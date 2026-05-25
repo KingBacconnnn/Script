@@ -1,0 +1,479 @@
+-- made by kingbacconnnn
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+------------------------------------------------------------------------
+-- SCREEN GUI
+------------------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ModernGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = playerGui
+
+------------------------------------------------------------------------
+-- MAIN FRAME
+------------------------------------------------------------------------
+local W, H = 220, 300
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, W, 0, H)
+MainFrame.Position = UDim2.new(0.5, -W/2, 0.5, -H/2)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Color = Color3.fromRGB(55, 55, 65)
+MainStroke.Thickness = 1
+
+------------------------------------------------------------------------
+-- TITLE BAR
+------------------------------------------------------------------------
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 32)
+TitleBar.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+TitleBar.BorderSizePixel = 0
+TitleBar.ZIndex = 3
+TitleBar.Parent = MainFrame
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+
+local TitleFix = Instance.new("Frame", TitleBar)
+TitleFix.Size = UDim2.new(1, 0, 0, 8)
+TitleFix.Position = UDim2.new(0, 0, 1, -8)
+TitleFix.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+TitleFix.BorderSizePixel = 0
+
+local function makeDot(color, posX)
+	local dot = Instance.new("Frame", TitleBar)
+	dot.Size = UDim2.new(0, 8, 0, 8)
+	dot.Position = UDim2.new(0, posX, 0.5, -4)
+	dot.BackgroundColor3 = color
+	dot.BorderSizePixel = 0
+	dot.ZIndex = 4
+	Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+end
+makeDot(Color3.fromRGB(226, 75, 74),  10)
+makeDot(Color3.fromRGB(239, 159, 39), 23)
+makeDot(Color3.fromRGB(99, 153, 34),  36)
+
+local TitleLabel = Instance.new("TextLabel", TitleBar)
+TitleLabel.Size = UDim2.new(1, -80, 1, 0)
+TitleLabel.Position = UDim2.new(0, 54, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "RELEASE Turret Heroes"
+TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
+TitleLabel.TextSize = 11
+TitleLabel.Font = Enum.Font.GothamMedium
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.ZIndex = 4
+
+local CloseBtn = Instance.new("TextButton", TitleBar)
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+CloseBtn.TextSize = 10
+CloseBtn.Font = Enum.Font.GothamMedium
+CloseBtn.BorderSizePixel = 0
+CloseBtn.ZIndex = 6
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
+
+local DragBtn = Instance.new("TextButton", TitleBar)
+DragBtn.Size = UDim2.new(1, -30, 1, 0)
+DragBtn.BackgroundTransparency = 1
+DragBtn.Text = ""
+DragBtn.ZIndex = 5
+
+------------------------------------------------------------------------
+-- BODY
+------------------------------------------------------------------------
+local Body = Instance.new("ScrollingFrame")
+Body.Size = UDim2.new(1, 0, 1, -32)
+Body.Position = UDim2.new(0, 0, 0, 32)
+Body.BackgroundTransparency = 1
+Body.BorderSizePixel = 0
+Body.ScrollBarThickness = 2
+Body.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
+Body.CanvasSize = UDim2.new(0, 0, 0, 0)
+Body.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Body.Parent = MainFrame
+
+local BodyLayout = Instance.new("UIListLayout", Body)
+BodyLayout.Padding = UDim.new(0, 5)
+
+local BodyPad = Instance.new("UIPadding", Body)
+BodyPad.PaddingTop    = UDim.new(0, 8)
+BodyPad.PaddingLeft   = UDim.new(0, 8)
+BodyPad.PaddingRight  = UDim.new(0, 8)
+BodyPad.PaddingBottom = UDim.new(0, 8)
+
+------------------------------------------------------------------------
+-- HELPERS
+------------------------------------------------------------------------
+local function sectionLabel(text)
+	local lbl = Instance.new("TextLabel", Body)
+	lbl.Size = UDim2.new(1, 0, 0, 14)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = text:upper()
+	lbl.TextColor3 = Color3.fromRGB(100, 100, 120)
+	lbl.TextSize = 9
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+end
+
+local function makeDivider()
+	local div = Instance.new("Frame", Body)
+	div.Size = UDim2.new(1, 0, 0, 1)
+	div.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+	div.BorderSizePixel = 0
+end
+
+------------------------------------------------------------------------
+-- TOGGLE
+------------------------------------------------------------------------
+local toggleStates = {}
+
+local function makeToggle(parent, labelText, default)
+	local row = Instance.new("Frame", parent)
+	row.Size = UDim2.new(1, 0, 0, 32)
+	row.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+	row.BorderSizePixel = 0
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+
+	local lbl = Instance.new("TextLabel", row)
+	lbl.Size = UDim2.new(1, -52, 1, 0)
+	lbl.Position = UDim2.new(0, 10, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = labelText
+	lbl.TextColor3 = Color3.fromRGB(200, 200, 210)
+	lbl.TextSize = 11
+	lbl.Font = Enum.Font.Gotham
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+	local state = (default == true)
+
+	local track = Instance.new("Frame", row)
+	track.Size = UDim2.new(0, 30, 0, 16)
+	track.Position = UDim2.new(1, -38, 0.5, -8)
+	track.BackgroundColor3 = state and Color3.fromRGB(29, 158, 117) or Color3.fromRGB(55, 55, 70)
+	track.BorderSizePixel = 0
+	Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+	local knob = Instance.new("Frame", track)
+	knob.Size = UDim2.new(0, 11, 0, 11)
+	knob.Position = state and UDim2.new(0, 16, 0.5, -5.5) or UDim2.new(0, 3, 0.5, -5.5)
+	knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	knob.BorderSizePixel = 0
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+	toggleStates[labelText] = state
+
+	local btn = Instance.new("TextButton", row)
+	btn.Size = UDim2.new(1, 0, 1, 0)
+	btn.BackgroundTransparency = 1
+	btn.Text = ""
+
+	btn.Activated:Connect(function()
+		state = not state
+		toggleStates[labelText] = state
+		TweenService:Create(track, TweenInfo.new(0.2), {
+			BackgroundColor3 = state and Color3.fromRGB(29, 158, 117) or Color3.fromRGB(55, 55, 70)
+		}):Play()
+		TweenService:Create(knob, TweenInfo.new(0.2), {
+			Position = state and UDim2.new(0, 16, 0.5, -5.5) or UDim2.new(0, 3, 0.5, -5.5)
+		}):Play()
+	end)
+
+	return row
+end
+
+------------------------------------------------------------------------
+-- DROPDOWN
+------------------------------------------------------------------------
+local function makeDropdown(title, items)
+	local HEADER_H = 32
+	local ITEM_H   = 32
+	local GAP      = 4
+
+	-- Outer container clipped so items hide when collapsed
+	local container = Instance.new("Frame", Body)
+	container.Size = UDim2.new(1, 0, 0, HEADER_H)
+	container.BackgroundTransparency = 1
+	container.BorderSizePixel = 0
+	container.ClipsDescendants = true
+
+	local containerLayout = Instance.new("UIListLayout", container)
+	containerLayout.Padding = UDim.new(0, GAP)
+	containerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	-- Header
+	local header = Instance.new("Frame", container)
+	header.Size = UDim2.new(1, 0, 0, HEADER_H)
+	header.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	header.BorderSizePixel = 0
+	header.LayoutOrder = 0
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 7)
+
+	local headerLbl = Instance.new("TextLabel", header)
+	headerLbl.Size = UDim2.new(1, -36, 1, 0)
+	headerLbl.Position = UDim2.new(0, 10, 0, 0)
+	headerLbl.BackgroundTransparency = 1
+	headerLbl.Text = title
+	headerLbl.TextColor3 = Color3.fromRGB(220, 220, 225)
+	headerLbl.TextSize = 11
+	headerLbl.Font = Enum.Font.GothamMedium
+	headerLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+	local arrow = Instance.new("TextLabel", header)
+	arrow.Size = UDim2.new(0, 24, 1, 0)
+	arrow.Position = UDim2.new(1, -26, 0, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Text = "+"
+	arrow.TextColor3 = Color3.fromRGB(120, 120, 140)
+	arrow.TextSize = 16
+	arrow.Font = Enum.Font.GothamMedium
+
+	local headerBtn = Instance.new("TextButton", header)
+	headerBtn.Size = UDim2.new(1, 0, 1, 0)
+	headerBtn.BackgroundTransparency = 1
+	headerBtn.Text = ""
+	headerBtn.ZIndex = 2
+
+	-- Inner list (hidden by default)
+	local innerList = Instance.new("Frame", container)
+	innerList.Size = UDim2.new(1, 0, 0, 0)
+	innerList.AutomaticSize = Enum.AutomaticSize.Y
+	innerList.BackgroundTransparency = 1
+	innerList.BorderSizePixel = 0
+	innerList.LayoutOrder = 1
+	innerList.Visible = false
+
+	local innerLayout = Instance.new("UIListLayout", innerList)
+	innerLayout.Padding = UDim.new(0, GAP)
+	innerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local innerPad = Instance.new("UIPadding", innerList)
+	innerPad.PaddingLeft = UDim.new(0, 8)
+
+	for i, itemName in ipairs(items) do
+		local row = makeToggle(innerList, itemName, false)
+		row.LayoutOrder = i
+	end
+
+	-- Expand / collapse
+	local expanded = false
+	local expandedH = HEADER_H + GAP + (#items * ITEM_H) + ((#items - 1) * GAP)
+
+	headerBtn.Activated:Connect(function()
+		expanded = not expanded
+		arrow.Text = expanded and "-" or "+"
+		innerList.Visible = expanded
+		TweenService:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+			Size = UDim2.new(1, 0, 0, expanded and expandedH or HEADER_H)
+		}):Play()
+	end)
+
+	return container
+end
+
+------------------------------------------------------------------------
+-- BUILD CONTENT
+------------------------------------------------------------------------
+local noteLbl = Instance.new("TextLabel", Body)
+noteLbl.Size = UDim2.new(1, 0, 0, 52)
+noteLbl.BackgroundTransparency = 1
+noteLbl.Text = "Credits: KingBacconnnn" -- empty string, or put your announcement text here
+noteLbl.TextColor3 = Color3.fromRGB(100, 100, 120)
+noteLbl.TextSize = 9
+noteLbl.Font = Enum.Font.Gotham
+noteLbl.TextXAlignment = Enum.TextXAlignment.Left
+noteLbl.TextYAlignment = Enum.TextYAlignment.Top
+noteLbl.TextWrapped = true
+makeToggle(Body, "Fast Roll 🎲", false)
+makeToggle(Body, "Hide Roll 🎲", false) 
+makeToggle(Body, "Auto Upgrade 💪", false) 
+------------------------------------------------------------------------
+-- STATUS BAR
+------------------------------------------------------------------------
+local StatusBar = Instance.new("Frame", MainFrame)
+StatusBar.Size = UDim2.new(1, 0, 0, 22)
+StatusBar.Position = UDim2.new(0, 0, 1, -22)
+StatusBar.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+StatusBar.BorderSizePixel = 0
+StatusBar.ZIndex = 2
+Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 10)
+
+local SBFix = Instance.new("Frame", StatusBar)
+SBFix.Size = UDim2.new(1, 0, 0, 8)
+SBFix.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+SBFix.BorderSizePixel = 0
+
+local StatusDot = Instance.new("Frame", StatusBar)
+StatusDot.Size = UDim2.new(0, 5, 0, 5)
+StatusDot.Position = UDim2.new(0, 10, 0.5, -2.5)
+StatusDot.BackgroundColor3 = Color3.fromRGB(99, 153, 34)
+StatusDot.BorderSizePixel = 0
+Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
+
+local StatusLbl = Instance.new("TextLabel", StatusBar)
+StatusLbl.Size = UDim2.new(1, -24, 1, 0)
+StatusLbl.Position = UDim2.new(0, 20, 0, 0)
+StatusLbl.BackgroundTransparency = 1
+StatusLbl.Text = "Connected - ready"
+StatusLbl.TextColor3 = Color3.fromRGB(90, 90, 110)
+StatusLbl.TextSize = 9
+StatusLbl.Font = Enum.Font.Gotham
+StatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+------------------------------------------------------------------------
+-- OPEN BUTTON
+------------------------------------------------------------------------
+local OpenBtn = Instance.new("TextButton", ScreenGui)
+OpenBtn.Size = UDim2.new(0, 95, 0, 28)
+OpenBtn.Position = UDim2.new(0, 12, 0, 12)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+OpenBtn.Text = "Panel"
+OpenBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
+OpenBtn.TextSize = 11
+OpenBtn.Font = Enum.Font.GothamMedium
+OpenBtn.BorderSizePixel = 0
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 7)
+local OBS = Instance.new("UIStroke", OpenBtn)
+OBS.Color = Color3.fromRGB(55, 55, 65)
+OBS.Thickness = 1
+
+------------------------------------------------------------------------
+-- OPEN / CLOSE ANIMATIONS
+------------------------------------------------------------------------
+local function openGui()
+	MainFrame.Visible = true
+	MainFrame.Size = UDim2.new(0, W, 0, 8)
+	OpenBtn.Visible = false
+	task.defer(function()
+		TweenService:Create(MainFrame, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, W, 0, H),
+		}):Play()
+	end)
+end
+
+local function closeGui()
+	local t = TweenService:Create(MainFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Size = UDim2.new(0, W, 0, 8),
+	})
+	t:Play()
+	t.Completed:Connect(function()
+		MainFrame.Visible = false
+		OpenBtn.Visible = true
+	end)
+end
+
+OpenBtn.Activated:Connect(openGui)
+CloseBtn.Activated:Connect(closeGui)
+
+------------------------------------------------------------------------
+-- DRAGGING (mouse + touch)
+------------------------------------------------------------------------
+local windowDragging  = false
+local dragStartInput  = Vector2.zero
+local frameStartPos   = Vector2.zero
+local activeDragInput = nil
+
+local function inputPos(input)
+	return Vector2.new(input.Position.X, input.Position.Y)
+end
+
+DragBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		windowDragging  = true
+		activeDragInput = input
+		dragStartInput  = inputPos(input)
+		frameStartPos   = Vector2.new(MainFrame.AbsolutePosition.X, MainFrame.AbsolutePosition.Y)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if not windowDragging then return end
+	if input ~= activeDragInput and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+	local delta  = inputPos(input) - dragStartInput
+	local vpSize = workspace.CurrentCamera.ViewportSize
+	local newX   = math.clamp(frameStartPos.X + delta.X, 0, vpSize.X - W)
+	local newY   = math.clamp(frameStartPos.Y + delta.Y, 0, vpSize.Y - H)
+	MainFrame.Position = UDim2.fromOffset(newX, newY)
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input == activeDragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		windowDragging  = false
+		activeDragInput = nil
+	end
+end)
+
+------------------------------------------------------------------------
+-- OP FAST ROLL
+------------------------------------------------------------------------
+task.spawn(function()
+	local rollEvent = game:GetService("ReplicatedStorage")
+		:WaitForChild("Modules")
+		:WaitForChild("Net")
+		:WaitForChild("RE/roll_unit")
+
+	while true do
+		if toggleStates["Fast Roll 🎲"] then
+			rollEvent:FireServer()
+		end
+
+		task.wait(0.01) -- extremely fast loop
+	end
+end)
+
+------------------------------------------------------------------------
+-- HIDE ROLL
+------------------------------------------------------------------------
+task.spawn(function()
+	local RollMain = game:GetService("Players").LocalPlayer
+		:WaitForChild("PlayerGui")
+		:WaitForChild("Menu")
+		:WaitForChild("RollMain")
+
+	while true do
+		if toggleStates["Hide Roll 🎲"] then
+			RollMain.Visible = false
+		else
+			RollMain.Visible = true
+		end
+		task.wait(0.1)
+	end
+end)
+
+-- AUTO UPGRADE
+local levelUpRemote = game:GetService("ReplicatedStorage")
+    :WaitForChild("Modules")
+    :WaitForChild("Net")
+    :WaitForChild("RE/level_up")
+
+task.spawn(function()
+    while true do
+        if toggleStates["Auto Upgrade 💪"] then
+            for i = 1, 16 do
+                levelUpRemote:FireServer(i)  -- was upgradeRemote, now fixed
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
+------------------------------------------------------------------------
+print("[KingBacconnnn] Loaded.")
