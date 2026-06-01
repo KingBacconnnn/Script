@@ -1,1 +1,1 @@
-‎loadstring(game:HttpGet("https://raw.githubusercontent.com/KingBacconnnn/Script/refs/heads/main/RunARestaurant"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/KingBacconnnn/Script/refs/heads/main/RunARestaurant"))()
