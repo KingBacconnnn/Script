@@ -1,0 +1,914 @@
+--[[
+    ✈️ Paper Plane For Brainrots – Custom "Nova" UI Framework (Visibility Fix)
+    Rebuilt with UIScale to guarantee the menu completely hides on all executors.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+
+local player = Players.LocalPlayer
+
+-- UI Target
+local TargetParent
+if gethui then TargetParent = gethui()
+elseif game.PlaceId == 0 then TargetParent = player:WaitForChild("PlayerGui")
+else
+	local success, result = pcall(function() return CoreGui end)
+	TargetParent = success and result or player:WaitForChild("PlayerGui")
+end
+
+local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+
+-- ==============================================================================
+-- 🎨 CUSTOM UI FRAMEWORK (NOVA)
+-- ==============================================================================
+local NovaUI = {}
+NovaUI.Theme = {
+    Background = Color3.fromRGB(20, 20, 25),
+    Sidebar = Color3.fromRGB(15, 15, 20),
+    Section = Color3.fromRGB(25, 25, 30),
+    Accent = Color3.fromRGB(88, 101, 242),
+    Text = Color3.fromRGB(240, 240, 240),
+    SubText = Color3.fromRGB(150, 150, 150),
+    ToggleOff = Color3.fromRGB(40, 40, 45)
+}
+
+local function Tween(obj, props, time)
+    local t = TweenService:Create(obj, TweenInfo.new(time or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
+    t:Play() return t
+end
+
+local function MakeDraggable(topbar, main)
+    local dragging, dragInput, dragStart, startPos
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = main.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+function NovaUI:CreateWindow(config)
+    local Window = { Tabs = {}, CurrentTab = nil }
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "NovaUI_" .. tostring(math.random(1000,9999))
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = TargetParent
+
+    -- Mobile Toggle Icon
+    local ToggleBtn = Instance.new("ImageButton")
+    ToggleBtn.Size = UDim2.new(0, 45, 0, 45)
+    ToggleBtn.Position = UDim2.new(0, 15, 0, 15)
+    ToggleBtn.BackgroundColor3 = NovaUI.Theme.Sidebar
+    ToggleBtn.Image = "rbxassetid://10734938289" -- Plane Icon
+    ToggleBtn.Parent = ScreenGui
+    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+    Instance.new("UIStroke", ToggleBtn).Color = NovaUI.Theme.Accent
+    MakeDraggable(ToggleBtn, ToggleBtn)
+
+    -- Changed from CanvasGroup to standard Frame for strict visibility control
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = IsMobile and UDim2.new(0, 450, 0, 280) or UDim2.new(0, 600, 0, 400)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    MainFrame.BackgroundColor3 = NovaUI.Theme.Background
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = ScreenGui
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+    
+    local PanelScale = Instance.new("UIScale")
+    PanelScale.Scale = 1
+    PanelScale.Parent = MainFrame
+    
+    -- Absolute Visibility Toggle Logic
+    local isUIOpen = true
+    ToggleBtn.Activated:Connect(function()
+        isUIOpen = not isUIOpen
+        if isUIOpen then
+            MainFrame.Visible = true
+            Tween(PanelScale, {Scale = 1}, 0.3)
+        else
+            local hideTween = Tween(PanelScale, {Scale = 0.01}, 0.25)
+            hideTween.Completed:Connect(function()
+                if not isUIOpen then
+                    MainFrame.Visible = false
+                end
+            end)
+        end
+    end)
+
+    -- Sidebar
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Size = UDim2.new(0, 140, 1, 0)
+    Sidebar.BackgroundColor3 = NovaUI.Theme.Sidebar
+    Sidebar.BorderSizePixel = 0
+    Sidebar.Parent = MainFrame
+
+    local TopBar = Instance.new("Frame")
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.BackgroundTransparency = 1
+    TopBar.Parent = MainFrame
+    MakeDraggable(TopBar, MainFrame)
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -20, 0, 40)
+    Title.Position = UDim2.new(0, 10, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = config.Title or "Nova UI"
+    Title.TextColor3 = NovaUI.Theme.Text
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 14
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Parent = Sidebar
+
+    local TabContainer = Instance.new("ScrollingFrame")
+    TabContainer.Size = UDim2.new(1, -10, 1, -50)
+    TabContainer.Position = UDim2.new(0, 5, 0, 40)
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.ScrollBarThickness = 0
+    TabContainer.Parent = Sidebar
+    local TabList = Instance.new("UIListLayout")
+    TabList.Padding = UDim.new(0, 5)
+    TabList.Parent = TabContainer
+
+    local ContentContainer = Instance.new("Frame")
+    ContentContainer.Size = UDim2.new(1, -140, 1, 0)
+    ContentContainer.Position = UDim2.new(0, 140, 0, 0)
+    ContentContainer.BackgroundTransparency = 1
+    ContentContainer.Parent = MainFrame
+
+    function Window:CreateTab(name)
+        local Tab = {}
+        local TabBtn = Instance.new("TextButton")
+        TabBtn.Size = UDim2.new(1, 0, 0, 30)
+        TabBtn.BackgroundColor3 = NovaUI.Theme.Sidebar
+        TabBtn.Text = "  " .. name
+        TabBtn.TextColor3 = NovaUI.Theme.SubText
+        TabBtn.Font = Enum.Font.GothamMedium
+        TabBtn.TextSize = 13
+        TabBtn.TextXAlignment = Enum.TextXAlignment.Left
+        TabBtn.AutoButtonColor = false
+        TabBtn.Parent = TabContainer
+        Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+
+        local TabContent = Instance.new("ScrollingFrame")
+        TabContent.Size = UDim2.new(1, -20, 1, -20)
+        TabContent.Position = UDim2.new(0, 10, 0, 10)
+        TabContent.BackgroundTransparency = 1
+        TabContent.ScrollBarThickness = 2
+        TabContent.Visible = false
+        TabContent.Parent = ContentContainer
+        local ContentList = Instance.new("UIListLayout")
+        ContentList.Padding = UDim.new(0, 8)
+        ContentList.Parent = TabContent
+
+        TabContent.ChildAdded:Connect(function()
+            RunService.RenderStepped:Wait()
+            TabContent.CanvasSize = UDim2.new(0, 0, 0, ContentList.AbsoluteContentSize.Y + 20)
+        end)
+
+        TabBtn.Activated:Connect(function()
+            for _, t in pairs(Window.Tabs) do
+                t.Content.Visible = false
+                Tween(t.Btn, {BackgroundColor3 = NovaUI.Theme.Sidebar, TextColor3 = NovaUI.Theme.SubText}, 0.2)
+            end
+            TabContent.Visible = true
+            Tween(TabBtn, {BackgroundColor3 = NovaUI.Theme.Section, TextColor3 = NovaUI.Theme.Accent}, 0.2)
+        end)
+
+        if not Window.CurrentTab then
+            Window.CurrentTab = TabContent
+            TabContent.Visible = true
+            TabBtn.BackgroundColor3 = NovaUI.Theme.Section
+            TabBtn.TextColor3 = NovaUI.Theme.Accent
+        end
+
+        table.insert(Window.Tabs, {Btn = TabBtn, Content = TabContent})
+
+        function Tab:CreateSection(titleText)
+            local Sec = Instance.new("TextLabel")
+            Sec.Size = UDim2.new(1, 0, 0, 20)
+            Sec.BackgroundTransparency = 1
+            Sec.Text = titleText
+            Sec.TextColor3 = NovaUI.Theme.Accent
+            Sec.Font = Enum.Font.GothamBold
+            Sec.TextSize = 12
+            Sec.TextXAlignment = Enum.TextXAlignment.Left
+            Sec.Parent = TabContent
+        end
+
+        function Tab:CreateToggle(config)
+            local state = config.Default or false
+            local ToggleFrame = Instance.new("TextButton")
+            ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
+            ToggleFrame.BackgroundColor3 = NovaUI.Theme.Section
+            ToggleFrame.Text = ""
+            ToggleFrame.AutoButtonColor = false
+            ToggleFrame.Parent = TabContent
+            Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 6)
+
+            local Lbl = Instance.new("TextLabel")
+            Lbl.Size = UDim2.new(1, -60, 1, 0)
+            Lbl.Position = UDim2.new(0, 10, 0, 0)
+            Lbl.BackgroundTransparency = 1
+            Lbl.Text = config.Title
+            Lbl.TextColor3 = NovaUI.Theme.Text
+            Lbl.Font = Enum.Font.Gotham
+            Lbl.TextSize = 13
+            Lbl.TextXAlignment = Enum.TextXAlignment.Left
+            Lbl.Parent = ToggleFrame
+
+            local Switch = Instance.new("Frame")
+            Switch.Size = UDim2.new(0, 36, 0, 18)
+            Switch.Position = UDim2.new(1, -46, 0.5, -9)
+            Switch.BackgroundColor3 = state and NovaUI.Theme.Accent or NovaUI.Theme.ToggleOff
+            Switch.Parent = ToggleFrame
+            Instance.new("UICorner", Switch).CornerRadius = UDim.new(1, 0)
+
+            local Circle = Instance.new("Frame")
+            Circle.Size = UDim2.new(0, 14, 0, 14)
+            Circle.Position = UDim2.new(0, state and 20 or 2, 0.5, -7)
+            Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Circle.Parent = Switch
+            Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+
+            local function Fire()
+                Tween(Switch, {BackgroundColor3 = state and NovaUI.Theme.Accent or NovaUI.Theme.ToggleOff})
+                Tween(Circle, {Position = UDim2.new(0, state and 20 or 2, 0.5, -7)})
+                if config.Callback then task.spawn(config.Callback, state) end
+            end
+
+            ToggleFrame.Activated:Connect(function()
+                state = not state
+                Fire()
+            end)
+            if state then Fire() end
+        end
+
+        function Tab:CreateSlider(config)
+            local val = config.Default or config.Min
+            local SliderFrame = Instance.new("Frame")
+            SliderFrame.Size = UDim2.new(1, 0, 0, 50)
+            SliderFrame.BackgroundColor3 = NovaUI.Theme.Section
+            SliderFrame.Parent = TabContent
+            Instance.new("UICorner", SliderFrame).CornerRadius = UDim.new(0, 6)
+
+            local Lbl = Instance.new("TextLabel")
+            Lbl.Size = UDim2.new(1, -20, 0, 25)
+            Lbl.Position = UDim2.new(0, 10, 0, 0)
+            Lbl.BackgroundTransparency = 1
+            Lbl.Text = config.Title
+            Lbl.TextColor3 = NovaUI.Theme.Text
+            Lbl.Font = Enum.Font.Gotham
+            Lbl.TextSize = 13
+            Lbl.TextXAlignment = Enum.TextXAlignment.Left
+            Lbl.Parent = SliderFrame
+
+            local ValLbl = Instance.new("TextLabel")
+            ValLbl.Size = UDim2.new(0, 50, 0, 25)
+            ValLbl.Position = UDim2.new(1, -60, 0, 0)
+            ValLbl.BackgroundTransparency = 1
+            ValLbl.Text = tostring(val)
+            ValLbl.TextColor3 = NovaUI.Theme.SubText
+            ValLbl.Font = Enum.Font.Gotham
+            ValLbl.TextSize = 13
+            ValLbl.TextXAlignment = Enum.TextXAlignment.Right
+            ValLbl.Parent = SliderFrame
+
+            local TrackBtn = Instance.new("TextButton")
+            TrackBtn.Size = UDim2.new(1, -20, 0, 6)
+            TrackBtn.Position = UDim2.new(0, 10, 0, 32)
+            TrackBtn.BackgroundColor3 = NovaUI.Theme.ToggleOff
+            TrackBtn.Text = ""
+            TrackBtn.AutoButtonColor = false
+            TrackBtn.Parent = SliderFrame
+            Instance.new("UICorner", TrackBtn).CornerRadius = UDim.new(1, 0)
+
+            local Fill = Instance.new("Frame")
+            Fill.Size = UDim2.new((val - config.Min) / (config.Max - config.Min), 0, 1, 0)
+            Fill.BackgroundColor3 = NovaUI.Theme.Accent
+            Fill.Parent = TrackBtn
+            Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+
+            local dragging = false
+            local function update(input)
+                local pos = math.clamp((input.Position.X - TrackBtn.AbsolutePosition.X) / TrackBtn.AbsoluteSize.X, 0, 1)
+                val = math.floor(config.Min + (pos * (config.Max - config.Min)))
+                Tween(Fill, {Size = UDim2.new(pos, 0, 1, 0)}, 0.1)
+                ValLbl.Text = tostring(val)
+                if config.Callback then config.Callback(val) end
+            end
+
+            TrackBtn.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true; update(input)
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    update(input)
+                end
+            end)
+        end
+
+        function Tab:CreateButton(config)
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 35)
+            Btn.BackgroundColor3 = NovaUI.Theme.Section
+            Btn.Text = config.Title
+            Btn.TextColor3 = NovaUI.Theme.Text
+            Btn.Font = Enum.Font.GothamMedium
+            Btn.TextSize = 13
+            Btn.AutoButtonColor = false
+            Btn.Parent = TabContent
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+            Instance.new("UIStroke", Btn).Color = NovaUI.Theme.ToggleOff
+
+            Btn.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    Tween(Btn, {BackgroundColor3 = NovaUI.Theme.ToggleOff}, 0.1)
+                end
+            end)
+            Btn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    Tween(Btn, {BackgroundColor3 = NovaUI.Theme.Section}, 0.1)
+                end
+            end)
+            Btn.Activated:Connect(function()
+                if config.Callback then config.Callback() end
+            end)
+        end
+
+        function Tab:CreateParagraph(config)
+            local Frame = Instance.new("Frame")
+            Frame.Size = UDim2.new(1, 0, 0, 60)
+            Frame.BackgroundColor3 = NovaUI.Theme.Section
+            Frame.Parent = TabContent
+            Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+            
+            local Txt = Instance.new("TextLabel")
+            Txt.Size = UDim2.new(1, -20, 1, -10)
+            Txt.Position = UDim2.new(0, 10, 0, 5)
+            Txt.BackgroundTransparency = 1
+            Txt.Text = "**" .. config.Title .. "**\n" .. config.Desc
+            Txt.RichText = true
+            Txt.TextColor3 = NovaUI.Theme.SubText
+            Txt.Font = Enum.Font.Gotham
+            Txt.TextSize = 12
+            Txt.TextXAlignment = Enum.TextXAlignment.Left
+            Txt.TextYAlignment = Enum.TextYAlignment.Top
+            Txt.Parent = Frame
+        end
+
+        return Tab
+    end
+
+    return Window
+end
+
+-- ==============================================================================
+-- 🚀 GAME LOGIC & INITIALIZATION (PAPER PLANE FOR BRAINROTS)
+-- ==============================================================================
+
+local Window = NovaUI:CreateWindow({
+    Title = "✈️ Paper Plane"
+})
+
+-- Game Modules Setup
+local GameCore = require(ReplicatedStorage:WaitForChild("GameCore", 9e9))
+local ClientCore = require(ReplicatedStorage:WaitForChild("ClientCore", 9e9))
+local UtilityCore = require(ReplicatedStorage:WaitForChild("UtilityCore", 9e9))
+local Network = GameCore.Network
+local EventDriven = require(ReplicatedStorage:WaitForChild("ClientModules", 9e9):WaitForChild("Controllers", 9e9):WaitForChild("EventDrivenController", 9e9))
+
+local FlightManager = nil
+for _, obj in ipairs(ReplicatedStorage.ClientModules:GetDescendants()) do
+    if obj.Name == "FlightManager" and obj:IsA("ModuleScript") then
+        local success, result = pcall(require, obj)
+        if success then FlightManager = result break end
+    end
+end
+if FlightManager then
+    pcall(function() FlightManager:Init(); FlightManager:Start() end)
+end
+
+-- TABS
+local ChangelogTab = Window:CreateTab("Changelog")
+local PlayerTab = Window:CreateTab("Player")
+local MainTab = Window:CreateTab("Main")
+local ShopTab = Window:CreateTab("Shop")
+local LinksTab = Window:CreateTab("Links")
+
+-- CHANGELOG TAB
+ChangelogTab:CreateSection("Update History")
+ChangelogTab:CreateParagraph({
+    Title = "v1.0.1 (Nova Framework Edit)",
+    Desc = "• Absolute Visibility Fix applied for all executors.\n• Completely disappears on toggle.\n• Fixed Flight Launch logic."
+})
+
+-- PLAYER TAB
+PlayerTab:CreateSection("Character Configuration")
+
+local walkSpeedValue = 16
+local walkSpeedEnabled = false
+
+PlayerTab:CreateSlider({
+    Title = "Walk Speed",
+    Min = 16,
+    Max = 100,
+    Default = 16,
+    Callback = function(val) walkSpeedValue = val end
+})
+
+PlayerTab:CreateToggle({
+    Title = "Enable WalkSpeed",
+    Default = false,
+    Callback = function(state)
+        walkSpeedEnabled = state
+        if not state then
+            pcall(function()
+                local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = 16 end
+            end)
+        end
+    end
+})
+
+task.spawn(function()
+    while true do
+        if walkSpeedEnabled then
+            pcall(function()
+                local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = walkSpeedValue end
+            end)
+        end
+        task.wait(0.1)
+    end
+end)
+
+PlayerTab:CreateToggle({
+    Title = "Anti AFK",
+    Default = false,
+    Callback = function(state)
+        local vu = game:GetService("VirtualUser")
+        if state then
+            _G.AntiAfkConnection = player.Idled:Connect(function()
+                vu:CaptureController()
+                vu:ClickButton2(Vector2.new())
+            end)
+        else
+            if _G.AntiAfkConnection then
+                _G.AntiAfkConnection:Disconnect()
+                _G.AntiAfkConnection = nil
+            end
+        end
+    end
+})
+
+-- MAIN TAB (AUTO FARM)
+MainTab:CreateSection("Auto Farming")
+
+MainTab:CreateToggle({
+    Title = "Auto Farm Brainrots",
+    Default = false,
+    Callback = function(state)
+        _G.AutoFarmBrainrots = state
+        
+        if state and FlightManager then
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            
+            _G.SavedPosition = root and root.CFrame or nil
+            if humanoid then 
+                humanoid.WalkSpeed = 0 
+                humanoid.JumpPower = 0 
+                humanoid.UseJumpPower = true
+            end
+
+            task.spawn(function()
+                local function applyFreeze()
+                    local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if not r then return end
+                    local existing = r:FindFirstChild("AutoFarmFreeze")
+                    if existing then existing:Destroy() end
+                    r.AssemblyLinearVelocity = Vector3.zero
+                    r.AssemblyAngularVelocity = Vector3.zero
+                    local ap = Instance.new("AlignPosition")
+                    ap.Name = "AutoFarmFreeze"
+                    ap.Mode = Enum.PositionAlignmentMode.OneAttachment
+                    ap.Attachment0 = r:FindFirstChildOfClass("Attachment") or Instance.new("Attachment", r)
+                    ap.Position = r.Position
+                    ap.MaxForce = 1e5  
+                    ap.Responsiveness = 100  
+                    ap.Parent = r
+                end
+                
+                local function removeFreeze()
+                    local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        local fc = r:FindFirstChild("AutoFarmFreeze")
+                        if fc then fc:Destroy() end
+                    end
+                end
+
+                local function findBestLaunchZone()
+                    local plotsFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Plots")
+                    if not plotsFolder then return nil end
+                    
+                    local bestFloors, bestPlotIndex = -1, nil
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        local floors = p:GetAttribute("BuildFloors")
+                        local plotIndex = p:GetAttribute("PlotIndex")
+                        if floors and plotIndex and floors > bestFloors then
+                            bestFloors = floors
+                            bestPlotIndex = plotIndex
+                        end
+                    end
+                    if not bestPlotIndex then return nil end
+                    for _, plotModel in ipairs(plotsFolder:GetChildren()) do
+                        local baseTemplate = plotModel:FindFirstChild("BaseTemplate")
+                        local build = baseTemplate and baseTemplate:FindFirstChild("Build")
+                        local launchZone = build and build:FindFirstChild("LaunchZone")
+                        if launchZone and launchZone:IsA("BasePart") then
+                            local modelPlotIndex = plotModel:GetAttribute("PlotIndex") or tonumber(plotModel.Name:match("Plot_(%d+)"))
+                            if modelPlotIndex == bestPlotIndex then return launchZone end
+                        end
+                    end
+                    return nil
+                end
+
+                local capturedResult = nil
+                local origProcessActive = FlightManager.ProcessActive
+                FlightManager.ProcessActive = function(self, flightData, result)
+                    if flightData.player == player then capturedResult = result end
+                    return origProcessActive(self, flightData, result)
+                end
+
+                local function holdPrompt(prompt)
+                    if not prompt then return end
+                    task.spawn(function()
+                        pcall(function()
+                            prompt:InputHoldBegin()
+                            task.wait(prompt.HoldDuration + 0.1)
+                            prompt:InputHoldEnd()
+                        end)
+                    end)
+                end
+
+                task.wait(1)
+                local initialZone = ClientCore.CurrentLaunchZone or findBestLaunchZone()
+                if initialZone and root then
+                    removeFreeze()
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    root.CFrame = initialZone.CFrame * CFrame.new(0, 5, 0)
+                    task.wait(0.3)
+                    applyFreeze()
+                    ClientCore.CurrentLaunchZone = initialZone
+                else applyFreeze() end
+
+                while _G.AutoFarmBrainrots do
+                    pcall(function()
+                        capturedResult = nil
+                        local char = player.Character
+                        local rt = char and char:FindFirstChild("HumanoidRootPart")
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.WalkSpeed ~= 0 then hum.WalkSpeed = 0; hum.JumpPower = 0 end
+                        if not rt then task.wait(1) return end
+                        if ClientCore.IsInFlight or ClientCore.IsInLaunch or ClientCore.IsInCapture then task.wait(0.3) return end
+
+                        local zone = ClientCore.CurrentLaunchZone or findBestLaunchZone()
+                        if not zone then task.wait(2) return end
+
+                        if (rt.Position - zone.Position).Magnitude > 5 then
+                            removeFreeze()
+                            rt.AssemblyLinearVelocity = Vector3.zero
+                            rt.AssemblyAngularVelocity = Vector3.zero
+                            rt.CFrame = zone.CFrame * CFrame.new(0, 5, 0)
+                            task.wait(0.3)
+                            applyFreeze()
+                        end
+                        ClientCore.CurrentLaunchZone = zone
+
+                        removeFreeze()
+                        FlightManager:ProcessInput()
+                        task.wait(0.45)
+                        EventDriven.EVENTS.CONTROLLERS.GameplayController.ProcessClick:Fire()
+
+                        local waited = 0
+                        while not ClientCore.IsInFlight and waited < 3 do
+                            task.wait(0.1); waited += 0.1
+                        end
+                        
+                        if not ClientCore.IsInFlight then
+                            FlightManager:CancelLaunch()
+                            applyFreeze()
+                            return
+                        end
+
+                        local flightTime = capturedResult and capturedResult.timeInAir or 5
+                        task.wait(flightTime + 0.5)
+
+                        local prompt = nil
+                        local captureFolder = workspace:FindFirstChild("Live") and workspace.Live:FindFirstChild("Debris") and workspace.Live.Debris:FindFirstChild("CapturBrainrots")
+                        if captureFolder then
+                            for _, model in ipairs(captureFolder:GetChildren()) do
+                                if model:IsA("Model") then
+                                    local p = model:FindFirstChildOfClass("ProximityPrompt")
+                                    if p then prompt = p; break end
+                                end
+                            end
+                        end
+
+                        if prompt then holdPrompt(prompt); task.wait(0.3)
+                        elseif capturedResult and capturedResult.spawnedBrainrots and #capturedResult.spawnedBrainrots > 0 then
+                            pcall(function() Network.ClaimFlight:InvokeServer(capturedResult.spawnedBrainrots[1].uid) end)
+                            ClientCore.IsInCapture = false
+                            FlightManager:UpdateInFlight()
+                        end
+
+                        ClientCore.IsInFlight = false; ClientCore.IsInLaunch = false
+                        if rt and zone then
+                            removeFreeze()
+                            rt.AssemblyLinearVelocity = Vector3.zero
+                            rt.AssemblyAngularVelocity = Vector3.zero
+                            rt.CFrame = zone.CFrame * CFrame.new(0, 5, 0)
+                            task.wait(0.15)
+                            applyFreeze()
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+                removeFreeze()
+            end)
+        else
+            local char = player.Character
+            local rt = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if rt then
+                local fc = rt:FindFirstChild("AutoFarmFreeze")
+                if fc then fc:Destroy() end
+                rt.AssemblyLinearVelocity = Vector3.zero
+                rt.AssemblyAngularVelocity = Vector3.zero
+            end
+            if hum then hum.WalkSpeed = 16; hum.JumpPower = 50 end
+            if _G.SavedPosition and rt then rt.CFrame = _G.SavedPosition end
+            _G.SavedPosition = nil
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Train Strength",
+    Default = false,
+    Callback = function(state)
+        _G.AutoTrainStrength = state
+        if state then
+            task.spawn(function()
+                while _G.AutoTrainStrength do
+                    pcall(function()
+                        Network.RequestStrength:InvokeServer()
+                        Network.RequestDoubleStrength:InvokeServer()
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Rebirth",
+    Default = false,  
+    Callback = function(state)
+        _G.AutoRebirth = state
+        if state then
+            task.spawn(function()
+                while _G.AutoRebirth do
+                    pcall(function()
+                        local data = ClientCore.Data
+                        if data and UtilityCore.RebirthUtility.DoesPlayerMeetRebirthReq(player, data, false) then
+                            Network.Rebirth:InvokeServer()
+                        end
+                    end)
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Upgrade Brainrots",
+    Default = false,
+    Callback = function(state)
+        _G.AutoUpgradeBrainrots = state
+        if state then
+            task.spawn(function()
+                while _G.AutoUpgradeBrainrots do
+                    pcall(function()
+                        local data = ClientCore.Data
+                        local cash = data and (data.Cash or data.Money or data.Currency or 0)
+                        if not data then return end
+                        for _, obj in ipairs(CollectionService:GetTagged(GameCore.GameConfig.PLOT_BRAINROT_TAG)) do
+                            if obj:IsA("BasePart") and obj:GetAttribute("OwnerUserId") == player.UserId then
+                                local uid = obj:GetAttribute("ItemUID")
+                                if uid then
+                                    local price = UtilityCore.BalanceUtility.GetLevelUpPrice(data, uid)
+                                    if price and cash >= price then
+                                        Network.LevelUpBrainrot:InvokeServer(uid)
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Upgrade Plot",
+    Default = false,
+    Callback = function(state)
+        _G.AutoUpgradePlot = state
+        if state then
+            task.spawn(function()
+                while _G.AutoUpgradePlot do
+                    pcall(function()
+                        local data = ClientCore.Data
+                        local cash = data and (data.Cash or data.Money or data.Currency or 0)
+                        if not data then return end
+                        local _, price = UtilityCore.PlotUtility.GetNextPlotSlot(data)
+                        if price and cash >= price then
+                            Network.UpgradePlot:InvokeServer()
+                        end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Collect Cash",
+    Default = false,
+    Callback = function(state)
+        _G.AutoCollectCash = state
+        if state then
+            task.spawn(function()
+                while _G.AutoCollectCash do
+                    pcall(function()
+                        if not ClientCore.Data or not ClientCore.Data.Earnings then return end
+                        for uid, amount in pairs(ClientCore.Data.Earnings) do
+                            if type(uid) == "string" and amount > 0 then
+                                Network.ClaimEarnings:InvokeServer(uid)
+                            end
+                        end
+                    end)
+                    task.wait(1)
+                end
+            end)
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Title = "Auto Sell All Brainrots",
+    Default = false,
+    Callback = function(state)
+        _G.AutoSellBrainrots = state
+        if state then
+            task.spawn(function()
+                while _G.AutoSellBrainrots do
+                    pcall(Network.SellAllBrainrots.InvokeServer, Network.SellAllBrainrots)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+-- SHOP TAB
+ShopTab:CreateSection("Auto Buying")
+
+ShopTab:CreateToggle({
+    Title = "Auto Buy Weights",
+    Default = false,
+    Callback = function(state)
+        _G.AutoBuyWeights = state
+        if state then
+            task.spawn(function()
+                while _G.AutoBuyWeights do
+                    pcall(function()
+                        local cash = ClientCore.Data and (ClientCore.Data.Cash or ClientCore.Data.Money or ClientCore.Data.Currency or 0)
+                        local owned = ClientCore.Data.OwnedWeights or {}
+                        for _, weightName in ipairs(GameCore.Databases.SortedWeights) do
+                            local weightData = GameCore.Databases.Weights[weightName]
+                            if weightData and not owned[weightName] then
+                                local price = weightData.priceAmount or 0
+                                if cash >= price then
+                                    Network.BuyWeight:InvokeServer(weightName)
+                                    task.wait(0.01)
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+})
+
+ShopTab:CreateToggle({
+    Title = "Auto Buy Speed",
+    Default = false,
+    Callback = function(state)
+        _G.AutoBuySpeed = state
+        if state then
+            task.spawn(function()
+                while _G.AutoBuySpeed do
+                    pcall(function()
+                        local options = UtilityCore.UpgradeUtility.GetSpeedShopOptions(ClientCore.Data)
+                        for tier = 3, 1, -1 do
+                            if options[tier] and options[tier].canAfford then
+                                Network.BuySpeed:InvokeServer(tier)
+                                break
+                            end
+                        end
+                    end)
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end
+})
+
+ShopTab:CreateToggle({
+    Title = "Auto Buy Floor",
+    Default = false,
+    Callback = function(state)
+        _G.AutoBuyFloor = state
+        if state then
+            task.spawn(function()
+                local TAG = GameCore.GameConfig.PLOT_FLOOR_PAD_TAG
+                while _G.AutoBuyFloor do
+                    pcall(function()
+                        local cash = ClientCore.Data and (ClientCore.Data.Cash or ClientCore.Data.Money or ClientCore.Data.Currency or 0)
+                        local bestTier, bestPrice = nil, 0
+                        for _, pad in ipairs(CollectionService:GetTagged(TAG)) do
+                            if pad:IsA("BasePart") and pad:GetAttribute("OwnerUserId") ~= player.UserId then
+                                local tier = tonumber(pad.Name)
+                                if tier then
+                                    local floorsToAdd = UtilityCore.UpgradeUtility.GetBuildFloorsByIndex(tier)
+                                    local price = UtilityCore.UpgradeUtility.GetBuildFloorPrice(ClientCore.Data, floorsToAdd)
+                                    if price and cash >= price and price > bestPrice then
+                                        bestTier = tier
+                                        bestPrice = price
+                                    end
+                                end
+                            end
+                        end
+                        if bestTier then Network.BuyBuildFloor:InvokeServer(bestTier) end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end
+})
+
+-- LINKS TAB
+LinksTab:CreateSection("External Links")
+LinksTab:CreateButton({
+    Title = "Copy YouTube Link",
+    Callback = function()
+        pcall(function() setclipboard("https://www.youtube.com/@VeloxScripts") end)
+    end
+})
+
