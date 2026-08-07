@@ -9,7 +9,8 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = GenerateRandomString(16)
+-- FIXED: Replaced random string with a static identifier so the script can actually detect itself
+local _G_Identifier = "VeloxHub_Loaded_Instance"
 if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
@@ -325,6 +326,9 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
+-- ==========================================
+-- FIXED: Floating Button Logic and Visuals
+-- ==========================================
 local FloatingBtn = Instance.new("TextButton", ScreenGui)
 FloatingBtn.Size = UDim2.new(0, 48, 0, 48)
 FloatingBtn.Position = UDim2.new(0.1, 0, 0.2, 0)
@@ -335,40 +339,55 @@ FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
-Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
+local BtnCorner = Instance.new("UICorner", FloatingBtn)
+BtnCorner.CornerRadius = UDim.new(1, 0)
+
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
+-- FIXED: Crop + Corner mask to fill circle completely without sticking out
 local FloatIcon = Instance.new("ImageLabel", FloatingBtn)
-FloatIcon.Size = UDim2.new(0.75, 0, 0.75, 0)
-FloatIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+FloatIcon.Name = "FloatIcon"
 FloatIcon.BackgroundTransparency = 1
-FloatIcon.Image = "rbxassetid://124635602201411"
 FloatIcon.ZIndex = 101
-FloatIcon.ScaleType = Enum.ScaleType.Fit
+FloatIcon.Image = "rbxassetid://124635602201411" 
+FloatIcon.Size = UDim2.fromScale(1, 1)
+FloatIcon.Position = UDim2.fromScale(0.5, 0.5)
+FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+FloatIcon.ScaleType = Enum.ScaleType.Crop 
+local IconCorner = Instance.new("UICorner", FloatIcon)
+IconCorner.CornerRadius = UDim.new(1, 0)
 
+-- FIXED: Prevents UI from maximizing during drags
 local floatDrag, floatStart, floatPos
+local hasDragged = false
+
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
+		hasDragged = false 
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
+		
 		local floatEndedConn
 		floatEndedConn = RegConn(input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then 
 				floatDrag = false 
 				if floatEndedConn then floatEndedConn:Disconnect() end
+				if not hasDragged then ToggleUI() end
 			end
 		end))
 	end
 end))
+
 RegConn(UserInputService.InputChanged:Connect(function(input)
 	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - floatStart
+		if delta.Magnitude > 5 then hasDragged = true end
 		FloatingBtn.Position = UDim2.new(floatPos.X.Scale, floatPos.X.Offset + delta.X, floatPos.Y.Scale, floatPos.Y.Offset + delta.Y)
 	end
 end))
+-- ==========================================
 
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
@@ -401,7 +420,7 @@ Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
 local SearchInput
 
-local function ToggleUI()
+function ToggleUI()
 	if isDestroying or IsToggling or IsBindingKey then return end
 	IsToggling = true
 	isMinimized = not isMinimized
@@ -427,8 +446,6 @@ local function ToggleUI()
 	end
 	task.delay(0.25, function() IsToggling = false end)
 end
-
-RegConn(FloatingBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
@@ -728,14 +745,22 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ToggleKeybind then ToggleUI() end
 end))
 
+-- FIXED: Prevents unload tween bugs when UI is minimized
 local function CloseAndAnimateUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	tween(MainScale, animSmooth, {Scale = 0.85})
-	tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
-		getgenv()[_G_Identifier]()
-	end)
+	
+	if isMinimized then
+		tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 0, 0, 0)}).Completed:Connect(function()
+			getgenv()[_G_Identifier]()
+		end)
+	else
+		tween(MainScale, animSmooth, {Scale = 0.85})
+		tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+			getgenv()[_G_Identifier]()
+		end)
+	end
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1814,6 +1839,7 @@ RegConn(KeybindButton.Activated:Connect(function()
 	KeybindButton.Text = "Press Any Key..."
 end))
 
+-- FIXED: Anti-AFK Type Check Compatibility
 CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
@@ -1829,9 +1855,11 @@ CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.",
 		
 		if getconnections then
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				if type(conn) == "table" and conn.Disable then
-					conn:Disable()
-					AfkConnections[conn] = conn
+				if conn.Disable then
+					pcall(function()
+						conn:Disable()
+						AfkConnections[conn] = conn
+					end)
 				end
 			end
 		end
@@ -1857,6 +1885,7 @@ CreateButtonSetting("Unload Hub", "Removes Velox Hub entirely from the game.", "
 	CloseAndAnimateUI()
 end)
 
+-- FIXED: Anti-AFK Initial Setup Type Check Compatibility
 if SavedData.Settings.AntiAFK then
 	if not AfkConnections.Idled then
 		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
@@ -1867,9 +1896,11 @@ if SavedData.Settings.AntiAFK then
 	end
 	if getconnections then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-			if type(conn) == "table" and conn.Disable then
-				conn:Disable()
-				AfkConnections[conn] = conn
+			if conn.Disable then
+				pcall(function()
+					conn:Disable()
+					AfkConnections[conn] = conn
+				end)
 			end
 		end
 	end
