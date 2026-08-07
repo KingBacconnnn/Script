@@ -340,7 +340,7 @@ local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
 local FloatIcon = Instance.new("ImageLabel", FloatingBtn)
-FloatIcon.Size = UDim2.new(0.5, 0, 0.5, 0)
+FloatIcon.Size = UDim2.new(0.75, 0, 0.75, 0)
 FloatIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
 FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatIcon.BackgroundTransparency = 1
