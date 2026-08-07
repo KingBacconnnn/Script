@@ -1,15 +1,4 @@
-local function GenerateRandomString(len)
-	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local str = ""
-	math.randomseed(os.clock() * 10000)
-	for i = 1, len do
-		local r = math.random(1, #chars)
-		str = str .. string.sub(chars, r, r)
-	end
-	return str
-end
-
-local _G_Identifier = GenerateRandomString(16)
+local _G_Identifier = "VeloxHub_Runtime_V3"
 if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
@@ -67,7 +56,7 @@ local Theme = {
 	Warning = Color3.fromRGB(245, 158, 11),
 	Info = Color3.fromRGB(56, 189, 248),
 	Stroke = Color3.fromRGB(51, 65, 85),
-	ToggleOff = Color3.fromRGB(71, 85, 105)
+	ToggleOff = Color3.fromRGB(100, 116, 139)
 }
 
 local VeloxConnections = {}
@@ -76,11 +65,11 @@ local RegisteredScripts = {}
 local AfkConnections = {}
 
 local isDestroying = false
-local uiState = "OPEN"
+local isMinimized = false
+local IsToggling = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local isAnimatingTab = false
-local MainGuiName = GenerateRandomString(20)
 
 local function RegConn(connection)
 	if connection and typeof(connection) == "RBXScriptConnection" then
@@ -122,7 +111,7 @@ local function CreateDebounce(delay, func)
 	end
 end
 
-local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local DATA_FILE = ".VeloxHub_Data_V3.0.json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -136,27 +125,8 @@ local SavedData = {
 local function SaveConfiguration()
 	if type(write_file) == "function" then
 		task.spawn(function()
-			local cleanData = {
-				Favorites = {},
-				AutoExecutes = {},
-				LastSearch = tostring(SavedData.LastSearch or ""),
-				ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-				Settings = {
-					AntiAFK = SavedData.Settings.AntiAFK == true
-				}
-			}
-			for k, v in pairs(SavedData.Favorites) do
-				if v then cleanData.Favorites[tostring(k)] = true end
-			end
-			for k, v in pairs(SavedData.AutoExecutes) do
-				if type(v) == "table" and v.PlaceId then
-					cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId }
-				end
-			end
-			local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
-			if success then 
-				pcall(function() write_file(DATA_FILE, result) end) 
-			end
+			local success, result = pcall(function() return HttpService:JSONEncode(SavedData) end)
+			if success then pcall(function() write_file(DATA_FILE, result) end) end
 		end)
 	end
 end
@@ -166,12 +136,12 @@ local function LoadConfiguration()
 		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
-				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
+				for k, _ in pairs(result.Favorites) do SavedData.Favorites[k] = true end
 			end
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
 					if type(k) == "string" and type(v) == "table" and type(v.PlaceId) == "number" then
-						SavedData.AutoExecutes[tostring(k)] = {PlaceId = v.PlaceId}
+						SavedData.AutoExecutes[k] = {PlaceId = v.PlaceId}
 					end
 				end
 			end
@@ -227,32 +197,17 @@ local function GetRelativeTime(timestamp)
 end
 
 local TargetParent = gethui()
-local existingGui = TargetParent:FindFirstChild(MainGuiName)
+local existingGui = TargetParent:FindFirstChild("VeloxHub_MainUI")
 if existingGui then pcall(function() existingGui:Destroy() end) end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = MainGuiName
+ScreenGui.Name = "VeloxHub_MainUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
-
-local mt = getrawmetatable(game)
-if mt and setreadonly and checkcaller and getnamecallmethod then
-	local oldNamecall = mt.__namecall
-	setreadonly(mt, false)
-	mt.__namecall = newcclosure(function(self, ...)
-		local method = getnamecallmethod()
-		if not checkcaller() and (method == "FindFirstChild" or method == "WaitForChild") then
-			local args = {...}
-			if args[1] == MainGuiName then return nil end
-		end
-		return oldNamecall(self, ...)
-	end)
-	setreadonly(mt, true)
-end
 
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
@@ -281,9 +236,7 @@ local function tween(obj, info, props)
 	ActiveObjectTweens[obj] = t
 	t:Play()
 	
-	local conn
-	conn = t.Completed:Connect(function()
-		if conn then conn:Disconnect() end
+	t.Completed:Connect(function()
 		if ActiveObjectTweens[obj] == t then
 			ActiveObjectTweens[obj] = nil
 		end
@@ -326,26 +279,16 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 end
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = "VeloxFloatingIcon"
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
-FloatingBtn.Position = UDim2.new(0.5, -22, 0, 20)
+FloatingBtn.Position = UDim2.new(0.05, 0, 0.15, 0)
 FloatingBtn.BackgroundColor3 = Theme.BackgroundMain
 FloatingBtn.Image = "rbxassetid://124635602201411"
 FloatingBtn.Visible = false
-FloatingBtn.ImageTransparency = 1
-FloatingBtn.BackgroundTransparency = 1
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
-FloatingBtn.AutoButtonColor = false
-pcall(function() FloatingBtn.Interactable = true end)
-
-local FloatCorner = Instance.new("UICorner", FloatingBtn)
-FloatCorner.CornerRadius = UDim.new(1, 0)
-
+Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
-FloatStroke.Color = Theme.Accent
-FloatStroke.Thickness = 2
-FloatStroke.Transparency = 1
+FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
 local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
@@ -353,16 +296,11 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatDrag = true
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		local iConn
-		iConn = RegConn(input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then 
-				floatDrag = false 
-				if iConn then iConn:Disconnect() end
-			end
+		RegConn(input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then floatDrag = false end
 		end))
 	end
 end))
-
 RegConn(UserInputService.InputChanged:Connect(function(input)
 	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - floatStart
@@ -370,20 +308,16 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
-local MainPanel = Instance.new("CanvasGroup", ScreenGui)
+local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
 MainPanel.BorderSizePixel = 0
+MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
-MainPanel.GroupTransparency = 0
-pcall(function() MainPanel.Interactable = true end)
-
-local MainScale = Instance.new("UIScale", MainPanel)
-MainScale.Scale = 1
 
 local MainGradient = Instance.new("UIGradient", MainPanel)
 MainGradient.Color = ColorSequence.new({
@@ -402,83 +336,30 @@ Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
 local SearchInput
 
-local function executeCloseAnimation()
-	uiState = "CLOSING"
-	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-	pcall(function() MainPanel.Interactable = false end)
-	
-	if ActiveObjectTweens[FloatingBtn] then pcall(function() ActiveObjectTweens[FloatingBtn]:Cancel() end) end
-	if FloatStroke and ActiveObjectTweens[FloatStroke] then pcall(function() ActiveObjectTweens[FloatStroke]:Cancel() end) end
-	
-	FloatingBtn.Visible = false
-	
-	tween(MainScale, animSmooth, {Scale = 0.85})
-	local tFade = tween(MainPanel, animSmooth, {GroupTransparency = 1})
-	
-	local fadeConn
-	fadeConn = tFade.Completed:Connect(function()
-		if fadeConn then fadeConn:Disconnect() end
-		if uiState == "CLOSING" and not isDestroying then
-			MainPanel.Visible = false
-			FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
-			FloatingBtn.ImageTransparency = 1
-			FloatingBtn.BackgroundTransparency = 1
-			if FloatStroke then FloatStroke.Transparency = 1 end
-			FloatingBtn.Visible = true
-			
-			local fbFade = tween(FloatingBtn, animSmooth, {ImageTransparency = 0, BackgroundTransparency = 0})
-			if FloatStroke then tween(FloatStroke, animSmooth, {Transparency = 0}) end
-			
-			local fbConn
-			fbConn = fbFade.Completed:Connect(function()
-				if fbConn then fbConn:Disconnect() end
-				if uiState == "CLOSING" then
-					uiState = "MINIMIZED"
-					pcall(function() FloatingBtn.Interactable = true end)
-				end
-			end)
-		end
-	end)
-end
-
 local function ToggleUI()
-	if isDestroying or IsBindingKey then return end
-	
-	if uiState == "OPEN" or uiState == "OPENING" then
-		executeCloseAnimation()
-	elseif uiState == "MINIMIZED" then
-		uiState = "OPENING"
-		pcall(function() FloatingBtn.Interactable = false end)
-		
-		local fbFadeOut = tween(FloatingBtn, animSmooth, {ImageTransparency = 1, BackgroundTransparency = 1})
-		if FloatStroke then tween(FloatStroke, animSmooth, {Transparency = 1}) end
-		
-		local fbOutConn
-		fbOutConn = fbFadeOut.Completed:Connect(function()
-			if fbOutConn then fbOutConn:Disconnect() end
-			if uiState == "OPENING" and not isDestroying then
-				FloatingBtn.Visible = false
-				MainPanel.Visible = true
-				
-				tween(MainScale, animSmooth, {Scale = 1})
-				local tFadeOpen = tween(MainPanel, animSmooth, {GroupTransparency = 0})
-				
-				local tOpenConn
-				tOpenConn = tFadeOpen.Completed:Connect(function()
-					if tOpenConn then tOpenConn:Disconnect() end
-					if uiState == "OPENING" then
-						uiState = "OPEN"
-						pcall(function() MainPanel.Interactable = true end)
-					end
-				end)
+	if isDestroying or IsToggling or IsBindingKey then return end
+	IsToggling = true
+	isMinimized = not isMinimized
+
+	if isMinimized then
+		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
+		tween(MainPanel, animSmooth, {Size = UDim2.new(0, 0, 0, 0)}).Completed:Connect(function()
+			if isMinimized and not isDestroying then
+				MainPanel.Visible = false
+				FloatingBtn.Visible = true
+				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
+				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 45, 0, 45)})
 			end
 		end)
-	elseif uiState == "CLOSING" then
-		return
+	else
+		FloatingBtn.Visible = false
+		MainPanel.Visible = true
+		tween(MainPanel, animSmooth, {Size = PANEL_SIZE})
 	end
+	task.delay(0.25, function() IsToggling = false end)
 end
 
-RegConn(FloatingBtn.MouseButton1Click:Connect(CreateDebounce(0.1, ToggleUI)))
+RegConn(FloatingBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
@@ -557,9 +438,7 @@ getfenv().ShowNotification = function(msg, notifType)
 	task.delay(3.5, function()
 		if wrapper and wrapper.Parent then
 			local twOut = tween(box, animSmooth, {Position = UDim2.new(1, 400, 0, 0)})
-			local wConn
-			wConn = twOut.Completed:Connect(function()
-				if wConn then wConn:Disconnect() end
+			twOut.Completed:Connect(function()
 				local idx = table.find(NotificationQueue, wrapper)
 				if idx then table.remove(NotificationQueue, idx) end
 				pcall(function() wrapper:Destroy() end)
@@ -569,209 +448,139 @@ getfenv().ShowNotification = function(msg, notifType)
 end
 local ShowNotification = getfenv().ShowNotification
 
-local ConfirmOverlay = Instance.new("Frame", ScreenGui)
+-- ============================================================
+-- [[ Confirmation Dialog Component ]]
+-- ============================================================
+
+local ConfirmOverlay = Instance.new("TextButton", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
-ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
 ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ConfirmOverlay.BackgroundTransparency = 1
+ConfirmOverlay.AutoButtonColor = false
+ConfirmOverlay.Text = ""
+ConfirmOverlay.Active = true
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
-ConfirmOverlay.Active = true
 
 local ConfirmBox = Instance.new("Frame", ConfirmOverlay)
-ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
-ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+ConfirmBox.Size = UDim2.new(0, 0, 0, 0) 
 ConfirmBox.AnchorPoint = Vector2.new(0.5, 0.5)
-ConfirmBox.BackgroundColor3 = Theme.BackgroundSecondary
-ConfirmBox.BorderSizePixel = 0
+ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+ConfirmBox.BackgroundColor3 = Theme.BackgroundMain
 ConfirmBox.ClipsDescendants = true
 ConfirmBox.ZIndex = 401
-Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 12)
-local ConfirmBoxStroke = Instance.new("UIStroke", ConfirmBox)
-ConfirmBoxStroke.Color = Theme.Stroke
-ConfirmBoxStroke.Thickness = 1
-
-local ConfirmScale = Instance.new("UIScale", ConfirmBox)
-ConfirmScale.Scale = 0.85
-
-local ConfirmPadding = Instance.new("UIPadding", ConfirmBox)
-ConfirmPadding.PaddingTop = UDim.new(0, 16)
-ConfirmPadding.PaddingBottom = UDim.new(0, 16)
-ConfirmPadding.PaddingLeft = UDim.new(0, 20)
-ConfirmPadding.PaddingRight = UDim.new(0, 20)
-
-local ConfirmLayout = Instance.new("UIListLayout", ConfirmBox)
-ConfirmLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfirmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ConfirmLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-ConfirmLayout.Padding = UDim.new(0, 8)
+Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 8)
+Instance.new("UIStroke", ConfirmBox).Color = Theme.Stroke
 
 local ConfirmTitle = Instance.new("TextLabel", ConfirmBox)
-ConfirmTitle.Size = UDim2.new(1, 0, 0, 22)
+ConfirmTitle.Size = UDim2.new(1, 0, 0, 40)
 ConfirmTitle.BackgroundTransparency = 1
 ConfirmTitle.Text = "Execute Script"
 ConfirmTitle.TextColor3 = Theme.TextPrimary
 ConfirmTitle.Font = Enum.Font.GothamBold
-ConfirmTitle.TextSize = IsMobile and 14 or 16
-ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmTitle.LayoutOrder = 1
+ConfirmTitle.TextSize = 15
 ConfirmTitle.ZIndex = 402
 
 local ConfirmMessage = Instance.new("TextLabel", ConfirmBox)
-ConfirmMessage.Size = UDim2.new(1, 0, 0, 18)
+ConfirmMessage.Size = UDim2.new(1, -40, 0, 50)
+ConfirmMessage.Position = UDim2.new(0, 20, 0, 35)
 ConfirmMessage.BackgroundTransparency = 1
 ConfirmMessage.Text = "Are you sure you want to execute this script?"
 ConfirmMessage.TextColor3 = Theme.TextSecondary
-ConfirmMessage.Font = Enum.Font.Gotham
-ConfirmMessage.TextSize = IsMobile and 11 or 12
-ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Center
+ConfirmMessage.Font = Enum.Font.GothamMedium
+ConfirmMessage.TextSize = 12
 ConfirmMessage.TextWrapped = true
-ConfirmMessage.LayoutOrder = 2
 ConfirmMessage.ZIndex = 402
 
-local ConfirmScriptName = Instance.new("TextLabel", ConfirmBox)
-ConfirmScriptName.Size = UDim2.new(1, 0, 0, 0)
-ConfirmScriptName.AutomaticSize = Enum.AutomaticSize.Y
-ConfirmScriptName.BackgroundTransparency = 1
-ConfirmScriptName.Text = ""
-ConfirmScriptName.TextColor3 = Theme.Accent
-ConfirmScriptName.Font = Enum.Font.GothamBold
-ConfirmScriptName.TextSize = IsMobile and 12 or 13
-ConfirmScriptName.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmScriptName.TextWrapped = true
-ConfirmScriptName.LayoutOrder = 3
-ConfirmScriptName.ZIndex = 402
+local ConfirmBtnContainer = Instance.new("Frame", ConfirmBox)
+ConfirmBtnContainer.Size = UDim2.new(1, -40, 0, 32)
+ConfirmBtnContainer.Position = UDim2.new(0, 20, 1, -48)
+ConfirmBtnContainer.BackgroundTransparency = 1
+ConfirmBtnContainer.ZIndex = 402
 
-local ConfirmButtonRow = Instance.new("Frame", ConfirmBox)
-ConfirmButtonRow.Size = UDim2.new(1, 0, 0, 34)
-ConfirmButtonRow.BackgroundTransparency = 1
-ConfirmButtonRow.LayoutOrder = 4
-ConfirmButtonRow.ZIndex = 402
+local ConfirmBtnLayout = Instance.new("UIListLayout", ConfirmBtnContainer)
+ConfirmBtnLayout.FillDirection = Enum.FillDirection.Horizontal
+ConfirmBtnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ConfirmBtnLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ConfirmBtnLayout.Padding = UDim.new(0, 12)
 
-local ConfirmRowLayout = Instance.new("UIListLayout", ConfirmButtonRow)
-ConfirmRowLayout.FillDirection = Enum.FillDirection.Horizontal
-ConfirmRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ConfirmRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-ConfirmRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfirmRowLayout.Padding = UDim.new(0, 12)
+local BtnNo = Instance.new("TextButton", ConfirmBtnContainer)
+BtnNo.Size = UDim2.new(0, 100, 1, 0)
+BtnNo.BackgroundColor3 = Theme.CardHover
+BtnNo.Text = "No"
+BtnNo.TextColor3 = Theme.TextPrimary
+BtnNo.Font = Enum.Font.GothamBold
+BtnNo.TextSize = 12
+BtnNo.LayoutOrder = 1
+BtnNo.ZIndex = 403
+Instance.new("UICorner", BtnNo).CornerRadius = UDim.new(0, 6)
+local BtnNoStroke = Instance.new("UIStroke", BtnNo)
+BtnNoStroke.Color = Theme.Stroke
+ApplyInteractiveAnimations(BtnNo, Theme.CardHover, Color3.fromRGB(40, 53, 75), Theme.BackgroundSecondary, BtnNoStroke, Theme.Stroke, Theme.TextSecondary)
 
-local ConfirmCancelBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmCancelBtn.Size = UDim2.new(0.5, -6, 1, 0)
-ConfirmCancelBtn.BackgroundColor3 = Theme.CardHover
-ConfirmCancelBtn.Text = "Cancel"
-ConfirmCancelBtn.TextColor3 = Theme.TextPrimary
-ConfirmCancelBtn.Font = Enum.Font.GothamBold
-ConfirmCancelBtn.TextSize = IsMobile and 11 or 12
-ConfirmCancelBtn.AutoButtonColor = false
-ConfirmCancelBtn.LayoutOrder = 1
-ConfirmCancelBtn.ZIndex = 403
-Instance.new("UICorner", ConfirmCancelBtn).CornerRadius = UDim.new(0, 6)
-local CancelStroke = Instance.new("UIStroke", ConfirmCancelBtn)
-CancelStroke.Color = Theme.Stroke
+local BtnYes = Instance.new("TextButton", ConfirmBtnContainer)
+BtnYes.Size = UDim2.new(0, 100, 1, 0)
+BtnYes.BackgroundColor3 = Theme.Accent
+BtnYes.Text = "Yes"
+BtnYes.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnYes.Font = Enum.Font.GothamBold
+BtnYes.TextSize = 12
+BtnYes.LayoutOrder = 2
+BtnYes.ZIndex = 403
+Instance.new("UICorner", BtnYes).CornerRadius = UDim.new(0, 6)
+ApplyInteractiveAnimations(BtnYes, Theme.Accent, Color3.fromRGB(115, 118, 245), Color3.fromRGB(80, 83, 200))
 
-local ConfirmExecuteBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmExecuteBtn.Size = UDim2.new(0.5, -6, 1, 0)
-ConfirmExecuteBtn.BackgroundColor3 = Theme.Accent
-ConfirmExecuteBtn.Text = "Execute"
-ConfirmExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ConfirmExecuteBtn.Font = Enum.Font.GothamBold
-ConfirmExecuteBtn.TextSize = IsMobile and 11 or 12
-ConfirmExecuteBtn.AutoButtonColor = false
-ConfirmExecuteBtn.LayoutOrder = 2
-ConfirmExecuteBtn.ZIndex = 403
-Instance.new("UICorner", ConfirmExecuteBtn).CornerRadius = UDim.new(0, 6)
+local PendingScriptReference = nil
+local IsConfirmAnimating = false
 
-ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Color3.fromRGB(40, 53, 75), Color3.fromRGB(20, 29, 45), CancelStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Accent, Color3.fromRGB(120, 123, 245), Color3.fromRGB(79, 82, 221))
+local function HideConfirmDialog()
+	if IsConfirmAnimating or not ConfirmOverlay.Visible then return end
+	IsConfirmAnimating = true
+	PendingScriptReference = nil
+	tween(ConfirmOverlay, animSmooth, {BackgroundTransparency = 1})
+	local tw = tween(ConfirmBox, animSmooth, {Size = UDim2.new(0, 0, 0, 0)})
+	
+	tw.Completed:Connect(function()
+		if not PendingScriptReference then 
+			ConfirmOverlay.Visible = false
+		end
+		IsConfirmAnimating = false
+	end)
+end
 
-local isConfirming = false
-local isDialogAnimating = false
-local pendingExecuteCallback = nil
-
-local function OpenConfirmDialog(scriptName, onExecute)
-	if isConfirming or isDialogAnimating then return end
-	isConfirming = true
-	isDialogAnimating = true
-	pendingExecuteCallback = onExecute
-
-	ConfirmScriptName.Text = scriptName
-	ConfirmExecuteBtn.Active = true
-	ConfirmExecuteBtn.AutoButtonColor = true
-	ConfirmExecuteBtn.Text = "Execute"
-
-	ConfirmOverlay.BackgroundTransparency = 1
-	ConfirmScale.Scale = 0.85
+local function ShowConfirmDialog(executeCallback)
+	if IsConfirmAnimating or ConfirmOverlay.Visible then return end
+	IsConfirmAnimating = true
+	PendingScriptReference = executeCallback
+	
 	ConfirmOverlay.Visible = true
-
-	tween(ConfirmOverlay, animQuick, {BackgroundTransparency = 0.5})
-	local scaleTween = tween(ConfirmScale, animQuick, {Scale = 1})
-	local sConn
-	sConn = scaleTween.Completed:Connect(function()
-		if sConn then sConn:Disconnect() end
-		isDialogAnimating = false
+	tween(ConfirmOverlay, animSmooth, {BackgroundTransparency = 0.5})
+	local tw = tween(ConfirmBox, animSmooth, {Size = UDim2.new(0, 260, 0, 140)})
+	
+	tw.Completed:Connect(function()
+		IsConfirmAnimating = false
 	end)
 end
 
-local function CloseConfirmDialog(shouldExecute)
-	if not isConfirming or isDialogAnimating then return end
-	isDialogAnimating = true
+RegConn(BtnNo.Activated:Connect(function()
+	if not isDestroying then HideConfirmDialog() end
+end))
 
-	ConfirmExecuteBtn.Active = false
-
-	tween(ConfirmOverlay, animQuick, {BackgroundTransparency = 1})
-	local scaleTween = tween(ConfirmScale, animQuick, {Scale = 0.85})
-
-	local sConn
-	sConn = scaleTween.Completed:Connect(function()
-		if sConn then sConn:Disconnect() end
-		ConfirmOverlay.Visible = false
-		isConfirming = false
-		isDialogAnimating = false
-
-		local cb = pendingExecuteCallback
-		pendingExecuteCallback = nil
-
-		if shouldExecute and type(cb) == "function" then
-			cb()
+RegConn(BtnYes.Activated:Connect(function()
+	if not isDestroying then
+		if PendingScriptReference then
+			task.spawn(PendingScriptReference)
 		end
-	end)
-end
-
-RegConn(ConfirmCancelBtn.Activated:Connect(function()
-	if isConfirming and not isDialogAnimating then
-		CloseConfirmDialog(false)
+		HideConfirmDialog()
 	end
 end))
-
-RegConn(ConfirmExecuteBtn.Activated:Connect(function()
-	if isConfirming and not isDialogAnimating then
-		CloseConfirmDialog(true)
-	end
-end))
-
-RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
-	if not isConfirming or isDialogAnimating then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		local pos = input.Position
-		local bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
-		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
-		if not inside then
-			CloseConfirmDialog(false)
-		end
-	end
-end))
+-- ============================================================
 
 local ToggleKeybind = Enum.KeyCode.RightControl
 pcall(function() if SavedData.ToggleKeybind then ToggleKeybind = Enum.KeyCode[SavedData.ToggleKeybind] end end)
 local KeybindButtonRef = nil
 
 RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if isConfirming then
-		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
-			CloseConfirmDialog(false)
-			return
-		end
-	end
 	if IsBindingKey then
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
@@ -799,12 +608,7 @@ local function CloseAndAnimateUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	pcall(function() MainPanel.Interactable = false end)
-	tween(MainScale, animSmooth, {Scale = 0.85})
-	local tClose = tween(MainPanel, animSmooth, {GroupTransparency = 1})
-	local cConn
-	cConn = tClose.Completed:Connect(function()
-		if cConn then cConn:Disconnect() end
+	tween(MainPanel, animSmooth, {Size = UDim2.new(0, 0, 0, 0)}).Completed:Connect(function()
 		getgenv()[_G_Identifier]()
 	end)
 end
@@ -906,7 +710,7 @@ local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X
 VersionLabel.Size = UDim2.new(0, 0, 1, 0)
 VersionLabel.BackgroundTransparency = 1
-VersionLabel.Text = "v3.1.0 | " .. getexecutor()
+VersionLabel.Text = "v3.0.0 | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent
 VersionLabel.Font = Enum.Font.GothamMedium
 VersionLabel.TextSize = IsMobile and 10 or 12
@@ -944,29 +748,27 @@ UILay.SortOrder = Enum.SortOrder.LayoutOrder
 UILay.VerticalAlignment = Enum.VerticalAlignment.Center
 
 local UI_DisplayName = Instance.new("TextLabel", UserInfoFrame)
-UI_DisplayName.Size = UDim2.new(1, 0, 0, 0)
-UI_DisplayName.AutomaticSize = Enum.AutomaticSize.Y
+UI_DisplayName.Size = UDim2.new(1, 0, 0, 14)
 UI_DisplayName.BackgroundTransparency = 1
 UI_DisplayName.Text = LocalPlayer.DisplayName ~= "" and LocalPlayer.DisplayName or LocalPlayer.Name
 UI_DisplayName.TextColor3 = Theme.TextPrimary
 UI_DisplayName.Font = Enum.Font.GothamBold
 UI_DisplayName.TextSize = IsMobile and 10 or 12
-UI_DisplayName.TextScaled = false
-UI_DisplayName.TextWrapped = true
+UI_DisplayName.TextScaled = true
 UI_DisplayName.TextXAlignment = Enum.TextXAlignment.Right
+UI_DisplayName.TextTruncate = Enum.TextTruncate.AtEnd
 UI_DisplayName.LayoutOrder = 1
 
 local UI_Username = Instance.new("TextLabel", UserInfoFrame)
-UI_Username.Size = UDim2.new(1, 0, 0, 0)
-UI_Username.AutomaticSize = Enum.AutomaticSize.Y
+UI_Username.Size = UDim2.new(1, 0, 0, 12)
 UI_Username.BackgroundTransparency = 1
 UI_Username.Text = "@" .. LocalPlayer.Name
 UI_Username.TextColor3 = Theme.TextSecondary
 UI_Username.Font = Enum.Font.Gotham
 UI_Username.TextSize = IsMobile and 9 or 10
-UI_Username.TextScaled = false
-UI_Username.TextWrapped = true
+UI_Username.TextScaled = true
 UI_Username.TextXAlignment = Enum.TextXAlignment.Right
+UI_Username.TextTruncate = Enum.TextTruncate.AtEnd
 UI_Username.LayoutOrder = 2
 
 local AvatarFrame = Instance.new("ImageLabel", RightHeaderFrame)
@@ -1004,7 +806,7 @@ MinBtn.TextSize = IsMobile and 14 or 18
 MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-RegConn(MinBtn.Activated:Connect(CreateDebounce(0.1, ToggleUI)))
+RegConn(MinBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
@@ -1451,8 +1253,8 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.1.0 - Stealth & Security Overhaul", "• Fully isolated UI container logic dynamically routing away from PlayerGui dependencies.\n• Complete string randomization for hub instances, ensuring unflagged client memory execution.\n• Refined all global tween configurations to cancel conflicts linearly.\n• Centered exact floating toggle proportions across cross-platform environments.", ChangelogsView)
 CreateParagraph("v3.0.2 - Interaction Rewrite & UX Flow", "• Replaced bouncing/overshoot animations with clean, unified linear/quad fades.\n• Refined the Settings Hub layout to prioritize clear navigation, equal button scaling, and modern horizontal alignments.\n• Forced immediate keyboard execution upon search tap, entirely resolving unresponsive UI focus instances.", ChangelogsView)
+CreateParagraph("v3.0.1 - Input & Rendering Hotfix", "• Resolved mobile search input interception. Tapping the search bar now accurately displays the soft keyboard.\n• Addressed significant UI memory leaks caused by unbounded UI connections during catalog refreshes.\n• Integrated strict Tween cancellation layer to resolve card overlaps.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1640,17 +1442,14 @@ local function CreateScriptCard(data, renderParent)
 
 	RegConn(card.Activated:Connect(function()
 		if isDestroying or GlobalExecutionCooldown then return end
+		
+		if type(loadstring) ~= "function" then
+			ShowNotification("Executor lacks loadstring support!", "Error")
+			return
+		end
 
-		local function executeScript()
-			if GlobalExecutionCooldown then return end
+		local function ExecuteScriptLogic()
 			GlobalExecutionCooldown = true
-
-			if type(loadstring) ~= "function" then
-				ShowNotification("Executor lacks loadstring support!", "Error")
-				GlobalExecutionCooldown = false
-				return
-			end
-
 			titleLbl.Text = "Executing..."
 			tween(titleLbl, animQuick, {TextColor3 = Theme.Accent})
 
@@ -1675,10 +1474,10 @@ local function CreateScriptCard(data, renderParent)
 			end)
 		end
 
-		if SavedData.AutoExecutes[exactName] ~= nil then
-			executeScript()
+		if SavedData.AutoExecutes[exactName] then
+			ExecuteScriptLogic()
 		else
-			OpenConfirmDialog(exactName, executeScript)
+			ShowConfirmDialog(ExecuteScriptLogic)
 		end
 	end))
 
@@ -1761,7 +1560,7 @@ local function LoadDynamicCatalog()
 				StatusText.TextColor3 = Theme.Success
 				ShowNotification("Catalog refreshed successfully.", "Success")
 			else
-				EmptyStateMessage.Text = "Catalog parsing error. Check console."
+				EmptyStateMessage.Text = "Catalog parsing error."
 				StatusText.Text = "Data Error"
 			end
 		else
@@ -1790,170 +1589,137 @@ local function CreateSettingRow(title, desc, parent, order)
 	local t = Instance.new("TextLabel", textContainer)
 	t.Size = UDim2.new(1, 0, 0, 16); t.BackgroundTransparency = 1; t.Text = title
 	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.LayoutOrder = 1
-	
+
 	local d = Instance.new("TextLabel", textContainer)
-	d.Size = UDim2.new(1, 0, 0, 16); d.BackgroundTransparency = 1; d.Text = desc
-	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextXAlignment = Enum.TextXAlignment.Left; d.LayoutOrder = 2
-	d.TextWrapped = true
+	d.Size = UDim2.new(1, 0, 1, -20); d.BackgroundTransparency = 1; d.Text = desc
+	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextXAlignment = Enum.TextXAlignment.Left
+	d.TextWrapped = true; d.TextTruncate = Enum.TextTruncate.AtEnd; d.LayoutOrder = 2
 
-	local rightContainer = Instance.new("Frame", wrap)
-	rightContainer.Size = UDim2.new(0, 120, 1, 0)
-	rightContainer.Position = UDim2.new(1, -120, 0, 0)
-	rightContainer.BackgroundTransparency = 1
-
-	return wrap, rightContainer
+	return wrap
 end
 
-local function CreateToggleSetting(title, desc, parent, order, defaultValue, callback)
-	local wrap, rightContainer = CreateSettingRow(title, desc, parent, order)
-	
-	local toggleBtn = Instance.new("TextButton", rightContainer)
-	toggleBtn.Size = UDim2.new(0, 44, 0, 24)
-	toggleBtn.Position = UDim2.new(1, -54, 0.5, -12)
-	toggleBtn.BackgroundColor3 = defaultValue and Theme.Success or Theme.ToggleOff
-	toggleBtn.Text = ""
-	toggleBtn.AutoButtonColor = false
-	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+local function CreateToggleCard(title, desc, stateKey, customCallback, order)
+	local wrap = CreateSettingRow(title, desc, SettingsView, order)
 
-	local circle = Instance.new("Frame", toggleBtn)
-	circle.Size = UDim2.new(0, 18, 0, 18)
-	circle.Position = defaultValue and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+	local b = Instance.new("TextButton", wrap)
+	b.Size = UDim2.new(0, 44, 0, 24)
+	b.AnchorPoint = Vector2.new(1, 0.5)
+	b.Position = UDim2.new(1, -16, 0.5, 0)
+	b.Text = ""; b.AutoButtonColor = false
+	b.ClipsDescendants = false
+	Instance.new("UICorner", b).CornerRadius = UDim.new(1, 0)
 
-	local state = defaultValue
+	local knob = Instance.new("Frame", b)
+	knob.Size = UDim2.new(0, 20, 0, 20)
+	knob.AnchorPoint = Vector2.new(0, 0.5)
+	knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
-	RegConn(toggleBtn.Activated:Connect(function()
-		if isDestroying then return end
-		state = not state
-		tween(toggleBtn, animQuick, {BackgroundColor3 = state and Theme.Success or Theme.ToggleOff})
-		tween(circle, animQuick, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
-		if type(callback) == "function" then task.spawn(callback, state) end
-	end))
-end
-
-local function CreateButtonSetting(title, desc, btnText, parent, order, callback)
-	local wrap, rightContainer = CreateSettingRow(title, desc, parent, order)
-
-	local btn = Instance.new("TextButton", rightContainer)
-	btn.Size = UDim2.new(0, 100, 0, 28)
-	btn.Position = UDim2.new(1, -110, 0.5, -14)
-	btn.BackgroundColor3 = Theme.BackgroundMain
-	btn.Text = btnText
-	btn.TextColor3 = Theme.TextPrimary
-	btn.Font = Enum.Font.GothamMedium
-	btn.TextSize = 12
-	btn.AutoButtonColor = false
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-	local btnStroke = Instance.new("UIStroke", btn)
-	btnStroke.Color = Theme.Stroke
-
-	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
-
-	RegConn(btn.Activated:Connect(function()
-		if isDestroying then return end
-		if type(callback) == "function" then task.spawn(callback, btn) end
-	end))
-	
-	return btn
-end
-
-local kbWrap, kbRightContainer = CreateSettingRow("Toggle UI", "Keybind to show/hide the hub.", SettingsView, 1)
-local KeybindButton = Instance.new("TextButton", kbRightContainer)
-KeybindButton.Size = UDim2.new(0, 100, 0, 28)
-KeybindButton.Position = UDim2.new(1, -110, 0.5, -14)
-KeybindButton.BackgroundColor3 = Theme.BackgroundMain
-KeybindButton.Text = ToggleKeybind.Name
-KeybindButton.TextColor3 = Theme.TextPrimary
-KeybindButton.Font = Enum.Font.GothamMedium
-KeybindButton.TextSize = 12
-KeybindButton.AutoButtonColor = false
-Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
-local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
-kbBtnStroke.Color = Theme.Stroke
-KeybindButtonRef = KeybindButton
-
-ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
-
-RegConn(KeybindButton.Activated:Connect(function()
-	if isDestroying then return end
-	IsBindingKey = true
-	KeybindButton.Text = "Press Any Key..."
-end))
-
-CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
-	SaveConfiguration()
-	
-	if val then
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-				VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-				task.wait(0.1)
-				VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-			end))
-		end
+	local function UpdateVisualState()
+		local isOn = SavedData.Settings[stateKey]
+		local color = isOn and Theme.Accent or Theme.ToggleOff
+		local targetPos = isOn and UDim2.new(1, -22, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
 		
-		if getconnections then
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				if type(conn) == "table" and conn.Disable then
-					conn:Disable()
-					AfkConnections[conn] = conn
-				end
+		tween(b, animSmooth, {BackgroundColor3 = color})
+		tween(knob, animSmooth, {Position = targetPos})
+	end
+
+	UpdateVisualState()
+	RegConn(b.Activated:Connect(CreateDebounce(0.3, function()
+		if isDestroying then return end
+		local oldState = SavedData.Settings[stateKey]
+		SavedData.Settings[stateKey] = not oldState
+		UpdateVisualState()
+		local success = true
+		if customCallback then
+			local ok = pcall(function() customCallback(SavedData.Settings[stateKey]) end)
+			if not ok then
+				success = false
+				SavedData.Settings[stateKey] = oldState
+				UpdateVisualState()
+				ShowNotification("Failed to toggle " .. title, "Error")
 			end
+		end
+		if success then SaveConfiguration() end
+	end)))
+
+	return b
+end
+
+local function CreateActionCard(title, desc, btnText, btnColor, order, callback)
+	local wrap = CreateSettingRow(title, desc, SettingsView, order)
+
+	local b = Instance.new("TextButton", wrap)
+	b.Size = UDim2.new(0, 110, 0, 32)
+	b.AnchorPoint = Vector2.new(1, 0.5)
+	b.Position = UDim2.new(1, -12, 0.5, 0)
+	b.BackgroundColor3 = btnColor
+	b.Text = btnText; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Font = Enum.Font.GothamBold
+	b.TextSize = 11; b.AutoButtonColor = false
+	b.ClipsDescendants = true
+	b.TextWrapped = true
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+
+	local hoverCol = Color3.new(math.min(btnColor.R*1.2, 1), math.min(btnColor.G*1.2, 1), math.min(btnColor.B*1.2, 1))
+	local clickCol = Color3.new(math.max(btnColor.R*0.8, 0), math.max(btnColor.G*0.8, 0), math.max(btnColor.B*0.8, 0))
+	ApplyInteractiveAnimations(b, btnColor, hoverCol, clickCol)
+	RegConn(b.Activated:Connect(CreateDebounce(0.5, callback)))
+	return b
+end
+
+local function UpdateAntiAFK(state)
+	if state then
+		local success = pcall(function()
+			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+				conn:Disable()
+				table.insert(AfkConnections, conn)
+			end
+		end)
+		if not success or #AfkConnections == 0 then
+			local c = RegConn(LocalPlayer.Idled:Connect(function()
+				VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightMeta, false, game)
+				VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightMeta, false, game)
+			end))
+			table.insert(AfkConnections, c)
 		end
 	else
-		if AfkConnections.Idled then
-			AfkConnections.Idled:Disconnect()
-			AfkConnections.Idled = nil
+		for _, c in pairs(AfkConnections) do
+			if type(c) == "table" and c.Enable then pcall(function() c:Enable() end)
+			elseif typeof(c) == "RBXScriptConnection" then pcall(function() c:Disconnect() end) end
 		end
-		
-		for conn, _ in pairs(AfkConnections) do
-			if type(conn) == "table" and conn.Enable then
-				pcall(function() conn:Enable() end)
-			end
-		end
+		table.clear(AfkConnections)
 	end
-end)
+end
 
-CreateButtonSetting("Refresh Catalog", "Forces an update to the script list.", "Refresh", SettingsView, 3, function()
+CreateToggleCard("Universal Anti-AFK", "Prevents Roblox 20-minute idle disconnects.", "AntiAFK", function(s)
+	ShowNotification("Anti-AFK " .. (s and "Enabled" or "Disabled"), s); UpdateAntiAFK(s)
+end, 1)
+if SavedData.Settings.AntiAFK then UpdateAntiAFK(true) end
+
+CreateActionCard("Database Synchronization", "Force refresh the remote script catalog.", "Sync Data", Theme.Success, 2, function()
+	ShowNotification("Starting Database Synchronization...", "Info")
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSetting("Unload Hub", "Removes Velox Hub entirely from the game.", "Unload", SettingsView, 4, function()
-	CloseAndAnimateUI()
+CreateActionCard("Reset User Preferences", "Purge saved toggles and execution states.", "Clear Cache", Theme.Warning, 3, function()
+	table.clear(SavedData.Favorites)
+	table.clear(SavedData.AutoExecutes)
+	SaveConfiguration()
+	RefreshAllCardStates()
+	UpdateFilter()
+	ShowNotification("All caches & preferences cleared.", "Success")
 end)
 
-if SavedData.Settings.AntiAFK then
-	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-			task.wait(0.1)
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-		end))
+KeybindButtonRef = CreateActionCard("UI Keybind", "Change button used to toggle interface.", ToggleKeybind.Name, Theme.Accent, 4, function()
+	if not isDestroying and not IsBindingKey then 
+		IsBindingKey = true 
+		KeybindButtonRef.Text = "Press Key..."
 	end
-	if getconnections then
-		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-			if type(conn) == "table" and conn.Disable then
-				conn:Disable()
-				AfkConnections[conn] = conn
-			end
-		end
-	end
-end
+end)
 
-local function ObfuscateHierarchy(instance)
-	for _, child in ipairs(instance:GetDescendants()) do
-		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
-			child.Name = GenerateRandomString(15)
-		end
-	end
-end
-ObfuscateHierarchy(ScreenGui)
+CreateActionCard("Unload Engine", "Gracefully terminate tasks & UI.", "Destroy UI", Theme.Error, 5, CloseAndAnimateUI)
 
-TabViews["Changelogs"].Visible = true
-TabViews["Scripts"].Visible = false
-TabViews["Settings"].Visible = false
-TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+MainGradient.Offset = Vector2.new(-1, 0)
+tween(MainGradient, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Offset = Vector2.new(0, 0)})
 
-ShowNotification("Velox Hub loaded successfully.", "Success")
+ShowNotification("Velox Hub initialized. Welcome back, " .. (LocalPlayer.DisplayName ~= "" and LocalPlayer.DisplayName or LocalPlayer.Name) .. ".", "Success")
