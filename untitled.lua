@@ -77,11 +77,51 @@ local AfkConnections = {}
 
 local isDestroying = false
 local isMinimized = false
-local IsToggling = false
+local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local isAnimatingTab = false
 local MainGuiName = GenerateRandomString(20)
+
+local OriginalCache = {}
+
+local function CacheInstanceAndDescendants(root)
+	local function CacheObj(obj)
+		if not obj or OriginalCache[obj] then return end
+		local c = {}
+		if obj:IsA("GuiObject") then
+			c.BackgroundTransparency = obj.BackgroundTransparency
+			c.Size = obj.Size
+			c.Position = obj.Position
+			c.AnchorPoint = obj.AnchorPoint
+			c.Visible = obj.Visible
+		end
+		if obj:IsA("TextLabel") or obj:IsA("TextBox") or obj:IsA("TextButton") then
+			c.TextTransparency = obj.TextTransparency
+		end
+		if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+			c.ImageTransparency = obj.ImageTransparency
+		end
+		if obj:IsA("ScrollingFrame") then
+			c.ScrollBarImageTransparency = obj.ScrollBarImageTransparency
+		end
+		if obj:IsA("UIStroke") or obj:IsA("UIGradient") then
+			c.Transparency = obj.Transparency
+		end
+		if obj:IsA("CanvasGroup") then
+			c.GroupTransparency = obj.GroupTransparency
+		end
+		if obj:IsA("UIScale") then
+			c.Scale = obj.Scale
+		end
+		OriginalCache[obj] = c
+	end
+
+	CacheObj(root)
+	for _, desc in ipairs(root:GetDescendants()) do
+		CacheObj(desc)
+	end
+end
 
 local function RegConn(connection)
 	if connection and typeof(connection) == "RBXScriptConnection" then
@@ -354,12 +394,21 @@ FloatStroke.Thickness = 2
 
 local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
+	if isTransitioning then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		RegConn(input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then floatDrag = false end
+		
+		local inputEndedConn
+		inputEndedConn = RegConn(input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then 
+				floatDrag = false 
+				if OriginalCache[FloatingBtn] then
+					OriginalCache[FloatingBtn].Position = FloatingBtn.Position
+				end
+				if inputEndedConn then inputEndedConn:Disconnect() end
+			end
 		end))
 	end
 end))
@@ -402,60 +451,139 @@ Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
 local SearchInput
+local transitionTweenA, transitionTweenB, transitionTweenC, transitionTweenD
+
+local function CancelActiveTweens()
+	if transitionTweenA then pcall(function() transitionTweenA:Cancel(); transitionTweenA:Destroy() end) transitionTweenA = nil end
+	if transitionTweenB then pcall(function() transitionTweenB:Cancel(); transitionTweenB:Destroy() end) transitionTweenB = nil end
+	if transitionTweenC then pcall(function() transitionTweenC:Cancel(); transitionTweenC:Destroy() end) transitionTweenC = nil end
+	if transitionTweenD then pcall(function() transitionTweenD:Cancel(); transitionTweenD:Destroy() end) transitionTweenD = nil end
+end
+
+local function RestoreCachedProperties()
+	for obj, c in pairs(OriginalCache) do
+		if obj and obj.Parent then
+			if c.BackgroundTransparency ~= nil then pcall(function() obj.BackgroundTransparency = c.BackgroundTransparency end) end
+			if c.TextTransparency ~= nil then pcall(function() obj.TextTransparency = c.TextTransparency end) end
+			if c.ImageTransparency ~= nil then pcall(function() obj.ImageTransparency = c.ImageTransparency end) end
+			if c.ScrollBarImageTransparency ~= nil then pcall(function() obj.ScrollBarImageTransparency = c.ScrollBarImageTransparency end) end
+			if c.Transparency ~= nil then pcall(function() obj.Transparency = c.Transparency end) end
+			if c.GroupTransparency ~= nil then pcall(function() obj.GroupTransparency = c.GroupTransparency end) end
+			
+			if obj == MainPanel or obj == MainScale or obj == FloatingBtn or obj == FloatStroke then
+				if c.Size ~= nil then pcall(function() obj.Size = c.Size end) end
+				if c.Position ~= nil then pcall(function() obj.Position = c.Position end) end
+				if c.AnchorPoint ~= nil then pcall(function() obj.AnchorPoint = c.AnchorPoint end) end
+				if c.Scale ~= nil then pcall(function() obj.Scale = c.Scale end) end
+			end
+		end
+	end
+end
 
 local function ToggleUI()
-	if isDestroying or IsToggling or IsBindingKey then return end
-	IsToggling = true
-	isMinimized = not isMinimized
+	if isDestroying or IsBindingKey or isTransitioning then return end
+	isTransitioning = true
 
-	if isMinimized then
+	if not isMinimized then
+		isMinimized = true
+		
+		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		
-		-- Unified Close Transition: Scales down and fades the entire CanvasGroup simultaneously
-		tween(MainScale, animSmooth, {Scale = 0.85})
-		local closeTween = tween(MainPanel, animSmooth, {GroupTransparency = 1})
+		CancelActiveTweens()
+		transitionTweenA = TweenService:Create(MainScale, animSmooth, {Scale = 0.85})
+		transitionTweenB = TweenService:Create(MainPanel, animSmooth, {GroupTransparency = 1})
 		
-		closeTween.Completed:Connect(function()
-			if isMinimized and not isDestroying then
-				MainPanel.Visible = false -- Only hide after fully faded out
+		local cFired = false
+		local conn
+		conn = transitionTweenB.Completed:Connect(function(state)
+			conn:Disconnect()
+			if cFired then return end
+			cFired = true
+			
+			if state == Enum.PlaybackState.Completed then
+				MainPanel.Visible = false
+				RestoreCachedProperties()
 				
 				FloatingBtn.Visible = true
 				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
 				FloatingBtn.ImageTransparency = 1
 				FloatStroke.Transparency = 1
 				
-				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 45, 0, 45), ImageTransparency = 0})
-				tween(FloatStroke, animSmooth, {Transparency = 0}).Completed:Connect(function()
-					IsToggling = false
+				transitionTweenC = TweenService:Create(FloatingBtn, animSmooth, {Size = UDim2.new(0, 45, 0, 45), ImageTransparency = 0})
+				transitionTweenD = TweenService:Create(FloatStroke, animSmooth, {Transparency = 0})
+				
+				local ftFired = false
+				local ftConn
+				ftConn = transitionTweenC.Completed:Connect(function(state2)
+					ftConn:Disconnect()
+					if ftFired then return end
+					ftFired = true
+					
+					isTransitioning = false
 				end)
+				transitionTweenC:Play()
+				transitionTweenD:Play()
 			else
-				IsToggling = false
+				isTransitioning = false
 			end
 		end)
+		transitionTweenA:Play()
+		transitionTweenB:Play()
+
 	else
-		tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 0, 0, 0), ImageTransparency = 1})
-		local floatTween = tween(FloatStroke, animSmooth, {Transparency = 1})
+		isMinimized = false
 		
-		floatTween.Completed:Connect(function()
-			if not isMinimized and not isDestroying then
+		CancelActiveTweens()
+		transitionTweenC = TweenService:Create(FloatingBtn, animSmooth, {Size = UDim2.new(0, 0, 0, 0), ImageTransparency = 1})
+		transitionTweenD = TweenService:Create(FloatStroke, animSmooth, {Transparency = 1})
+		
+		local ftFired = false
+		local ftConn
+		ftConn = transitionTweenC.Completed:Connect(function(state)
+			ftConn:Disconnect()
+			if ftFired then return end
+			ftFired = true
+			
+			if state == Enum.PlaybackState.Completed then
 				FloatingBtn.Visible = false
 				
-				-- Unified Open Transition: Make visible first, then scale up and fade in
 				MainPanel.Visible = true
-				tween(MainScale, animSmooth, {Scale = 1})
-				local openTween = tween(MainPanel, animSmooth, {GroupTransparency = 0})
+				RestoreCachedProperties()
 				
-				openTween.Completed:Connect(function()
-					IsToggling = false
+				MainPanel.GroupTransparency = 1
+				MainScale.Scale = 0.85
+				
+				transitionTweenA = TweenService:Create(MainScale, animSmooth, {Scale = 1})
+				transitionTweenB = TweenService:Create(MainPanel, animSmooth, {GroupTransparency = 0})
+				
+				local cFired = false
+				local conn
+				conn = transitionTweenB.Completed:Connect(function(state2)
+					conn:Disconnect()
+					if cFired then return end
+					cFired = true
+					
+					if state2 == Enum.PlaybackState.Completed then
+						RestoreCachedProperties()
+						pcall(function() MainPanel.Interactable = true end)
+						isTransitioning = false
+					else
+						isTransitioning = false
+					end
 				end)
+				transitionTweenA:Play()
+				transitionTweenB:Play()
 			else
-				IsToggling = false
+				isTransitioning = false
 			end
 		end)
+		transitionTweenC:Play()
+		transitionTweenD:Play()
 	end
 end
 
-RegConn(FloatingBtn.MouseButton1Click:Connect(CreateDebounce(0.5, ToggleUI)))
+RegConn(FloatingBtn.MouseButton1Click:Connect(function() ToggleUI() end))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
@@ -521,6 +649,8 @@ getfenv().ShowNotification = function(msg, notifType)
 	progressBar.BackgroundColor3 = indicatorColor
 	progressBar.BorderSizePixel = 0
 	progressBar.ZIndex = 304
+
+	CacheInstanceAndDescendants(wrapper)
 
 	table.insert(NotificationQueue, wrapper)
 	if #NotificationQueue > 6 then
@@ -771,8 +901,12 @@ local function CloseAndAnimateUI()
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
 	
-	tween(MainScale, animSmooth, {Scale = 0.85})
-	tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
+	CancelActiveTweens()
+	local t1 = TweenService:Create(MainScale, animSmooth, {Scale = 0.85})
+	local t2 = TweenService:Create(MainPanel, animSmooth, {GroupTransparency = 1})
+	t1:Play()
+	t2:Play()
+	t2.Completed:Connect(function()
 		getgenv()[_G_Identifier]()
 	end)
 end
@@ -786,6 +920,7 @@ HeaderContainer.Active = true
 local mainDragging, mainDragInput, mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
+	if isTransitioning then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		mainDragging = true
 		mainDragStart = input.Position
@@ -795,6 +930,9 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		inputEndedConn = RegConn(input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				mainDragging = false
+				if OriginalCache[MainPanel] then
+					OriginalCache[MainPanel].Position = MainPanel.Position
+				end
 				if inputEndedConn then inputEndedConn:Disconnect() end
 			end
 		end))
@@ -972,7 +1110,7 @@ MinBtn.TextSize = IsMobile and 14 or 18
 MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-RegConn(MinBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
+RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
@@ -1098,6 +1236,7 @@ local sPad = Instance.new("UIPadding", SearchInput)
 sPad.PaddingRight = UDim.new(0, 10)
 
 RegConn(SearchInput.Focused:Connect(function()
+	if isTransitioning then return end
 	tween(SearchStroke, animQuick, {Color = Theme.Accent})
 end))
 RegConn(SearchInput.FocusLost:Connect(function()
@@ -1149,8 +1288,6 @@ local DDLayout = Instance.new("UIListLayout", DropdownContainer)
 DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 local FilterFavoritesActive = false
-local GlobalStarUpdater = Instance.new("BindableEvent") 
-local GlobalAutoExecUpdater = Instance.new("BindableEvent")
 local SortMode = "Most Relevant"
 local SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
@@ -1256,12 +1393,13 @@ end
 
 local typingTask = nil
 RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+	if isTransitioning then return end
 	if typingTask then task.cancel(typingTask) end
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
 
 RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.2, function()
-	if isDestroying then return end
+	if isDestroying or isTransitioning then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	
 	if FilterFavoritesActive then
@@ -1288,6 +1426,7 @@ for _, opt in ipairs(SortOptions) do
 	btn.ZIndex = 201
 
 	RegConn(btn.Activated:Connect(function()
+		if isTransitioning then return end
 		SortMode = opt
 		DropdownContainer.Visible = false
 		for _, child in ipairs(DropdownContainer:GetChildren()) do
@@ -1299,6 +1438,7 @@ for _, opt in ipairs(SortOptions) do
 end
 
 RegConn(SortDropdownBtn.Activated:Connect(function()
+	if isTransitioning then return end
 	if DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	else
@@ -1320,6 +1460,7 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 end))
 
 RegConn(UserInputService.InputBegan:Connect(function(input)
+	if isTransitioning then return end
 	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 		local pos = input.Position
 		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
@@ -1361,7 +1502,7 @@ local function CreateTab(name, index)
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying or currentTab == name or isAnimatingTab then return end
+		if isDestroying or isTransitioning or currentTab == name or isAnimatingTab then return end
 		isAnimatingTab = true
 		currentTab = name
 		DropdownContainer.Visible = false
@@ -1585,7 +1726,7 @@ local function CreateScriptCard(data, renderParent)
 	scriptEntry.UpdateUI()
 
 	RegConn(starBtn.Activated:Connect(CreateDebounce(0.2, function()
-		if isDestroying then return end
+		if isDestroying or isTransitioning then return end
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil
 			ShowNotification("Favorite removed: " .. exactName, "Info")
@@ -1597,7 +1738,7 @@ local function CreateScriptCard(data, renderParent)
 	end)))
 
 	RegConn(autoExecBtn.Activated:Connect(CreateDebounce(0.2, function()
-		if isDestroying then return end
+		if isDestroying or isTransitioning then return end
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil
 			ShowNotification("Auto-Execute disabled: " .. exactName, "Warning")
@@ -1609,7 +1750,7 @@ local function CreateScriptCard(data, renderParent)
 	end)))
 
 	RegConn(card.Activated:Connect(function()
-		if isDestroying or GlobalExecutionCooldown then return end
+		if isDestroying or isTransitioning or GlobalExecutionCooldown then return end
 
 		local function executeScript()
 			if GlobalExecutionCooldown then return end
@@ -1653,6 +1794,7 @@ local function CreateScriptCard(data, renderParent)
 	end))
 
 	card.Parent = renderParent
+	CacheInstanceAndDescendants(card)
 	table.insert(RegisteredScripts, scriptEntry)
 end
 
@@ -1795,7 +1937,7 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 	local isAnimatingToggle = false
 
 	RegConn(toggleBtn.Activated:Connect(function()
-		if isDestroying or isAnimatingToggle then return end
+		if isDestroying or isTransitioning or isAnimatingToggle then return end
 		isAnimatingToggle = true
 		state = not state
 		
@@ -1829,7 +1971,7 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
 
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying then return end
+		if isDestroying or isTransitioning then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
 	end))
 	
@@ -1854,7 +1996,7 @@ KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
 RegConn(KeybindButton.Activated:Connect(function()
-	if isDestroying then return end
+	if isDestroying or isTransitioning then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any Key..."
 end))
@@ -1933,5 +2075,9 @@ TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
 TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+
+CacheInstanceAndDescendants(MainPanel)
+CacheInstanceAndDescendants(FloatingBtn)
+CacheInstanceAndDescendants(ConfirmOverlay)
 
 ShowNotification("Velox Hub loaded successfully.", "Success")
