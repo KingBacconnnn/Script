@@ -361,7 +361,7 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
-local MainPanel = Instance.new("Frame", ScreenGui)
+local MainPanel = Instance.new("CanvasGroup", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -400,7 +400,7 @@ local function ToggleUI()
 	if isMinimized then
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		tween(MainScale, animSmooth, {Scale = 0.85})
-		tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+		tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
 			if isMinimized and not isDestroying then
 				MainPanel.Visible = false
 				FloatingBtn.Visible = true
@@ -412,7 +412,7 @@ local function ToggleUI()
 		FloatingBtn.Visible = false
 		MainPanel.Visible = true
 		tween(MainScale, animSmooth, {Scale = 1})
-		tween(MainPanel, animSmooth, {BackgroundTransparency = 0})
+		tween(MainPanel, animSmooth, {GroupTransparency = 0})
 	end
 	task.delay(0.25, function() IsToggling = false end)
 end
@@ -733,7 +733,7 @@ local function CloseAndAnimateUI()
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
 	tween(MainScale, animSmooth, {Scale = 0.85})
-	tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+	tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
 		getgenv()[_G_Identifier]()
 	end)
 end
