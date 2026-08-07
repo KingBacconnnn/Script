@@ -85,6 +85,8 @@ local isMinimized = false
 local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
+local floatDrag, floatStart, floatPos
+local mainDragging, mainDragInput, mainDragStart, mainStartPos
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -146,7 +148,9 @@ local function CleanUpMemory()
 	if getgenv().VeloxOriginalNamecall and mt and setreadonly then
 		pcall(function()
 			setreadonly(mt, false)
-			mt.__namecall = getgenv().VeloxOriginalNamecall
+			if rawget(mt, "__namecall") then
+				mt.__namecall = getgenv().VeloxOriginalNamecall
+			end
 			setreadonly(mt, true)
 		end)
 	end
@@ -302,10 +306,17 @@ LoadConfiguration()
 local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
-		if reqSuccess and reqResult and reqResult.StatusCode == 200 then return reqResult.Body end
+		if reqSuccess and type(reqResult) == "table" then
+			local status = tonumber(reqResult.StatusCode or reqResult.Status)
+			if status == 200 then
+				local body = reqResult.Body or reqResult.Response or reqResult.Data
+				if body then return body end
+			end
+		end
 	end
+	
 	local success, result = pcall(function() return game:HttpGet(url) end)
-	if success and result then return result end
+	if success and result and #result > 0 then return result end
 	return nil
 end
 
@@ -375,11 +386,6 @@ if mt and setreadonly and checkcaller and getnamecallmethod then
 	setreadonly(mt, true)
 end
 
-getgenv()[_G_Identifier] = function()
-	CleanUpMemory()
-	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
-end
-
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
@@ -421,13 +427,25 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-RegConn(UserInputService.WindowFocusReleased:Connect(function()
-	if isDestroying then return end
+local function CleanUpStaleInteractiveElements()
 	for i = #InteractiveElements, 1, -1 do
 		local data = InteractiveElements[i]
 		if not data.Element or not data.Element.Parent then
 			table.remove(InteractiveElements, i)
-		else
+		end
+	end
+end
+
+RegConn(UserInputService.WindowFocusReleased:Connect(function()
+	if isDestroying then return end
+	
+	mainDragging = false
+	floatDrag = false
+	CleanUpStaleInteractiveElements()
+	
+	for i = #InteractiveElements, 1, -1 do
+		local data = InteractiveElements[i]
+		if data.Element and data.Element.Parent then
 			if data.BaseColor then pcall(function() data.Element.BackgroundColor3 = data.BaseColor end) end
 			if data.StrokeObj and data.BaseStroke then pcall(function() data.StrokeObj.Color = data.BaseStroke end) end
 		end
@@ -454,7 +472,6 @@ Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
-local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
@@ -804,8 +821,6 @@ HeaderContainer.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 56)
 HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true 
-
-local mainDragging, mainDragInput, mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1301,8 +1316,8 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
+CreateParagraph("v3.2.1 - Core Stability Updates", "• Fixed lingering UI elements blocking memory upon cleanup.\n• Adjusted network handling for better compatibility across diverse executor environments.\n• Improved global event handling for inputs across different window focus states.", ChangelogsView)
 CreateParagraph("v3.2.0 - Catalog & Stability Upgrades", "• Handled all lingering connection leaks on Catalog resets.\n• Implemented robust dragging boundaries with global inputs.\n• Upgraded Anti-AFK behavior (non-intrusive controller simulation).", ChangelogsView)
-CreateParagraph("v3.1.3 - Notification Stability Fix", "• Simplified the notification system and removed complex dependent queues that caused stuck UI elements.\n• Guaranteed smooth cleanup and automatic destruction upon tween completion.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1502,72 +1517,85 @@ local function LoadDynamicCatalog()
 	EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Loading script repository..."
 
 	task.spawn(function()
-		local raw = FetchWithRetry(CATALOG_URL, 3, 2)
-		if isDestroying then return end
-		if raw then
-			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
-			if success and type(parsed) == "table" then
-				
-				for _, conn in ipairs(CardConnections) do
-					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-						conn:Disconnect()
-					end
-				end
-				table.clear(CardConnections)
-
-				for _, child in ipairs(ScriptsView:GetChildren()) do
-					if child:IsA("TextButton") then child:Destroy() end
-				end
-				table.clear(RegisteredScripts)
-
-				local detachedFolder = Instance.new("Folder")
-				local vMap = {}
-				for _, scriptData in ipairs(parsed) do
-					if type(scriptData) == "table" and scriptData.Name then
-						vMap[scriptData.Name] = true
-						if isDestroying then return end
-						CreateScriptCard(scriptData, detachedFolder)
-					end
-				end
-
-				local cleaned = false
-				for k, _ in pairs(SavedData.AutoExecutes) do
-					if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
-				end
-				if cleaned then SaveConfiguration() end
-
-				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
-				pcall(function() detachedFolder:Destroy() end)
-
-				local autoIndex = 0
-				for _, scriptData in ipairs(parsed) do
-					if type(scriptData) == "table" and scriptData.Name then
-						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
-							autoIndex = autoIndex + 1
-							local delayTime = 0.2 * autoIndex
-							task.spawn(function()
-								task.wait(delayTime)
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
-								if isDestroying then return end
-								if scrRaw and type(loadstring) == "function" then
-									local fn = loadstring(scrRaw)
-									if fn then task.spawn(fn); ShowNotification("Auto-executed: " .. scriptData.Name, "Success") end
-								end
-							end)
-						end
-					end
-				end
-				UpdateFilter()
-				task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
-				StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
-				ShowNotification("Catalog refreshed successfully.", "Success")
-			else
-				EmptyStateMessage.Text = "Catalog parsing error. Check console."; StatusText.Text = "Data Error"
+		local success, err = pcall(function()
+			local raw = FetchWithRetry(CATALOG_URL, 3, 2)
+			if isDestroying then return end
+			
+			if not raw then
+				EmptyStateMessage.Text = "Unable to connect to server."
+				StatusText.Text = "Offline"
+				return
 			end
-		else
-			EmptyStateMessage.Text = "Unable to connect to server."; StatusText.Text = "Offline"
+
+			local parseSuccess, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			if not parseSuccess or type(parsed) ~= "table" then
+				EmptyStateMessage.Text = "Catalog parsing error. Check console."
+				StatusText.Text = "Data Error"
+				return
+			end
+			
+			for _, conn in ipairs(CardConnections) do
+				if typeof(conn) == "RBXScriptConnection" and conn.Connected then
+					conn:Disconnect()
+				end
+			end
+			table.clear(CardConnections)
+
+			for _, child in ipairs(ScriptsView:GetChildren()) do
+				if child:IsA("TextButton") then child:Destroy() end
+			end
+			table.clear(RegisteredScripts)
+			CleanUpStaleInteractiveElements()
+
+			local detachedFolder = Instance.new("Folder")
+			local vMap = {}
+			for _, scriptData in ipairs(parsed) do
+				if type(scriptData) == "table" and scriptData.Name then
+					vMap[scriptData.Name] = true
+					if isDestroying then return end
+					CreateScriptCard(scriptData, detachedFolder)
+				end
+			end
+
+			local cleaned = false
+			for k, _ in pairs(SavedData.AutoExecutes) do
+				if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
+			end
+			if cleaned then SaveConfiguration() end
+
+			for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
+			pcall(function() detachedFolder:Destroy() end)
+
+			local autoIndex = 0
+			for _, scriptData in ipairs(parsed) do
+				if type(scriptData) == "table" and scriptData.Name then
+					local auto = SavedData.AutoExecutes[scriptData.Name]
+					if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
+						autoIndex = autoIndex + 1
+						local delayTime = 0.2 * autoIndex
+						task.spawn(function()
+							task.wait(delayTime)
+							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+							if isDestroying then return end
+							if scrRaw and type(loadstring) == "function" then
+								local fn = loadstring(scrRaw)
+								if fn then task.spawn(fn); ShowNotification("Auto-executed: " .. scriptData.Name, "Success") end
+							end
+						end)
+					end
+				end
+			end
+			UpdateFilter()
+			task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
+			StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
+			ShowNotification("Catalog refreshed successfully.", "Success")
+		end)
+
+		if not success then
+			warn("Velox Hub Catalog Error: ", tostring(err))
+			if StatusText and StatusText.Parent then StatusText.Text = "Error" end
 		end
+
 		dbRefreshing = false
 	end)
 end
@@ -1642,6 +1670,57 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 	return btn
 end
 
+local function SafeToggleAntiAFK(val)
+	SavedData.Settings.AntiAFK = val
+	SaveConfiguration()
+	
+	if val then
+		if not AfkConnections.Idled then
+			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
+				if VirtualUser then
+					VirtualUser:CaptureController()
+					VirtualUser:ClickButton2(Vector2.new(0, 0))
+				end
+			end))
+		end
+		
+		if type(getconnections) == "function" then
+			pcall(function()
+				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+					pcall(function()
+						if type(conn) == "table" and conn.Disable then
+							conn:Disable()
+							AfkConnections[conn] = conn
+						elseif type(disableconnection) == "function" then
+							disableconnection(conn)
+						end
+					end)
+				end
+			end)
+		end
+	else
+		if AfkConnections.Idled then 
+			AfkConnections.Idled:Disconnect()
+			AfkConnections.Idled = nil 
+		end
+		for conn, _ in pairs(AfkConnections) do
+			if conn ~= "Idled" then
+				pcall(function()
+					if type(conn) == "table" and conn.Enable then
+						conn:Enable()
+					elseif type(enableconnection) == "function" then
+						enableconnection(conn)
+					end
+				end)
+			end
+		end
+		
+		local newAfk = {}
+		if AfkConnections.Idled then newAfk.Idled = AfkConnections.Idled end
+		AfkConnections = newAfk
+	end
+end
+
 local kbWrap, kbRightContainer = CreateSettingRow("Toggle UI", "Keybind to show/hide the hub.", SettingsView, 1)
 local KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 100, 0, 28); KeybindButton.Position = UDim2.new(1, -110, 0.5, -14)
@@ -1660,51 +1739,14 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 end)))
 
 CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
-	SaveConfiguration()
-	if val then
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-				if VirtualUser then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new(0,0))
-				end
-			end))
-		end
-		if getconnections then
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				if type(conn) == "table" and conn.Disable then
-					conn:Disable(); AfkConnections[conn] = conn
-				end
-			end
-		end
-	else
-		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
-		for conn, _ in pairs(AfkConnections) do
-			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
-		end
-	end
+	SafeToggleAntiAFK(val)
 end)
 
 CreateButtonSetting("Refresh Catalog", "Forces an update to the script list.", "Refresh", SettingsView, 3, function() LoadDynamicCatalog() end)
 CreateButtonSetting("Unload Hub", "Removes Velox Hub entirely from the game.", "Unload", SettingsView, 4, function() CloseUI() end)
 
 if SavedData.Settings.AntiAFK then
-	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-			if VirtualUser then
-				VirtualUser:CaptureController()
-				VirtualUser:ClickButton2(Vector2.new(0,0))
-			end
-		end))
-	end
-	if getconnections then
-		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-			if type(conn) == "table" and conn.Disable then
-				conn:Disable(); AfkConnections[conn] = conn
-			end
-		end
-	end
+	SafeToggleAntiAFK(true)
 end
 
 local function ObfuscateHierarchy(instance)
