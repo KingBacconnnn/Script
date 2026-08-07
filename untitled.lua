@@ -76,8 +76,7 @@ local RegisteredScripts = {}
 local AfkConnections = {}
 
 local isDestroying = false
-local isMinimized = false
-local IsToggling = false
+local uiState = "OPEN"
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local isAnimatingTab = false
@@ -282,7 +281,9 @@ local function tween(obj, info, props)
 	ActiveObjectTweens[obj] = t
 	t:Play()
 	
-	t.Completed:Connect(function()
+	local conn
+	conn = t.Completed:Connect(function()
+		if conn then conn:Disconnect() end
 		if ActiveObjectTweens[obj] == t then
 			ActiveObjectTweens[obj] = nil
 		end
@@ -331,9 +332,12 @@ FloatingBtn.Position = UDim2.new(0.5, -22, 0, 20)
 FloatingBtn.BackgroundColor3 = Theme.BackgroundMain
 FloatingBtn.Image = "rbxassetid://124635602201411"
 FloatingBtn.Visible = false
+FloatingBtn.ImageTransparency = 1
+FloatingBtn.BackgroundTransparency = 1
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
+pcall(function() FloatingBtn.Interactable = true end)
 
 local FloatCorner = Instance.new("UICorner", FloatingBtn)
 FloatCorner.CornerRadius = UDim.new(1, 0)
@@ -341,6 +345,7 @@ FloatCorner.CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent
 FloatStroke.Thickness = 2
+FloatStroke.Transparency = 1
 
 local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
@@ -348,8 +353,12 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatDrag = true
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		RegConn(input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then floatDrag = false end
+		local iConn
+		iConn = RegConn(input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then 
+				floatDrag = false 
+				if iConn then iConn:Disconnect() end
+			end
 		end))
 	end
 end))
@@ -367,10 +376,11 @@ MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
 MainPanel.BorderSizePixel = 0
-MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
+MainPanel.GroupTransparency = 0
+pcall(function() MainPanel.Interactable = true end)
 
 local MainScale = Instance.new("UIScale", MainPanel)
 MainScale.Scale = 1
@@ -392,32 +402,83 @@ Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
 local SearchInput
 
-local function ToggleUI()
-	if isDestroying or IsToggling or IsBindingKey then return end
-	IsToggling = true
-	isMinimized = not isMinimized
-
-	if isMinimized then
-		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-		tween(MainScale, animSmooth, {Scale = 0.85})
-		tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
-			if isMinimized and not isDestroying then
-				MainPanel.Visible = false
-				FloatingBtn.Visible = true
-				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
-				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 45, 0, 45)})
-			end
-		end)
-	else
-		FloatingBtn.Visible = false
-		MainPanel.Visible = true
-		tween(MainScale, animSmooth, {Scale = 1})
-		tween(MainPanel, animSmooth, {GroupTransparency = 0})
-	end
-	task.delay(0.25, function() IsToggling = false end)
+local function executeCloseAnimation()
+	uiState = "CLOSING"
+	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
+	pcall(function() MainPanel.Interactable = false end)
+	
+	if ActiveObjectTweens[FloatingBtn] then pcall(function() ActiveObjectTweens[FloatingBtn]:Cancel() end) end
+	if FloatStroke and ActiveObjectTweens[FloatStroke] then pcall(function() ActiveObjectTweens[FloatStroke]:Cancel() end) end
+	
+	FloatingBtn.Visible = false
+	
+	tween(MainScale, animSmooth, {Scale = 0.85})
+	local tFade = tween(MainPanel, animSmooth, {GroupTransparency = 1})
+	
+	local fadeConn
+	fadeConn = tFade.Completed:Connect(function()
+		if fadeConn then fadeConn:Disconnect() end
+		if uiState == "CLOSING" and not isDestroying then
+			MainPanel.Visible = false
+			FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
+			FloatingBtn.ImageTransparency = 1
+			FloatingBtn.BackgroundTransparency = 1
+			if FloatStroke then FloatStroke.Transparency = 1 end
+			FloatingBtn.Visible = true
+			
+			local fbFade = tween(FloatingBtn, animSmooth, {ImageTransparency = 0, BackgroundTransparency = 0})
+			if FloatStroke then tween(FloatStroke, animSmooth, {Transparency = 0}) end
+			
+			local fbConn
+			fbConn = fbFade.Completed:Connect(function()
+				if fbConn then fbConn:Disconnect() end
+				if uiState == "CLOSING" then
+					uiState = "MINIMIZED"
+					pcall(function() FloatingBtn.Interactable = true end)
+				end
+			end)
+		end
+	end)
 end
 
-RegConn(FloatingBtn.MouseButton1Click:Connect(CreateDebounce(0.5, ToggleUI)))
+local function ToggleUI()
+	if isDestroying or IsBindingKey then return end
+	
+	if uiState == "OPEN" or uiState == "OPENING" then
+		executeCloseAnimation()
+	elseif uiState == "MINIMIZED" then
+		uiState = "OPENING"
+		pcall(function() FloatingBtn.Interactable = false end)
+		
+		local fbFadeOut = tween(FloatingBtn, animSmooth, {ImageTransparency = 1, BackgroundTransparency = 1})
+		if FloatStroke then tween(FloatStroke, animSmooth, {Transparency = 1}) end
+		
+		local fbOutConn
+		fbOutConn = fbFadeOut.Completed:Connect(function()
+			if fbOutConn then fbOutConn:Disconnect() end
+			if uiState == "OPENING" and not isDestroying then
+				FloatingBtn.Visible = false
+				MainPanel.Visible = true
+				
+				tween(MainScale, animSmooth, {Scale = 1})
+				local tFadeOpen = tween(MainPanel, animSmooth, {GroupTransparency = 0})
+				
+				local tOpenConn
+				tOpenConn = tFadeOpen.Completed:Connect(function()
+					if tOpenConn then tOpenConn:Disconnect() end
+					if uiState == "OPENING" then
+						uiState = "OPEN"
+						pcall(function() MainPanel.Interactable = true end)
+					end
+				end)
+			end
+		end)
+	elseif uiState == "CLOSING" then
+		return
+	end
+end
+
+RegConn(FloatingBtn.MouseButton1Click:Connect(CreateDebounce(0.1, ToggleUI)))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
@@ -496,7 +557,9 @@ getfenv().ShowNotification = function(msg, notifType)
 	task.delay(3.5, function()
 		if wrapper and wrapper.Parent then
 			local twOut = tween(box, animSmooth, {Position = UDim2.new(1, 400, 0, 0)})
-			twOut.Completed:Connect(function()
+			local wConn
+			wConn = twOut.Completed:Connect(function()
+				if wConn then wConn:Disconnect() end
 				local idx = table.find(NotificationQueue, wrapper)
 				if idx then table.remove(NotificationQueue, idx) end
 				pcall(function() wrapper:Destroy() end)
@@ -642,7 +705,9 @@ local function OpenConfirmDialog(scriptName, onExecute)
 
 	tween(ConfirmOverlay, animQuick, {BackgroundTransparency = 0.5})
 	local scaleTween = tween(ConfirmScale, animQuick, {Scale = 1})
-	scaleTween.Completed:Connect(function()
+	local sConn
+	sConn = scaleTween.Completed:Connect(function()
+		if sConn then sConn:Disconnect() end
 		isDialogAnimating = false
 	end)
 end
@@ -656,7 +721,9 @@ local function CloseConfirmDialog(shouldExecute)
 	tween(ConfirmOverlay, animQuick, {BackgroundTransparency = 1})
 	local scaleTween = tween(ConfirmScale, animQuick, {Scale = 0.85})
 
-	scaleTween.Completed:Connect(function()
+	local sConn
+	sConn = scaleTween.Completed:Connect(function()
+		if sConn then sConn:Disconnect() end
 		ConfirmOverlay.Visible = false
 		isConfirming = false
 		isDialogAnimating = false
@@ -732,8 +799,12 @@ local function CloseAndAnimateUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
+	pcall(function() MainPanel.Interactable = false end)
 	tween(MainScale, animSmooth, {Scale = 0.85})
-	tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
+	local tClose = tween(MainPanel, animSmooth, {GroupTransparency = 1})
+	local cConn
+	cConn = tClose.Completed:Connect(function()
+		if cConn then cConn:Disconnect() end
 		getgenv()[_G_Identifier]()
 	end)
 end
@@ -933,7 +1004,7 @@ MinBtn.TextSize = IsMobile and 14 or 18
 MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-RegConn(MinBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
+RegConn(MinBtn.Activated:Connect(CreateDebounce(0.1, ToggleUI)))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
