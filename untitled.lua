@@ -9,7 +9,6 @@ local function GenerateRandomString(len)
 	return str
 end
 
--- Fix 1: Static Identifiers to prevent duplicate executions stacking
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3"
 local MainGuiName = "VeloxHub_Main_ScreenGui_V3"
 
@@ -74,9 +73,8 @@ local Theme = {
 	ToggleOff = Color3.fromRGB(71, 85, 105)
 }
 
--- Memory & Event Management
 local VeloxConnections = {}
-local CardConnections = {} -- Fix 2: Dedicated connection cleanup for cards
+local CardConnections = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
@@ -137,12 +135,21 @@ local function RegCardConn(connection)
 end
 
 local typingTask = nil
+local mt = getrawmetatable(game)
 
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 
 	if typingTask then task.cancel(typingTask); typingTask = nil end
+
+	if getgenv().VeloxOriginalNamecall and mt and setreadonly then
+		pcall(function()
+			setreadonly(mt, false)
+			mt.__namecall = getgenv().VeloxOriginalNamecall
+			setreadonly(mt, true)
+		end)
+	end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -159,11 +166,16 @@ local function CleanUpMemory()
 		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
 	end
 
-	for _, tween in pairs(ActiveTweens) do
-		pcall(function() 
-			tween:Cancel() 
-			tween:Destroy() 
-		end)
+	for _, tweenData in pairs(ActiveTweens) do
+		if type(tweenData) == "table" then
+			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
+			if tweenData.Tween then
+				pcall(function() 
+					tweenData.Tween:Cancel() 
+					tweenData.Tween:Destroy() 
+				end)
+			end
+		end
 	end
 
 	table.clear(VeloxConnections)
@@ -177,24 +189,29 @@ local function SafeTween(instance, tweenInfo, properties)
 	if not instance or not instance.Parent then return nil end
 	
 	if ActiveTweens[instance] then
-		pcall(function() 
-			ActiveTweens[instance]:Cancel() 
-			ActiveTweens[instance]:Destroy() 
-		end)
+		local oldData = ActiveTweens[instance]
+		if oldData and type(oldData) == "table" then
+			if oldData.Connection then pcall(function() oldData.Connection:Disconnect() end) end
+			if oldData.Tween then
+				pcall(function() 
+					oldData.Tween:Cancel() 
+					oldData.Tween:Destroy() 
+				end)
+			end
+		end
 	end
 	
 	local tween = TweenService:Create(instance, tweenInfo, properties)
-	ActiveTweens[instance] = tween
-	
 	local conn
 	conn = tween.Completed:Connect(function()
 		if conn then conn:Disconnect() end
-		if ActiveTweens[instance] == tween then
+		if ActiveTweens[instance] and ActiveTweens[instance].Tween == tween then
 			ActiveTweens[instance] = nil
 		end
 		pcall(function() tween:Destroy() end)
 	end)
 	
+	ActiveTweens[instance] = { Tween = tween, Connection = conn }
 	tween:Play()
 	return tween
 end
@@ -284,7 +301,6 @@ LoadConfiguration()
 
 local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
-		-- Fix 5: Ensure status code is checked before assuming code payload is valid
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
 		if reqSuccess and reqResult and reqResult.StatusCode == 200 then return reqResult.Body end
 	end
@@ -333,14 +349,13 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-local mt = getrawmetatable(game)
 if mt and setreadonly and checkcaller and getnamecallmethod then
-	local oldNamecall = mt.__namecall
+	getgenv().VeloxOriginalNamecall = getgenv().VeloxOriginalNamecall or mt.__namecall
+	local oldNamecall = getgenv().VeloxOriginalNamecall
 	setreadonly(mt, false)
 	mt.__namecall = newcclosure(function(self, ...)
 		local method = getnamecallmethod()
 		if not checkcaller() then
-			-- Fix 8: Comprehensive Namecall hooking for GetChildren/GetDescendants
 			if method == "FindFirstChild" or method == "WaitForChild" then
 				local args = {...}
 				if args[1] == MainGuiName then return nil end
@@ -408,8 +423,11 @@ end
 
 RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
-	for _, data in ipairs(InteractiveElements) do
-		if data.Element and data.Element.Parent then
+	for i = #InteractiveElements, 1, -1 do
+		local data = InteractiveElements[i]
+		if not data.Element or not data.Element.Parent then
+			table.remove(InteractiveElements, i)
+		else
 			if data.BaseColor then pcall(function() data.Element.BackgroundColor3 = data.BaseColor end) end
 			if data.StrokeObj and data.BaseStroke then pcall(function() data.StrokeObj.Color = data.BaseStroke end) end
 		end
@@ -624,6 +642,11 @@ ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
 ConfirmOverlay.Active = true
 
+local ModalFixBtn = Instance.new("TextButton", ConfirmOverlay)
+ModalFixBtn.Size = UDim2.new(0, 0, 0, 0)
+ModalFixBtn.Visible = true
+ModalFixBtn.Modal = true
+
 local ConfirmBox = Instance.new("Frame", ConfirmOverlay)
 ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
 ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -818,7 +841,6 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
--- Fix 3: Global release fallback logic & Perfect floating button input handling
 RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -828,14 +850,13 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 		end
 		if floatDrag then
 			floatDrag = false
-			-- Measure the exact pixel distance between drag start and release
-			local dist = (input.Position - floatStart).Magnitude
-			if dist < 5 then
-				-- It was a clean click/tap
-				ToggleUI()
-			else
-				-- It was a drag action, just update the cache position
-				if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
+			if floatStart then
+				local dist = (input.Position - floatStart).Magnitude
+				if dist < 5 then
+					ToggleUI()
+				else
+					if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
+				end
 			end
 		end
 	end
@@ -1034,6 +1055,14 @@ Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+if workspace.CurrentCamera then
+	RegConn(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		if DropdownContainer and DropdownContainer.Visible then
+			DropdownContainer.Visible = false
+		end
+	end))
+end
+
 local FilterFavoritesActive = false
 local filterVersion = 0
 local SortMode = "Most Relevant"
@@ -1060,7 +1089,6 @@ local function UpdateFilter()
 		local matches = {}
 		local osTimeCache = os.time()
 
-		-- Fix 7: Process filtering purely in memory without yields to prevent UI flashing
 		for _, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
 
@@ -1480,7 +1508,6 @@ local function LoadDynamicCatalog()
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if success and type(parsed) == "table" then
 				
-				-- Clean up old card connections properly to prevent memory leak
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 						conn:Disconnect()
@@ -1512,12 +1539,15 @@ local function LoadDynamicCatalog()
 				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
 				pcall(function() detachedFolder:Destroy() end)
 
+				local autoIndex = 0
 				for _, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
 						local auto = SavedData.AutoExecutes[scriptData.Name]
 						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
+							autoIndex = autoIndex + 1
+							local delayTime = 0.2 * autoIndex
 							task.spawn(function()
-								task.wait(0.2) -- Stagger concurrent executes to prevent rate limits
+								task.wait(delayTime)
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
 								if isDestroying then return end
 								if scrRaw and type(loadstring) == "function" then
@@ -1629,7 +1659,6 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any Key..."
 end)))
 
--- Fix 6: More robust and un-intrusive Anti-AFK Method
 CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
