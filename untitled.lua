@@ -507,7 +507,7 @@ ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 ToastLayout.Padding = UDim.new(0, 8)
 
-local MAX_VISIBLE_NOTIFS = 3
+local MAX_VISIBLE_NOTIFS = 10
 local NOTIF_DURATION = 3.5
 local ANIM_DURATION = 0.2
 
@@ -578,7 +578,12 @@ function DisplayNotification(msg, nType)
 		if notifState.IsRemoving then return end
 		notifState.IsRemoving = true
 
-		if notifState.Timer then task.cancel(notifState.Timer); notifState.Timer = nil end
+		if notifState.Timer then
+			if coroutine.running() ~= notifState.Timer then
+				task.cancel(notifState.Timer)
+			end
+			notifState.Timer = nil
+		end
 
 		local idx = table.find(ActiveNotifications, notifState)
 		if idx then table.remove(ActiveNotifications, idx) end
@@ -593,6 +598,8 @@ function DisplayNotification(msg, nType)
 					if exitConn then exitConn:Disconnect() end
 					if wrapper and wrapper.Parent then wrapper:Destroy() end
 				end)
+			else
+				if wrapper and wrapper.Parent then wrapper:Destroy() end
 			end
 		else
 			if wrapper and wrapper.Parent then wrapper:Destroy() end
@@ -606,6 +613,7 @@ function DisplayNotification(msg, nType)
 	SafeTween(progressBar, LinearTweenInfo, {Size = UDim2.new(0, 0, 0, 2)})
 
 	notifState.Timer = task.delay(NOTIF_DURATION, function()
+		notifState.Timer = nil
 		if notifState and type(notifState.Remove) == "function" then
 			notifState.Remove()
 		end
