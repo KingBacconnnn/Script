@@ -371,7 +371,7 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
-local MainPanel = Instance.new("Frame", ScreenGui)
+local MainPanel = Instance.new("CanvasGroup", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -381,6 +381,7 @@ MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
+MainPanel.GroupTransparency = 0
 
 local MainScale = Instance.new("UIScale", MainPanel)
 MainScale.Scale = 1
@@ -410,10 +411,13 @@ local function ToggleUI()
 	if isMinimized then
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		
+		-- Unified Close Transition: Scales down and fades the entire CanvasGroup simultaneously
 		tween(MainScale, animSmooth, {Scale = 0.85})
-		tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+		local closeTween = tween(MainPanel, animSmooth, {GroupTransparency = 1})
+		
+		closeTween.Completed:Connect(function()
 			if isMinimized and not isDestroying then
-				MainPanel.Visible = false
+				MainPanel.Visible = false -- Only hide after fully faded out
 				
 				FloatingBtn.Visible = true
 				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
@@ -424,19 +428,28 @@ local function ToggleUI()
 				tween(FloatStroke, animSmooth, {Transparency = 0}).Completed:Connect(function()
 					IsToggling = false
 				end)
+			else
+				IsToggling = false
 			end
 		end)
 	else
 		tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 0, 0, 0), ImageTransparency = 1})
-		tween(FloatStroke, animSmooth, {Transparency = 1}).Completed:Connect(function()
+		local floatTween = tween(FloatStroke, animSmooth, {Transparency = 1})
+		
+		floatTween.Completed:Connect(function()
 			if not isMinimized and not isDestroying then
 				FloatingBtn.Visible = false
-				MainPanel.Visible = true
 				
+				-- Unified Open Transition: Make visible first, then scale up and fade in
+				MainPanel.Visible = true
 				tween(MainScale, animSmooth, {Scale = 1})
-				tween(MainPanel, animSmooth, {BackgroundTransparency = 0}).Completed:Connect(function()
+				local openTween = tween(MainPanel, animSmooth, {GroupTransparency = 0})
+				
+				openTween.Completed:Connect(function()
 					IsToggling = false
 				end)
+			else
+				IsToggling = false
 			end
 		end)
 	end
@@ -757,8 +770,9 @@ local function CloseAndAnimateUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
+	
 	tween(MainScale, animSmooth, {Scale = 0.85})
-	tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+	tween(MainPanel, animSmooth, {GroupTransparency = 1}).Completed:Connect(function()
 		getgenv()[_G_Identifier]()
 	end)
 end
