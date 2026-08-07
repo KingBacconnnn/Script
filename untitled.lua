@@ -77,6 +77,7 @@ local AfkConnections = {}
 local ActiveNotifications = {}
 local NotificationQueue = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
+local InteractiveElements = {}
 
 local isDestroying = false
 local isMinimized = false
@@ -163,7 +164,7 @@ local function CleanUpMemory()
 	table.clear(AfkConnections)
 	table.clear(ActiveNotifications)
 	table.clear(NotificationQueue)
-	-- ActiveTweens and OriginalCache naturally clear via GC because they are weak tables
+	table.clear(InteractiveElements)
 end
 
 local function SafeTween(instance, tweenInfo, properties)
@@ -351,6 +352,10 @@ local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
 	if not gui:IsA("GuiObject") then return end
 
+	table.insert(InteractiveElements, {
+		Element = gui, BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj
+	})
+
 	RegConn(gui.MouseEnter:Connect(function()
 		if isDestroying or isTransitioning then return end
 		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
@@ -381,6 +386,16 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 		end
 	end))
 end
+
+RegConn(UserInputService.WindowFocusReleased:Connect(function()
+	if isDestroying then return end
+	for _, data in ipairs(InteractiveElements) do
+		if data.Element and data.Element.Parent then
+			if data.BaseColor then pcall(function() data.Element.BackgroundColor3 = data.BaseColor end) end
+			if data.StrokeObj and data.BaseStroke then pcall(function() data.StrokeObj.Color = data.BaseStroke end) end
+		end
+	end
+end))
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
 FloatingBtn.Name = "VeloxFloatingIcon"
@@ -424,6 +439,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 end))
 
 RegConn(UserInputService.InputChanged:Connect(function(input)
+	if isDestroying then return end
 	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - floatStart
 		local camera = workspace.CurrentCamera
@@ -609,14 +625,10 @@ function DisplayNotification(msg, nType)
 		ProcessNotificationQueue()
 
 		if box and box.Parent then
-			local exitTween = SafeTween(box, ExitTweenInfo, {Position = UDim2.new(1.5, 0, 0, 0)})
-			if exitTween then
-				local exitConn
-				exitConn = exitTween.Completed:Connect(function()
-					if exitConn then exitConn:Disconnect() end
-					if wrapper and wrapper.Parent then wrapper:Destroy() end
-				end)
-			end
+			SafeTween(box, ExitTweenInfo, {Position = UDim2.new(1.5, 0, 0, 0)})
+			task.delay(ANIM_DURATION, function()
+				if wrapper and wrapper.Parent then wrapper:Destroy() end
+			end)
 		else
 			if wrapper and wrapper.Parent then wrapper:Destroy() end
 		end
@@ -836,6 +848,7 @@ RegConn(HeaderContainer.InputChanged:Connect(function(input)
 end))
 
 RegConn(UserInputService.InputChanged:Connect(function(input)
+	if isDestroying then return end
 	if input == mainDragInput and mainDragging then
 		local delta = input.Position - mainDragStart
 		local camera = workspace.CurrentCamera
@@ -884,7 +897,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.1.1 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.1.2 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -926,7 +939,13 @@ task.spawn(function()
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
 		local thumb, ready = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-		if thumb and ready then AvatarFrame.Image = ready break else task.wait(2) end
+		if thumb and ready then 
+			if isDestroying then return end
+			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = ready end
+			break 
+		else 
+			task.wait(2) 
+		end
 	end
 end)
 
@@ -1239,6 +1258,10 @@ local function CreateTab(name, index)
 	RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
 		currentTab = name; DropdownContainer.Visible = false
+		
+		-- Set baseline properties to prevent fractional tween artifacts
+		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
+		TabIndicator.BackgroundTransparency = 0
 		SafeTween(TabIndicator, EntryTweenInfo, {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
@@ -1280,6 +1303,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
+CreateParagraph("v3.1.2 - Stability Patch", "• Fixed notification memory leak by removing tween callback dependencies.\n• Implemented WindowFocusReleased listener to resolve stuck hover states.\n• Added thread interruption checks for yielded task operations.\n• Adjusted TabIndicator baseline variables resolving animation overlap issues.", ChangelogsView)
 CreateParagraph("v3.1.1 - Core Stability Overhaul", "• Fully integrated custom TweenManager resolving overlapping states & memory leaks.\n• Purged dead signal callbacks globally, closing performance bleed during repeated interactions.\n• Restructured layout rendering engine ensuring frame-perfect alignment out of minimization states.", ChangelogsView)
 
 local function RefreshAllCardStates()
@@ -1438,19 +1462,23 @@ local function CreateScriptCard(data, renderParent)
 			task.spawn(function()
 				local success, err = pcall(function()
 					local raw = FetchWithRetry(data.RawUrl, 2, 1)
+					if isDestroying then return end
 					if not raw then error("HTTP fetch failed.") end
 					if string.find(raw, "404: Not Found") then error("Source script returned a 404 error.") end
 					local chunk, compileErr = loadstring(raw)
 					if chunk then task.spawn(chunk) else error("Compile error: " .. tostring(compileErr)) end
 				end)
 
+				if isDestroying then return end
 				if success then
 					ShowNotification("Script executed: " .. exactName, "Success")
 				else
 					ShowNotification("Execution failed. See console.", "Error")
 					warn("Velox Hub Execution Error: ", tostring(err))
 				end
-				titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
+				if titleLbl and titleLbl.Parent then
+					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
+				end
 				GlobalExecutionCooldown = false
 			end)
 		end
@@ -1477,6 +1505,7 @@ local function LoadDynamicCatalog()
 
 	task.spawn(function()
 		local raw = FetchWithRetry(CATALOG_URL, 3, 2)
+		if isDestroying then return end
 		if raw then
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if success and type(parsed) == "table" then
@@ -1510,6 +1539,7 @@ local function LoadDynamicCatalog()
 						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
 							task.spawn(function()
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+								if isDestroying then return end
 								if scrRaw and type(loadstring) == "function" then
 									local fn = loadstring(scrRaw)
 									if fn then task.spawn(fn); ShowNotification("Auto-executed: " .. scriptData.Name, "Success") end
