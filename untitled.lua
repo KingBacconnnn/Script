@@ -33,6 +33,7 @@ local VirtualInputManager = Services.VirtualInputManager
 local RunService = Services.RunService
 local Stats = Services.Stats
 local CoreGui = Services.CoreGui
+local TweenService = Services.TweenService
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -66,7 +67,13 @@ local Theme = {
 	Warning = Color3.fromRGB(245, 158, 11),
 	Info = Color3.fromRGB(56, 189, 248),
 	Stroke = Color3.fromRGB(51, 65, 85),
-	ToggleOff = Color3.fromRGB(71, 85, 105)
+	ToggleOff = Color3.fromRGB(71, 85, 105),
+	Icons = {
+		Success = "rbxassetid://7733674932",
+		Error = "rbxassetid://7733691689",
+		Warning = "rbxassetid://7733693259",
+		Info = "rbxassetid://7733692015"
+	}
 }
 
 local VeloxConnections = {}
@@ -75,35 +82,64 @@ local AfkConnections = {}
 
 local isDestroying = false
 local isMinimized = false
-local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local MainGuiName = GenerateRandomString(20)
 
 local OriginalCache = {}
 
+local TweenQuadOut = Enum.EasingStyle.Quad
+local TweenDirOut = Enum.EasingDirection.Out
+local TweenInfoCache = {}
+local ActiveTweens = {}
+
+local function GetTweenInfo(duration)
+	duration = duration or 0.15
+	local key = tostring(duration)
+	if not TweenInfoCache[key] then
+		TweenInfoCache[key] = TweenInfo.new(duration, TweenQuadOut, TweenDirOut)
+	end
+	return TweenInfoCache[key]
+end
+
+local function PlayTween(obj, props, duration)
+	if not obj then return end
+	if ActiveTweens[obj] then 
+		ActiveTweens[obj]:Cancel() 
+		ActiveTweens[obj] = nil 
+	end
+	
+	local tween = TweenService:Create(obj, GetTweenInfo(duration), props)
+	ActiveTweens[obj] = tween
+	tween:Play()
+	
+	local conn
+	conn = tween.Completed:Connect(function()
+		if ActiveTweens[obj] == tween then
+			ActiveTweens[obj] = nil
+		end
+		if conn then conn:Disconnect() end
+		tween:Destroy()
+	end)
+	return tween
+end
+
 local function CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
 		local c = {}
-		if obj:IsA("GuiObject") then
+		if obj:IsA("GuiObject") or obj:IsA("CanvasGroup") then
 			c.BackgroundTransparency = obj.BackgroundTransparency
 			c.Size = obj.Size
 			c.Position = obj.Position
 			c.AnchorPoint = obj.AnchorPoint
 			c.Visible = obj.Visible
 		end
-		if obj:IsA("TextLabel") or obj:IsA("TextBox") or obj:IsA("TextButton") then
-			c.TextTransparency = obj.TextTransparency
-		end
-		if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-			c.ImageTransparency = obj.ImageTransparency
-		end
-		if obj:IsA("ScrollingFrame") then
-			c.ScrollBarImageTransparency = obj.ScrollBarImageTransparency
-		end
-		if obj:IsA("UIStroke") or obj:IsA("UIGradient") then
-			c.Transparency = obj.Transparency
-		end
+		if obj:IsA("CanvasGroup") then c.GroupTransparency = obj.GroupTransparency end
+		if obj:IsA("TextLabel") or obj:IsA("TextBox") or obj:IsA("TextButton") then c.TextTransparency = obj.TextTransparency end
+		if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then c.ImageTransparency = obj.ImageTransparency end
+		if obj:IsA("ScrollingFrame") then c.ScrollBarImageTransparency = obj.ScrollBarImageTransparency end
+		if obj:IsA("UIStroke") or obj:IsA("UIGradient") then c.Transparency = obj.Transparency end
+		if obj:IsA("UIScale") then c.Scale = obj.Scale end
 		OriginalCache[obj] = c
 	end
 
@@ -124,6 +160,11 @@ local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 
+	for obj, t in pairs(ActiveTweens) do
+		if t then pcall(function() t:Cancel() end) end
+	end
+	table.clear(ActiveTweens)
+
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 			conn:Disconnect()
@@ -137,16 +178,6 @@ local function CleanUpMemory()
 	table.clear(VeloxConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
-end
-
-local function CreateDebounce(delay, func)
-	local isDebounced = false
-	return function(...)
-		if isDebounced then return end
-		isDebounced = true
-		task.spawn(func, ...)
-		task.delay(delay, function() isDebounced = false end)
-	end
 end
 
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
@@ -289,36 +320,208 @@ end
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
+local function GetUIScale(obj)
+	local scale = obj:FindFirstChildOfClass("UIScale")
+	if not scale then
+		scale = Instance.new("UIScale", obj)
+		scale.Scale = 1
+	end
+	return scale
+end
+
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
 	if not gui:IsA("GuiObject") then return end
+	local scaleObj = GetUIScale(gui)
 
 	RegConn(gui.MouseEnter:Connect(function()
 		if isDestroying then return end
-		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
-		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
+		if originalColor and hoverColor then PlayTween(gui, {BackgroundColor3 = hoverColor}, 0.12) end
+		if strokeObj and hoverStroke then PlayTween(strokeObj, {Color = hoverStroke}, 0.12) end
 	end))
 
 	RegConn(gui.MouseLeave:Connect(function()
 		if isDestroying then return end
-		if originalColor then gui.BackgroundColor3 = originalColor end
-		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
+		PlayTween(scaleObj, {Scale = 1}, 0.12)
+		if originalColor then PlayTween(gui, {BackgroundColor3 = originalColor}, 0.12) end
+		if strokeObj and originalStroke then PlayTween(strokeObj, {Color = originalStroke}, 0.12) end
 	end))
 
 	RegConn(gui.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if clickColor then gui.BackgroundColor3 = clickColor end
+			PlayTween(scaleObj, {Scale = 0.97}, 0.12)
+			if clickColor then PlayTween(gui, {BackgroundColor3 = clickColor}, 0.12) end
 		end
 	end))
 
 	RegConn(gui.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			PlayTween(scaleObj, {Scale = 1}, 0.12)
 			if hoverColor then 
-				gui.BackgroundColor3 = hoverColor
+				PlayTween(gui, {BackgroundColor3 = hoverColor}, 0.12)
 			elseif originalColor then 
-				gui.BackgroundColor3 = originalColor
+				PlayTween(gui, {BackgroundColor3 = originalColor}, 0.12)
 			end
 		end
 	end))
+end
+
+local ToastContainer = Instance.new("Frame", ScreenGui)
+ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
+ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
+ToastContainer.BackgroundTransparency = 1
+ToastContainer.ZIndex = 300
+
+local NotifQueue = {}
+local VisibleNotifs = {}
+local ActiveNotifsMap = {}
+local MAX_NOTIFS = 3
+
+local function UpdateNotifPositions()
+	local currentY = 0
+	for _, item in ipairs(VisibleNotifs) do
+		if item.Frame and item.Frame.Parent then
+			PlayTween(item.Frame, {Position = UDim2.new(0, 0, 1, -currentY)}, 0.15)
+			currentY = currentY + item.Frame.AbsoluteSize.Y + 8
+		end
+	end
+end
+
+local function ProcessNotifQueue()
+	if #VisibleNotifs >= MAX_NOTIFS or #NotifQueue == 0 then return end
+	
+	local item = table.remove(NotifQueue, 1)
+	table.insert(VisibleNotifs, 1, item)
+	ActiveNotifsMap[item.Id] = item
+	
+	item.Frame.Position = UDim2.new(0, item.Frame.AbsoluteSize.X + 20, 1, 0)
+	item.Frame.Parent = ToastContainer
+	
+	UpdateNotifPositions()
+	PlayTween(item.Frame, {GroupTransparency = 0}, 0.2)
+	
+	if item.Duration > 0 then
+		item.Timer = task.delay(item.Duration, function()
+			getfenv().RemoveNotification(item.Id)
+		end)
+	end
+end
+
+getfenv().RemoveNotification = function(id)
+	local item = ActiveNotifsMap[id]
+	if not item then return end
+	ActiveNotifsMap[id] = nil
+	
+	if item.Timer then task.cancel(item.Timer) end
+	
+	local idx = table.find(VisibleNotifs, item)
+	if idx then table.remove(VisibleNotifs, idx) end
+	
+	if item.Frame and item.Frame.Parent then
+		local t = PlayTween(item.Frame, {Position = UDim2.new(0, item.Frame.AbsoluteSize.X + 20, 1, item.Frame.Position.Y.Offset), GroupTransparency = 1}, 0.2)
+		t.Completed:Connect(function() pcall(function() item.Frame:Destroy() end) end)
+	end
+	
+	UpdateNotifPositions()
+	ProcessNotifQueue()
+end
+
+getfenv().UpdateNotificationText = function(id, text)
+	local item = ActiveNotifsMap[id]
+	if item and item.TextObj then item.TextObj.Text = text end
+end
+
+getfenv().ShowNotification = function(msg, notifType, duration, forceId)
+	if isDestroying then return end
+	
+	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
+	local indicatorColor = Theme[nType] or Theme.Info
+	local iconAsset = Theme.Icons[nType] or Theme.Icons.Info
+	local id = forceId or GenerateRandomString(10)
+
+	local cg = Instance.new("CanvasGroup")
+	cg.Size = UDim2.new(1, 0, 0, 0)
+	cg.AutomaticSize = Enum.AutomaticSize.Y
+	cg.BackgroundTransparency = 1
+	cg.AnchorPoint = Vector2.new(0, 1)
+	cg.GroupTransparency = 1
+	cg.ZIndex = 301
+
+	local box = Instance.new("Frame", cg)
+	box.Size = UDim2.new(1, 0, 0, 0)
+	box.AutomaticSize = Enum.AutomaticSize.Y
+	box.BackgroundColor3 = Theme.CardHover
+	box.Position = UDim2.new(0, 0, 0, 0)
+	box.ZIndex = 302
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
+
+	local pad = Instance.new("UIPadding", box)
+	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
+	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
+
+	local indicator = Instance.new("Frame", box)
+	indicator.Size = UDim2.new(0, 4, 1, 0)
+	indicator.Position = UDim2.new(0, -12, 0, -10)
+	indicator.BackgroundColor3 = indicatorColor
+	indicator.BorderSizePixel = 0
+	indicator.ZIndex = 303
+	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
+
+	local icon = Instance.new("ImageLabel", box)
+	icon.Size = UDim2.new(0, 16, 0, 16)
+	icon.Position = UDim2.new(0, 0, 0, 0)
+	icon.BackgroundTransparency = 1
+	icon.Image = iconAsset
+	icon.ImageColor3 = indicatorColor
+	icon.ZIndex = 303
+
+	local txt = Instance.new("TextLabel", box)
+	txt.Size = UDim2.new(1, -24, 0, 0)
+	txt.Position = UDim2.new(0, 24, 0, 0)
+	txt.AutomaticSize = Enum.AutomaticSize.Y
+	txt.BackgroundTransparency = 1
+	txt.Text = tostring(msg)
+	txt.TextColor3 = Theme.TextPrimary
+	txt.Font = Enum.Font.GothamMedium
+	txt.TextSize = IsMobile and 11 or 13
+	txt.TextXAlignment = Enum.TextXAlignment.Left
+	txt.TextWrapped = true
+	txt.ZIndex = 303
+
+	local item = {Id = id, Frame = cg, TextObj = txt, Duration = duration or 3.5}
+	table.insert(NotifQueue, item)
+	ProcessNotifQueue()
+	
+	return id
+end
+local ShowNotification = getfenv().ShowNotification
+local RemoveNotification = getfenv().RemoveNotification
+local UpdateNotificationText = getfenv().UpdateNotificationText
+
+local ActiveCooldowns = {}
+
+local function CheckCooldown(actionId, duration)
+	if ActiveCooldowns[actionId] then return false end
+	ActiveCooldowns[actionId] = true
+	local remaining = duration or 3
+	
+	ShowNotification("Please wait " .. remaining .. (remaining == 1 and " second." or " seconds."), "Warning", -1, actionId)
+	
+	task.spawn(function()
+		while remaining > 0 and ActiveCooldowns[actionId] and not isDestroying do
+			remaining = remaining - 1
+			task.wait(1)
+			if remaining > 0 then
+				UpdateNotificationText(actionId, "Please wait " .. remaining .. (remaining == 1 and " second." or " seconds."))
+			end
+		end
+		ActiveCooldowns[actionId] = nil
+		if not isDestroying then
+			RemoveNotification(actionId)
+			ShowNotification("Ready.", "Success")
+		end
+	end)
+	return true
 end
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
@@ -333,6 +536,7 @@ FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
+FloatingBtn.ImageTransparency = 1
 
 local FloatPadding = Instance.new("UIPadding", FloatingBtn)
 FloatPadding.PaddingLeft = UDim.new(0, 6)
@@ -346,6 +550,7 @@ FloatCorner.CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent
 FloatStroke.Thickness = 2
+FloatStroke.Transparency = 1
 
 local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
@@ -374,16 +579,16 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
-local MainPanel = Instance.new("Frame", ScreenGui)
+local MainPanel = Instance.new("CanvasGroup", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
 MainPanel.BorderSizePixel = 0
-MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
+MainPanel.GroupTransparency = 0
 
 local MainGradient = Instance.new("UIGradient", MainPanel)
 MainGradient.Color = ColorSequence.new({
@@ -410,6 +615,8 @@ local function RestoreCachedProperties()
 			if c.ImageTransparency ~= nil then pcall(function() obj.ImageTransparency = c.ImageTransparency end) end
 			if c.ScrollBarImageTransparency ~= nil then pcall(function() obj.ScrollBarImageTransparency = c.ScrollBarImageTransparency end) end
 			if c.Transparency ~= nil then pcall(function() obj.Transparency = c.Transparency end) end
+			if c.Scale ~= nil then pcall(function() obj.Scale = c.Scale end) end
+			if c.GroupTransparency ~= nil then pcall(function() obj.GroupTransparency = c.GroupTransparency end) end
 			
 			if obj == MainPanel or obj == FloatingBtn or obj == FloatStroke then
 				if c.Size ~= nil then pcall(function() obj.Size = c.Size end) end
@@ -425,107 +632,31 @@ local function ToggleUI()
 
 	if not isMinimized then
 		isMinimized = true
-		
 		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		
-		MainPanel.Visible = false
-		RestoreCachedProperties()
-		
 		FloatingBtn.Visible = true
-		FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
-		FloatingBtn.ImageTransparency = 0
-		FloatStroke.Transparency = 0
-
+		PlayTween(FloatingBtn, {ImageTransparency = 0}, 0.15)
+		PlayTween(FloatStroke, {Transparency = 0}, 0.15)
+		
+		PlayTween(MainPanel, {GroupTransparency = 1}, 0.15).Completed:Connect(function()
+			if isMinimized then MainPanel.Visible = false end
+		end)
 	else
 		isMinimized = false
+		pcall(function() MainPanel.Interactable = true end)
 		
-		FloatingBtn.Visible = false
+		PlayTween(FloatingBtn, {ImageTransparency = 1}, 0.15)
+		PlayTween(FloatStroke, {Transparency = 1}, 0.15).Completed:Connect(function()
+			if not isMinimized then FloatingBtn.Visible = false end
+		end)
 		
 		MainPanel.Visible = true
-		RestoreCachedProperties()
-		
-		pcall(function() MainPanel.Interactable = true end)
+		PlayTween(MainPanel, {GroupTransparency = 0}, 0.15)
 	end
 end
 
 RegConn(FloatingBtn.MouseButton1Click:Connect(function() ToggleUI() end))
-
-local ToastContainer = Instance.new("Frame", ScreenGui)
-ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
-ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
-ToastContainer.BackgroundTransparency = 1
-ToastContainer.ZIndex = 300
-local ToastLayout = Instance.new("UIListLayout", ToastContainer)
-ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-ToastLayout.Padding = UDim.new(0, 8)
-
-local NotificationQueue = {}
-
-getfenv().ShowNotification = function(msg, notifType)
-	if isDestroying then return end
-	
-	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	local indicatorColor = Theme[nType] or Theme.Info
-
-	local wrapper = Instance.new("Frame", ToastContainer)
-	wrapper.Size = UDim2.new(1, 0, 0, 0)
-	wrapper.AutomaticSize = Enum.AutomaticSize.Y
-	wrapper.BackgroundTransparency = 1
-	wrapper.ZIndex = 301
-
-	local box = Instance.new("Frame", wrapper)
-	box.Size = UDim2.new(1, 0, 0, 0)
-	box.AutomaticSize = Enum.AutomaticSize.Y
-	box.BackgroundColor3 = Theme.CardHover
-	box.Position = UDim2.new(0, 0, 0, 0)
-	box.ClipsDescendants = true
-	box.ZIndex = 302
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
-
-	local pad = Instance.new("UIPadding", box)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
-
-	local indicator = Instance.new("Frame", box)
-	indicator.Size = UDim2.new(0, 4, 1, 0)
-	indicator.Position = UDim2.new(0, -12, 0, -10)
-	indicator.BackgroundColor3 = indicatorColor
-	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 303
-	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
-
-	local txt = Instance.new("TextLabel", box)
-	txt.Size = UDim2.new(1, 0, 0, 0)
-	txt.AutomaticSize = Enum.AutomaticSize.Y
-	txt.BackgroundTransparency = 1
-	txt.Text = tostring(msg)
-	txt.TextColor3 = Theme.TextPrimary
-	txt.Font = Enum.Font.GothamMedium
-	txt.TextSize = IsMobile and 11 or 13
-	txt.TextXAlignment = Enum.TextXAlignment.Left
-	txt.TextWrapped = true
-	txt.ZIndex = 303
-
-	CacheInstanceAndDescendants(wrapper)
-
-	table.insert(NotificationQueue, wrapper)
-	if #NotificationQueue > 6 then
-		local oldest = table.remove(NotificationQueue, 1)
-		if oldest and oldest.Parent then oldest:Destroy() end
-	end
-
-	task.delay(3.5, function()
-		if wrapper and wrapper.Parent then
-			local idx = table.find(NotificationQueue, wrapper)
-			if idx then table.remove(NotificationQueue, idx) end
-			pcall(function() wrapper:Destroy() end)
-		end
-	end)
-end
-local ShowNotification = getfenv().ShowNotification
 
 local ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -548,6 +679,8 @@ Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 12)
 local ConfirmBoxStroke = Instance.new("UIStroke", ConfirmBox)
 ConfirmBoxStroke.Color = Theme.Stroke
 ConfirmBoxStroke.Thickness = 1
+local ConfirmBoxScale = GetUIScale(ConfirmBox)
+ConfirmBoxScale.Scale = 0.96
 
 local ConfirmPadding = Instance.new("UIPadding", ConfirmBox)
 ConfirmPadding.PaddingTop = UDim.new(0, 16)
@@ -652,37 +785,34 @@ local function OpenConfirmDialog(scriptName, onExecute)
 	ConfirmExecuteBtn.AutoButtonColor = true
 	ConfirmExecuteBtn.Text = "Execute"
 
-	ConfirmOverlay.BackgroundTransparency = 0.5
 	ConfirmOverlay.Visible = true
+	PlayTween(ConfirmOverlay, {BackgroundTransparency = 0.5}, 0.15)
+	PlayTween(ConfirmBoxScale, {Scale = 1}, 0.15)
 end
 
 local function CloseConfirmDialog(shouldExecute)
 	if not isConfirming then return end
-
 	ConfirmExecuteBtn.Active = false
 
-	ConfirmOverlay.BackgroundTransparency = 1
-	ConfirmOverlay.Visible = false
-	isConfirming = false
-
-	local cb = pendingExecuteCallback
-	pendingExecuteCallback = nil
-
-	if shouldExecute and type(cb) == "function" then
-		cb()
-	end
+	PlayTween(ConfirmBoxScale, {Scale = 0.96}, 0.15)
+	PlayTween(ConfirmOverlay, {BackgroundTransparency = 1}, 0.15).Completed:Connect(function()
+		ConfirmOverlay.Visible = false
+		isConfirming = false
+		
+		local cb = pendingExecuteCallback
+		pendingExecuteCallback = nil
+		if shouldExecute and type(cb) == "function" then
+			cb()
+		end
+	end)
 end
 
 RegConn(ConfirmCancelBtn.Activated:Connect(function()
-	if isConfirming then
-		CloseConfirmDialog(false)
-	end
+	if isConfirming then CloseConfirmDialog(false) end
 end))
 
 RegConn(ConfirmExecuteBtn.Activated:Connect(function()
-	if isConfirming then
-		CloseConfirmDialog(true)
-	end
+	if isConfirming then CloseConfirmDialog(true) end
 end))
 
 RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
@@ -976,14 +1106,20 @@ local TabViews = {}
 local currentTab = "Changelogs"
 
 local function CreateCanvas(name)
-	local scroll = Instance.new("ScrollingFrame", PanelGroup)
-	scroll.Size = UDim2.new(1, -32, 1, IsMobile and -116 or -138)
-	scroll.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
+	local wrapper = Instance.new("CanvasGroup", PanelGroup)
+	wrapper.Size = UDim2.new(1, -32, 1, IsMobile and -116 or -138)
+	wrapper.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
+	wrapper.BackgroundTransparency = 1
+	wrapper.Visible = (name == currentTab)
+	wrapper.GroupTransparency = (name == currentTab) and 0 or 1
+	wrapper.BorderSizePixel = 0
+
+	local scroll = Instance.new("ScrollingFrame", wrapper)
+	scroll.Size = UDim2.new(1, 0, 1, 0)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 2
 	scroll.ScrollBarImageColor3 = Theme.Stroke
-	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scroll.Active = true
@@ -996,7 +1132,7 @@ local function CreateCanvas(name)
 	pad.PaddingRight = UDim.new(0, 4)
 	pad.PaddingBottom = UDim.new(0, 16)
 
-	TabViews[name] = scroll
+	TabViews[name] = wrapper
 	return scroll
 end
 
@@ -1004,8 +1140,8 @@ local ChangelogsView = CreateCanvas("Changelogs")
 local ScriptsView = CreateCanvas("Scripts")
 local SettingsView = CreateCanvas("Settings")
 
-ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
-ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
+TabViews["Scripts"].Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
+TabViews["Scripts"].Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
 
 local EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40)
@@ -1016,11 +1152,12 @@ EmptyStateMessage.TextSize = 12
 EmptyStateMessage.TextWrapped = true
 EmptyStateMessage.LayoutOrder = -1
 
-local SearchRow = Instance.new("Frame", PanelGroup)
+local SearchRow = Instance.new("CanvasGroup", PanelGroup)
 SearchRow.Size = UDim2.new(1, -32, 0, IsMobile and 28 or 32)
 SearchRow.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
 SearchRow.BackgroundTransparency = 1
 SearchRow.Visible = false
+SearchRow.GroupTransparency = 1
 SearchRow.Active = false
 SearchRow.ZIndex = 50
 
@@ -1062,10 +1199,10 @@ local sPad = Instance.new("UIPadding", SearchInput)
 sPad.PaddingRight = UDim.new(0, 10)
 
 RegConn(SearchInput.Focused:Connect(function()
-	SearchStroke.Color = Theme.Accent
+	PlayTween(SearchStroke, {Color = Theme.Accent}, 0.15)
 end))
 RegConn(SearchInput.FocusLost:Connect(function()
-	SearchStroke.Color = Theme.Stroke
+	PlayTween(SearchStroke, {Color = Theme.Stroke}, 0.15)
 end))
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
@@ -1082,6 +1219,7 @@ Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
 local FavFilterStroke = Instance.new("UIStroke", FavFilterBtn)
 FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
 FavFilterStroke.Thickness = 1
+ApplyInteractiveAnimations(FavFilterBtn, Color3.fromRGB(30, 41, 59), Color3.fromRGB(40, 53, 75), Color3.fromRGB(20, 29, 45), FavFilterStroke, Color3.fromRGB(51, 65, 85), Theme.Accent)
 
 local SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0)
@@ -1222,18 +1360,28 @@ RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
 
+local function CreateDebounce(delay, func)
+	local isDebounced = false
+	return function(...)
+		if isDebounced then return end
+		isDebounced = true
+		task.spawn(func, ...)
+		task.delay(delay, function() isDebounced = false end)
+	end
+end
+
 RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.2, function()
-	if isDestroying then return end
+	if isDestroying or not CheckCooldown("SearchRefresh", 1) then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	
 	if FilterFavoritesActive then
 		FavFilterBtn.Text = "★"
-		FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21)
-		FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		PlayTween(FavFilterBtn, {TextColor3 = Color3.fromRGB(250, 204, 21)}, 0.15)
+		PlayTween(FavFilterStroke, {Color = Color3.fromRGB(250, 204, 21)}, 0.15)
 	else
 		FavFilterBtn.Text = "☆"
-		FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184)
-		FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		PlayTween(FavFilterBtn, {TextColor3 = Color3.fromRGB(148, 163, 184)}, 0.15)
+		PlayTween(FavFilterStroke, {Color = Color3.fromRGB(51, 65, 85)}, 0.15)
 	end
 	UpdateFilter()
 end)))
@@ -1250,12 +1398,13 @@ for _, opt in ipairs(SortOptions) do
 	btn.ZIndex = 201
 
 	RegConn(btn.Activated:Connect(function()
+		if not CheckCooldown("SearchRefresh", 1) then return end
 		SortMode = opt
 		DropdownContainer.Visible = false
 		for _, child in ipairs(DropdownContainer:GetChildren()) do
-			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
+			if child:IsA("TextButton") then PlayTween(child, {TextColor3 = Theme.TextPrimary}, 0.15) end
 		end
-		btn.TextColor3 = Theme.Accent
+		PlayTween(btn, {TextColor3 = Theme.Accent}, 0.15)
 		UpdateFilter()
 	end))
 end
@@ -1324,26 +1473,42 @@ local function CreateTab(name, index)
 
 	RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
+		local oldTab = currentTab
 		currentTab = name
 		DropdownContainer.Visible = false
-		TabIndicator.Position = UDim2.new(0, xOffset + 4, 1, -2)
+		
+		PlayTween(TabIndicator, {Position = UDim2.new(0, xOffset + 4, 1, -2)}, 0.2)
 
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
-		SearchRow.Visible = (name == "Scripts")
 
-		if name == "Scripts" then UpdateFilter() else if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end end
+		local oldView = TabViews[oldTab]
+		local newView = TabViews[name]
 
-		for tName, view in pairs(TabViews) do
-			if tName == name then
-				view.Visible = true
-				view.CanvasPosition = Vector2.new(0, 0)
-			else
-				view.Visible = false
-			end
+		if name == "Scripts" then 
+			SearchRow.Visible = true
+			PlayTween(SearchRow, {GroupTransparency = 0}, 0.15)
+			UpdateFilter() 
+		else 
+			if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end 
+			PlayTween(SearchRow, {GroupTransparency = 1}, 0.15).Completed:Connect(function()
+				if currentTab ~= "Scripts" then SearchRow.Visible = false end
+			end)
+		end
+
+		if oldView then
+			PlayTween(oldView, {GroupTransparency = 1}, 0.15).Completed:Connect(function()
+				if currentTab ~= oldTab then oldView.Visible = false end
+			end)
+		end
+		
+		if newView then
+			newView.Visible = true
+			newView:FindFirstChildWhichIsA("ScrollingFrame").CanvasPosition = Vector2.new(0, 0)
+			PlayTween(newView, {GroupTransparency = 0}, 0.15)
 		end
 
 		for tName, tBtn in pairs(TabButtonCache) do
-			tBtn.TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+			PlayTween(tBtn, {TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary}, 0.15)
 		end
 	end))
 end
@@ -1533,16 +1698,16 @@ local function CreateScriptCard(data, renderParent)
 
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[exactName]
+		PlayTween(starBtn, {TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary}, 0.15)
 		starBtn.Text = isFav and "★" or "☆"
-		starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"
-		aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
+		PlayTween(aeState, {BackgroundColor3 = isON and Theme.Success or Theme.Error}, 0.15)
 	end
 	scriptEntry.UpdateUI()
 
-	RegConn(starBtn.Activated:Connect(CreateDebounce(0.2, function()
-		if isDestroying then return end
+	RegConn(starBtn.Activated:Connect(function()
+		if isDestroying or not CheckCooldown("Favorite_"..exactName, 3) then return end
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil
 			ShowNotification("Favorite removed: " .. exactName, "Info")
@@ -1551,10 +1716,10 @@ local function CreateScriptCard(data, renderParent)
 			ShowNotification("Favorite added: " .. exactName, "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end)))
+	end))
 
-	RegConn(autoExecBtn.Activated:Connect(CreateDebounce(0.2, function()
-		if isDestroying then return end
+	RegConn(autoExecBtn.Activated:Connect(function()
+		if isDestroying or not CheckCooldown("AutoExec_"..exactName, 3) then return end
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil
 			ShowNotification("Auto-Execute disabled: " .. exactName, "Warning")
@@ -1563,23 +1728,19 @@ local function CreateScriptCard(data, renderParent)
 			ShowNotification("Auto-Execute enabled: " .. exactName, "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end)))
+	end))
 
 	RegConn(card.Activated:Connect(function()
-		if isDestroying or GlobalExecutionCooldown then return end
+		if isDestroying or not CheckCooldown("Execute_"..exactName, 3) then return end
 
 		local function executeScript()
-			if GlobalExecutionCooldown then return end
-			GlobalExecutionCooldown = true
-
 			if type(loadstring) ~= "function" then
 				ShowNotification("Executor lacks loadstring support!", "Error")
-				GlobalExecutionCooldown = false
 				return
 			end
 
 			titleLbl.Text = "Executing..."
-			titleLbl.TextColor3 = Theme.Accent
+			PlayTween(titleLbl, {TextColor3 = Theme.Accent}, 0.15)
 
 			task.spawn(function()
 				local success, err = pcall(function()
@@ -1597,8 +1758,7 @@ local function CreateScriptCard(data, renderParent)
 				end
 
 				titleLbl.Text = exactName
-				titleLbl.TextColor3 = Theme.TextPrimary
-				GlobalExecutionCooldown = false
+				PlayTween(titleLbl, {TextColor3 = Theme.TextPrimary}, 0.15)
 			end)
 		end
 
@@ -1752,11 +1912,12 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 	local state = defaultValue
 
 	RegConn(toggleBtn.Activated:Connect(function()
-		if isDestroying then return end
+		if isDestroying or not CheckCooldown("Setting_"..title, 1) then return end
 		state = not state
 		
-		toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
-		circle.Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+		PlayTween(toggleBtn, {BackgroundColor3 = state and Theme.Success or Theme.ToggleOff}, 0.2)
+		PlayTween(circle, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)}, 0.2)
+		
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end))
 end
@@ -1780,7 +1941,7 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
 
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying then return end
+		if isDestroying or not CheckCooldown("SettingBtn_"..title, 3) then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
 	end))
 	
@@ -1805,7 +1966,7 @@ KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
 RegConn(KeybindButton.Activated:Connect(function()
-	if isDestroying then return end
+	if isDestroying or not CheckCooldown("Setting_Keybind", 2) then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any Key..."
 end))
@@ -1883,6 +2044,9 @@ ObfuscateHierarchy(ScreenGui)
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
+TabViews["Changelogs"].GroupTransparency = 0
+TabViews["Scripts"].GroupTransparency = 1
+TabViews["Settings"].GroupTransparency = 1
 TabIndicator.Position = UDim2.new(0, 4, 1, -2)
 
 CacheInstanceAndDescendants(MainPanel)
