@@ -540,8 +540,6 @@ local function ToggleUI()
 	isTransitioning = false
 end
 
-RegConn(FloatingBtn.MouseButton1Click:Connect(function() if not floatDrag then ToggleUI() end end))
-
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
 ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
@@ -820,7 +818,7 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 	end
 end))
 
--- Fix 3: Global release fallback logic to prevent sticky dragging behavior
+-- Fix 3: Global release fallback logic & Perfect floating button input handling
 RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -830,7 +828,15 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 		end
 		if floatDrag then
 			floatDrag = false
-			if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
+			-- Measure the exact pixel distance between drag start and release
+			local dist = (input.Position - floatStart).Magnitude
+			if dist < 5 then
+				-- It was a clean click/tap
+				ToggleUI()
+			else
+				-- It was a drag action, just update the cache position
+				if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
+			end
 		end
 	end
 end))
