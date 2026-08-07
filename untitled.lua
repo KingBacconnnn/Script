@@ -74,8 +74,6 @@ local Theme = {
 local VeloxConnections = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
-local ActiveNotifications = {}
-local NotificationQueue = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local InteractiveElements = {}
 
@@ -144,13 +142,6 @@ local function CleanUpMemory()
 		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
 		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
 	end
-	
-	for _, notif in ipairs(ActiveNotifications) do
-		pcall(function()
-			if notif.Timer then task.cancel(notif.Timer) end
-			if notif.Wrapper then notif.Wrapper:Destroy() end
-		end)
-	end
 
 	for _, tween in pairs(ActiveTweens) do
 		pcall(function() 
@@ -162,8 +153,6 @@ local function CleanUpMemory()
 	table.clear(VeloxConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
-	table.clear(ActiveNotifications)
-	table.clear(NotificationQueue)
 	table.clear(InteractiveElements)
 end
 
@@ -265,7 +254,7 @@ local function LoadConfiguration()
 			if type(result.LastSearch) == "string" then SavedData.LastSearch = result.LastSearch end
 			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 			if type(result.Settings) == "table" then
-				for k, _ in pairs(SavedData.Settings) do
+				for k, _ in pairs(result.Settings) do
 					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
 				end
 			end
@@ -535,6 +524,7 @@ end
 
 RegConn(FloatingBtn.MouseButton1Click:Connect(function() if not floatDrag then ToggleUI() end end))
 
+-- SIMPLIFIED AND FIXED NOTIFICATION SYSTEM
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
 ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
@@ -546,40 +536,23 @@ ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 ToastLayout.Padding = UDim.new(0, 8)
 
-local MAX_VISIBLE_NOTIFS = 3
 local NOTIF_DURATION = 3.5
-local ANIM_DURATION = 0.2
-
-local EntryTweenInfo = TweenInfo.new(ANIM_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local ExitTweenInfo = TweenInfo.new(ANIM_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-local LinearTweenInfo = TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear)
-
-local function ProcessNotificationQueue()
-	if isDestroying then return end
-	while #ActiveNotifications < MAX_VISIBLE_NOTIFS and #NotificationQueue > 0 do
-		local nextNotif = table.remove(NotificationQueue, 1)
-		DisplayNotification(nextNotif.Msg, nextNotif.Type)
-	end
-end
 
 function DisplayNotification(msg, nType)
 	if isDestroying then return end
 	local indicatorColor = Theme[nType] or Theme.Info
-	
-	local notifState = { IsRemoving = false }
-	
+
 	local wrapper = Instance.new("Frame", ToastContainer)
 	wrapper.Size = UDim2.new(1, 0, 0, 0)
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y
 	wrapper.BackgroundTransparency = 1
 	wrapper.ZIndex = 301
-	notifState.Wrapper = wrapper
 
 	local box = Instance.new("Frame", wrapper)
 	box.Size = UDim2.new(1, 0, 0, 0)
 	box.AutomaticSize = Enum.AutomaticSize.Y
 	box.BackgroundColor3 = Theme.CardHover
-	box.Position = UDim2.new(1.5, 0, 0, 0)
+	box.Position = UDim2.new(1.2, 0, 0, 0)
 	box.ClipsDescendants = true
 	box.ZIndex = 302
 	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
@@ -604,54 +577,28 @@ function DisplayNotification(msg, nType)
 	txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
 	txt.TextWrapped = true; txt.ZIndex = 303
 
-	local progressBar = Instance.new("Frame", box)
-	progressBar.AnchorPoint = Vector2.new(0, 1)
-	progressBar.Position = UDim2.new(0, -12, 1, 12)
-	progressBar.Size = UDim2.new(1, 24, 0, 2)
-	progressBar.BackgroundColor3 = indicatorColor
-	progressBar.BorderSizePixel = 0; progressBar.ZIndex = 304
+	local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+	introTween:Play()
 
-	CacheInstanceAndDescendants(wrapper)
-
-	local function RemoveNotification()
-		if notifState.IsRemoving then return end
-		notifState.IsRemoving = true
-
-		if notifState.Timer then task.cancel(notifState.Timer); notifState.Timer = nil end
-
-		local idx = table.find(ActiveNotifications, notifState)
-		if idx then table.remove(ActiveNotifications, idx) end
-
-		ProcessNotificationQueue()
-
-		if box and box.Parent then
-			SafeTween(box, ExitTweenInfo, {Position = UDim2.new(1.5, 0, 0, 0)})
-			task.delay(ANIM_DURATION, function()
-				if wrapper and wrapper.Parent then wrapper:Destroy() end
-			end)
-		else
-			if wrapper and wrapper.Parent then wrapper:Destroy() end
-		end
-	end
-
-	notifState.Remove = RemoveNotification
-	table.insert(ActiveNotifications, notifState)
-
-	SafeTween(box, EntryTweenInfo, {Position = UDim2.new(0, 0, 0, 0)})
-	SafeTween(progressBar, LinearTweenInfo, {Size = UDim2.new(0, 0, 0, 2)})
-
-	notifState.Timer = task.delay(NOTIF_DURATION, function()
-		if notifState and type(notifState.Remove) == "function" then
-			notifState.Remove()
-		end
+	task.delay(NOTIF_DURATION, function()
+		if not wrapper or not wrapper.Parent then return end
+		local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
+		outroTween:Play()
+		
+		local conn
+		conn = outroTween.Completed:Connect(function()
+			if conn then conn:Disconnect() end
+			if wrapper and wrapper.Parent then
+				wrapper:Destroy()
+			end
+		end)
 	end)
 end
 
 getfenv().ShowNotification = function(msg, notifType)
 	if isDestroying then return end
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	table.insert(NotificationQueue, {Msg = tostring(msg), Type = nType})
-	ProcessNotificationQueue()
+	DisplayNotification(msg, nType)
 end
 local ShowNotification = getfenv().ShowNotification
 
@@ -897,7 +844,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.1.2 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.1.3 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1259,10 +1206,9 @@ local function CreateTab(name, index)
 		if isDestroying or currentTab == name then return end
 		currentTab = name; DropdownContainer.Visible = false
 		
-		-- Set baseline properties to prevent fractional tween artifacts
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
-		SafeTween(TabIndicator, EntryTweenInfo, {Position = UDim2.new(0, xOffset + 4, 1, -2)})
+		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
@@ -1303,8 +1249,8 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.1.2 - Stability Patch", "• Fixed notification memory leak by removing tween callback dependencies.\n• Implemented WindowFocusReleased listener to resolve stuck hover states.\n• Added thread interruption checks for yielded task operations.\n• Adjusted TabIndicator baseline variables resolving animation overlap issues.", ChangelogsView)
-CreateParagraph("v3.1.1 - Core Stability Overhaul", "• Fully integrated custom TweenManager resolving overlapping states & memory leaks.\n• Purged dead signal callbacks globally, closing performance bleed during repeated interactions.\n• Restructured layout rendering engine ensuring frame-perfect alignment out of minimization states.", ChangelogsView)
+CreateParagraph("v3.1.3 - Notification Stability Fix", "• Simplified the notification system and removed complex dependent queues that caused stuck UI elements.\n• Guaranteed smooth cleanup and automatic destruction upon tween completion.", ChangelogsView)
+CreateParagraph("v3.1.2 - Stability Patch", "• Fixed notification memory leak by removing tween callback dependencies.\n• Implemented WindowFocusReleased listener to resolve stuck hover states.\n• Added thread interruption checks for yielded task operations.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1608,7 +1554,7 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 		if isDestroying then return end
 		state = not state
 		toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
-		SafeTween(circle, EntryTweenInfo, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
+		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
