@@ -76,71 +76,15 @@ local AfkConnections = {}
 local ActiveNotifications = {}
 local NotificationQueue = {}
 local ActiveTweens = {}
+local ActiveCooldowns = {}
 
 local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
-local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local MainGuiName = GenerateRandomString(20)
 
 local OriginalCache = {}
-
-local CooldownManager = {
-	Active = {},
-	TickConn = nil
-}
-
-function CooldownManager.Request(actionName, duration)
-	duration = duration or 3
-	local cd = CooldownManager.Active[actionName]
-	
-	if cd then
-		if not cd.Showing then
-			cd.Showing = true
-			ShowNotification("Please try again in " .. cd.Remaining .. (cd.Remaining == 1 and " second." or " seconds."), "Warning", "CD_" .. actionName, cd.Remaining + 0.5)
-		end
-		return false
-	end
-	
-	CooldownManager.Active[actionName] = {
-		Remaining = duration,
-		Showing = false
-	}
-	
-	if not CooldownManager.TickConn then
-		local lastTick = os.clock()
-		CooldownManager.TickConn = RunService.Heartbeat:Connect(function()
-			local now = os.clock()
-			if now - lastTick >= 1 then
-				lastTick = now
-				for name, data in pairs(CooldownManager.Active) do
-					data.Remaining = data.Remaining - 1
-					if data.Remaining > 0 then
-						if data.Showing then
-							ShowNotification("Please try again in " .. data.Remaining .. (data.Remaining == 1 and " second." or " seconds."), "Warning", "CD_" .. name)
-						end
-					elseif data.Remaining <= 0 then
-						if data.Showing then
-							ShowNotification("Ready.", "Success", "CD_" .. name, 1.5)
-						end
-						CooldownManager.Active[name] = nil
-					end
-				end
-				
-				local hasActive = false
-				for _ in pairs(CooldownManager.Active) do hasActive = true break end
-				if not hasActive and CooldownManager.TickConn then
-					CooldownManager.TickConn:Disconnect()
-					CooldownManager.TickConn = nil
-				end
-			end
-		end)
-		table.insert(VeloxConnections, CooldownManager.TickConn)
-	end
-	
-	return true
-end
 
 local function CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
@@ -184,16 +128,11 @@ end
 local typingTask = nil
 
 local function CleanUpMemory()
+	if isDestroying then return end
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-	
-	if CooldownManager.TickConn then 
-		CooldownManager.TickConn:Disconnect()
-		CooldownManager.TickConn = nil 
-	end
-	table.clear(CooldownManager.Active)
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -208,7 +147,14 @@ local function CleanUpMemory()
 	for _, notif in ipairs(ActiveNotifications) do
 		pcall(function()
 			if notif.Timer then task.cancel(notif.Timer) end
+			if notif.CountdownTimer then task.cancel(notif.CountdownTimer) end
 			if notif.Wrapper then notif.Wrapper:Destroy() end
+		end)
+	end
+
+	for _, cd in pairs(ActiveCooldowns) do
+		pcall(function()
+			if cd.Timer then task.cancel(cd.Timer) end
 		end)
 	end
 
@@ -225,6 +171,7 @@ local function CleanUpMemory()
 	table.clear(ActiveNotifications)
 	table.clear(NotificationQueue)
 	table.clear(ActiveTweens)
+	table.clear(ActiveCooldowns)
 	table.clear(OriginalCache)
 end
 
@@ -388,25 +335,212 @@ end
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
-local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
+local EntryTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local ExitTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+local ToastContainer = Instance.new("Frame", ScreenGui)
+ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
+ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
+ToastContainer.BackgroundTransparency = 1
+ToastContainer.ZIndex = 300
+
+local ToastLayout = Instance.new("UIListLayout", ToastContainer)
+ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+ToastLayout.Padding = UDim.new(0, 8)
+
+local MAX_VISIBLE_NOTIFS = 3
+
+local function ProcessNotificationQueue()
+	if isDestroying then return end
+	while #ActiveNotifications < MAX_VISIBLE_NOTIFS and #NotificationQueue > 0 do
+		local nextNotif = table.remove(NotificationQueue, 1)
+		DisplayNotification(nextNotif.Msg, nextNotif.Type, nextNotif.Duration, nextNotif.ActionKey)
+	end
+end
+
+function DisplayNotification(msg, nType, customDuration, actionKey)
+	if isDestroying then return end
+	
+	if actionKey then
+		for _, existing in ipairs(ActiveNotifications) do
+			if existing.ActionKey == actionKey then
+				if existing.Timer then task.cancel(existing.Timer); existing.Timer = nil end
+				if existing.CountdownTimer then task.cancel(existing.CountdownTimer); existing.CountdownTimer = nil end
+				existing.TextLabel.Text = tostring(msg)
+				
+				local duration = customDuration or 3.5
+				if duration > 0 then
+					SafeTween(existing.ProgressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 2)})
+					existing.Timer = task.delay(duration, function()
+						if existing and type(existing.Remove) == "function" then
+							existing.Remove()
+						end
+					end)
+				end
+				return existing
+			end
+		end
+	end
+
+	local indicatorColor = Theme[nType] or Theme.Info
+	local notifState = { IsRemoving = false, ActionKey = actionKey }
+	
+	local wrapper = Instance.new("Frame", ToastContainer)
+	wrapper.Size = UDim2.new(1, 0, 0, 0)
+	wrapper.AutomaticSize = Enum.AutomaticSize.Y
+	wrapper.BackgroundTransparency = 1
+	wrapper.ZIndex = 301
+	notifState.Wrapper = wrapper
+
+	local box = Instance.new("Frame", wrapper)
+	box.Size = UDim2.new(1, 0, 0, 0)
+	box.AutomaticSize = Enum.AutomaticSize.Y
+	box.BackgroundColor3 = Theme.CardHover
+	box.Position = UDim2.new(1.5, 0, 0, 0)
+	box.ClipsDescendants = true
+	box.ZIndex = 302
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
+
+	local pad = Instance.new("UIPadding", box)
+	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
+	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
+
+	local indicator = Instance.new("Frame", box)
+	indicator.Size = UDim2.new(0, 4, 1, 0)
+	indicator.Position = UDim2.new(0, -12, 0, -10)
+	indicator.BackgroundColor3 = indicatorColor
+	indicator.BorderSizePixel = 0
+	indicator.ZIndex = 303
+	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
+
+	local txt = Instance.new("TextLabel", box)
+	txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
+	txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
+	txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
+	txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
+	txt.TextWrapped = true; txt.ZIndex = 303
+	notifState.TextLabel = txt
+
+	local progressBar = Instance.new("Frame", box)
+	progressBar.AnchorPoint = Vector2.new(0, 1)
+	progressBar.Position = UDim2.new(0, -12, 1, 12)
+	progressBar.Size = UDim2.new(1, 24, 0, 2)
+	progressBar.BackgroundColor3 = indicatorColor
+	progressBar.BorderSizePixel = 0; progressBar.ZIndex = 304
+	notifState.ProgressBar = progressBar
+
+	CacheInstanceAndDescendants(wrapper)
+
+	local function RemoveNotification()
+		if notifState.IsRemoving then return end
+		notifState.IsRemoving = true
+
+		if notifState.Timer then task.cancel(notifState.Timer); notifState.Timer = nil end
+		if notifState.CountdownTimer then task.cancel(notifState.CountdownTimer); notifState.CountdownTimer = nil end
+
+		local idx = table.find(ActiveNotifications, notifState)
+		if idx then table.remove(ActiveNotifications, idx) end
+
+		ProcessNotificationQueue()
+
+		if box and box.Parent then
+			local exitTween = SafeTween(box, ExitTweenInfo, {Position = UDim2.new(1.5, 0, 0, 0)})
+			if exitTween then
+				local exitConn
+				exitConn = exitTween.Completed:Connect(function()
+					if exitConn then exitConn:Disconnect() end
+					if wrapper and wrapper.Parent then wrapper:Destroy() end
+				end)
+			end
+		else
+			if wrapper and wrapper.Parent then wrapper:Destroy() end
+		end
+	end
+
+	notifState.Remove = RemoveNotification
+	table.insert(ActiveNotifications, notifState)
+
+	SafeTween(box, EntryTweenInfo, {Position = UDim2.new(0, 0, 0, 0)})
+	
+	local duration = customDuration or 3.5
+	if duration > 0 then
+		SafeTween(progressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 2)})
+		notifState.Timer = task.delay(duration, function()
+			if notifState and type(notifState.Remove) == "function" then
+				notifState.Remove()
+			end
+		end)
+	end
+	
+	return notifState
+end
+
+getfenv().ShowNotification = function(msg, notifType, customDuration, actionKey)
+	if isDestroying then return end
+	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
+	table.insert(NotificationQueue, {Msg = tostring(msg), Type = nType, Duration = customDuration, ActionKey = actionKey})
+	ProcessNotificationQueue()
+end
+local ShowNotification = getfenv().ShowNotification
+
+local function RunWithCooldown(actionName, func, cooldownDuration)
+	cooldownDuration = cooldownDuration or 3
+	if ActiveCooldowns[actionName] then
+		local remaining = math.ceil(ActiveCooldowns[actionName].Expires - os.clock())
+		if remaining > 0 then
+			ShowNotification("Please try again in " .. remaining .. " second" .. (remaining == 1 and "" or "s") .. ".", "Warning", 1.1, "Cooldown_" .. actionName)
+			return
+		end
+	end
+
+	ActiveCooldowns[actionName] = {
+		Expires = os.clock() + cooldownDuration
+	}
+
+	local notifActionKey = "Cooldown_" .. actionName
+	ShowNotification("Please try again in " .. cooldownDuration .. " seconds.", "Warning", 1.1, notifActionKey)
+
+	ActiveCooldowns[actionName].Timer = task.spawn(function()
+		for i = cooldownDuration - 1, 1, -1 do
+			task.wait(1)
+			if ActiveCooldowns[actionName] then
+				ShowNotification("Please try again in " .. i .. " second" .. (i == 1 and "" or "s") .. ".", "Warning", 1.1, notifActionKey)
+			else
+				return
+			end
+		end
+		task.wait(1)
+		if ActiveCooldowns[actionName] then
+			ShowNotification("Ready.", "Success", 1.5, notifActionKey)
+			ActiveCooldowns[actionName] = nil
+		end
+	end)
+
+	task.spawn(func)
+end
+
+local ApplyInteractiveAnimations
+ApplyInteractiveAnimations = function(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
 	if not gui:IsA("GuiObject") then return end
 
 	RegConn(gui.MouseEnter:Connect(function()
 		if isDestroying or isTransitioning then return end
-		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
+		if originalColor and hoverColor then SafeTween(gui, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}) end
 		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
 	end))
 
 	RegConn(gui.MouseLeave:Connect(function()
 		if isDestroying or isTransitioning then return end
-		if originalColor then gui.BackgroundColor3 = originalColor end
+		if originalColor then SafeTween(gui, TweenInfo.new(0.15), {BackgroundColor3 = originalColor}) end
 		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
 	end))
 
 	RegConn(gui.InputBegan:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if clickColor then gui.BackgroundColor3 = clickColor end
+			if clickColor then SafeTween(gui, TweenInfo.new(0.1), {BackgroundColor3 = clickColor}) end
 		end
 	end))
 
@@ -414,9 +548,9 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if hoverColor then 
-				gui.BackgroundColor3 = hoverColor
+				SafeTween(gui, TweenInfo.new(0.1), {BackgroundColor3 = hoverColor})
 			elseif originalColor then 
-				gui.BackgroundColor3 = originalColor
+				SafeTween(gui, TweenInfo.new(0.1), {BackgroundColor3 = originalColor})
 			end
 		end
 	end))
@@ -518,8 +652,6 @@ end
 
 local function ToggleUI()
 	if isDestroying or IsBindingKey or isTransitioning then return end
-	if not CooldownManager.Request("ToggleUI", 3) then return end
-	
 	isTransitioning = true
 
 	if not isMinimized then
@@ -527,196 +659,37 @@ local function ToggleUI()
 		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		
+		SafeTween(MainPanel, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
+		task.wait(0.15)
 		MainPanel.Visible = false
 		RestoreCachedProperties()
 		
 		FloatingBtn.Visible = true
-		FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
-		FloatingBtn.ImageTransparency = 0
-		FloatStroke.Transparency = 0
+		FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
+		FloatingBtn.ImageTransparency = 1
+		FloatStroke.Transparency = 1
+		SafeTween(FloatingBtn, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 45, 0, 45), ImageTransparency = 0})
+		SafeTween(FloatStroke, TweenInfo.new(0.2), {Transparency = 0})
 	else
 		isMinimized = false
 		FloatingBtn.Visible = false
 		
+		MainPanel.Size = UDim2.new(0, 0, 0, 0)
 		MainPanel.Visible = true
+		SafeTween(MainPanel, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = PANEL_SIZE})
 		RestoreCachedProperties()
 		pcall(function() MainPanel.Interactable = true end)
 	end
 
-	task.wait(0.1) 
+	task.wait(0.25) 
 	isTransitioning = false
 end
 
-RegConn(FloatingBtn.MouseButton1Click:Connect(function() if not floatDrag then ToggleUI() end end))
-
-local ToastContainer = Instance.new("Frame", ScreenGui)
-ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
-ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
-ToastContainer.BackgroundTransparency = 1
-ToastContainer.ZIndex = 300
-
-local ToastLayout = Instance.new("UIListLayout", ToastContainer)
-ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-ToastLayout.Padding = UDim.new(0, 8)
-
-local MAX_VISIBLE_NOTIFS = 3
-local NOTIF_DURATION = 3.5
-local ANIM_DURATION = 0.2
-
-local EntryTweenInfo = TweenInfo.new(ANIM_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local ExitTweenInfo = TweenInfo.new(ANIM_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-
-local function ProcessNotificationQueue()
-	if isDestroying then return end
-	while #ActiveNotifications < MAX_VISIBLE_NOTIFS and #NotificationQueue > 0 do
-		local nextNotif = table.remove(NotificationQueue, 1)
-		DisplayNotification(nextNotif.Msg, nextNotif.Type, nextNotif.Id, nextNotif.Duration)
-	end
-end
-
-function DisplayNotification(msg, nType, id, customDuration)
-	if isDestroying then return end
-	local duration = customDuration or NOTIF_DURATION
-	local indicatorColor = Theme[nType] or Theme.Info
-	
-	local notifState = { IsRemoving = false, Id = id }
-	
-	local wrapper = Instance.new("Frame", ToastContainer)
-	wrapper.Size = UDim2.new(1, 0, 0, 0)
-	wrapper.AutomaticSize = Enum.AutomaticSize.Y
-	wrapper.BackgroundTransparency = 1
-	wrapper.ZIndex = 301
-	notifState.Wrapper = wrapper
-
-	local box = Instance.new("Frame", wrapper)
-	box.Size = UDim2.new(1, 0, 0, 0)
-	box.AutomaticSize = Enum.AutomaticSize.Y
-	box.BackgroundColor3 = Theme.CardHover
-	box.Position = UDim2.new(1.5, 0, 0, 0)
-	box.ClipsDescendants = true
-	box.ZIndex = 302
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
-
-	local pad = Instance.new("UIPadding", box)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
-
-	local indicator = Instance.new("Frame", box)
-	indicator.Size = UDim2.new(0, 4, 1, 0)
-	indicator.Position = UDim2.new(0, -12, 0, -10)
-	indicator.BackgroundColor3 = indicatorColor
-	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 303
-	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
-
-	local txt = Instance.new("TextLabel", box)
-	txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
-	txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
-	txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
-	txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
-	txt.TextWrapped = true; txt.ZIndex = 303
-
-	local progressBar = Instance.new("Frame", box)
-	progressBar.AnchorPoint = Vector2.new(0, 1)
-	progressBar.Position = UDim2.new(0, -12, 1, 12)
-	progressBar.Size = UDim2.new(1, 24, 0, 2)
-	progressBar.BackgroundColor3 = indicatorColor
-	progressBar.BorderSizePixel = 0; progressBar.ZIndex = 304
-
-	CacheInstanceAndDescendants(wrapper)
-
-	notifState.UpdateText = function(newMsg)
-		if txt and txt.Parent then txt.Text = tostring(newMsg) end
-	end
-
-	notifState.UpdateIndicator = function(newType)
-		if indicator and indicator.Parent and progressBar and progressBar.Parent then
-			local c = Theme[newType] or Theme.Info
-			indicator.BackgroundColor3 = c
-			progressBar.BackgroundColor3 = c
-		end
-	end
-
-	local function RemoveNotification()
-		if notifState.IsRemoving then return end
-		notifState.IsRemoving = true
-
-		if notifState.Timer then task.cancel(notifState.Timer); notifState.Timer = nil end
-
-		local idx = table.find(ActiveNotifications, notifState)
-		if idx then table.remove(ActiveNotifications, idx) end
-
-		ProcessNotificationQueue()
-
-		if box and box.Parent then
-			local exitTween = SafeTween(box, ExitTweenInfo, {Position = UDim2.new(1.5, 0, 0, 0)})
-			if exitTween then
-				local exitConn
-				exitConn = exitTween.Completed:Connect(function()
-					if exitConn then exitConn:Disconnect() end
-					if wrapper and wrapper.Parent then wrapper:Destroy() end
-				end)
-			end
-		else
-			if wrapper and wrapper.Parent then wrapper:Destroy() end
-		end
-	end
-
-	notifState.Remove = RemoveNotification
-
-	notifState.ForceClose = function(newDuration)
-		if notifState.Timer then task.cancel(notifState.Timer); notifState.Timer = nil end
-		if progressBar and progressBar.Parent then
-			SafeTween(progressBar, TweenInfo.new(newDuration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 2)})
-		end
-		notifState.Timer = task.delay(newDuration, function()
-			if notifState and type(notifState.Remove) == "function" then
-				notifState.Remove()
-			end
-		end)
-	end
-
-	table.insert(ActiveNotifications, notifState)
-
-	SafeTween(box, EntryTweenInfo, {Position = UDim2.new(0, 0, 0, 0)})
-	SafeTween(progressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 2)})
-
-	notifState.Timer = task.delay(duration, function()
-		if notifState and type(notifState.Remove) == "function" then
-			notifState.Remove()
-		end
-	end)
-end
-
-getfenv().ShowNotification = function(msg, notifType, id, overrideDuration)
-	if isDestroying then return end
-	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	
-	if id then
-		for _, notif in ipairs(ActiveNotifications) do
-			if notif.Id == id then
-				if notif.UpdateText then notif.UpdateText(msg) end
-				if notif.UpdateIndicator then notif.UpdateIndicator(nType) end
-				if overrideDuration and notif.ForceClose then notif.ForceClose(overrideDuration) end
-				return
-			end
-		end
-		for _, qItem in ipairs(NotificationQueue) do
-			if qItem.Id == id then
-				qItem.Msg = tostring(msg)
-				qItem.Type = nType
-				if overrideDuration then qItem.Duration = overrideDuration end
-				return
-			end
-		end
-	end
-	
-	table.insert(NotificationQueue, {Msg = tostring(msg), Type = nType, Id = id, Duration = overrideDuration})
-	ProcessNotificationQueue()
-end
-local ShowNotification = getfenv().ShowNotification
+RegConn(FloatingBtn.MouseButton1Click:Connect(function() 
+	if not floatDrag then 
+		RunWithCooldown("FloatingButton", ToggleUI, 1)
+	end 
+end))
 
 local ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -800,16 +773,18 @@ local pendingExecuteCallback = nil
 
 local function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
-	isConfirming = true
-	pendingExecuteCallback = onExecute
+	RunWithCooldown("ConfirmationDialogs", function()
+		isConfirming = true
+		pendingExecuteCallback = onExecute
 
-	ConfirmScriptName.Text = scriptName
-	ConfirmExecuteBtn.Active = true
-	ConfirmExecuteBtn.AutoButtonColor = true
-	ConfirmExecuteBtn.Text = "Execute"
+		ConfirmScriptName.Text = scriptName
+		ConfirmExecuteBtn.Active = true
+		ConfirmExecuteBtn.AutoButtonColor = true
+		ConfirmExecuteBtn.Text = "Execute"
 
-	ConfirmOverlay.BackgroundTransparency = 0.5
-	ConfirmOverlay.Visible = true
+		ConfirmOverlay.BackgroundTransparency = 0.5
+		ConfirmOverlay.Visible = true
+	end, 1)
 end
 
 local function CloseConfirmDialog(shouldExecute)
@@ -826,13 +801,10 @@ local function CloseConfirmDialog(shouldExecute)
 end
 
 RegConn(ConfirmCancelBtn.Activated:Connect(function() 
-	if not CooldownManager.Request("ConfirmCancel", 3) then return end
-	CloseConfirmDialog(false) 
+	RunWithCooldown("ConfirmationDialogs", function() CloseConfirmDialog(false) end, 1) 
 end))
-
 RegConn(ConfirmExecuteBtn.Activated:Connect(function() 
-	if not CooldownManager.Request("ConfirmExecute", 3) then return end
-	CloseConfirmDialog(true) 
+	RunWithCooldown("ConfirmationDialogs", function() CloseConfirmDialog(true) end, 1) 
 end))
 
 RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
@@ -870,19 +842,21 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				SavedData.ToggleKeybind = ToggleKeybind.Name
 				SaveConfiguration()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-				ShowNotification("Keybind set to: " .. input.KeyCode.Name, "Success")
+				ShowNotification("Keybind set to: " + input.KeyCode.Name, "Success")
 			end
 		end
 		return
 	end
 	if gameProcessed then return end
-	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ToggleKeybind then ToggleUI() end
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ToggleKeybind then 
+		RunWithCooldown("ToggleUI", ToggleUI, 1) 
+	end
 end))
 
 local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-	isDestroying = true
+	CleanUpMemory()
 	getgenv()[_G_Identifier]()
 end
 
@@ -1008,7 +982,9 @@ MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn
 MinBtn.TextColor3 = Theme.TextSecondary; MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = IsMobile and 14 or 18; MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
+RegConn(MinBtn.Activated:Connect(function() 
+	RunWithCooldown("Minimize", ToggleUI, 1) 
+end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
@@ -1045,6 +1021,7 @@ local function CreateCanvas(name)
 	scroll.ScrollBarThickness = 2; scroll.ScrollBarImageColor3 = Theme.Stroke
 	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.Active = true
+	scroll.ScrollingEnabled = true
 	local layout = Instance.new("UIListLayout", scroll)
 	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder
 	local pad = Instance.new("UIPadding", scroll)
@@ -1110,6 +1087,7 @@ local DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
 DropdownContainer.Visible = false; DropdownContainer.ZIndex = 200; DropdownContainer.BorderSizePixel = 0
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+DropdownContainer.ScrollingEnabled = true
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1223,57 +1201,58 @@ RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 end))
 
 RegConn(FavFilterBtn.MouseButton1Click:Connect(function()
-	if isDestroying then return end
-	if not CooldownManager.Request("ToggleFavoriteFilter", 3) then return end
-	
-	FilterFavoritesActive = not FilterFavoritesActive
-	
-	if FilterFavoritesActive then
-		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
-	else
-		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
-	end
-	UpdateFilter()
+	RunWithCooldown("Favorite", function()
+		if isDestroying then return end
+		FilterFavoritesActive = not FilterFavoritesActive
+		
+		if FilterFavoritesActive then
+			FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		else
+			FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		end
+		UpdateFilter()
+	end, 0.5)
 end))
 
 for _, opt in ipairs(SortOptions) do
 	local btn = Instance.new("TextButton", DropdownContainer)
 	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
-	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
+	btn.Text = "  " + opt; btn.TextXAlignment = Enum.TextXAlignment.Left
 	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
 	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 201
 
 	RegConn(btn.Activated:Connect(function()
-		if not CooldownManager.Request("SelectSortMode_" .. opt, 3) then return end
-		SortMode = opt
-		DropdownContainer.Visible = false
-		for _, child in ipairs(DropdownContainer:GetChildren()) do
-			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
-		end
-		btn.TextColor3 = Theme.Accent
-		UpdateFilter()
+		RunWithCooldown("Search", function()
+			SortMode = opt
+			DropdownContainer.Visible = false
+			for _, child in ipairs(DropdownContainer:GetChildren()) do
+				if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
+			end
+			btn.TextColor3 = Theme.Accent
+			UpdateFilter()
+		end, 0.5)
 	end))
 end
 
 RegConn(SortDropdownBtn.Activated:Connect(function()
-	if not CooldownManager.Request("SortDropdown", 3) then return end
-	
-	if DropdownContainer.Visible then
-		DropdownContainer.Visible = false
-	else
-		local absPos = SortDropdownBtn.AbsolutePosition
-		local absSize = SortDropdownBtn.AbsoluteSize
-		local camera = workspace.CurrentCamera
-		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local dropWidth, dropHeight = 190, 210
+	RunWithCooldown("Search", function()
+		if DropdownContainer.Visible then
+			DropdownContainer.Visible = false
+		else
+			local absPos = SortDropdownBtn.AbsolutePosition
+			local absSize = SortDropdownBtn.AbsoluteSize
+			local camera = workspace.CurrentCamera
+			local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+			local dropWidth, dropHeight = 190, 210
 
-		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
-		local posY = absPos.Y + absSize.Y + 4
-		if posY + dropHeight > viewportSize.Y - 10 then posY = absPos.Y - dropHeight - 4 end
+			local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
+			local posY = absPos.Y + absSize.Y + 4
+			if posY + dropHeight > viewportSize.Y - 10 then posY = absPos.Y - dropHeight - 4 end
 
-		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
-		DropdownContainer.Visible = true
-	end
+			DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
+			DropdownContainer.Visible = true
+		end
+	end, 0.5)
 end))
 
 RegConn(UserInputService.InputBegan:Connect(function(input)
@@ -1311,24 +1290,24 @@ local function CreateTab(name, index)
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying or currentTab == name then return end
-		if not CooldownManager.Request("SwitchTab_" .. name, 3) then return end
-		
-		currentTab = name; DropdownContainer.Visible = false
-		SafeTween(TabIndicator, EntryTweenInfo, {Position = UDim2.new(0, xOffset + 4, 1, -2)})
+		RunWithCooldown("Tab switching", function()
+			if isDestroying or currentTab == name then return end
+			currentTab = name; DropdownContainer.Visible = false
+			SafeTween(TabIndicator, EntryTweenInfo, {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 
-		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
-		SearchRow.Visible = (name == "Scripts")
+			SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
+			SearchRow.Visible = (name == "Scripts")
 
-		if name == "Scripts" then UpdateFilter() else if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end end
+			if name == "Scripts" then UpdateFilter() else if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end end
 
-		for tName, view in pairs(TabViews) do
-			view.Visible = (tName == name)
-			if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
-		end
-		for tName, tBtn in pairs(TabButtonCache) do
-			tBtn.TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
-		end
+			for tName, view in pairs(TabViews) do
+				view.Visible = (tName == name)
+				if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
+			end
+			for tName, tBtn in pairs(TabButtonCache) do
+				tBtn.TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+			end
+		end, 0.5)
 	end))
 end
 CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
@@ -1478,65 +1457,60 @@ local function CreateScriptCard(data, renderParent)
 	scriptEntry.UpdateUI()
 
 	RegConn(starBtn.Activated:Connect(function()
-		if isDestroying then return end
-		if not CooldownManager.Request("FavoriteScript_" .. exactName, 3) then return end
-		
-		if SavedData.Favorites[exactName] then
-			SavedData.Favorites[exactName] = nil; ShowNotification("Favorite removed: " .. exactName, "Info")
-		else
-			SavedData.Favorites[exactName] = true; ShowNotification("Favorite added: " .. exactName, "Success")
-		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end))
+		RunWithCooldown("Favorite", function()
+			if isDestroying then return end
+			if SavedData.Favorites[exactName] then
+				SavedData.Favorites[exactName] = nil; ShowNotification("Favorite removed: " + exactName, "Info")
+			else
+				SavedData.Favorites[exactName] = true; ShowNotification("Favorite added: " + exactName, "Success")
+			end
+			SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		end, 0.5)
+	end)))
 
 	RegConn(autoExecBtn.Activated:Connect(function()
-		if isDestroying then return end
-		if not CooldownManager.Request("AutoExecute_" .. exactName, 3) then return end
-		
-		if SavedData.AutoExecutes[exactName] then
-			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Auto-Execute disabled: " .. exactName, "Warning")
-		else
-			SavedData.AutoExecutes[exactName] = {PlaceId = PlaceId}; ShowNotification("Auto-Execute enabled: " .. exactName, "Success")
-		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end))
+		RunWithCooldown("Auto Execute", function()
+			if isDestroying then return end
+			if SavedData.AutoExecutes[exactName] then
+				SavedData.AutoExecutes[exactName] = nil; ShowNotification("Auto-Execute disabled: " + exactName, "Warning")
+			else
+				SavedData.AutoExecutes[exactName] = {PlaceId = PlaceId}; ShowNotification("Auto-Execute enabled: " + exactName, "Success")
+			end
+			SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		end, 0.5)
+	end)))
 
 	RegConn(card.Activated:Connect(function()
-		if isDestroying or GlobalExecutionCooldown then return end
-		if not CooldownManager.Request("ExecuteScript_" .. exactName, 3) then return end
-		
-		local function executeScript()
-			if GlobalExecutionCooldown then return end
-			GlobalExecutionCooldown = true
+		RunWithCooldown("Execute", function()
+			if isDestroying then return end
+			local function executeScript()
+				if type(loadstring) ~= "function" then
+					ShowNotification("Executor lacks loadstring support!", "Error")
+					return
+				end
 
-			if type(loadstring) ~= "function" then
-				ShowNotification("Executor lacks loadstring support!", "Error")
-				GlobalExecutionCooldown = false
-				return
+				titleLbl.Text = "Executing..."; titleLbl.TextColor3 = Theme.Accent
+
+				task.spawn(function()
+					local success, err = pcall(function()
+						local raw = FetchWithRetry(data.RawUrl, 2, 1)
+						if not raw then error("HTTP fetch failed.") end
+						local chunk, compileErr = loadstring(raw)
+						if chunk then task.spawn(chunk) else error("Compile error: " + tostring(compileErr)) end
+					end)
+
+					if success then
+						ShowNotification("Script executed: " + exactName, "Success")
+					else
+						ShowNotification("Execution failed. See console.", "Error")
+						warn("Velox Hub Execution Error: ", tostring(err))
+					end
+					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
+				end)
 			end
 
-			titleLbl.Text = "Executing..."; titleLbl.TextColor3 = Theme.Accent
-
-			task.spawn(function()
-				local success, err = pcall(function()
-					local raw = FetchWithRetry(data.RawUrl, 2, 1)
-					if not raw then error("HTTP fetch failed.") end
-					local chunk, compileErr = loadstring(raw)
-					if chunk then task.spawn(chunk) else error("Compile error: " .. tostring(compileErr)) end
-				end)
-
-				if success then
-					ShowNotification("Script executed: " .. exactName, "Success")
-				else
-					ShowNotification("Execution failed. See console.", "Error")
-					warn("Velox Hub Execution Error: ", tostring(err))
-				end
-				titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
-				GlobalExecutionCooldown = false
-			end)
-		end
-
-		if SavedData.AutoExecutes[exactName] ~= nil then executeScript() else OpenConfirmDialog(exactName, executeScript) end
+			if SavedData.AutoExecutes[exactName] ~= nil then executeScript() else OpenConfirmDialog(exactName, executeScript) end
+		end, 1)
 	end))
 
 	card.Parent = renderParent
@@ -1549,68 +1523,70 @@ local dbRefreshing = false
 
 local function LoadDynamicCatalog()
 	if dbRefreshing then return end
-	dbRefreshing = true
-	local savedScroll = ScriptsView.CanvasPosition
-	StatusDot.BackgroundColor3 = Theme.Warning
-	StatusText.Text = "Connecting..."
-	StatusText.TextColor3 = Theme.Warning
-	EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Loading script repository..."
+	RunWithCooldown("Refresh", function()
+		dbRefreshing = true
+		local savedScroll = ScriptsView.CanvasPosition
+		StatusDot.BackgroundColor3 = Theme.Warning
+		StatusText.Text = "Connecting..."
+		StatusText.TextColor3 = Theme.Warning
+		EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Loading script repository..."
 
-	task.spawn(function()
-		local raw = FetchWithRetry(CATALOG_URL, 3, 2)
-		if raw then
-			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
-			if success and type(parsed) == "table" then
-				for _, child in ipairs(ScriptsView:GetChildren()) do
-					if child:IsA("TextButton") then child:Destroy() end
-				end
-				table.clear(RegisteredScripts)
-
-				local detachedFolder = Instance.new("Folder")
-				local vMap = {}
-				for _, scriptData in ipairs(parsed) do
-					if type(scriptData) == "table" and scriptData.Name then
-						vMap[scriptData.Name] = true
-						if isDestroying then return end
-						CreateScriptCard(scriptData, detachedFolder)
+		task.spawn(function()
+			local raw = FetchWithRetry(CATALOG_URL, 3, 2)
+			if raw then
+				local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+				if success and type(parsed) == "table" then
+					for _, child in ipairs(ScriptsView:GetChildren()) do
+						if child:IsA("TextButton") then child:Destroy() end
 					end
-				end
+					table.clear(RegisteredScripts)
 
-				local cleaned = false
-				for k, _ in pairs(SavedData.AutoExecutes) do
-					if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
-				end
-				if cleaned then SaveConfiguration() end
-
-				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
-				pcall(function() detachedFolder:Destroy() end)
-
-				for _, scriptData in ipairs(parsed) do
-					if type(scriptData) == "table" and scriptData.Name then
-						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
-							task.spawn(function()
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
-								if scrRaw and type(loadstring) == "function" then
-									local fn = loadstring(scrRaw)
-									if fn then task.spawn(fn); ShowNotification("Auto-executed: " .. scriptData.Name, "Success") end
-								end
-							end)
+					local detachedFolder = Instance.new("Folder")
+					local vMap = {}
+					for _, scriptData in ipairs(parsed) do
+						if type(scriptData) == "table" and scriptData.Name then
+							vMap[scriptData.Name] = true
+							if isDestroying then return end
+							CreateScriptCard(scriptData, detachedFolder)
 						end
 					end
+
+					local cleaned = false
+					for k, _ in pairs(SavedData.AutoExecutes) do
+						if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
+					end
+					if cleaned then SaveConfiguration() end
+
+					for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
+					pcall(function() detachedFolder:Destroy() end)
+
+					for _, scriptData in ipairs(parsed) do
+						if type(scriptData) == "table" and scriptData.Name then
+							local auto = SavedData.AutoExecutes[scriptData.Name]
+							if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
+								task.spawn(function()
+									local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+									if scrRaw and type(loadstring) == "function" then
+										local fn = loadstring(scrRaw)
+										if fn then task.spawn(fn); ShowNotification("Auto-executed: " + scriptData.Name, "Success") end
+									end
+								end)
+							end
+						end
+					end
+					UpdateFilter()
+					task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
+					StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
+					ShowNotification("Catalog refreshed successfully.", "Success")
+				else
+					EmptyStateMessage.Text = "Catalog parsing error. Check console."; StatusText.Text = "Data Error"
 				end
-				UpdateFilter()
-				task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
-				StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
-				ShowNotification("Catalog refreshed successfully.", "Success")
 			else
-				EmptyStateMessage.Text = "Catalog parsing error. Check console."; StatusText.Text = "Data Error"
+				EmptyStateMessage.Text = "Unable to connect to server."; StatusText.Text = "Offline"
 			end
-		else
-			EmptyStateMessage.Text = "Unable to connect to server."; StatusText.Text = "Offline"
-		end
-		dbRefreshing = false
-	end)
+			dbRefreshing = false
+		end)
+	end, 1)
 end
 LoadDynamicCatalog()
 
@@ -1656,14 +1632,14 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 	local state = defaultValue
 
 	RegConn(toggleBtn.Activated:Connect(function()
-		if isDestroying then return end
-		if not CooldownManager.Request("ToggleSetting_" .. title, 3) then return end
-		
-		state = not state
-		toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
-		SafeTween(circle, EntryTweenInfo, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
-		if type(callback) == "function" then task.spawn(callback, state) end
-	end))
+		RunWithCooldown("Settings toggles", function()
+			if isDestroying then return end
+			state = not state
+			toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
+			SafeTween(circle, EntryTweenInfo, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
+			if type(callback) == "function" then task.spawn(callback, state) end
+		end, 0.5)
+	end)))
 end
 
 local function CreateButtonSetting(title, desc, btnText, parent, order, callback)
@@ -1679,11 +1655,11 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
 
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying then return end
-		if not CooldownManager.Request("ButtonSetting_" .. title, 3) then return end
-		
-		if type(callback) == "function" then task.spawn(callback, btn) end
-	end))
+		RunWithCooldown("Settings toggles", function()
+			if isDestroying then return end
+			if type(callback) == "function" then task.spawn(callback, btn) end
+		end, 0.5)
+	end)))
 	return btn
 end
 
@@ -1699,12 +1675,12 @@ KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
 RegConn(KeybindButton.Activated:Connect(function()
-	if isDestroying then return end
-	if not CooldownManager.Request("ChangeKeybind", 3) then return end
-	
-	IsBindingKey = true
-	KeybindButton.Text = "Press Any Key..."
-end))
+	RunWithCooldown("Settings toggles", function()
+		if isDestroying then return end
+		IsBindingKey = true
+		KeybindButton.Text = "Press Any Key..."
+	end, 0.5)
+end)))
 
 CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
