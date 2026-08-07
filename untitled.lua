@@ -338,8 +338,13 @@ FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
+FloatingBtn.ClipsDescendants = true -- Forces perfect circular bounds to eliminate empty borders
 local BtnCorner = Instance.new("UICorner", FloatingBtn)
 BtnCorner.CornerRadius = UDim.new(1, 0)
+
+-- Replaces Size tweens for stable animations without layout recalculations
+local FloatScale = Instance.new("UIScale", FloatingBtn)
+FloatScale.Scale = 1
 
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
@@ -349,10 +354,10 @@ FloatIcon.Name = "FloatIcon"
 FloatIcon.BackgroundTransparency = 1
 FloatIcon.ZIndex = 101
 FloatIcon.Image = "rbxassetid://124635602201411" 
-FloatIcon.Size = UDim2.fromScale(1, 1)
+FloatIcon.Size = UDim2.fromScale(1, 1) -- Completely fills the button
 FloatIcon.Position = UDim2.fromScale(0.5, 0.5)
 FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-FloatIcon.ScaleType = Enum.ScaleType.Crop 
+FloatIcon.ScaleType = Enum.ScaleType.Crop -- Prevents squashing/stretching
 local IconCorner = Instance.new("UICorner", FloatIcon)
 IconCorner.CornerRadius = UDim.new(1, 0)
 
@@ -371,13 +376,14 @@ InnerStroke.Color = Theme.TextSecondary
 InnerStroke.Transparency = 0.5
 InnerStroke.Thickness = 1.5
 
-local floatDrag, floatStart, floatPos
+local floatDrag, floatDragInput, floatStart, floatPos
 local hasDragged = false
 
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
 		hasDragged = false 
+		floatDragInput = input -- Locks onto the exact touch/click to prevent conflicting input jitter
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		
@@ -393,7 +399,8 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 end))
 
 RegConn(UserInputService.InputChanged:Connect(function(input)
-	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+	-- Only process position changes from the exact input that initiated the drag
+	if input == floatDragInput and floatDrag then
 		local delta = input.Position - floatStart
 		if delta.Magnitude > 5 then hasDragged = true end
 		FloatingBtn.Position = UDim2.new(floatPos.X.Scale, floatPos.X.Offset + delta.X, floatPos.Y.Scale, floatPos.Y.Offset + delta.Y)
@@ -444,13 +451,21 @@ function ToggleUI()
 			if isMinimized and not isDestroying then
 				MainPanel.Visible = false
 				MainPanel.Active = false
+				
+				-- Use UIScale instead of UDim2 Size
 				FloatingBtn.Visible = true
-				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
-				tween(FloatingBtn, animQuick, {Size = UDim2.new(0, 48, 0, 48)})
+				FloatScale.Scale = 0
+				tween(FloatScale, animQuick, {Scale = 1})
 			end
 		end)
 	else
-		FloatingBtn.Visible = false
+		-- Tween scale out before hiding to prevent flashes
+		tween(FloatScale, animQuick, {Scale = 0}).Completed:Connect(function()
+			if not isMinimized and not isDestroying then
+				FloatingBtn.Visible = false
+			end
+		end)
+		
 		MainPanel.Visible = true
 		MainPanel.Active = true
 		tween(MainScale, animQuick, {Scale = 1})
@@ -763,7 +778,7 @@ local function CloseAndAnimateUI()
 	isDestroying = true
 	
 	if isMinimized then
-		tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 0, 0, 0)}).Completed:Connect(function()
+		tween(FloatScale, animSmooth, {Scale = 0}).Completed:Connect(function()
 			getgenv()[_G_Identifier]()
 		end)
 	else
