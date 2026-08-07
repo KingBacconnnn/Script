@@ -324,26 +324,23 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-local FloatingBtn = Instance.new("TextButton", ScreenGui)
-FloatingBtn.Size = UDim2.new(0, 48, 0, 48)
-FloatingBtn.Position = UDim2.new(0.05, 0, 0.15, 0)
+local FloatingBtn = Instance.new("ImageButton", ScreenGui)
+FloatingBtn.Name = "VeloxFloatingIcon"
+FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
+FloatingBtn.Position = UDim2.new(0.5, -22, 0, 20)
 FloatingBtn.BackgroundColor3 = Theme.BackgroundMain
-FloatingBtn.Text = ""
+FloatingBtn.Image = "rbxassetid://124635602201411"
 FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
-Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
-local FloatStroke = Instance.new("UIStroke", FloatingBtn)
-FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
-local FloatIcon = Instance.new("ImageLabel", FloatingBtn)
-FloatIcon.Size = UDim2.new(0.5, 0, 0.5, 0)
-FloatIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-FloatIcon.BackgroundTransparency = 1
-FloatIcon.Image = "rbxassetid://124635602201411"
-FloatIcon.ZIndex = 101
+local FloatCorner = Instance.new("UICorner", FloatingBtn)
+FloatCorner.CornerRadius = UDim.new(1, 0)
+
+local FloatStroke = Instance.new("UIStroke", FloatingBtn)
+FloatStroke.Color = Theme.Accent
+FloatStroke.Thickness = 2
 
 local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
@@ -356,6 +353,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		end))
 	end
 end))
+
 RegConn(UserInputService.InputChanged:Connect(function(input)
 	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - floatStart
@@ -407,7 +405,7 @@ local function ToggleUI()
 				MainPanel.Visible = false
 				FloatingBtn.Visible = true
 				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
-				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 48, 0, 48)})
+				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 45, 0, 45)})
 			end
 		end)
 	else
@@ -419,7 +417,7 @@ local function ToggleUI()
 	task.delay(0.25, function() IsToggling = false end)
 end
 
-RegConn(FloatingBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
+RegConn(FloatingBtn.MouseButton1Click:Connect(CreateDebounce(0.5, ToggleUI)))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
