@@ -136,7 +136,7 @@ end
 
 local typingTask = nil
 local mt = getrawmetatable(game)
-local VeloxNamecallDetour -- Forward declaration for Fix 3
+local VeloxNamecallDetour 
 
 local function CleanUpMemory()
 	isDestroying = true
@@ -144,7 +144,6 @@ local function CleanUpMemory()
 
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
-	-- Fix 3: Safely unhook namecall by ensuring our detour is still the active one
 	if getgenv().VeloxOriginalNamecall and mt and setreadonly then
 		pcall(function()
 			if mt.__namecall == VeloxNamecallDetour then
@@ -501,7 +500,6 @@ MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
 
--- Fix 4: Add Modal button directly to MainPanel to release mouse in First Person games
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
 MainModalBtn.Visible = true
@@ -770,6 +768,7 @@ end))
 local ToggleKeybind = Enum.KeyCode.RightControl
 pcall(function() if SavedData.ToggleKeybind then ToggleKeybind = Enum.KeyCode[SavedData.ToggleKeybind] end end)
 local KeybindButtonRef = nil
+local KeybindActiveStroke = nil
 
 RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
@@ -782,7 +781,8 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
 				IsBindingKey = false
-				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				if KeybindButtonRef then KeybindButtonRef.Text = "[ " .. ToggleKeybind.Name .. " ]" end
+				if KeybindActiveStroke then KeybindActiveStroke.Color = Theme.Stroke end
 				ShowNotification("Keybind mapping canceled.", "Warning")
 				return
 			end
@@ -791,7 +791,8 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				IsBindingKey = false
 				SavedData.ToggleKeybind = ToggleKeybind.Name
 				SaveConfiguration()
-				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				if KeybindButtonRef then KeybindButtonRef.Text = "[ " .. ToggleKeybind.Name .. " ]" end
+				if KeybindActiveStroke then KeybindActiveStroke.Color = Theme.Stroke end
 				ShowNotification("Keybind set to: " .. input.KeyCode.Name, "Success")
 			end
 		end
@@ -1038,7 +1039,6 @@ Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
 
 RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
 
--- Fix 2: Only save search configuration on focus lost
 RegConn(SearchInput.FocusLost:Connect(function() 
 	SearchStroke.Color = Theme.Stroke
 	SavedData.LastSearch = SearchInput.Text
@@ -1564,7 +1564,6 @@ local function LoadDynamicCatalog()
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
 								if isDestroying then return end
 								if scrRaw and type(loadstring) == "function" then
-									-- Fix 1: Auto-Execute Error Handling
 									local fn, compileErr = loadstring(scrRaw)
 									if fn then
 										local exSuccess, err = pcall(fn)
@@ -1598,67 +1597,163 @@ local function LoadDynamicCatalog()
 end
 LoadDynamicCatalog()
 
-local function CreateSettingRow(title, desc, parent, order)
+-- ==========================================
+-- REDESIGNED SETTINGS HUB UI COMPONENTS
+-- ==========================================
+
+local function CreateSectionHeader(title, parent, order)
+	local header = Instance.new("TextLabel", parent)
+	header.Size = UDim2.new(1, 0, 0, 24)
+	header.BackgroundTransparency = 1
+	header.Text = title
+	header.TextColor3 = Theme.Accent
+	header.Font = Enum.Font.GothamBold
+	header.TextSize = 12
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.LayoutOrder = order
+	
+	local pad = Instance.new("UIPadding", header)
+	pad.PaddingLeft = UDim.new(0, 4)
+	return header
+end
+
+local function CreateModernSettingRow(title, desc, parent, order, isDanger)
 	local wrap = Instance.new("Frame", parent)
-	wrap.Size = UDim2.new(1, 0, 0, IsMobile and 54 or 58); wrap.BackgroundColor3 = Theme.CardHover; wrap.LayoutOrder = order
+	wrap.Size = UDim2.new(1, 0, 0, IsMobile and 54 or 58)
+	wrap.BackgroundColor3 = Theme.CardHover
+	wrap.LayoutOrder = order
 	Instance.new("UICorner", wrap).CornerRadius = UDim.new(0, 8)
 	
+	if isDanger then
+		local stroke = Instance.new("UIStroke", wrap)
+		stroke.Color = Theme.Error
+		stroke.Transparency = 0.5
+	end
+	
 	local textContainer = Instance.new("Frame", wrap)
-	textContainer.Size = UDim2.new(1, -135, 1, 0); textContainer.BackgroundTransparency = 1
+	textContainer.Size = UDim2.new(1, -135, 1, 0)
+	textContainer.BackgroundTransparency = 1
+	
 	local tPad = Instance.new("UIPadding", textContainer)
-	tPad.PaddingLeft = UDim.new(0, 12); tPad.PaddingTop = UDim.new(0, 10); tPad.PaddingBottom = UDim.new(0, 10)
+	tPad.PaddingLeft = UDim.new(0, 12)
+	tPad.PaddingTop = UDim.new(0, 10)
+	tPad.PaddingBottom = UDim.new(0, 10)
+	
 	local tLay = Instance.new("UIListLayout", textContainer)
-	tLay.SortOrder = Enum.SortOrder.LayoutOrder; tLay.Padding = UDim.new(0, 4)
+	tLay.SortOrder = Enum.SortOrder.LayoutOrder
+	tLay.Padding = UDim.new(0, 4)
 
 	local t = Instance.new("TextLabel", textContainer)
-	t.Size = UDim2.new(1, 0, 0, 16); t.BackgroundTransparency = 1; t.Text = title
-	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.LayoutOrder = 1
+	t.Size = UDim2.new(1, 0, 0, 16)
+	t.BackgroundTransparency = 1
+	t.Text = title
+	t.TextColor3 = isDanger and Theme.Error or Theme.TextPrimary
+	t.Font = Enum.Font.GothamBold
+	t.TextSize = 13
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	t.LayoutOrder = 1
 	
 	local d = Instance.new("TextLabel", textContainer)
-	d.Size = UDim2.new(1, 0, 0, 16); d.BackgroundTransparency = 1; d.Text = desc
-	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextXAlignment = Enum.TextXAlignment.Left; d.LayoutOrder = 2
+	d.Size = UDim2.new(1, 0, 0, 16)
+	d.BackgroundTransparency = 1
+	d.Text = desc
+	d.TextColor3 = isDanger and Color3.fromRGB(255, 150, 150) or Theme.TextSecondary
+	d.Font = Enum.Font.Gotham
+	d.TextSize = 11
+	d.TextXAlignment = Enum.TextXAlignment.Left
+	d.LayoutOrder = 2
 	d.TextWrapped = true
 
 	local rightContainer = Instance.new("Frame", wrap)
-	rightContainer.Size = UDim2.new(0, 120, 1, 0); rightContainer.Position = UDim2.new(1, -120, 0, 0); rightContainer.BackgroundTransparency = 1
+	rightContainer.Size = UDim2.new(0, 120, 1, 0)
+	rightContainer.Position = UDim2.new(1, -120, 0, 0)
+	rightContainer.BackgroundTransparency = 1
+	
 	return wrap, rightContainer
 end
 
-local function CreateToggleSetting(title, desc, parent, order, defaultValue, callback)
-	local wrap, rightContainer = CreateSettingRow(title, desc, parent, order)
+local function CreateModernToggle(title, desc, parent, order, defaultValue, callback)
+	local wrap, rightContainer = CreateModernSettingRow(title, desc, parent, order, false)
 	
-	local toggleBtn = Instance.new("TextButton", rightContainer)
-	toggleBtn.Size = UDim2.new(0, 44, 0, 24); toggleBtn.Position = UDim2.new(1, -54, 0.5, -12)
-	toggleBtn.BackgroundColor3 = defaultValue and Theme.Success or Theme.ToggleOff
-	toggleBtn.Text = ""; toggleBtn.AutoButtonColor = false
-	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+	local toggleTrack = Instance.new("TextButton", rightContainer)
+	toggleTrack.Size = UDim2.new(0, 48, 0, 24)
+	toggleTrack.Position = UDim2.new(1, -58, 0.5, -12)
+	toggleTrack.BackgroundColor3 = defaultValue and Theme.Success or Theme.ToggleOff
+	toggleTrack.Text = ""
+	toggleTrack.AutoButtonColor = false
+	Instance.new("UICorner", toggleTrack).CornerRadius = UDim.new(1, 0)
 
-	local circle = Instance.new("Frame", toggleBtn)
-	circle.Size = UDim2.new(0, 18, 0, 18); circle.Position = defaultValue and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+	local knob = Instance.new("Frame", toggleTrack)
+	knob.Size = UDim2.new(0, 18, 0, 18)
+	knob.Position = defaultValue and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+	knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+	
 	local state = defaultValue
 
-	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
+	RegConn(toggleTrack.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		state = not state
-		toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
-		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
+		
+		local targetColor = state and Theme.Success or Theme.ToggleOff
+		local targetPos = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+		
+		SafeTween(toggleTrack, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = targetColor})
+		SafeTween(knob, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = targetPos})
+		
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
 
-local function CreateButtonSetting(title, desc, btnText, parent, order, callback)
-	local wrap, rightContainer = CreateSettingRow(title, desc, parent, order)
+local function CreateKeybindSetting(title, desc, parent, order, defaultKeyName, callback)
+	local wrap, rightContainer = CreateModernSettingRow(title, desc, parent, order, false)
 
 	local btn = Instance.new("TextButton", rightContainer)
-	btn.Size = UDim2.new(0, 100, 0, 28); btn.Position = UDim2.new(1, -110, 0.5, -14)
-	btn.BackgroundColor3 = Theme.BackgroundMain; btn.Text = btnText
-	btn.TextColor3 = Theme.TextPrimary; btn.Font = Enum.Font.GothamMedium; btn.TextSize = 12
+	btn.Size = UDim2.new(0, 100, 0, 28)
+	btn.Position = UDim2.new(1, -110, 0.5, -14)
+	btn.BackgroundColor3 = Theme.BackgroundMain
+	btn.Text = "[ " .. defaultKeyName .. " ]"
+	btn.TextColor3 = Theme.TextPrimary
+	btn.Font = Enum.Font.GothamMedium
+	btn.TextSize = 11
 	btn.AutoButtonColor = false
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-	local btnStroke = Instance.new("UIStroke", btn); btnStroke.Color = Theme.Stroke
-	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
+	
+	local stroke = Instance.new("UIStroke", btn)
+	stroke.Color = Theme.Stroke
+	
+	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), stroke, Theme.Stroke, Theme.Accent)
+
+	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
+		if isDestroying then return end
+		if type(callback) == "function" then task.spawn(callback, btn, stroke) end
+	end)))
+	
+	return btn, stroke
+end
+
+local function CreateModernButton(title, desc, btnText, parent, order, isDanger, callback)
+	local wrap, rightContainer = CreateModernSettingRow(title, desc, parent, order, isDanger)
+
+	local btn = Instance.new("TextButton", rightContainer)
+	btn.Size = UDim2.new(0, 100, 0, 28)
+	btn.Position = UDim2.new(1, -110, 0.5, -14)
+	btn.BackgroundColor3 = isDanger and Color3.fromRGB(45, 20, 25) or Theme.BackgroundMain
+	btn.Text = btnText
+	btn.TextColor3 = isDanger and Theme.Error or Theme.TextPrimary
+	btn.Font = Enum.Font.GothamMedium
+	btn.TextSize = 12
+	btn.AutoButtonColor = false
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	
+	local stroke = Instance.new("UIStroke", btn)
+	stroke.Color = isDanger and Theme.Error or Theme.Stroke
+	
+	local hoverColor = isDanger and Color3.fromRGB(60, 25, 30) or Theme.BackgroundSecondary
+	local clickColor = isDanger and Color3.fromRGB(80, 30, 35) or Color3.fromRGB(10, 15, 30)
+	local hoverStroke = isDanger and Color3.fromRGB(255, 100, 100) or Theme.Accent
+	
+	ApplyInteractiveAnimations(btn, btn.BackgroundColor3, hoverColor, clickColor, stroke, stroke.Color, hoverStroke)
 
 	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -1667,24 +1762,16 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 	return btn
 end
 
-local kbWrap, kbRightContainer = CreateSettingRow("Toggle UI", "Keybind to show/hide the hub.", SettingsView, 1)
-local KeybindButton = Instance.new("TextButton", kbRightContainer)
-KeybindButton.Size = UDim2.new(0, 100, 0, 28); KeybindButton.Position = UDim2.new(1, -110, 0.5, -14)
-KeybindButton.BackgroundColor3 = Theme.BackgroundMain; KeybindButton.Text = ToggleKeybind.Name
-KeybindButton.TextColor3 = Theme.TextPrimary; KeybindButton.Font = Enum.Font.GothamMedium
-KeybindButton.TextSize = 12; KeybindButton.AutoButtonColor = false
-Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
-local kbBtnStroke = Instance.new("UIStroke", KeybindButton); kbBtnStroke.Color = Theme.Stroke
-KeybindButtonRef = KeybindButton
-ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
+-- ==========================================
+-- POPULATE SETTINGS MENU
+-- ==========================================
 
-RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
-	if isDestroying then return end
-	IsBindingKey = true
-	KeybindButton.Text = "Press Any Key..."
-end)))
+local SettingsLayoutOrder = 0
+local function GetOrder() SettingsLayoutOrder = SettingsLayoutOrder + 1; return SettingsLayoutOrder end
 
-CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, 2, SavedData.Settings.AntiAFK, function(val)
+CreateSectionHeader("⚙️ General & Automation", SettingsView, GetOrder())
+
+CreateModernToggle("Anti-AFK", "Prevents getting disconnected for being idle.", SettingsView, GetOrder(), SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -1708,12 +1795,31 @@ CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.",
 		for conn, _ in pairs(AfkConnections) do
 			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
 		end
-		table.clear(AfkConnections) -- Fix 5: Clean table reference leak on disable
+		table.clear(AfkConnections)
 	end
 end)
 
-CreateButtonSetting("Refresh Catalog", "Forces an update to the script list.", "Refresh", SettingsView, 3, function() LoadDynamicCatalog() end)
-CreateButtonSetting("Unload Hub", "Removes Velox Hub entirely from the game.", "Unload", SettingsView, 4, function() CloseUI() end)
+CreateSectionHeader("⌨️ Keybinds & Controls", SettingsView, GetOrder())
+
+local kbBtn, kbStroke = CreateKeybindSetting("Toggle UI Keybind", "Key to easily show/hide the hub.", SettingsView, GetOrder(), ToggleKeybind.Name, function(btn, stroke)
+	IsBindingKey = true
+	btn.Text = "[ ... ]"
+	stroke.Color = Theme.Warning
+	KeybindActiveStroke = stroke 
+end)
+KeybindButtonRef = kbBtn
+
+CreateSectionHeader("🛠️ System & Maintenance", SettingsView, GetOrder())
+
+CreateModernButton("Refresh Catalog", "Forces an update to the script list from the cloud.", "Refresh", SettingsView, GetOrder(), false, function() 
+	LoadDynamicCatalog() 
+end)
+
+CreateSectionHeader("⚠️ Danger Zone", SettingsView, GetOrder())
+
+CreateModernButton("Unload Hub", "Removes Velox Hub entirely from the game instance.", "Unload", SettingsView, GetOrder(), true, function() 
+	CloseUI() 
+end)
 
 if SavedData.Settings.AntiAFK then
 	if not AfkConnections.Idled then
