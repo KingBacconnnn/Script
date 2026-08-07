@@ -9,7 +9,7 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Loaded_Instance"
+local _G_Identifier = GenerateRandomString(16)
 if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
@@ -235,7 +235,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = MainGuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.IgnoreGuiInset = false 
+ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
@@ -276,7 +276,6 @@ local function tween(obj, info, props)
 			ActiveObjectTweens[obj]:Cancel()
 			ActiveObjectTweens[obj]:Destroy() 
 		end)
-		ActiveObjectTweens[obj] = nil
 	end
 	
 	local t = TweenService:Create(obj, info, props)
@@ -325,88 +324,44 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
--- ==========================================
--- Floating Button with Inner Border / Stroke
--- ==========================================
 local FloatingBtn = Instance.new("TextButton", ScreenGui)
 FloatingBtn.Size = UDim2.new(0, 48, 0, 48)
-FloatingBtn.Position = UDim2.new(0.1, 0, 0.2, 0)
-FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+FloatingBtn.Position = UDim2.new(0.05, 0, 0.15, 0)
 FloatingBtn.BackgroundColor3 = Theme.BackgroundMain
 FloatingBtn.Text = ""
 FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
 FloatingBtn.Active = true
 FloatingBtn.AutoButtonColor = false
-FloatingBtn.ClipsDescendants = true -- Forces perfect circular bounds to eliminate empty borders
-local BtnCorner = Instance.new("UICorner", FloatingBtn)
-BtnCorner.CornerRadius = UDim.new(1, 0)
-
--- Replaces Size tweens for stable animations without layout recalculations
-local FloatScale = Instance.new("UIScale", FloatingBtn)
-FloatScale.Scale = 1
-
+Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
 local FloatIcon = Instance.new("ImageLabel", FloatingBtn)
-FloatIcon.Name = "FloatIcon"
-FloatIcon.BackgroundTransparency = 1
-FloatIcon.ZIndex = 101
-FloatIcon.Image = "rbxassetid://124635602201411" 
-FloatIcon.Size = UDim2.fromScale(1, 1) -- Completely fills the button
-FloatIcon.Position = UDim2.fromScale(0.5, 0.5)
+FloatIcon.Size = UDim2.new(0.5, 0, 0.5, 0)
+FloatIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
 FloatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-FloatIcon.ScaleType = Enum.ScaleType.Crop -- Prevents squashing/stretching
-local IconCorner = Instance.new("UICorner", FloatIcon)
-IconCorner.CornerRadius = UDim.new(1, 0)
+FloatIcon.BackgroundTransparency = 1
+FloatIcon.Image = "rbxassetid://124635602201411"
+FloatIcon.ZIndex = 101
 
--- Inner Circle Border Layer inside Floating Button
-local InnerBorder = Instance.new("Frame", FloatingBtn)
-InnerBorder.Name = "InnerBorder"
-InnerBorder.Size = UDim2.new(1, -6, 1, -6)
-InnerBorder.Position = UDim2.fromScale(0.5, 0.5)
-InnerBorder.AnchorPoint = Vector2.new(0.5, 0.5)
-InnerBorder.BackgroundTransparency = 1
-InnerBorder.ZIndex = 102
-local InnerCorner = Instance.new("UICorner", InnerBorder)
-InnerCorner.CornerRadius = UDim.new(1, 0)
-local InnerStroke = Instance.new("UIStroke", InnerBorder)
-InnerStroke.Color = Theme.TextSecondary
-InnerStroke.Transparency = 0.5
-InnerStroke.Thickness = 1.5
-
-local floatDrag, floatDragInput, floatStart, floatPos
-local hasDragged = false
-
+local floatDrag, floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
-		hasDragged = false 
-		floatDragInput = input -- Locks onto the exact touch/click to prevent conflicting input jitter
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		
-		local floatEndedConn
-		floatEndedConn = RegConn(input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then 
-				floatDrag = false 
-				if floatEndedConn then floatEndedConn:Disconnect() end
-				if not hasDragged then ToggleUI() end
-			end
+		RegConn(input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then floatDrag = false end
 		end))
 	end
 end))
-
 RegConn(UserInputService.InputChanged:Connect(function(input)
-	-- Only process position changes from the exact input that initiated the drag
-	if input == floatDragInput and floatDrag then
+	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - floatStart
-		if delta.Magnitude > 5 then hasDragged = true end
 		FloatingBtn.Position = UDim2.new(floatPos.X.Scale, floatPos.X.Offset + delta.X, floatPos.Y.Scale, floatPos.Y.Offset + delta.Y)
 	end
 end))
--- ==========================================
 
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
@@ -439,40 +394,32 @@ Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
 local SearchInput
 
-function ToggleUI()
+local function ToggleUI()
 	if isDestroying or IsToggling or IsBindingKey then return end
 	IsToggling = true
 	isMinimized = not isMinimized
 
 	if isMinimized then
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-		tween(MainScale, animQuick, {Scale = 0.85})
-		tween(MainPanel, animQuick, {BackgroundTransparency = 1}).Completed:Connect(function()
+		tween(MainScale, animSmooth, {Scale = 0.85})
+		tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
 			if isMinimized and not isDestroying then
 				MainPanel.Visible = false
-				MainPanel.Active = false
-				
-				-- Use UIScale instead of UDim2 Size
 				FloatingBtn.Visible = true
-				FloatScale.Scale = 0
-				tween(FloatScale, animQuick, {Scale = 1})
+				FloatingBtn.Size = UDim2.new(0, 0, 0, 0)
+				tween(FloatingBtn, animSmooth, {Size = UDim2.new(0, 48, 0, 48)})
 			end
 		end)
 	else
-		-- Tween scale out before hiding to prevent flashes
-		tween(FloatScale, animQuick, {Scale = 0}).Completed:Connect(function()
-			if not isMinimized and not isDestroying then
-				FloatingBtn.Visible = false
-			end
-		end)
-		
+		FloatingBtn.Visible = false
 		MainPanel.Visible = true
-		MainPanel.Active = true
-		tween(MainScale, animQuick, {Scale = 1})
-		tween(MainPanel, animQuick, {BackgroundTransparency = 0})
+		tween(MainScale, animSmooth, {Scale = 1})
+		tween(MainPanel, animSmooth, {BackgroundTransparency = 0})
 	end
-	task.delay(0.15, function() IsToggling = false end)
+	task.delay(0.25, function() IsToggling = false end)
 end
+
+RegConn(FloatingBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
@@ -561,15 +508,14 @@ getfenv().ShowNotification = function(msg, notifType)
 end
 local ShowNotification = getfenv().ShowNotification
 
-local ConfirmOverlay = Instance.new("TextButton", ScreenGui)
+local ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
 ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ConfirmOverlay.BackgroundTransparency = 1
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
-ConfirmOverlay.AutoButtonColor = false
-ConfirmOverlay.Text = ""
+ConfirmOverlay.Active = true
 
 local ConfirmBox = Instance.new("Frame", ConfirmOverlay)
 ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
@@ -738,6 +684,18 @@ RegConn(ConfirmExecuteBtn.Activated:Connect(function()
 	end
 end))
 
+RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
+	if not isConfirming or isDialogAnimating then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local pos = input.Position
+		local bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
+		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
+		if not inside then
+			CloseConfirmDialog(false)
+		end
+	end
+end))
+
 local ToggleKeybind = Enum.KeyCode.RightControl
 pcall(function() if SavedData.ToggleKeybind then ToggleKeybind = Enum.KeyCode[SavedData.ToggleKeybind] end end)
 local KeybindButtonRef = nil
@@ -776,17 +734,10 @@ local function CloseAndAnimateUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	
-	if isMinimized then
-		tween(FloatScale, animSmooth, {Scale = 0}).Completed:Connect(function()
-			getgenv()[_G_Identifier]()
-		end)
-	else
-		tween(MainScale, animSmooth, {Scale = 0.85})
-		tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
-			getgenv()[_G_Identifier]()
-		end)
-	end
+	tween(MainScale, animSmooth, {Scale = 0.85})
+	tween(MainPanel, animSmooth, {BackgroundTransparency = 1}).Completed:Connect(function()
+		getgenv()[_G_Identifier]()
+	end)
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -916,7 +867,7 @@ RHLay.VerticalAlignment = Enum.VerticalAlignment.Center
 RHLay.Padding = UDim.new(0, 8)
 
 local UserInfoFrame = Instance.new("Frame", RightHeaderFrame)
-UserInfoFrame.Size = UDim2.new(1, -70, 1, 0)
+UserInfoFrame.Size = UDim2.new(0, IsMobile and 70 or 90, 1, 0)
 UserInfoFrame.BackgroundTransparency = 1
 UserInfoFrame.LayoutOrder = 1
 local UILay = Instance.new("UIListLayout", UserInfoFrame)
@@ -924,24 +875,28 @@ UILay.SortOrder = Enum.SortOrder.LayoutOrder
 UILay.VerticalAlignment = Enum.VerticalAlignment.Center
 
 local UI_DisplayName = Instance.new("TextLabel", UserInfoFrame)
-UI_DisplayName.Size = UDim2.new(1, 0, 0, 14)
+UI_DisplayName.Size = UDim2.new(1, 0, 0, 0)
+UI_DisplayName.AutomaticSize = Enum.AutomaticSize.Y
 UI_DisplayName.BackgroundTransparency = 1
 UI_DisplayName.Text = LocalPlayer.DisplayName ~= "" and LocalPlayer.DisplayName or LocalPlayer.Name
 UI_DisplayName.TextColor3 = Theme.TextPrimary
 UI_DisplayName.Font = Enum.Font.GothamBold
 UI_DisplayName.TextSize = IsMobile and 10 or 12
-UI_DisplayName.TextTruncate = Enum.TextTruncate.AtEnd
+UI_DisplayName.TextScaled = false
+UI_DisplayName.TextWrapped = true
 UI_DisplayName.TextXAlignment = Enum.TextXAlignment.Right
 UI_DisplayName.LayoutOrder = 1
 
 local UI_Username = Instance.new("TextLabel", UserInfoFrame)
-UI_Username.Size = UDim2.new(1, 0, 0, 12)
+UI_Username.Size = UDim2.new(1, 0, 0, 0)
+UI_Username.AutomaticSize = Enum.AutomaticSize.Y
 UI_Username.BackgroundTransparency = 1
 UI_Username.Text = "@" .. LocalPlayer.Name
 UI_Username.TextColor3 = Theme.TextSecondary
 UI_Username.Font = Enum.Font.Gotham
 UI_Username.TextSize = IsMobile and 9 or 10
-UI_Username.TextTruncate = Enum.TextTruncate.AtEnd
+UI_Username.TextScaled = false
+UI_Username.TextWrapped = true
 UI_Username.TextXAlignment = Enum.TextXAlignment.Right
 UI_Username.LayoutOrder = 2
 
@@ -970,34 +925,25 @@ task.spawn(function()
 	end
 end)
 
--- ==========================================
--- Fixed Minimize Button (Expanded Touch/Hitbox & Instant Response)
--- ==========================================
 local MinBtn = Instance.new("TextButton", RightHeaderFrame)
-MinBtn.Size = UDim2.new(0, 36, 0, 36)
+MinBtn.Size = UDim2.new(0, 28, 0, 28)
 MinBtn.BackgroundTransparency = 1
 MinBtn.Text = "—"
 MinBtn.TextColor3 = Theme.TextSecondary
 MinBtn.Font = Enum.Font.GothamBold
-MinBtn.TextSize = IsMobile and 16 or 20
+MinBtn.TextSize = IsMobile and 14 or 18
 MinBtn.LayoutOrder = 3
-MinBtn.ClipsDescendants = false
-MinBtn.AutoButtonColor = false
+MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-
--- Instant activation response without delay
-RegConn(MinBtn.Activated:Connect(function()
-	ToggleUI()
-end))
+RegConn(MinBtn.Activated:Connect(CreateDebounce(0.4, ToggleUI)))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
--- ==========================================
 
 local fpsCount = 0
-local lastPingUpdate = os.clock()
+local lastPingUpdate = tick()
 RegConn(RunService.Heartbeat:Connect(function() 
 	fpsCount = fpsCount + 1 
-	if os.clock() - lastPingUpdate >= 1 then
-		lastPingUpdate = os.clock()
+	if tick() - lastPingUpdate >= 1 then
+		lastPingUpdate = tick()
 		local ping = 0
 		pcall(function() ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
 		if DiagnosticsLabel and DiagnosticsLabel.Parent then
@@ -1040,7 +986,7 @@ local function CreateCanvas(name)
 	scroll.Active = true
 
 	local layout = Instance.new("UIListLayout", scroll)
-	layout.Padding = UDim.new(0, IsMobile and 6 or 8)
+	layout.Padding = UDim.new(0, IsMobile and 8 or 12)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	local pad = Instance.new("UIPadding", scroll)
@@ -1164,6 +1110,8 @@ local DDLayout = Instance.new("UIListLayout", DropdownContainer)
 DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 local FilterFavoritesActive = false
+local GlobalStarUpdater = Instance.new("BindableEvent") 
+local GlobalAutoExecUpdater = Instance.new("BindableEvent")
 local SortMode = "Most Relevant"
 local SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
@@ -1300,7 +1248,7 @@ for _, opt in ipairs(SortOptions) do
 	btn.TextSize = 11
 	btn.ZIndex = 201
 
-	btn.Activated:Connect(function()
+	RegConn(btn.Activated:Connect(function()
 		SortMode = opt
 		DropdownContainer.Visible = false
 		for _, child in ipairs(DropdownContainer:GetChildren()) do
@@ -1308,7 +1256,7 @@ for _, opt in ipairs(SortOptions) do
 		end
 		btn.TextColor3 = Theme.Accent
 		UpdateFilter()
-	end)
+	end))
 end
 
 RegConn(SortDropdownBtn.Activated:Connect(function()
@@ -1434,7 +1382,8 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.1.0 - Stealth & Security Overhaul", "• Fully isolated UI container logic dynamically routing away from PlayerGui dependencies.\n• Complete string randomization for hub instances, ensuring unflagged client memory execution.", ChangelogsView)
+CreateParagraph("v3.1.0 - Stealth & Security Overhaul", "• Fully isolated UI container logic dynamically routing away from PlayerGui dependencies.\n• Complete string randomization for hub instances, ensuring unflagged client memory execution.\n• Refined all global tween configurations to cancel conflicts linearly.\n• Centered exact floating toggle proportions across cross-platform environments.", ChangelogsView)
+CreateParagraph("v3.0.2 - Interaction Rewrite & UX Flow", "• Replaced bouncing/overshoot animations with clean, unified linear/quad fades.\n• Refined the Settings Hub layout to prioritize clear navigation, equal button scaling, and modern horizontal alignments.\n• Forced immediate keyboard execution upon search tap, entirely resolving unresponsive UI focus instances.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1442,12 +1391,9 @@ local function RefreshAllCardStates()
 	end
 end
 
--- ==========================================
--- Compact Script Cards (Reduced Size & Spacing)
--- ==========================================
 local function CreateScriptCard(data, renderParent)
 	local card = Instance.new("TextButton")
-	card.Size = UDim2.new(1, 0, 0, 84) -- Reduced card height
+	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = Theme.Card; card.Text = ""
 	card.AutoButtonColor = false
 	card.ClipsDescendants = true
@@ -1455,93 +1401,95 @@ local function CreateScriptCard(data, renderParent)
 	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = Color3.fromRGB(44, 58, 77)
 
 	local pad = Instance.new("UIPadding", card)
-	pad.PaddingLeft = UDim.new(0, 8); pad.PaddingRight = UDim.new(0, 8)
-	pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 8)
+	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 
 	local img = Instance.new("ImageLabel", card)
-	img.Size = UDim2.new(0, 68, 0, 68) -- Smaller image size to reduce overall bulk
+	img.Size = UDim2.new(0, 68, 0, 68)
 	img.BackgroundColor3 = Theme.BackgroundMain; img.BorderSizePixel = 0
 	img.Image = data.ImageAssetId or "rbxassetid://99657752206675"
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 
 	local content = Instance.new("Frame", card)
-	content.Size = UDim2.new(1, -76, 1, 0); content.Position = UDim2.new(0, 76, 0, 0)
+	content.Size = UDim2.new(1, -76, 0, 0); content.Position = UDim2.new(0, 76, 0, 0)
+	content.AutomaticSize = Enum.AutomaticSize.Y
 	content.BackgroundTransparency = 1
 	local cLay = Instance.new("UIListLayout", content)
-	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 2)
+	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 4)
 
 	local topRow = Instance.new("Frame", content)
-	topRow.Size = UDim2.new(1, 0, 0, 16)
+	topRow.Size = UDim2.new(1, 0, 0, 0)
+	topRow.AutomaticSize = Enum.AutomaticSize.Y
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal
 	trLay.SortOrder = Enum.SortOrder.LayoutOrder
-	trLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	trLay.VerticalAlignment = Enum.VerticalAlignment.Top
 
 	local titleContainer = Instance.new("Frame", topRow)
-	titleContainer.Size = UDim2.new(1, -110, 1, 0)
+	titleContainer.Size = UDim2.new(1, IsMobile and -115 or -140, 0, 0)
+	titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1
 	titleContainer.LayoutOrder = 1
 
 	local titleLbl = Instance.new("TextLabel", titleContainer)
-	titleLbl.Size = UDim2.new(1, 0, 1, 0)
+	titleLbl.Size = UDim2.new(1, 0, 0, 0)
+	titleLbl.AutomaticSize = Enum.AutomaticSize.Y
 	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary
-	titleLbl.Font = Enum.Font.GothamBold; titleLbl.TextSize = IsMobile and 11 or 12
-	titleLbl.TextTruncate = Enum.TextTruncate.AtEnd; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	titleLbl.Font = Enum.Font.GothamBold; titleLbl.TextSize = IsMobile and 12 or 13
+	titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 
 	local metaRightContainer = Instance.new("Frame", topRow)
-	metaRightContainer.Size = UDim2.new(0, 110, 1, 0)
+	metaRightContainer.Size = UDim2.new(0, IsMobile and 115 or 140, 0, 18)
 	metaRightContainer.BackgroundTransparency = 1
 	metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal
 	mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	mrLay.VerticalAlignment = Enum.VerticalAlignment.Center
-	mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 4)
+	mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 6)
 
 	if data.TagType and data.TagType ~= "NONE" then
 		local tag = Instance.new("Frame", metaRightContainer)
-		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 12)
+		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
 		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 4)
 		local tPad = Instance.new("UIPadding", tag)
-		tPad.PaddingLeft = UDim.new(0, 4); tPad.PaddingRight = UDim.new(0, 4)
+		tPad.PaddingLeft = UDim.new(0, 5); tPad.PaddingRight = UDim.new(0, 5)
 		local tText = Instance.new("TextLabel", tag)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
 		tText.BackgroundTransparency = 1; tText.Text = data.TagType
-		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 8
+		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 9
 		tag.BackgroundColor3 = (data.TagType == "HOT") and Theme.Error or (data.TagType == "UPDATED") and Theme.Success or Color3.fromRGB(100, 116, 139)
 		tag.LayoutOrder = 1
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, 50, 1, 0)
+	dateLbl.AutomaticSize = Enum.AutomaticSize.X; dateLbl.Size = UDim2.new(0, 0, 1, 0)
 	dateLbl.BackgroundTransparency = 1
 	dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary
-	dateLbl.Font = Enum.Font.GothamMedium; dateLbl.TextSize = 9; dateLbl.LayoutOrder = 2
+	dateLbl.Font = Enum.Font.GothamMedium; dateLbl.TextSize = 10; dateLbl.LayoutOrder = 2
 	dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 
 	local descLbl = Instance.new("TextLabel", content)
-	descLbl.Size = UDim2.new(1, 0, 0, 24) -- Shorter description space
+	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
 	descLbl.BackgroundTransparency = 1; descLbl.Text = data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham
-	descLbl.TextSize = 10; descLbl.TextWrapped = true
-	descLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	descLbl.TextSize = 11; descLbl.TextWrapped = true
 	descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
-	descLbl.TextYAlignment = Enum.TextYAlignment.Top
 
 	local btmRow = Instance.new("Frame", content)
 	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
 	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal
 	brLay.SortOrder = Enum.SortOrder.LayoutOrder
-	brLay.Padding = UDim.new(0, 6)
+	brLay.Padding = UDim.new(0, 8)
 	brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 
 	local autoExecBtn = Instance.new("TextButton", btmRow)
-	autoExecBtn.Size = UDim2.new(0, 110, 1, 0)
+	autoExecBtn.Size = UDim2.new(0, 120, 0, 22)
 	autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false
 	autoExecBtn.ClipsDescendants = true
@@ -1550,26 +1498,25 @@ local function CreateScriptCard(data, renderParent)
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
 
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
-	aeLbl.Size = UDim2.new(1, -30, 1, 0); aeLbl.Position = UDim2.new(0, 5, 0, 0)
+	aeLbl.Size = UDim2.new(1, -34, 1, 0); aeLbl.Position = UDim2.new(0, 6, 0, 0)
 	aeLbl.BackgroundTransparency = 1; aeLbl.Text = "Auto Execute"
-	aeLbl.TextColor3 = Theme.TextPrimary; aeLbl.Font = Enum.Font.GothamBold; aeLbl.TextSize = 9
+	aeLbl.TextColor3 = Theme.TextPrimary; aeLbl.Font = Enum.Font.GothamBold; aeLbl.TextSize = 10
 	aeLbl.TextXAlignment = Enum.TextXAlignment.Left
 	aeLbl.ZIndex = 2
 
 	local aeState = Instance.new("Frame", autoExecBtn)
-	aeState.Size = UDim2.new(0, 20, 0, 12)
-	aeState.AnchorPoint = Vector2.new(1, 0.5)
-	aeState.Position = UDim2.new(1, -5, 0.5, 0)
+	aeState.Size = UDim2.new(0, 24, 0, 14)
+	aeState.Position = UDim2.new(1, -28, 0.5, -7)
 	aeState.ZIndex = 2
 	Instance.new("UICorner", aeState).CornerRadius = UDim.new(0, 4)
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
-	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 7
+	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8
 	aeStateTxt.ZIndex = 2
 
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22)
-	starBtn.BackgroundTransparency = 1; starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 14
+	starBtn.BackgroundTransparency = 1; starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15
 	starBtn.LayoutOrder = 2
 	starBtn.ZIndex = 2
 
@@ -1598,7 +1545,7 @@ local function CreateScriptCard(data, renderParent)
 	end
 	scriptEntry.UpdateUI()
 
-	starBtn.Activated:Connect(CreateDebounce(0.2, function()
+	RegConn(starBtn.Activated:Connect(CreateDebounce(0.2, function()
 		if isDestroying then return end
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil
@@ -1608,9 +1555,9 @@ local function CreateScriptCard(data, renderParent)
 			ShowNotification("Favorite added: " .. exactName, "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end))
+	end)))
 
-	autoExecBtn.Activated:Connect(CreateDebounce(0.2, function()
+	RegConn(autoExecBtn.Activated:Connect(CreateDebounce(0.2, function()
 		if isDestroying then return end
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil
@@ -1620,9 +1567,9 @@ local function CreateScriptCard(data, renderParent)
 			ShowNotification("Auto-Execute enabled: " .. exactName, "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end))
+	end)))
 
-	card.Activated:Connect(function()
+	RegConn(card.Activated:Connect(function()
 		if isDestroying or GlobalExecutionCooldown then return end
 
 		local function executeScript()
@@ -1664,12 +1611,11 @@ local function CreateScriptCard(data, renderParent)
 		else
 			OpenConfirmDialog(exactName, executeScript)
 		end
-	end)
+	end))
 
 	card.Parent = renderParent
 	table.insert(RegisteredScripts, scriptEntry)
 end
--- ==========================================
 
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
 local dbRefreshing = false
@@ -1760,7 +1706,7 @@ LoadDynamicCatalog()
 
 local function CreateSettingRow(title, desc, parent, order)
 	local wrap = Instance.new("Frame", parent)
-	wrap.Size = UDim2.new(1, 0, 0, 58)
+	wrap.Size = UDim2.new(1, 0, 0, IsMobile and 54 or 58)
 	wrap.BackgroundColor3 = Theme.CardHover; wrap.LayoutOrder = order
 	Instance.new("UICorner", wrap).CornerRadius = UDim.new(0, 8)
 	
@@ -1775,13 +1721,11 @@ local function CreateSettingRow(title, desc, parent, order)
 	local t = Instance.new("TextLabel", textContainer)
 	t.Size = UDim2.new(1, 0, 0, 16); t.BackgroundTransparency = 1; t.Text = title
 	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.LayoutOrder = 1
-	t.TextTruncate = Enum.TextTruncate.AtEnd
 	
 	local d = Instance.new("TextLabel", textContainer)
 	d.Size = UDim2.new(1, 0, 0, 16); d.BackgroundTransparency = 1; d.Text = desc
 	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextXAlignment = Enum.TextXAlignment.Left; d.LayoutOrder = 2
 	d.TextWrapped = true
-	d.TextTruncate = Enum.TextTruncate.AtEnd
 
 	local rightContainer = Instance.new("Frame", wrap)
 	rightContainer.Size = UDim2.new(0, 120, 1, 0)
@@ -1796,8 +1740,7 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 	
 	local toggleBtn = Instance.new("TextButton", rightContainer)
 	toggleBtn.Size = UDim2.new(0, 44, 0, 24)
-	toggleBtn.AnchorPoint = Vector2.new(1, 0.5)
-	toggleBtn.Position = UDim2.new(1, -12, 0.5, 0)
+	toggleBtn.Position = UDim2.new(1, -54, 0.5, -12)
 	toggleBtn.BackgroundColor3 = defaultValue and Theme.Success or Theme.ToggleOff
 	toggleBtn.Text = ""
 	toggleBtn.AutoButtonColor = false
@@ -1805,23 +1748,19 @@ local function CreateToggleSetting(title, desc, parent, order, defaultValue, cal
 
 	local circle = Instance.new("Frame", toggleBtn)
 	circle.Size = UDim2.new(0, 18, 0, 18)
-	circle.AnchorPoint = Vector2.new(0, 0.5)
-	circle.Position = defaultValue and UDim2.new(1, -21, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
+	circle.Position = defaultValue and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 
 	local state = defaultValue
-	local isTogglingToggle = false
 
-	toggleBtn.Activated:Connect(function()
-		if isDestroying or isTogglingToggle then return end
-		isTogglingToggle = true
+	RegConn(toggleBtn.Activated:Connect(function()
+		if isDestroying then return end
 		state = not state
 		tween(toggleBtn, animQuick, {BackgroundColor3 = state and Theme.Success or Theme.ToggleOff})
-		tween(circle, animQuick, {Position = state and UDim2.new(1, -21, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)})
+		tween(circle, animQuick, {Position = state and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
 		if type(callback) == "function" then task.spawn(callback, state) end
-		task.delay(0.2, function() isTogglingToggle = false end)
-	end)
+	end))
 end
 
 local function CreateButtonSetting(title, desc, btnText, parent, order, callback)
@@ -1829,8 +1768,7 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 
 	local btn = Instance.new("TextButton", rightContainer)
 	btn.Size = UDim2.new(0, 100, 0, 28)
-	btn.AnchorPoint = Vector2.new(1, 0.5)
-	btn.Position = UDim2.new(1, -12, 0.5, 0)
+	btn.Position = UDim2.new(1, -110, 0.5, -14)
 	btn.BackgroundColor3 = Theme.BackgroundMain
 	btn.Text = btnText
 	btn.TextColor3 = Theme.TextPrimary
@@ -1843,7 +1781,7 @@ local function CreateButtonSetting(title, desc, btnText, parent, order, callback
 
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), btnStroke, Theme.Stroke, Theme.Accent)
 
-	btn.Activated:Connect(CreateDebounce(0.3, function()
+	RegConn(btn.Activated:Connect(function()
 		if isDestroying then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
 	end))
@@ -1854,8 +1792,7 @@ end
 local kbWrap, kbRightContainer = CreateSettingRow("Toggle UI", "Keybind to show/hide the hub.", SettingsView, 1)
 local KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 100, 0, 28)
-KeybindButton.AnchorPoint = Vector2.new(1, 0.5)
-KeybindButton.Position = UDim2.new(1, -12, 0.5, 0)
+KeybindButton.Position = UDim2.new(1, -110, 0.5, -14)
 KeybindButton.BackgroundColor3 = Theme.BackgroundMain
 KeybindButton.Text = ToggleKeybind.Name
 KeybindButton.TextColor3 = Theme.TextPrimary
@@ -1890,11 +1827,9 @@ CreateToggleSetting("Anti-AFK", "Prevents getting disconnected for being idle.",
 		
 		if getconnections then
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				if conn.Disable then
-					pcall(function()
-						conn:Disable()
-						AfkConnections[conn] = conn
-					end)
+				if type(conn) == "table" and conn.Disable then
+					conn:Disable()
+					AfkConnections[conn] = conn
 				end
 			end
 		end
@@ -1930,11 +1865,9 @@ if SavedData.Settings.AntiAFK then
 	end
 	if getconnections then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-			if conn.Disable then
-				pcall(function()
-					conn:Disable()
-					AfkConnections[conn] = conn
-				end)
+			if type(conn) == "table" and conn.Disable then
+				conn:Disable()
+				AfkConnections[conn] = conn
 			end
 		end
 	end
