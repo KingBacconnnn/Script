@@ -1748,7 +1748,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog updat
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://139460135852345", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://120839892031657", "Unload", 2, true, function()
 	CloseUI()
 end)
 
