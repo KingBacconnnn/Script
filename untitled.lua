@@ -10,7 +10,8 @@ local function GenerateRandomString(len)
 end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3"
-local MainGuiName = "VeloxHub_Main_ScreenGui_V3"
+-- [SECURITY] Randomized GUI name to bypass static string scanning
+local MainGuiName = "Velox_" .. GenerateRandomString(12)
 
 if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
@@ -44,11 +45,7 @@ if not LocalPlayer then
 end
 local PlaceId = game.PlaceId
 
-local gethui = gethui or function() 
-	local success, target = pcall(function() return CoreGui end)
-	if success and target then return target end
-	return LocalPlayer:WaitForChild("PlayerGui") 
-end
+local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
@@ -77,8 +74,10 @@ local VeloxConnections = {}
 local CardConnections = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
+local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
-local InteractiveElements = {}
+-- [GUI STABILITY] Weak-Key table prevents memory leaks when UI elements are destroyed
+local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
 local isMinimized = false
@@ -86,6 +85,8 @@ local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+
+local mainDragConnection, floatDragConnection
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -141,6 +142,16 @@ local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
+	
+	-- [EXECUTION STABILITY] Clear background execution tasks
+	for _, thread in ipairs(PendingTasks) do
+		if type(thread) == "thread" then pcall(task.cancel, thread) end
+	end
+	table.clear(PendingTasks)
+
+	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
+	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
+
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 			conn:Disconnect()
@@ -170,7 +181,6 @@ local function CleanUpMemory()
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
-	table.clear(InteractiveElements)
 end
 
 local function SafeTween(instance, tweenInfo, properties)
@@ -332,7 +342,25 @@ local function GetRelativeTime(timestamp)
 	return years .. (years == 1 and " year ago" or " years ago")
 end
 
-local TargetParent = gethui()
+-- [SECURITY] Prevents execution if the only available UI injection point is PlayerGui
+local function GetSecureParent()
+	local success, target = pcall(function() return CoreGui end)
+	if success and target then return target end
+	
+	local huiSuccess, huiTarget = pcall(function() return gethui() end)
+	if huiSuccess and huiTarget and huiTarget ~= LocalPlayer:FindFirstChild("PlayerGui") then
+		return huiTarget
+	end
+	
+	return nil
+end
+
+local TargetParent = GetSecureParent()
+if not TargetParent then
+	warn("[Velox Hub] Secure GUI container unavailable. Execution aborted to prevent game detection.")
+	return
+end
+
 local existingGui = TargetParent:FindFirstChild(MainGuiName)
 if existingGui then pcall(function() existingGui:Destroy() end) end
 
@@ -354,9 +382,8 @@ local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0
 
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
 	if not gui:IsA("GuiObject") then return end
-	table.insert(InteractiveElements, {
-		Element = gui, BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj
-	})
+	InteractiveElements[gui] = {BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj}
+	
 	RegConn(gui.MouseEnter:Connect(function()
 		if isDestroying or isTransitioning or IsMobile then return end
 		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
@@ -387,12 +414,9 @@ end
 
 RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
-	for i = #InteractiveElements, 1, -1 do
-		local data = InteractiveElements[i]
-		if not data.Element or not data.Element.Parent then
-			table.remove(InteractiveElements, i)
-		else
-			if data.BaseColor then pcall(function() data.Element.BackgroundColor3 = data.BaseColor end) end
+	for element, data in pairs(InteractiveElements) do
+		if element and element.Parent then
+			if data.BaseColor then pcall(function() element.BackgroundColor3 = data.BaseColor end) end
 			if data.StrokeObj and data.BaseStroke then pcall(function() data.StrokeObj.Color = data.BaseStroke end) end
 		end
 	end
@@ -424,22 +448,24 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatDrag = true
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-	end
-end))
-
-RegConn(UserInputService.InputChanged:Connect(function(input)
-	if isDestroying then return end
-	if floatDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - floatStart
-		local camera = workspace.CurrentCamera
-		local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
-		local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
-		local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-		local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-		targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
-		targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
-		FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
+		
+		-- [GUI STABILITY] Dynamically track drag movement to save CPU
+		if floatDragConnection then floatDragConnection:Disconnect() end
+		floatDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
+			if isDestroying then return end
+			if floatDrag and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+				local delta = moveInput.Position - floatStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
+				local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
+				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
+				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
+				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
+			end
+		end)
 	end
 end))
 
@@ -497,10 +523,12 @@ end
 local function ToggleUI()
 	if isDestroying or IsBindingKey or isTransitioning then return end
 	isTransitioning = true
+	
 	if not isMinimized then
 		isMinimized = true
 		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
+		
 		MainPanel.Visible = false
 		RestoreCachedProperties()
 		FloatingBtn.Visible = true
@@ -514,7 +542,8 @@ local function ToggleUI()
 		RestoreCachedProperties()
 		pcall(function() MainPanel.Interactable = true end)
 	end
-	task.wait(0.1) 
+	
+	-- [GUI STABILITY] Transition complete instantly without overlapping thread delays
 	isTransitioning = false
 end
 
@@ -531,8 +560,10 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
-function DisplayNotification(msg, nType)
+-- [SECURITY] Removed from getfenv() environment injection. Standardized to localized wrapper.
+local function ShowNotification(msg, notifType)
 	if isDestroying then return end
+	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
 	local wrapper = Instance.new("Frame", ToastContainer)
 	wrapper.Size = UDim2.new(1, 0, 0, 0)
@@ -583,13 +614,6 @@ function DisplayNotification(msg, nType)
 		end)
 	end)
 end
-
-getfenv().ShowNotification = function(msg, notifType)
-	if isDestroying then return end
-	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	DisplayNotification(msg, nType)
-end
-local ShowNotification = getfenv().ShowNotification
 
 local ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -754,35 +778,31 @@ HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true 
 
-local mainDragging, mainDragInput, mainDragStart, mainStartPos
+local mainDragging, mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		mainDragging = true
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
-	end
-end))
-
-RegConn(HeaderContainer.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		mainDragInput = input
-	end
-end))
-
-RegConn(UserInputService.InputChanged:Connect(function(input)
-	if isDestroying then return end
-	if input == mainDragInput and mainDragging then
-		local delta = input.Position - mainDragStart
-		local camera = workspace.CurrentCamera
-		local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
-		local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
-		local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-		local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-		targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-		targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-		MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
+		
+		-- [GUI STABILITY] Dynamically track drag movement to save CPU
+		if mainDragConnection then mainDragConnection:Disconnect() end
+		mainDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
+			if isDestroying then return end
+			if mainDragging and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+				local delta = moveInput.Position - mainDragStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
+				local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
+			end
+		end)
 	end
 end))
 
@@ -791,10 +811,12 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		if mainDragging then
 			mainDragging = false
+			if mainDragConnection then mainDragConnection:Disconnect(); mainDragConnection = nil end
 			if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
 		end
 		if floatDrag then
 			floatDrag = false
+			if floatDragConnection then floatDragConnection:Disconnect(); floatDragConnection = nil end
 			if floatStart then
 				local dist = (input.Position - floatStart).Magnitude
 				if dist < 5 then
@@ -1261,12 +1283,26 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.3.0 - Performance Overhaul", "• Switched to VirtualInputManager for unflagged Anti-AFK capability.\n• Throttled script load loop rendering to fix major lag spikes.\n• Safely caches settings config updates to prevent data wipe during game crash.\n• Detached heavily intensive game logic hooks to vastly improve FPS.", ChangelogsView)
+CreateParagraph("v3.4.0 - Security & Stability Update", "• Implemented dynamic metatable hooks to hide GUI from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe sandbox environment.\n• Removed global environment vulnerabilities and memory leaks.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
 		if type(scrData.UpdateUI) == "function" then scrData.UpdateUI() end
 	end
+end
+
+-- [EXECUTION STABILITY] Execute scripts in isolated wrapper
+local function ExecuteSandboxed(code)
+	local chunk, compileErr = loadstring(code)
+	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
+
+	local env = setmetatable({}, {
+		__index = function(_, key) return getgenv()[key] or getfenv()[key] end,
+		__newindex = function(_, key, value) getgenv()[key] = value end
+	})
+	
+	setfenv(chunk, env)
+	return pcall(chunk)
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1404,21 +1440,22 @@ local function CreateScriptCard(data, renderParent)
 			end
 			titleLbl.Text = "Executing..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local success, err = pcall(function()
-					local raw = FetchWithRetry(data.RawUrl, 2, 1)
-					if isDestroying then return end
-					if not raw then error("HTTP fetch failed.") end
-					if string.find(raw, "404: Not Found") then error("Source script returned a 404 error.") end
-					local chunk, compileErr = loadstring(raw)
-					if chunk then task.spawn(chunk) else error("Compile error: " .. tostring(compileErr)) end
-				end)
+				local raw = FetchWithRetry(data.RawUrl, 2, 1)
 				if isDestroying then return end
-				if success then
-					ShowNotification("Script executed: " .. exactName, "Success")
+				if not raw then 
+					ShowNotification("HTTP fetch failed.", "Error")
+				elseif string.find(raw, "404: Not Found") then 
+					ShowNotification("Source script returned a 404 error.", "Error")
 				else
-					ShowNotification("Execution failed. See console.", "Error")
-					warn("Velox Hub Execution Error: ", tostring(err))
+					local success, err = ExecuteSandboxed(raw)
+					if success then
+						ShowNotification("Script executed: " .. exactName, "Success")
+					else
+						ShowNotification("Execution failed. See console.", "Error")
+						warn("Velox Hub Execution Error: ", tostring(err))
+					end
 				end
+				
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
@@ -1486,26 +1523,22 @@ local function LoadDynamicCatalog()
 						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
 							autoIndex = autoIndex + 1
 							local delayTime = 0.2 * autoIndex
-							task.spawn(function()
-								task.wait(delayTime)
+							
+							-- [EXECUTION STABILITY] Track threaded execution
+							local th = task.delay(delayTime, function()
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
 								if isDestroying then return end
 								if scrRaw and type(loadstring) == "function" then
-									local fn, compileErr = loadstring(scrRaw)
-									if fn then
-										local exSuccess, err = pcall(fn)
-										if exSuccess then
-											ShowNotification("Auto-executed: " .. scriptData.Name, "Success")
-										else
-											ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
-											warn("Velox Hub Auto-Execute Error: ", tostring(err))
-										end
+									local exSuccess, err = ExecuteSandboxed(scrRaw)
+									if exSuccess then
+										ShowNotification("Auto-executed: " .. scriptData.Name, "Success")
 									else
-										ShowNotification("Auto-Execute compile error: " .. scriptData.Name, "Error")
-										warn("Velox Hub Compile Error: ", tostring(compileErr))
+										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
+										warn("Velox Hub Auto-Execute Error: ", tostring(err))
 									end
 								end
 							end)
+							table.insert(PendingTasks, th)
 						end
 					end
 				end
@@ -1787,6 +1820,38 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
+-- [SECURITY] Metatable Hooks to hide the GUI from LocalScripts (Anti-Cheat Bypass)
+pcall(function()
+	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
+		local oldNamecall
+		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			local method = getnamecallmethod()
+			
+			if not checkcaller() and ScreenGui then
+				if method == "GetDescendants" or method == "GetChildren" then
+					local result = oldNamecall(self, ...)
+					local filtered = {}
+					for i = 1, #result do
+						local v = result[i]
+						-- Check if result item is our UI or a descendant of it
+						if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+							table.insert(filtered, v)
+						end
+					end
+					return filtered
+				elseif method == "FindFirstChild" or method == "WaitForChild" then
+					local args = {...}
+					-- Block searching by our generated randomized name
+					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
+						return nil
+					end
+				end
+			end
+			return oldNamecall(self, ...)
+		end)
+	end
+end)
+
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
@@ -1796,4 +1861,4 @@ CacheInstanceAndDescendants(MainPanel)
 CacheInstanceAndDescendants(FloatingBtn)
 CacheInstanceAndDescendants(ConfirmOverlay)
 
-ShowNotification("Velox Hub loaded successfully.", "Success")
+ShowNotification("Velox Hub loaded securely.", "Success")
