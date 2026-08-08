@@ -1711,7 +1711,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any..."
 end)))
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://105890630659564", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://76065683148344", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
