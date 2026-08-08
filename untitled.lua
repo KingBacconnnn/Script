@@ -10,7 +10,6 @@ local function GenerateRandomString(len)
 end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3"
--- [SECURITY] Randomized GUI name to bypass static string scanning
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 
 if getgenv()[_G_Identifier] then
@@ -76,7 +75,6 @@ local RegisteredScripts = {}
 local AfkConnections = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
--- [GUI STABILITY] Weak-Key table prevents memory leaks when UI elements are destroyed
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
@@ -143,7 +141,6 @@ local function CleanUpMemory()
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
-	-- [EXECUTION STABILITY] Clear background execution tasks
 	for _, thread in ipairs(PendingTasks) do
 		if type(thread) == "thread" then pcall(task.cancel, thread) end
 	end
@@ -342,7 +339,6 @@ local function GetRelativeTime(timestamp)
 	return years .. (years == 1 and " year ago" or " years ago")
 end
 
--- [SECURITY] Prevents execution if the only available UI injection point is PlayerGui
 local function GetSecureParent()
 	local success, target = pcall(function() return CoreGui end)
 	if success and target then return target end
@@ -449,7 +445,6 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		
-		-- [GUI STABILITY] Dynamically track drag movement to save CPU
 		if floatDragConnection then floatDragConnection:Disconnect() end
 		floatDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -526,7 +521,6 @@ local function ToggleUI()
 	
 	if not isMinimized then
 		isMinimized = true
-		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 		
 		MainPanel.Visible = false
@@ -540,10 +534,8 @@ local function ToggleUI()
 		FloatingBtn.Visible = false
 		MainPanel.Visible = true
 		RestoreCachedProperties()
-		pcall(function() MainPanel.Interactable = true end)
 	end
 	
-	-- [GUI STABILITY] Transition complete instantly without overlapping thread delays
 	isTransitioning = false
 end
 
@@ -560,7 +552,6 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
--- [SECURITY] Removed from getfenv() environment injection. Standardized to localized wrapper.
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
@@ -786,7 +777,6 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
 		
-		-- [GUI STABILITY] Dynamically track drag movement to save CPU
 		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -819,7 +809,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 			if floatDragConnection then floatDragConnection:Disconnect(); floatDragConnection = nil end
 			if floatStart then
 				local dist = (input.Position - floatStart).Magnitude
-				if dist < 5 then
+				if dist < 12 then
 					ToggleUI()
 				else
 					if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
@@ -991,7 +981,7 @@ SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 
 SearchInput.Text = SavedData.LastSearch or ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-SearchInput.ClearTextOnFocus = false; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
+SearchInput.ClearTextOnFocus = true; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
 
 local ClearSearchBtn = Instance.new("TextButton", SearchContainer)
@@ -1291,7 +1281,6 @@ local function RefreshAllCardStates()
 	end
 end
 
--- [EXECUTION STABILITY] Execute scripts in isolated wrapper
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
@@ -1524,7 +1513,6 @@ local function LoadDynamicCatalog()
 							autoIndex = autoIndex + 1
 							local delayTime = 0.2 * autoIndex
 							
-							-- [EXECUTION STABILITY] Track threaded execution
 							local th = task.delay(delayTime, function()
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
 								if isDestroying then return end
@@ -1820,7 +1808,6 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
--- [SECURITY] Metatable Hooks to hide the GUI from LocalScripts (Anti-Cheat Bypass)
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
@@ -1833,7 +1820,6 @@ pcall(function()
 					local filtered = {}
 					for i = 1, #result do
 						local v = result[i]
-						-- Check if result item is our UI or a descendant of it
 						if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
 							table.insert(filtered, v)
 						end
@@ -1841,7 +1827,6 @@ pcall(function()
 					return filtered
 				elseif method == "FindFirstChild" or method == "WaitForChild" then
 					local args = {...}
-					-- Block searching by our generated randomized name
 					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
 						return nil
 					end
