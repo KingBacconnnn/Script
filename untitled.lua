@@ -1711,7 +1711,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any..."
 end)))
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://76065683148344", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -1748,7 +1748,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog updat
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://120839892031657", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://10709782230", "Unload", 2, true, function()
 	CloseUI()
 end)
 
