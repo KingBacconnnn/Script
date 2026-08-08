@@ -85,6 +85,7 @@ local isMinimized = false
 local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
+local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -139,9 +140,7 @@ local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
-
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 			conn:Disconnect()
@@ -156,7 +155,6 @@ local function CleanUpMemory()
 		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
 		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
 	end
-
 	for _, tweenData in pairs(ActiveTweens) do
 		if type(tweenData) == "table" then
 			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
@@ -168,7 +166,6 @@ local function CleanUpMemory()
 			end
 		end
 	end
-
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
@@ -178,7 +175,6 @@ end
 
 local function SafeTween(instance, tweenInfo, properties)
 	if not instance or not instance.Parent then return nil end
-	
 	if ActiveTweens[instance] then
 		local oldData = ActiveTweens[instance]
 		if oldData and type(oldData) == "table" then
@@ -191,7 +187,6 @@ local function SafeTween(instance, tweenInfo, properties)
 			end
 		end
 	end
-	
 	local tween = TweenService:Create(instance, tweenInfo, properties)
 	local conn
 	conn = tween.Completed:Connect(function()
@@ -201,13 +196,11 @@ local function SafeTween(instance, tweenInfo, properties)
 		end
 		pcall(function() tween:Destroy() end)
 	end)
-	
 	ActiveTweens[instance] = { Tween = tween, Connection = conn }
 	tween:Play()
 	return tween
 end
 
--- Upgraded: State-Based Debouncing ensures the lock only releases AFTER the function completely finishes yielding.
 local function CreateDebounce(cooldown, func)
 	local isRunning = false
 	return function(...)
@@ -234,15 +227,12 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
--- Upgraded: Safe File Saving prevents data corruption on crash
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
-	
 	if isSaving then 
 		saveQueued = true 
 		return 
 	end
-	
 	isSaving = true
 	task.spawn(function()
 		local cleanData = {
@@ -251,12 +241,10 @@ local function SaveConfiguration()
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
 		}
-		
 		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
 		for k, v in pairs(SavedData.AutoExecutes) do
 			if type(v) == "table" and v.PlaceId then cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } end
 		end
-		
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
 		if success then 
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
@@ -265,14 +253,12 @@ local function SaveConfiguration()
 					local check = read_file(TEMP_FILE)
 					return HttpService:JSONDecode(check)
 				end)
-				
 				if verifySuccess then
 					pcall(function() write_file(DATA_FILE, result) end)
 				end
 			end
 			pcall(function() del_file(TEMP_FILE) end)
 		end
-		
 		isSaving = false
 		if saveQueued then
 			saveQueued = false
@@ -359,46 +345,38 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
--- Removing the massive __namecall detour for performance reasons. Modern executors already handle gethui() protection.
-
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
-local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
 	if not gui:IsA("GuiObject") then return end
-
 	table.insert(InteractiveElements, {
 		Element = gui, BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj
 	})
-
 	RegConn(gui.MouseEnter:Connect(function()
-		if isDestroying or isTransitioning then return end
+		if isDestroying or isTransitioning or IsMobile then return end
 		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
 		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
 	end))
-
 	RegConn(gui.MouseLeave:Connect(function()
-		if isDestroying or isTransitioning then return end
+		if isDestroying or isTransitioning or IsMobile then return end
 		if originalColor then gui.BackgroundColor3 = originalColor end
 		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
 	end))
-
 	RegConn(gui.InputBegan:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if clickColor then gui.BackgroundColor3 = clickColor end
 		end
 	end))
-
 	RegConn(gui.InputEnded:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if hoverColor then 
+			if not IsMobile and hoverColor then 
 				gui.BackgroundColor3 = hoverColor
 			elseif originalColor then 
 				gui.BackgroundColor3 = originalColor
@@ -455,16 +433,12 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 		local delta = input.Position - floatStart
 		local camera = workspace.CurrentCamera
 		local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		
 		local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
 		local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
-		
 		local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
 		local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-		
 		targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
 		targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
-		
 		FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 	end
 end))
@@ -511,7 +485,6 @@ local function RestoreCachedProperties()
 			if c.ImageTransparency ~= nil then pcall(function() obj.ImageTransparency = c.ImageTransparency end) end
 			if c.ScrollBarImageTransparency ~= nil then pcall(function() obj.ScrollBarImageTransparency = c.ScrollBarImageTransparency end) end
 			if c.Transparency ~= nil then pcall(function() obj.Transparency = c.Transparency end) end
-			
 			if obj == MainPanel or obj == FloatingBtn or obj == FloatStroke then
 				if c.Size ~= nil then pcall(function() obj.Size = c.Size end) end
 				if c.Position ~= nil then pcall(function() obj.Position = c.Position end) end
@@ -524,15 +497,12 @@ end
 local function ToggleUI()
 	if isDestroying or IsBindingKey or isTransitioning then return end
 	isTransitioning = true
-
 	if not isMinimized then
 		isMinimized = true
 		pcall(function() MainPanel.Interactable = false end)
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-		
 		MainPanel.Visible = false
 		RestoreCachedProperties()
-		
 		FloatingBtn.Visible = true
 		FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
 		FloatingBtn.ImageTransparency = 0
@@ -540,12 +510,10 @@ local function ToggleUI()
 	else
 		isMinimized = false
 		FloatingBtn.Visible = false
-		
 		MainPanel.Visible = true
 		RestoreCachedProperties()
 		pcall(function() MainPanel.Interactable = true end)
 	end
-
 	task.wait(0.1) 
 	isTransitioning = false
 end
@@ -554,7 +522,7 @@ local ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
 ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
 ToastContainer.BackgroundTransparency = 1
-ToastContainer.ZIndex = 300
+ToastContainer.ZIndex = 2000
 
 local ToastLayout = Instance.new("UIListLayout", ToastContainer)
 ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -566,12 +534,11 @@ local NOTIF_DURATION = 3.5
 function DisplayNotification(msg, nType)
 	if isDestroying then return end
 	local indicatorColor = Theme[nType] or Theme.Info
-
 	local wrapper = Instance.new("Frame", ToastContainer)
 	wrapper.Size = UDim2.new(1, 0, 0, 0)
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y
 	wrapper.BackgroundTransparency = 1
-	wrapper.ZIndex = 301
+	wrapper.ZIndex = 2001
 
 	local box = Instance.new("Frame", wrapper)
 	box.Size = UDim2.new(1, 0, 0, 0)
@@ -579,7 +546,7 @@ function DisplayNotification(msg, nType)
 	box.BackgroundColor3 = Theme.CardHover
 	box.Position = UDim2.new(1.2, 0, 0, 0)
 	box.ClipsDescendants = true
-	box.ZIndex = 302
+	box.ZIndex = 2002
 	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
 	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
 
@@ -592,7 +559,7 @@ function DisplayNotification(msg, nType)
 	indicator.Position = UDim2.new(0, -12, 0, -10)
 	indicator.BackgroundColor3 = indicatorColor
 	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 303
+	indicator.ZIndex = 2003
 	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
 
 	local txt = Instance.new("TextLabel", box)
@@ -600,7 +567,7 @@ function DisplayNotification(msg, nType)
 	txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
 	txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
 	txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
-	txt.TextWrapped = true; txt.ZIndex = 303
+	txt.TextWrapped = true; txt.ZIndex = 2003
 
 	local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
 	introTween:Play()
@@ -609,7 +576,6 @@ function DisplayNotification(msg, nType)
 		if not wrapper or not wrapper.Parent then return end
 		local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
 		outroTween:Play()
-		
 		local conn
 		conn = outroTween.Completed:Connect(function()
 			if conn then conn:Disconnect() end
@@ -709,12 +675,10 @@ local function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
-
 	ConfirmScriptName.Text = scriptName
 	ConfirmExecuteBtn.Active = true
 	ConfirmExecuteBtn.AutoButtonColor = true
 	ConfirmExecuteBtn.Text = "Execute"
-
 	ConfirmOverlay.BackgroundTransparency = 0.5
 	ConfirmOverlay.Visible = true
 end
@@ -725,10 +689,8 @@ local function CloseConfirmDialog(shouldExecute)
 	ConfirmOverlay.BackgroundTransparency = 1
 	ConfirmOverlay.Visible = false
 	isConfirming = false
-
 	local cb = pendingExecuteCallback
 	pendingExecuteCallback = nil
-
 	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
 end
 
@@ -814,16 +776,12 @@ RegConn(UserInputService.InputChanged:Connect(function(input)
 		local delta = input.Position - mainDragStart
 		local camera = workspace.CurrentCamera
 		local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		
 		local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
 		local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
-		
 		local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 		local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-		
 		targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 		targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-		
 		MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 	end
 end))
@@ -1007,12 +965,23 @@ Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 6)
 local SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Color3.fromRGB(51, 65, 85); SearchStroke.Thickness = 1
 
 SearchInput = Instance.new("TextBox", SearchContainer)
-SearchInput.Size = UDim2.new(1, -12, 1, 0); SearchInput.Position = UDim2.new(0, 12, 0, 0); SearchInput.BackgroundTransparency = 1
+SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 12, 0, 0); SearchInput.BackgroundTransparency = 1
 SearchInput.Text = SavedData.LastSearch or ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
 SearchInput.ClearTextOnFocus = false; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
+
+local ClearSearchBtn = Instance.new("TextButton", SearchContainer)
+ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
+ClearSearchBtn.Position = UDim2.new(1, -28, 0.5, -12)
+ClearSearchBtn.BackgroundTransparency = 1
+ClearSearchBtn.Text = "×"
+ClearSearchBtn.TextColor3 = Color3.fromRGB(148, 163, 184)
+ClearSearchBtn.TextSize = 18
+ClearSearchBtn.Font = Enum.Font.GothamBold
+ClearSearchBtn.ZIndex = 53
+ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 
 RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
 
@@ -1041,35 +1010,29 @@ ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.f
 
 local DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
-DropdownContainer.Visible = false; DropdownContainer.ZIndex = 200; DropdownContainer.BorderSizePixel = 0
+DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownContainer.BorderSizePixel = 0
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Upgraded Viewport Bounds Clamping ensures the UI remains fully on-screen even when Roblox window resizes
 if workspace.CurrentCamera then
 	RegConn(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if DropdownContainer and DropdownContainer.Visible then
 			DropdownContainer.Visible = false
 		end
-		
 		if MainPanel and MainPanel.Parent then
 			local viewport = workspace.CurrentCamera.ViewportSize
 			local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 			local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-			
 			local currentOffsetX = MainPanel.Position.X.Offset
 			local currentOffsetY = MainPanel.Position.Y.Offset
-			
 			if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
 				currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
 				currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
 			end
-
 			local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 			local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-			
 			MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 		end
 	end))
@@ -1084,25 +1047,20 @@ local SortOptions = {
 	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 
--- Upgraded Search Throttling: Threads yield every 50 loops so it doesn't freeze the client 
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
 	local currentVersion = filterVersion
-	
 	task.defer(function()
 		local savedScroll = ScriptsView.CanvasPosition
 		local queryText = SearchInput.Text
 		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1")) 
-
 		local words = {}
 		for word in string.gmatch(query, "%S+") do table.insert(words, word) end
 		local matches = {}
 		local osTimeCache = os.time()
-
 		for i, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
-
 			local isMatch = true
 			if query ~= "" then
 				for _, w in ipairs(words) do
@@ -1114,14 +1072,11 @@ local function UpdateFilter()
 					end
 				end
 			end
-
 			local filterPass = true
 			local age = scr.LastUpdated and (osTimeCache - scr.LastUpdated) or math.huge
-
 			if FilterFavoritesActive then
 				if not SavedData.Favorites[scr.ExactName] then filterPass = false end
 			end
-
 			if filterPass then
 				if SortMode == "Updated Today" then filterPass = (age <= 86400)
 				elseif SortMode == "Updated This Week" then filterPass = (age <= 604800)
@@ -1131,16 +1086,12 @@ local function UpdateFilter()
 				elseif SortMode == "Auto Execute: OFF" then filterPass = (SavedData.AutoExecutes[scr.ExactName] == nil)
 				end
 			end
-
 			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then table.insert(matches, scr) end
-			
 			if i % 50 == 0 then task.wait() end 
 		end
-
 		if filterVersion ~= currentVersion then return end
-
 		table.sort(matches, function(a, b)
 			if SortMode == "Most Relevant" and query ~= "" then
 				local aExact = string.sub(a.SearchTitle, 1, #query) == query
@@ -1162,12 +1113,10 @@ local function UpdateFilter()
 			end
 			return a.OriginalIndex < b.OriginalIndex
 		end)
-
 		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
 			if idx % 50 == 0 then task.wait() end 
 		end
-
 		if #RegisteredScripts > 0 then
 			local shouldShowEmpty = (#matches == 0)
 			if EmptyStateMessage.Visible ~= shouldShowEmpty then
@@ -1175,20 +1124,24 @@ local function UpdateFilter()
 			end
 			if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		end
-
 		if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 	end)
 end
 
 RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 	if typingTask then task.cancel(typingTask) end
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
+end))
+
+RegConn(ClearSearchBtn.Activated:Connect(function()
+	SearchInput.Text = ""
+	if SearchInput:IsFocused() then SearchInput:ReleaseFocus() end
 end))
 
 RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	if isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
-	
 	if FilterFavoritesActive then
 		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
 	else
@@ -1202,7 +1155,7 @@ for _, opt in ipairs(SortOptions) do
 	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
 	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
 	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
-	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 201
+	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 1001
 
 	RegConn(btn.Activated:Connect(function()
 		SortMode = opt
@@ -1224,11 +1177,12 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 		local camera = workspace.CurrentCamera
 		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
 		local dropWidth, dropHeight = 190, 210
-
 		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
 		local posY = absPos.Y + absSize.Y + 4
-		if posY + dropHeight > viewportSize.Y - 10 then posY = absPos.Y - dropHeight - 4 end
-
+		if posY + dropHeight > viewportSize.Y - 10 then 
+			posY = absPos.Y - dropHeight - 4 
+		end
+		if posY < 10 then posY = 10 end
 		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
 		DropdownContainer.Visible = true
 	end
@@ -1260,27 +1214,21 @@ local function CreateTab(name, index)
 	btn.Text = name; btn.Font = Enum.Font.GothamMedium; btn.TextSize = IsMobile and 11 or 13
 	btn.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
 	btn.ClipsDescendants = true; TabButtonCache[name] = btn
-
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, 10); div.Position = UDim2.new(0, xOffset - 3, 0.5, -5)
 		div.BackgroundColor3 = Theme.Stroke; div.BackgroundTransparency = 0.3
 	end
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
-
 	RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
 		currentTab = name; DropdownContainer.Visible = false
-		
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
 		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
-
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
-
 		if name == "Scripts" then UpdateFilter() else if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end end
-
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
 			if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
@@ -1302,12 +1250,10 @@ local function CreateParagraph(title, desc, parentView)
 	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	local lay = Instance.new("UIListLayout", block)
 	lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder
-
 	local tLbl = Instance.new("TextLabel", block)
 	tLbl.Size = UDim2.new(1, 0, 0, 18); tLbl.BackgroundTransparency = 1; tLbl.Text = title
 	tLbl.TextColor3 = Theme.TextPrimary; tLbl.Font = Enum.Font.GothamBold; tLbl.TextSize = 13
 	tLbl.TextXAlignment = Enum.TextXAlignment.Left; tLbl.LayoutOrder = 1
-
 	local dLbl = Instance.new("TextLabel", block)
 	dLbl.Size = UDim2.new(1, 0, 0, 0); dLbl.AutomaticSize = Enum.AutomaticSize.Y
 	dLbl.BackgroundTransparency = 1; dLbl.Text = desc; dLbl.TextColor3 = Theme.TextSecondary
@@ -1330,29 +1276,24 @@ local function CreateScriptCard(data, renderParent)
 	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
 	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = Color3.fromRGB(44, 58, 77)
-
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-
 	local img = Instance.new("ImageLabel", card)
 	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
 	img.BorderSizePixel = 0; img.Image = data.ImageAssetId or "rbxassetid://99657752206675"
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
-
 	local content = Instance.new("Frame", card)
 	content.Size = UDim2.new(1, -76, 0, 0); content.Position = UDim2.new(0, 76, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
 	local cLay = Instance.new("UIListLayout", content)
 	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 4)
-
 	local topRow = Instance.new("Frame", content)
 	topRow.Size = UDim2.new(1, 0, 0, 0); topRow.AutomaticSize = Enum.AutomaticSize.Y
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, IsMobile and -115 or -140, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -1361,7 +1302,6 @@ local function CreateScriptCard(data, renderParent)
 	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-
 	local metaRightContainer = Instance.new("Frame", topRow)
 	metaRightContainer.Size = UDim2.new(0, IsMobile and 115 or 140, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
@@ -1386,18 +1326,15 @@ local function CreateScriptCard(data, renderParent)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 10; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
-
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
 	descLbl.BackgroundTransparency = 1; descLbl.Text = data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
-
 	local btmRow = Instance.new("Frame", content)
 	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
 	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
-
 	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
@@ -1412,7 +1349,6 @@ local function CreateScriptCard(data, renderParent)
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
-
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
@@ -1461,15 +1397,12 @@ local function CreateScriptCard(data, renderParent)
 		local function executeScript()
 			if GlobalExecutionCooldown then return end
 			GlobalExecutionCooldown = true
-
 			if type(loadstring) ~= "function" then
-				ShowNotification("Executor lacks loadstring support!", "Error")
+				ShowNotification("Your executor does not support loadstring execution.", "Error")
 				GlobalExecutionCooldown = false
 				return
 			end
-
 			titleLbl.Text = "Executing..."; titleLbl.TextColor3 = Theme.Accent
-
 			task.spawn(function()
 				local success, err = pcall(function()
 					local raw = FetchWithRetry(data.RawUrl, 2, 1)
@@ -1479,7 +1412,6 @@ local function CreateScriptCard(data, renderParent)
 					local chunk, compileErr = loadstring(raw)
 					if chunk then task.spawn(chunk) else error("Compile error: " .. tostring(compileErr)) end
 				end)
-
 				if isDestroying then return end
 				if success then
 					ShowNotification("Script executed: " .. exactName, "Success")
@@ -1493,7 +1425,6 @@ local function CreateScriptCard(data, renderParent)
 				GlobalExecutionCooldown = false
 			end)
 		end
-
 		if SavedData.AutoExecutes[exactName] ~= nil then executeScript() else OpenConfirmDialog(exactName, executeScript) end
 	end))
 
@@ -1505,7 +1436,6 @@ end
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
 local dbRefreshing = false
 
--- Throttled loading process preventing client crashes on massive JSON files
 local function LoadDynamicCatalog()
 	if dbRefreshing then return end
 	dbRefreshing = true
@@ -1521,42 +1451,33 @@ local function LoadDynamicCatalog()
 		if raw then
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if success and type(parsed) == "table" then
-				
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 						conn:Disconnect()
 					end
 				end
 				table.clear(CardConnections)
-
 				for _, child in ipairs(ScriptsView:GetChildren()) do
 					if child:IsA("TextButton") then child:Destroy() end
 				end
 				table.clear(RegisteredScripts)
-
 				local detachedFolder = Instance.new("Folder")
 				local vMap = {}
-				
 				for index, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
 						vMap[scriptData.Name] = true
 						if isDestroying then return end
 						CreateScriptCard(scriptData, detachedFolder)
 					end
-					
-					-- Yield execution temporarily to prevent lockups on big libraries
 					if index % 25 == 0 then task.wait() end
 				end
-
 				local cleaned = false
 				for k, _ in pairs(SavedData.AutoExecutes) do
 					if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
 				end
 				if cleaned then SaveConfiguration() end
-
 				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
 				pcall(function() detachedFolder:Destroy() end)
-
 				local autoIndex = 0
 				for _, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
@@ -1595,7 +1516,9 @@ local function LoadDynamicCatalog()
 				EmptyStateMessage.Text = "Catalog parsing error. Check console."; StatusText.Text = "Data Error"
 			end
 		else
-			EmptyStateMessage.Text = "Unable to connect to server."; StatusText.Text = "Offline"
+			EmptyStateMessage.Text = "Unable to connect or unsupported executor API."
+			StatusText.Text = "Offline"
+			ShowNotification("Network error or unsupported executor request API.", "Error")
 		end
 		dbRefreshing = false
 	end)
@@ -1608,11 +1531,9 @@ local function CreateSettingsGroup(titleText, parentView, order)
 	container.AutomaticSize = Enum.AutomaticSize.Y
 	container.BackgroundTransparency = 1
 	container.LayoutOrder = order
-
 	local groupLayout = Instance.new("UIListLayout", container)
 	groupLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	groupLayout.Padding = UDim.new(0, 6)
-
 	local header = Instance.new("TextLabel", container)
 	header.Size = UDim2.new(1, 0, 0, 16)
 	header.BackgroundTransparency = 1
@@ -1622,30 +1543,21 @@ local function CreateSettingsGroup(titleText, parentView, order)
 	header.TextSize = 10
 	header.TextXAlignment = Enum.TextXAlignment.Left
 	header.LayoutOrder = 1
-
 	local card = Instance.new("Frame", container)
 	card.Size = UDim2.new(1, 0, 0, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = Theme.CardHover
 	card.LayoutOrder = 2
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-
-	local cardStroke = Instance.new("UIStroke", card)
-	cardStroke.Color = Color3.fromRGB(255, 255, 255)
-	cardStroke.Transparency = 0.9
-	cardStroke.Thickness = 1
-
 	local cardGradient = Instance.new("UIGradient", card)
 	cardGradient.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Theme.CardHover),
 		ColorSequenceKeypoint.new(1, Theme.Card)
 	})
 	cardGradient.Rotation = 45
-
 	local cardLayout = Instance.new("UIListLayout", card)
 	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	cardLayout.Padding = UDim.new(0, 0)
-
 	return card
 end
 
@@ -1659,42 +1571,35 @@ local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 		divider.BorderSizePixel = 0
 		divider.LayoutOrder = (order - 1) * 2
 	end
-
 	local row = Instance.new("Frame", groupCard)
 	row.Size = UDim2.new(1, 0, 0, IsMobile and 56 or 60)
 	row.BackgroundTransparency = 1
 	row.LayoutOrder = (order * 2) - 1
-
 	local rowPad = Instance.new("UIPadding", row)
 	rowPad.PaddingLeft = UDim.new(0, 12)
 	rowPad.PaddingRight = UDim.new(0, 12)
 	rowPad.PaddingTop = UDim.new(0, 8)
 	rowPad.PaddingBottom = UDim.new(0, 8)
-
 	local iconContainer = Instance.new("Frame", row)
 	iconContainer.Size = UDim2.new(0, 32, 0, 32)
 	iconContainer.Position = UDim2.new(0, 0, 0.5, -16)
 	iconContainer.BackgroundColor3 = Theme.Accent
 	iconContainer.BackgroundTransparency = 0.85
 	Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
-
 	local iconImg = Instance.new("ImageLabel", iconContainer)
 	iconImg.Size = UDim2.new(0, 18, 0, 18)
 	iconImg.Position = UDim2.new(0.5, -9, 0.5, -9)
 	iconImg.BackgroundTransparency = 1
 	iconImg.Image = iconAsset or "rbxassetid://10709782497"
 	iconImg.ImageColor3 = Theme.Accent
-
 	local textContainer = Instance.new("Frame", row)
 	textContainer.Size = UDim2.new(1, -165, 1, 0)
 	textContainer.Position = UDim2.new(0, 42, 0, 0)
 	textContainer.BackgroundTransparency = 1
-
 	local tLay = Instance.new("UIListLayout", textContainer)
 	tLay.SortOrder = Enum.SortOrder.LayoutOrder
 	tLay.Padding = UDim.new(0, 2)
 	tLay.VerticalAlignment = Enum.VerticalAlignment.Center
-
 	local t = Instance.new("TextLabel", textContainer)
 	t.Size = UDim2.new(1, 0, 0, 16)
 	t.BackgroundTransparency = 1
@@ -1704,7 +1609,6 @@ local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	t.TextSize = 12
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.LayoutOrder = 1
-
 	local d = Instance.new("TextLabel", textContainer)
 	d.Size = UDim2.new(1, 0, 0, 14)
 	d.BackgroundTransparency = 1
@@ -1715,18 +1619,15 @@ local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	d.TextXAlignment = Enum.TextXAlignment.Left
 	d.LayoutOrder = 2
 	d.TextWrapped = true
-
 	local rightContainer = Instance.new("Frame", row)
 	rightContainer.Size = UDim2.new(0, 110, 1, 0)
 	rightContainer.Position = UDim2.new(1, -110, 0, 0)
 	rightContainer.BackgroundTransparency = 1
-
 	return row, rightContainer
 end
 
 local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-
 	local toggleBtn = Instance.new("TextButton", rightContainer)
 	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
 	toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
@@ -1734,23 +1635,18 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 	toggleBtn.Text = ""
 	toggleBtn.AutoButtonColor = false
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
-
 	local toggleStroke = Instance.new("UIStroke", toggleBtn)
 	toggleStroke.Color = defaultValue and Theme.Accent or Theme.Stroke
 	toggleStroke.Thickness = 1
-
 	local circle = Instance.new("Frame", toggleBtn)
 	circle.Size = UDim2.new(0, 16, 0, 16)
 	circle.Position = defaultValue and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-
 	local state = defaultValue
-
 	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		state = not state
-		
 		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
 		})
@@ -1760,14 +1656,12 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 		})
-
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
 
 local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-
 	local btn = Instance.new("TextButton", rightContainer)
 	btn.Size = UDim2.new(0, 95, 0, 26)
 	btn.Position = UDim2.new(1, -95, 0.5, -13)
@@ -1779,16 +1673,12 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	btn.TextSize = 11
 	btn.AutoButtonColor = false
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
 	local btnStroke = Instance.new("UIStroke", btn)
 	btnStroke.Color = isDestructive and Theme.Error or Theme.Stroke
 	btnStroke.Thickness = 1
-
 	local hoverColor = isDestructive and Color3.fromRGB(50, 20, 20) or Theme.CardHover
 	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
-
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
-
 	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
@@ -1821,8 +1711,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any..."
 end)))
 
--- Upgraded Anti-AFK Method: VirtualInputManager seamlessly bypasses standard checks 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709783582", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://11419714808", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -1859,7 +1748,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog updat
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://10709782558", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://11419720448", "Unload", 2, true, function()
 	CloseUI()
 end)
 
