@@ -1592,6 +1592,7 @@ local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	iconImg.BackgroundTransparency = 1
 	iconImg.Image = iconAsset or "rbxassetid://10709782497"
 	iconImg.ImageColor3 = Theme.Accent
+	iconImg.ScaleType = Enum.ScaleType.Fit -- FIX: Prevents rendering distortions
 	local textContainer = Instance.new("Frame", row)
 	textContainer.Size = UDim2.new(1, -165, 1, 0)
 	textContainer.Position = UDim2.new(0, 42, 0, 0)
@@ -1711,7 +1712,8 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any..."
 end)))
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://11419714808", 2, SavedData.Settings.AntiAFK, function(val)
+-- FIX: Used rbxthumb:// endpoints for the broken decals
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxthumb://type=Asset&id=11419714808&w=150&h=150", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -1748,7 +1750,8 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog updat
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://11419720448", "Unload", 2, true, function()
+-- FIX: Used rbxthumb:// endpoints for the broken decals
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxthumb://type=Asset&id=11419720448&w=150&h=150", "Unload", 2, true, function()
 	CloseUI()
 end)
 
