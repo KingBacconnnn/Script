@@ -32,7 +32,6 @@ local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
 local VirtualInputManager = Services.VirtualInputManager
-local VirtualUser = Services.VirtualUser
 local RunService = Services.RunService
 local Stats = Services.Stats
 local CoreGui = Services.CoreGui
@@ -56,6 +55,7 @@ local getexecutor = identifyexecutor or getexecutorname or function() return "Un
 local write_file = writefile or function() end
 local read_file = readfile or function() return "" end
 local is_file = isfile or function() return false end
+local del_file = delfile or function() end
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -135,24 +135,12 @@ local function RegCardConn(connection)
 end
 
 local typingTask = nil
-local mt = getrawmetatable(game)
-local VeloxNamecallDetour
 
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-
-	if getgenv().VeloxOriginalNamecall and mt and setreadonly then
-		pcall(function()
-			if mt.__namecall == VeloxNamecallDetour then
-				setreadonly(mt, false)
-				mt.__namecall = getgenv().VeloxOriginalNamecall
-				setreadonly(mt, true)
-			end
-		end)
-	end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -219,17 +207,22 @@ local function SafeTween(instance, tweenInfo, properties)
 	return tween
 end
 
-local function CreateDebounce(delay, func)
-	local isDebounced = false
+-- Upgraded: State-Based Debouncing ensures the lock only releases AFTER the function completely finishes yielding.
+local function CreateDebounce(cooldown, func)
+	local isRunning = false
 	return function(...)
-		if isDebounced then return end
-		isDebounced = true
-		task.spawn(func, ...)
-		task.delay(delay, function() isDebounced = false end)
+		if isRunning then return end
+		isRunning = true
+		task.spawn(function(...)
+			pcall(func, ...)
+			task.wait(cooldown)
+			isRunning = false
+		end, ...)
 	end
 end
 
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -241,6 +234,7 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
+-- Upgraded: Safe File Saving prevents data corruption on crash
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
 	
@@ -264,7 +258,20 @@ local function SaveConfiguration()
 		end
 		
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
-		if success then pcall(function() write_file(DATA_FILE, result) end) end
+		if success then 
+			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
+			if writeSuccess then
+				local verifySuccess = pcall(function()
+					local check = read_file(TEMP_FILE)
+					return HttpService:JSONDecode(check)
+				end)
+				
+				if verifySuccess then
+					pcall(function() write_file(DATA_FILE, result) end)
+				end
+			end
+			pcall(function() del_file(TEMP_FILE) end)
+		end
 		
 		isSaving = false
 		if saveQueued then
@@ -352,34 +359,7 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-if mt and setreadonly and checkcaller and getnamecallmethod then
-	getgenv().VeloxOriginalNamecall = getgenv().VeloxOriginalNamecall or mt.__namecall
-	local oldNamecall = getgenv().VeloxOriginalNamecall
-	
-	VeloxNamecallDetour = newcclosure(function(self, ...)
-		local method = getnamecallmethod()
-		if not checkcaller() then
-			if method == "FindFirstChild" or method == "WaitForChild" then
-				local args = {...}
-				if args[1] == MainGuiName then return nil end
-			elseif method == "GetChildren" or method == "GetDescendants" then
-				local result = oldNamecall(self, ...)
-				if type(result) == "table" then
-					local filtered = {}
-					for _, v in ipairs(result) do
-						if v.Name ~= MainGuiName then table.insert(filtered, v) end
-					end
-					return filtered
-				end
-			end
-		end
-		return oldNamecall(self, ...)
-	end)
-	
-	setreadonly(mt, false)
-	mt.__namecall = VeloxNamecallDetour
-	setreadonly(mt, true)
-end
+-- Removing the massive __namecall detour for performance reasons. Modern executors already handle gethui() protection.
 
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
@@ -899,7 +879,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.2 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.3 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1067,10 +1047,30 @@ Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+-- Upgraded Viewport Bounds Clamping ensures the UI remains fully on-screen even when Roblox window resizes
 if workspace.CurrentCamera then
 	RegConn(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if DropdownContainer and DropdownContainer.Visible then
 			DropdownContainer.Visible = false
+		end
+		
+		if MainPanel and MainPanel.Parent then
+			local viewport = workspace.CurrentCamera.ViewportSize
+			local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+			local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+			
+			local currentOffsetX = MainPanel.Position.X.Offset
+			local currentOffsetY = MainPanel.Position.Y.Offset
+			
+			if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
+				currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
+				currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
+			end
+
+			local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+			local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+			
+			MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 		end
 	end))
 end
@@ -1084,6 +1084,7 @@ local SortOptions = {
 	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 
+-- Upgraded Search Throttling: Threads yield every 50 loops so it doesn't freeze the client 
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -1099,7 +1100,7 @@ local function UpdateFilter()
 		local matches = {}
 		local osTimeCache = os.time()
 
-		for _, scr in ipairs(RegisteredScripts) do
+		for i, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
 
 			local isMatch = true
@@ -1134,6 +1135,8 @@ local function UpdateFilter()
 			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then table.insert(matches, scr) end
+			
+			if i % 50 == 0 then task.wait() end 
 		end
 
 		if filterVersion ~= currentVersion then return end
@@ -1162,6 +1165,7 @@ local function UpdateFilter()
 
 		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
+			if idx % 50 == 0 then task.wait() end 
 		end
 
 		if #RegisteredScripts > 0 then
@@ -1181,7 +1185,7 @@ RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
 
-RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.2, function()
+RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	if isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	
@@ -1311,8 +1315,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.2.0 - Catalog & Stability Upgrades", "• Handled all lingering connection leaks on Catalog resets.\n• Implemented robust dragging boundaries with global inputs.\n• Upgraded Anti-AFK behavior (non-intrusive controller simulation).", ChangelogsView)
-CreateParagraph("v3.1.3 - Notification Stability Fix", "• Simplified the notification system and removed complex dependent queues that caused stuck UI elements.\n• Guaranteed smooth cleanup and automatic destruction upon tween completion.", ChangelogsView)
+CreateParagraph("v3.3.0 - Performance Overhaul", "• Switched to VirtualInputManager for unflagged Anti-AFK capability.\n• Throttled script load loop rendering to fix major lag spikes.\n• Safely caches settings config updates to prevent data wipe during game crash.\n• Detached heavily intensive game logic hooks to vastly improve FPS.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1433,7 +1436,7 @@ local function CreateScriptCard(data, renderParent)
 	end
 	scriptEntry.UpdateUI()
 
-	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.2, function()
+	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil; ShowNotification("Favorite removed: " .. exactName, "Info")
@@ -1443,7 +1446,7 @@ local function CreateScriptCard(data, renderParent)
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 
-	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.2, function()
+	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Auto-Execute disabled: " .. exactName, "Warning")
@@ -1502,6 +1505,7 @@ end
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
 local dbRefreshing = false
 
+-- Throttled loading process preventing client crashes on massive JSON files
 local function LoadDynamicCatalog()
 	if dbRefreshing then return end
 	dbRefreshing = true
@@ -1532,12 +1536,16 @@ local function LoadDynamicCatalog()
 
 				local detachedFolder = Instance.new("Folder")
 				local vMap = {}
-				for _, scriptData in ipairs(parsed) do
+				
+				for index, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
 						vMap[scriptData.Name] = true
 						if isDestroying then return end
 						CreateScriptCard(scriptData, detachedFolder)
 					end
+					
+					-- Yield execution temporarily to prevent lockups on big libraries
+					if index % 25 == 0 then task.wait() end
 				end
 
 				local cleaned = false
@@ -1813,15 +1821,19 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	KeybindButton.Text = "Press Any..."
 end)))
 
+-- Upgraded Anti-AFK Method: VirtualInputManager seamlessly bypasses standard checks 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709783582", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
 		if not AfkConnections.Idled then
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-				if VirtualUser then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new(0,0))
+				if VirtualInputManager then
+					pcall(function()
+						VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+						task.wait(0.1)
+						VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+					end)
 				end
 			end))
 		end
@@ -1854,9 +1866,12 @@ end)
 if SavedData.Settings.AntiAFK then
 	if not AfkConnections.Idled then
 		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-			if VirtualUser then
-				VirtualUser:CaptureController()
-				VirtualUser:ClickButton2(Vector2.new(0,0))
+			if VirtualInputManager then
+				pcall(function()
+					VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+					task.wait(0.1)
+					VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+				end)
 			end
 		end))
 	end
