@@ -1439,6 +1439,7 @@ local dbRefreshing = false
 local function LoadDynamicCatalog()
 	if dbRefreshing then return end
 	dbRefreshing = true
+	ShowNotification("Fetching latest scripts...", "Info")
 	local savedScroll = ScriptsView.CanvasPosition
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
@@ -1715,6 +1716,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", 
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
+		ShowNotification("Anti-AFK enabled.", "Success")
 		if not AfkConnections.Idled then
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
 				if VirtualInputManager then
@@ -1734,6 +1736,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", 
 			end
 		end
 	else
+		ShowNotification("Anti-AFK disabled.", "Warning")
 		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
 		for conn, _ in pairs(AfkConnections) do
 			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
@@ -1749,6 +1752,8 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog updat
 end)
 
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://10709782230", "Unload", 2, true, function()
+	ShowNotification("Unloading Velox Hub...", "Info")
+	task.wait(0.3)
 	CloseUI()
 end)
 
