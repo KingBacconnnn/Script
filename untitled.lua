@@ -85,6 +85,8 @@ local IsBindingKey = false
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 local mainDragConnection, floatDragConnection
+local ToggleKeybindConnection = nil
+local KeybindCaptureConnection = nil
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -148,6 +150,8 @@ local function CleanUpMemory()
 
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
+	if ToggleKeybindConnection then pcall(function() ToggleKeybindConnection:Disconnect() end) end
+	if KeybindCaptureConnection then pcall(function() KeybindCaptureConnection:Disconnect() end) end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -226,7 +230,6 @@ local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
-	LastSearch = "",
 	ToggleKeybind = "RightControl",
 	Settings = { AntiAFK = false }
 }
@@ -244,7 +247,6 @@ local function SaveConfiguration()
 	task.spawn(function()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
-			LastSearch = tostring(SavedData.LastSearch or ""),
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
 		}
@@ -288,7 +290,6 @@ local function LoadConfiguration()
 					end
 				end
 			end
-			if type(result.LastSearch) == "string" then SavedData.LastSearch = result.LastSearch end
 			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 			if type(result.Settings) == "table" then
 				for k, _ in pairs(result.Settings) do
@@ -516,7 +517,7 @@ local function RestoreCachedProperties()
 end
 
 local function ToggleUI()
-	if isDestroying or IsBindingKey or isTransitioning then return end
+	if isDestroying or isTransitioning then return end
 	isTransitioning = true
 	
 	if not isMinimized then
@@ -726,6 +727,26 @@ local ToggleKeybind = Enum.KeyCode.RightControl
 pcall(function() if SavedData.ToggleKeybind then ToggleKeybind = Enum.KeyCode[SavedData.ToggleKeybind] end end)
 local KeybindButtonRef = nil
 
+local function BindToggleKey(keyCode)
+	if ToggleKeybindConnection then
+		ToggleKeybindConnection:Disconnect()
+		ToggleKeybindConnection = nil
+	end
+	
+	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
+		
+		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
+			if SearchInput and SearchInput:IsFocused() then
+				SearchInput:ReleaseFocus()
+			end
+			ToggleUI()
+		end
+	end))
+end
+
+BindToggleKey(ToggleKeybind)
+
 RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
@@ -733,27 +754,6 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			return
 		end
 	end
-	if IsBindingKey then
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			if input.KeyCode == Enum.KeyCode.Escape then
-				IsBindingKey = false
-				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-				ShowNotification("Keybind mapping canceled.", "Warning")
-				return
-			end
-			if input.KeyCode.Name ~= "Unknown" then
-				ToggleKeybind = input.KeyCode
-				IsBindingKey = false
-				SavedData.ToggleKeybind = ToggleKeybind.Name
-				SaveConfiguration()
-				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-				ShowNotification("Keybind set to: " .. input.KeyCode.Name, "Success")
-			end
-		end
-		return
-	end
-	if gameProcessed then return end
-	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == ToggleKeybind then ToggleUI() end
 end))
 
 local function CloseUI()
@@ -978,7 +978,7 @@ local SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Col
 
 SearchInput = Instance.new("TextBox", SearchContainer)
 SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 12, 0, 0); SearchInput.BackgroundTransparency = 1
-SearchInput.Text = SavedData.LastSearch or ""; SearchInput.PlaceholderText = "Search scripts by name..."
+SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
 SearchInput.ClearTextOnFocus = true; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
@@ -999,8 +999,6 @@ RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent
 
 RegConn(SearchInput.FocusLost:Connect(function() 
 	SearchStroke.Color = Theme.Stroke
-	SavedData.LastSearch = SearchInput.Text
-	SaveConfiguration()
 end))
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
@@ -1728,9 +1726,52 @@ KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
 RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
-	if isDestroying then return end
+	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
+	
+	if KeybindCaptureConnection then 
+		KeybindCaptureConnection:Disconnect() 
+	end
+
+	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
+		if isDestroying then return end
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			if input.KeyCode == Enum.KeyCode.Escape then
+				IsBindingKey = false
+				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				ShowNotification("Keybind mapping canceled.", "Warning")
+				if KeybindCaptureConnection then 
+					KeybindCaptureConnection:Disconnect()
+					KeybindCaptureConnection = nil 
+				end
+				return
+			end
+			if input.KeyCode.Name ~= "Unknown" then
+				ToggleKeybind = input.KeyCode
+				IsBindingKey = false
+				SavedData.ToggleKeybind = ToggleKeybind.Name
+				SaveConfiguration()
+				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				ShowNotification("Keybind set to: " .. input.KeyCode.Name, "Success")
+				
+				BindToggleKey(ToggleKeybind)
+				
+				if KeybindCaptureConnection then 
+					KeybindCaptureConnection:Disconnect()
+					KeybindCaptureConnection = nil 
+				end
+			end
+		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			IsBindingKey = false
+			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+			ShowNotification("Keybind mapping canceled.", "Warning")
+			if KeybindCaptureConnection then 
+				KeybindCaptureConnection:Disconnect()
+				KeybindCaptureConnection = nil 
+			end
+		end
+	end))
 end)))
 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
