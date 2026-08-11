@@ -1457,7 +1457,7 @@ local function CreateScriptCard(data, renderParent)
 	table.insert(RegisteredScripts, scriptEntry)
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 local dbRefreshing = false
 
 local function LoadDynamicCatalog()
