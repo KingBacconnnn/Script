@@ -1519,7 +1519,7 @@ local function LoadDynamicCatalog()
 									if exSuccess then
 										ShowNotification("Auto-executed: " .. scriptData.Name, "Success")
 									else
-										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
+										ShowNotification("Wrong game/unsupported for: " .. scriptData.Name, "Error")
 										warn("Velox Hub Auto-Execute Error: ", tostring(err))
 									end
 								end
