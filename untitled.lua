@@ -32,6 +32,8 @@ local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
 local VirtualInputManager = Services.VirtualInputManager
+local VirtualUser = Services.VirtualUser
+local StarterGui = Services.StarterGui
 local RunService = Services.RunService
 local Stats = Services.Stats
 local CoreGui = Services.CoreGui
@@ -238,11 +240,12 @@ local function CreateDebounce(cooldown, func)
 	return function(...)
 		if isRunning then return end
 		isRunning = true
-		task.spawn(function(...)
-			pcall(func, ...)
+		local args = {...}
+		task.spawn(function()
+			pcall(func, unpack(args))
 			task.wait(cooldown)
 			isRunning = false
-		end, ...)
+		end)
 	end
 end
 
@@ -348,7 +351,7 @@ end
 local function GetRelativeTime(timestamp)
 	if type(timestamp) ~= "number" then return "Unknown" end
 	local diff = os.time() - timestamp
-	if diff < 0 then return "Unknown" end
+	if diff < 0 then return "Just now" end
 	local days = math.floor(diff / 86400)
 	if days == 0 then return "Today" end
 	if days == 1 then return "Yesterday" end
@@ -362,21 +365,31 @@ local function GetRelativeTime(timestamp)
 end
 
 local function GetSecureParent()
-	local success, target = pcall(function() return CoreGui end)
-	if success and target then return target end
-	
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
-	if huiSuccess and huiTarget and huiTarget ~= LocalPlayer:FindFirstChild("PlayerGui") then
+	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
 		return huiTarget
+	end
+	
+	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
+	if coreSuccess and coreTarget then
+		local testAccess = pcall(function()
+			local t = Instance.new("Folder")
+			t.Parent = coreTarget
+			t:Destroy()
+		end)
+		if testAccess then return coreTarget end
+	end
+	
+	if LocalPlayer then
+		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if playerGui then return playerGui end
 	end
 	
 	return nil
 end
 
 local TargetParent = GetSecureParent()
-if not TargetParent then
-	return
-end
+if not TargetParent then return end
 
 local existingGui = TargetParent:FindFirstChild(MainGuiName)
 if existingGui then pcall(function() existingGui:Destroy() end) end
@@ -581,58 +594,85 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
+local function FallbackSystemNotification(msg, title)
+	pcall(function()
+		if StarterGui and type(StarterGui.SetCore) == "function" then
+			StarterGui:SetCore("SendNotification", {
+				Title = title or "Velox Hub",
+				Text = tostring(msg),
+				Duration = NOTIF_DURATION
+			})
+		else
+			print("[Velox Hub Notification]: " .. tostring(msg))
+		end
+	end)
+end
+
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
+	
+	if not ToastContainer or not ToastContainer.Parent then
+		FallbackSystemNotification(msg, "Velox Hub - " .. tostring(notifType or "Notice"))
+		return
+	end
+
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
-	local wrapper = Instance.new("Frame", ToastContainer)
-	wrapper.Size = UDim2.new(1, 0, 0, 0)
-	wrapper.AutomaticSize = Enum.AutomaticSize.Y
-	wrapper.BackgroundTransparency = 1
-	wrapper.ZIndex = 2001
 
-	local box = Instance.new("Frame", wrapper)
-	box.Size = UDim2.new(1, 0, 0, 0)
-	box.AutomaticSize = Enum.AutomaticSize.Y
-	box.BackgroundColor3 = Theme.CardHover
-	box.Position = UDim2.new(1.2, 0, 0, 0)
-	box.ClipsDescendants = true
-	box.ZIndex = 2002
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-	Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
+	local success, err = pcall(function()
+		local wrapper = Instance.new("Frame", ToastContainer)
+		wrapper.Size = UDim2.new(1, 0, 0, 0)
+		wrapper.AutomaticSize = Enum.AutomaticSize.Y
+		wrapper.BackgroundTransparency = 1
+		wrapper.ZIndex = 2001
 
-	local pad = Instance.new("UIPadding", box)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
+		local box = Instance.new("Frame", wrapper)
+		box.Size = UDim2.new(1, 0, 0, 0)
+		box.AutomaticSize = Enum.AutomaticSize.Y
+		box.BackgroundColor3 = Theme.CardHover
+		box.Position = UDim2.new(1.2, 0, 0, 0)
+		box.ClipsDescendants = true
+		box.ZIndex = 2002
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+		Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
 
-	local indicator = Instance.new("Frame", box)
-	indicator.Size = UDim2.new(0, 4, 1, 0)
-	indicator.Position = UDim2.new(0, -12, 0, -10)
-	indicator.BackgroundColor3 = indicatorColor
-	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 2003
-	Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
+		local pad = Instance.new("UIPadding", box)
+		pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
+		pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
 
-	local txt = Instance.new("TextLabel", box)
-	txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
-	txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
-	txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
-	txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
-	txt.TextWrapped = true; txt.ZIndex = 2003
+		local indicator = Instance.new("Frame", box)
+		indicator.Size = UDim2.new(0, 4, 1, 0)
+		indicator.Position = UDim2.new(0, -12, 0, -10)
+		indicator.BackgroundColor3 = indicatorColor
+		indicator.BorderSizePixel = 0
+		indicator.ZIndex = 2003
+		Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
 
-	local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
-	introTween:Play()
+		local txt = Instance.new("TextLabel", box)
+		txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
+		txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
+		txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
+		txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
+		txt.TextWrapped = true; txt.ZIndex = 2003
 
-	task.delay(NOTIF_DURATION, function()
-		if not wrapper or not wrapper.Parent then return end
-		local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
-		outroTween:Play()
-		local conn
-		conn = outroTween.Completed:Connect(function()
-			if conn then conn:Disconnect() end
-			if wrapper and wrapper.Parent then wrapper:Destroy() end
+		local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+		introTween:Play()
+
+		task.delay(NOTIF_DURATION, function()
+			if not wrapper or not wrapper.Parent then return end
+			local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
+			outroTween:Play()
+			local conn
+			conn = outroTween.Completed:Connect(function()
+				if conn then conn:Disconnect() end
+				if wrapper and wrapper.Parent then wrapper:Destroy() end
+			end)
 		end)
 	end)
+
+	if not success then
+		FallbackSystemNotification(msg, "Velox Hub")
+	end
 end
 
 local ConfirmOverlay = Instance.new("Frame", ScreenGui)
@@ -879,7 +919,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.3 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.4 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -920,7 +960,7 @@ task.spawn(function()
 	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		local success, content, isReady = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then 
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
@@ -1011,7 +1051,7 @@ SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 
 SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-SearchInput.ClearTextOnFocus = true; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
+SearchInput.ClearTextOnFocus = false; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
 
 local ClearSearchBtn = Instance.new("TextButton", SearchContainer)
@@ -1026,10 +1066,7 @@ ClearSearchBtn.ZIndex = 53
 ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 
 RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
-
-RegConn(SearchInput.FocusLost:Connect(function() 
-	SearchStroke.Color = Theme.Stroke
-end))
+RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
@@ -1460,7 +1497,7 @@ local function CreateScriptCard(data, renderParent)
 			if GlobalExecutionCooldown then return end
 			GlobalExecutionCooldown = true
 			if type(loadstring) ~= "function" then
-				ShowNotification("Your executor does not support loadstring execution.", "Error")
+				ShowNotification("Executor does not support loadstring function.", "Error")
 				GlobalExecutionCooldown = false
 				return
 			end
@@ -1471,13 +1508,13 @@ local function CreateScriptCard(data, renderParent)
 				if not raw then 
 					ShowNotification("HTTP fetch failed.", "Error")
 				elseif string.find(raw, "404: Not Found") then 
-					ShowNotification("Source script returned a 404 error.", "Error")
+					ShowNotification("Source script returned 404 error.", "Error")
 				else
 					local success, err = ExecuteSandboxed(raw)
 					if success then
 						ShowNotification("Script executed: " .. exactName, "Success")
 					else
-						ShowNotification("Execution failed. See console.", "Error")
+						ShowNotification("Execution failed. Check console.", "Error")
 						warn("Velox Hub Execution Error: ", tostring(err))
 					end
 				end
@@ -1506,7 +1543,7 @@ local function LoadDynamicCatalog()
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 
-	ShowNotification("Fetching latest scripts...", "Info")
+	ShowNotification("Fetching latest script catalog...", "Info")
 	local savedScroll = ScriptsView.CanvasPosition
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
@@ -1530,6 +1567,12 @@ local function LoadDynamicCatalog()
 					end
 				end
 				table.clear(CardConnections)
+
+				for elem in pairs(InteractiveElements) do
+					if elem:IsDescendantOf(ScriptsView) then
+						InteractiveElements[elem] = nil
+					end
+				end
 
 				for _, child in ipairs(ScriptsView:GetChildren()) do
 					if child:IsA("TextButton") then
@@ -1590,7 +1633,7 @@ local function LoadDynamicCatalog()
 					if #autoQueue > 0 then
 						TrackTask(function()
 							if type(loadstring) ~= "function" then
-								ShowNotification("Auto-Execute failed: Executor lacks loadstring", "Error")
+								ShowNotification("Auto-Execute skipped: Missing loadstring", "Error")
 								return
 							end
 
@@ -1637,19 +1680,24 @@ local function LoadDynamicCatalog()
 					StatusDot.BackgroundColor3 = Theme.Success
 					StatusText.Text = "Online"
 					StatusText.TextColor3 = Theme.Success
-					ShowNotification("Catalog refreshed successfully.", "Success")
+					ShowNotification("Catalog loaded successfully.", "Success")
 				end
 			else
 				if not isDestroying and generation == CatalogGeneration then
-					EmptyStateMessage.Text = "Catalog parsing error. Check console."
+					EmptyStateMessage.Text = "Catalog JSON parsing failed."
 					StatusText.Text = "Data Error"
+					StatusDot.BackgroundColor3 = Theme.Error
+					StatusText.TextColor3 = Theme.Error
+					ShowNotification("JSON parse error on script catalog.", "Error")
 				end
 			end
 		else
 			if not isDestroying and generation == CatalogGeneration then
-				EmptyStateMessage.Text = "Unable to connect or unsupported executor API."
+				EmptyStateMessage.Text = "Unable to fetch catalog (HTTP Error or connection blocked)."
 				StatusText.Text = "Offline"
-				ShowNotification("Network error or unsupported executor request API.", "Error")
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Network request error while fetching catalog.", "Error")
 			end
 		end
 		if generation == CatalogGeneration then
@@ -1888,21 +1936,28 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 
+local function TriggerAntiAFKAction()
+	if VirtualUser then
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	elseif VirtualInputManager then
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+			task.wait(0.1)
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+		end)
+	end
+end
+
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
 		ShowNotification("Anti-AFK enabled.", "Success")
 		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-				if VirtualInputManager then
-					pcall(function()
-						VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
-						task.wait(0.1)
-						VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
-					end)
-				end
-			end))
+			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 		end
 		if getconnections then
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
@@ -1935,15 +1990,7 @@ end)
 
 if SavedData.Settings.AntiAFK then
 	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-			if VirtualInputManager then
-				pcall(function()
-					VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
-					task.wait(0.1)
-					VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
-				end)
-			end
-		end))
+		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 	end
 	if getconnections then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
@@ -1969,17 +2016,19 @@ pcall(function()
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 			local method = getnamecallmethod()
 			
-			if not checkcaller() and ScreenGui then
+			if not checkcaller() and ScreenGui and typeof(self) == "Instance" then
 				if method == "GetDescendants" or method == "GetChildren" then
 					local result = oldNamecall(self, ...)
-					local filtered = {}
-					for i = 1, #result do
-						local v = result[i]
-						if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-							table.insert(filtered, v)
+					if type(result) == "table" then
+						local filtered = {}
+						for i = 1, #result do
+							local v = result[i]
+							if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+								table.insert(filtered, v)
+							end
 						end
+						return filtered
 					end
-					return filtered
 				elseif method == "FindFirstChild" or method == "WaitForChild" then
 					local args = {...}
 					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
