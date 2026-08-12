@@ -354,7 +354,6 @@ end
 
 local TargetParent = GetSecureParent()
 if not TargetParent then
-	warn("[Velox Hub] Secure GUI container unavailable. Execution aborted to prevent game detection.")
 	return
 end
 
@@ -1503,31 +1502,42 @@ local function LoadDynamicCatalog()
 				if cleaned then SaveConfiguration() end
 				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
 				pcall(function() detachedFolder:Destroy() end)
-				local autoIndex = 0
+				
+				local autoQueue = {}
 				for _, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
 						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
-							autoIndex = autoIndex + 1
-							local delayTime = 0.2 * autoIndex
-							
-							local th = task.delay(delayTime, function()
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
-								if isDestroying then return end
-								if scrRaw and type(loadstring) == "function" then
-									local exSuccess, err = ExecuteSandboxed(scrRaw)
-									if exSuccess then
-										ShowNotification("Auto-executed: " .. scriptData.Name, "Success")
-									else
-										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
-										warn("Velox Hub Auto-Execute Error: ", tostring(err))
-									end
-								end
-							end)
-							table.insert(PendingTasks, th)
+						if auto and type(auto) == "table" and (auto.PlaceId == PlaceId or auto.PlaceId == 0) then
+							table.insert(autoQueue, scriptData)
 						end
 					end
 				end
+
+				if #autoQueue > 0 then
+					local th = task.spawn(function()
+						if type(loadstring) ~= "function" then
+							ShowNotification("Auto-Execute failed: Executor lacks loadstring", "Error")
+							return
+						end
+						for _, scriptData in ipairs(autoQueue) do
+							if isDestroying then return end
+							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+							if scrRaw then
+								local exSuccess, err = ExecuteSandboxed(scrRaw)
+								if exSuccess then
+									ShowNotification("Successfully auto-executed: " .. scriptData.Name, "Success")
+								else
+									ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
+								end
+							else
+								ShowNotification("Auto-Execute fetch failed: " .. scriptData.Name, "Error")
+							end
+							task.wait(0.5)
+						end
+					end)
+					table.insert(PendingTasks, th)
+				end
+
 				UpdateFilter()
 				task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
 				StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
@@ -1882,9 +1892,22 @@ TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
 TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+SectionHeaderLabel.Text = "Updates"
+MainPanel.Visible = true
+SearchRow.Visible = false
+FloatingBtn.Visible = false
 
-CacheInstanceAndDescendants(MainPanel)
-CacheInstanceAndDescendants(FloatingBtn)
-CacheInstanceAndDescendants(ConfirmOverlay)
+ShowNotification("Welcome to Velox Hub v3.3", "Success")
 
-ShowNotification("Velox Hub loaded securely.", "Success")
+if IsMobile then
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Fix scaling/position issues.", "rbxassetid://10709782230", "Reset", 1, true, function()
+		if isDestroying then return end
+		table.clear(OriginalCache)
+		CacheInstanceAndDescendants(MainPanel)
+		CacheInstanceAndDescendants(FloatingBtn)
+		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
+		ShowNotification("UI layout cache reset.", "Success")
+	end)
+end
