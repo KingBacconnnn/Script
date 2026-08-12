@@ -1,4 +1,4 @@
--- [[ Velox Hub Core Script - Full Implementation ]] --
+-- [[ Velox Hub Core Script - Full Implementation V3.5 ]] --
 -- Optimized, Asynchronous, and Sandboxed with Robust Fallbacks & Clear Notifications
 
 local rng = Random.new()
@@ -12,7 +12,7 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3"
+local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
@@ -326,6 +326,7 @@ local function LoadConfiguration()
 				end
 			end
 		else
+            print("[Velox Hub]: Failed to decode saved config. Generating a new fresh configuration file.")
 			SaveConfiguration()
 		end
 	end
@@ -987,7 +988,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.4 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.5 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1240,7 +1241,6 @@ local function UpdateFilter()
 			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then table.insert(matches, scr) end
-			if i % 50 == 0 then task.wait() end 
 		end
 		if filterVersion ~= currentVersion then return end
 		table.sort(matches, function(a, b)
@@ -1269,7 +1269,6 @@ local function UpdateFilter()
 		end)
 		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
-			if idx % 50 == 0 then task.wait() end 
 		end
 		if #RegisteredScripts > 0 then
 			local shouldShowEmpty = (#matches == 0)
@@ -1387,7 +1386,11 @@ local function CreateTab(name, index)
 		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
-		if name == "Scripts" then UpdateFilter() else if SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end end
+		if name == "Scripts" then 
+            UpdateFilter() 
+        elseif SearchInput and SearchInput.Parent then 
+            pcall(function() SearchInput:ReleaseFocus() end) 
+        end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
 			if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
@@ -1420,7 +1423,8 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.4.0 - Security & Stability Update", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
+CreateParagraph("v3.5.0 - Security & UX Stability Update", "• Added rich execution notifications and strict fallback GUIs for total UX clarity.\n• Re-engineered the auto-execute queue with real-time success and error tracking.\n• Implemented context-aware sandboxing so error logs explicitly name the failed script.\n• Cleaned up internal connection logic to eliminate silent memory leaks.", ChangelogsView)
+CreateParagraph("v3.4.0 - Performance Overhaul", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1428,7 +1432,7 @@ local function RefreshAllCardStates()
 	end
 end
 
-local function ExecuteSandboxed(code)
+local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, tostring(compileErr) end
 	
@@ -1436,8 +1440,8 @@ local function ExecuteSandboxed(code)
 	task.spawn(function()
 		local success, err = pcall(chunk)
 		if not success and not isDestroying then
-			warn("[Velox Runtime Error]: " .. tostring(err))
-			ShowNotification("An error occurred inside the script while running.", "Error")
+			warn("[Velox Runtime Error - " .. tostring(scriptName) .. "]: " .. tostring(err))
+			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		end
 	end)
 	
@@ -1550,7 +1554,7 @@ local function CreateScriptCard(data, renderParent)
 	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if SavedData.Favorites[exactName] then
-			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Info")
+			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
 		else
 			SavedData.Favorites[exactName] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
@@ -1571,7 +1575,7 @@ local function CreateScriptCard(data, renderParent)
 		if isDestroying then return end
 		local function executeScript()
 			if type(loadstring) ~= "function" then
-				ShowNotification("Your executor does not support script execution (missing loadstring).", "Error")
+				ShowNotification("Execution disabled: 'loadstring' is missing or blocked by your executor.", "Error")
 				return
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
@@ -1583,11 +1587,11 @@ local function CreateScriptCard(data, renderParent)
 				elseif string.find(raw, "404: Not Found") then 
 					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
-					local success, err = ExecuteSandboxed(raw)
+					local success, err = ExecuteSandboxed(raw, exactName)
 					if success then
-						ShowNotification("Successfully ran: " .. exactName, "Execution")
+						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					else
-						ShowNotification("Execution error. Check your console for details.", "Error")
+						ShowNotification("Failed to load script. Check the console for details.", "Error")
 						warn("[Velox Hub Execution Error - " .. exactName .. "]: " .. tostring(err))
 					end
 				end
@@ -1723,7 +1727,7 @@ local function LoadDynamicCatalog()
 									if string.find(scrRaw, "404: Not Found") then
 										table.insert(failList, scriptData.Name)
 									else
-										local exSuccess, err = ExecuteSandboxed(scrRaw)
+										local exSuccess, err = ExecuteSandboxed(scrRaw, scriptData.Name)
 										if exSuccess then
 											table.insert(successList, scriptData.Name)
 										else
@@ -1969,7 +1973,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
-	ShowNotification("Press any key to bind (Press Escape to cancel).", "Info")
+	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
 	
 	if KeybindCaptureConnection then 
 		KeybindCaptureConnection:Disconnect() 
@@ -2034,21 +2038,22 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
-		ShowNotification("Anti-AFK activated successfully.", "Success")
+		ShowNotification("Anti-AFK system engaged.", "Success")
 		if not AfkConnections.Idled then
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 		end
 		if getconnections then
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 				if type(conn) == "table" and conn.Disable then
-					conn:Disable(); AfkConnections[conn] = conn
+					conn:Disable()
+                    table.insert(AfkConnections, conn)
 				end
 			end
 		end
 	else
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
-		for conn, _ in pairs(AfkConnections) do
+		for _, conn in ipairs(AfkConnections) do
 			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
 		end
 		table.clear(AfkConnections)
@@ -2074,7 +2079,8 @@ if SavedData.Settings.AntiAFK then
 	if getconnections then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 			if type(conn) == "table" and conn.Disable then
-				conn:Disable(); AfkConnections[conn] = conn
+				conn:Disable()
+                table.insert(AfkConnections, conn)
 			end
 		end
 	end
