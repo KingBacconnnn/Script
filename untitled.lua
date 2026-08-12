@@ -1,3 +1,6 @@
+-- [[ Velox Hub Core Script - Full Implementation ]] --
+-- Optimized, Asynchronous, and Sandboxed with Robust Fallbacks & Clear Notifications
+
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -87,7 +90,6 @@ local InteractiveElements = setmetatable({}, { __mode = "k" })
 local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
-local GlobalExecutionCooldown = false
 local IsBindingKey = false
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
@@ -145,11 +147,11 @@ end
 
 local function TrackTask(fn)
 	local thread
-	thread = task.defer(function()
+	thread = task.spawn(function()
 		local ok, err = pcall(fn)
 		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
-			warn("Velox task error:", tostring(err))
+			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
 	PendingTasks[thread] = true
@@ -591,6 +593,7 @@ local function ToggleUI()
 end
 
 local ToastContainer = Instance.new("Frame", ScreenGui)
+ToastContainer.Name = "ToastContainer"
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
 ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
 ToastContainer.BackgroundTransparency = 1
@@ -603,17 +606,18 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
+-- [[ Understandable Fallback & Notification System ]]
 local function EmergencyFallbackNotification(msg, title)
-	print("[Velox Hub Fallback - " .. tostring(title or "Notice") .. "]: " .. tostring(msg))
 	pcall(function()
 		if StarterGui and type(StarterGui.SetCore) == "function" then
 			StarterGui:SetCore("SendNotification", {
-				Title = title or "Velox Hub",
+				Title = title or "Velox Hub Notice",
 				Text = tostring(msg),
 				Duration = NOTIF_DURATION
 			})
 		end
 	end)
+	print("[Velox Hub Fallback - " .. tostring(title or "Notice") .. "]: " .. tostring(msg))
 end
 
 local function StandaloneBannerNotification(msg, notifType)
@@ -623,7 +627,7 @@ local function StandaloneBannerNotification(msg, notifType)
 		return
 	end
 
-	pcall(function()
+	local success = pcall(function()
 		local bannerGui = Instance.new("ScreenGui")
 		bannerGui.Name = "VeloxBanner_" .. GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
@@ -646,7 +650,7 @@ local function StandaloneBannerNotification(msg, notifType)
 		txt.Size = UDim2.new(1, -20, 1, 0)
 		txt.Position = UDim2.new(0, 10, 0, 0)
 		txt.BackgroundTransparency = 1
-		txt.Text = "[" .. tostring(notifType or "Notice") .. "] " .. tostring(msg)
+		txt.Text = tostring(msg)
 		txt.TextColor3 = Theme.TextPrimary
 		txt.Font = Enum.Font.GothamMedium
 		txt.TextSize = IsMobile and 11 or 13
@@ -666,6 +670,10 @@ local function StandaloneBannerNotification(msg, notifType)
 			end)
 		end)
 	end)
+
+	if not success then
+		EmergencyFallbackNotification(msg, notifType)
+	end
 end
 
 local function ShowNotification(msg, notifType)
@@ -773,7 +781,7 @@ ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Center; ConfirmTitle.LayoutOrd
 
 local ConfirmMessage = Instance.new("TextLabel", ConfirmBox)
 ConfirmMessage.Size = UDim2.new(1, 0, 0, 18); ConfirmMessage.BackgroundTransparency = 1
-ConfirmMessage.Text = "Are you sure you want to execute this script?"
+ConfirmMessage.Text = "Are you sure you want to run this script?"
 ConfirmMessage.TextColor3 = Theme.TextSecondary; ConfirmMessage.Font = Enum.Font.Gotham
 ConfirmMessage.TextSize = IsMobile and 11 or 12; ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Center
 ConfirmMessage.TextWrapped = true; ConfirmMessage.LayoutOrder = 2; ConfirmMessage.ZIndex = 402
@@ -1292,8 +1300,10 @@ RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
 		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		ShowNotification("Showing your favorite scripts only.", "Info")
 	else
 		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		ShowNotification("Showing all scripts.", "Info")
 	end
 	UpdateFilter()
 end)))
@@ -1312,6 +1322,7 @@ for _, opt in ipairs(SortOptions) do
 			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
 		end
 		btn.TextColor3 = Theme.Accent
+		ShowNotification("Sorted by: " .. opt, "Info")
 		UpdateFilter()
 	end))
 end
@@ -1409,7 +1420,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.4.0 - Security & Stability Update", "• Implemented dynamic metatable hooks to hide GUI from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe sandbox environment.\n• Removed global environment vulnerabilities and memory leaks.", ChangelogsView)
+CreateParagraph("v3.4.0 - Security & Stability Update", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1420,11 +1431,17 @@ end
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, tostring(compileErr) end
-	local success, err = pcall(chunk)
-	if not success then
-		return false, tostring(err)
-	end
-	return true, "Execution completed successfully"
+	
+	-- Run asynchronously so heavy infinite loops/waits never freeze the hub
+	task.spawn(function()
+		local success, err = pcall(chunk)
+		if not success and not isDestroying then
+			warn("[Velox Runtime Error]: " .. tostring(err))
+			ShowNotification("An error occurred inside the script while running.", "Error")
+		end
+	end)
+	
+	return true, "Script executed successfully"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1533,9 +1550,9 @@ local function CreateScriptCard(data, renderParent)
 	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if SavedData.Favorites[exactName] then
-			SavedData.Favorites[exactName] = nil; ShowNotification("Favorite removed: " .. exactName, "Info")
+			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Info")
 		else
-			SavedData.Favorites[exactName] = true; ShowNotification("Favorite added: " .. exactName, "Success")
+			SavedData.Favorites[exactName] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
@@ -1543,45 +1560,41 @@ local function CreateScriptCard(data, renderParent)
 	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if SavedData.AutoExecutes[exactName] then
-			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Auto-Execute disabled: " .. exactName, "Warning")
+			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
 		else
-			SavedData.AutoExecutes[exactName] = {PlaceId = PlaceId}; ShowNotification("Auto-Execute enabled: " .. exactName, "Success")
+			SavedData.AutoExecutes[exactName] = {PlaceId = PlaceId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 
 	RegCardConn(card.Activated:Connect(function()
-		if isDestroying or GlobalExecutionCooldown then return end
+		if isDestroying then return end
 		local function executeScript()
-			if GlobalExecutionCooldown then return end
-			GlobalExecutionCooldown = true
 			if type(loadstring) ~= "function" then
-				ShowNotification("Executor does not support loadstring function.", "Error")
-				GlobalExecutionCooldown = false
+				ShowNotification("Your executor does not support script execution (missing loadstring).", "Error")
 				return
 			end
-			titleLbl.Text = "Executing..."; titleLbl.TextColor3 = Theme.Accent
+			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
 				local raw = FetchWithRetry(data.RawUrl, 2, 1)
 				if isDestroying then return end
 				if not raw then 
-					ShowNotification("HTTP fetch failed.", "Error")
+					ShowNotification("Failed to download script. Please check your connection.", "Error")
 				elseif string.find(raw, "404: Not Found") then 
-					ShowNotification("Source script returned 404 error.", "Error")
+					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
 					local success, err = ExecuteSandboxed(raw)
 					if success then
-						ShowNotification("Script executed: " .. exactName, "Execution")
+						ShowNotification("Successfully ran: " .. exactName, "Execution")
 					else
-						ShowNotification("Execution failed. Check console.", "Error")
-						warn("Velox Hub Execution Error [" .. exactName .. "]: " .. tostring(err))
+						ShowNotification("Execution error. Check your console for details.", "Error")
+						warn("[Velox Hub Execution Error - " .. exactName .. "]: " .. tostring(err))
 					end
 				end
 				
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
-				GlobalExecutionCooldown = false
 			end)
 		end
 		if SavedData.AutoExecutes[exactName] ~= nil then executeScript() else OpenConfirmDialog(exactName, executeScript) end
@@ -1675,6 +1688,7 @@ local function LoadDynamicCatalog()
 				end
 				detachedFolder:Destroy()
 
+				-- Improved Auto-Execute Queue with Understandable Notifications
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
 
@@ -1692,11 +1706,13 @@ local function LoadDynamicCatalog()
 					if #autoQueue > 0 then
 						TrackTask(function()
 							if type(loadstring) ~= "function" then
-								ShowNotification("Auto-Execute skipped: Missing loadstring", "Error")
+								ShowNotification("Auto-execute skipped: Your executor lacks loadstring support.", "Error")
 								return
 							end
 
-							local successCount = 0
+							local successList = {}
+							local failList = {}
+
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
@@ -1705,26 +1721,26 @@ local function LoadDynamicCatalog()
 
 								if scrRaw then
 									if string.find(scrRaw, "404: Not Found") then
-										warn("Velox Hub: Skipping Auto-Execute for " .. scriptData.Name .. " (404 Not Found)")
-										ShowNotification("Auto-Execute 404: " .. scriptData.Name, "Warning")
+										table.insert(failList, scriptData.Name)
 									else
 										local exSuccess, err = ExecuteSandboxed(scrRaw)
 										if exSuccess then
-											successCount = successCount + 1
+											table.insert(successList, scriptData.Name)
 										else
-											warn("Velox Hub: Auto-Execute compile failed for " .. scriptData.Name .. " -> " .. tostring(err))
-											ShowNotification("Auto-Execute error: " .. scriptData.Name, "Error")
+											table.insert(failList, scriptData.Name)
 										end
 									end
 								else
-									warn("Velox Hub: Auto-Execute fetch failed for " .. scriptData.Name)
-									ShowNotification("Auto-Execute network error: " .. scriptData.Name, "Error")
+									table.insert(failList, scriptData.Name)
 								end
 								task.wait(0.2)
 							end
 							
-							if successCount > 0 then
-								ShowNotification("Auto-executed " .. tostring(successCount) .. " scripts.", "Success")
+							if #successList > 0 then
+								ShowNotification("Auto-executed successfully: " .. table.concat(successList, ", "), "Success")
+							end
+							if #failList > 0 then
+								ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning")
 							end
 						end)
 					end
@@ -1742,24 +1758,24 @@ local function LoadDynamicCatalog()
 					StatusDot.BackgroundColor3 = Theme.Success
 					StatusText.Text = "Online"
 					StatusText.TextColor3 = Theme.Success
-					ShowNotification("Catalog loaded successfully.", "Success")
+					ShowNotification("Script catalog loaded successfully!", "Success")
 				end
 			else
 				if not isDestroying and generation == CatalogGeneration then
-					EmptyStateMessage.Text = "Catalog JSON parsing failed."
+					EmptyStateMessage.Text = "Failed to parse catalog data format."
 					StatusText.Text = "Data Error"
 					StatusDot.BackgroundColor3 = Theme.Error
 					StatusText.TextColor3 = Theme.Error
-					ShowNotification("JSON parse error on script catalog.", "Error")
+					ShowNotification("Catalog data format error.", "Error")
 				end
 			end
 		else
 			if not isDestroying and generation == CatalogGeneration then
-				EmptyStateMessage.Text = "Unable to fetch catalog (HTTP Error or connection blocked)."
+				EmptyStateMessage.Text = "Unable to reach script catalog server."
 				StatusText.Text = "Offline"
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Network request error while fetching catalog.", "Error")
+				ShowNotification("Could not connect to the script catalog server.", "Error")
 			end
 		end
 		if generation == CatalogGeneration then
@@ -1953,6 +1969,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
+	ShowNotification("Press any key to bind (Press Escape to cancel).", "Info")
 	
 	if KeybindCaptureConnection then 
 		KeybindCaptureConnection:Disconnect() 
@@ -1977,7 +1994,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				SavedData.ToggleKeybind = ToggleKeybind.Name
 				SaveConfiguration()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-				ShowNotification("Keybind set to: " .. input.KeyCode.Name, "Success")
+				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
 				
 				BindToggleKey(ToggleKeybind)
 				
@@ -2013,11 +2030,11 @@ local function TriggerAntiAFKAction()
 	end
 end
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
-		ShowNotification("Anti-AFK enabled.", "Success")
+		ShowNotification("Anti-AFK activated successfully.", "Success")
 		if not AfkConnections.Idled then
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 		end
@@ -2029,7 +2046,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", 
 			end
 		end
 	else
-		ShowNotification("Anti-AFK disabled.", "Warning")
+		ShowNotification("Anti-AFK deactivated.", "Warning")
 		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
 		for conn, _ in pairs(AfkConnections) do
 			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
@@ -2040,11 +2057,11 @@ end)
 
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Forces catalog update.", "rbxassetid://10709782230", "Refresh", 1, false, function()
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10709782230", "Refresh", 1, false, function()
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "rbxassetid://10709782230", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709782230", "Unload", 2, true, function()
 	ShowNotification("Unloading Velox Hub...", "Info")
 	task.wait(0.3)
 	CloseUI()
@@ -2072,6 +2089,7 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
+-- Optimized Metatable Hook to protect GUI without heavy performance lag
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
@@ -2079,34 +2097,25 @@ pcall(function()
 			local method = getnamecallmethod()
 			
 			if not checkcaller() and ScreenGui and typeof(self) == "Instance" then
-				if method == "GetDescendants" or method == "GetChildren" then
-					local result = oldNamecall(self, ...)
-					if type(result) == "table" then
-						local filtered = {}
-						for i = 1, #result do
-							local v = result[i]
-							if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-								table.insert(filtered, v)
+				if self == TargetParent then
+					if method == "GetDescendants" or method == "GetChildren" then
+						local result = oldNamecall(self, ...)
+						if type(result) == "table" then
+							local filtered = {}
+							for i = 1, #result do
+								local v = result[i]
+								if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+									table.insert(filtered, v)
+								end
 							end
+							return filtered
 						end
-						return filtered
+					elseif method == "FindFirstChild" or method == "WaitForChild" then
+						local args = {...}
+						if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+							return method == "WaitForChild" and oldNamecall(self, GenerateRandomString(20), args[2] or 1) or nil
+						end
 					end
-				elseif method == "FindFirstChild" then
-					local args = {...}
-					if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-						return nil
-					end
-				elseif method == "WaitForChild" then
-					local args = {...}
-					if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-						return oldNamecall(self, GenerateRandomString(20), args[2] or 1)
-					end
-				elseif method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
-					local result = oldNamecall(self, ...)
-					if result == ScreenGui or result == FloatingBtn then 
-						return nil 
-					end
-					return result
 				end
 			end
 			return oldNamecall(self, ...)
@@ -2123,17 +2132,17 @@ MainPanel.Visible = true
 SearchRow.Visible = false
 FloatingBtn.Visible = false
 
-ShowNotification("Welcome to Velox Hub", "Success")
+ShowNotification("Velox Hub is ready for use!", "Success")
 
 if IsMobile then
 	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Fix scaling/position issues.", "rbxassetid://10709782230", "Reset", 1, true, function()
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10709782230", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
 		CacheInstanceAndDescendants(MainPanel)
 		CacheInstanceAndDescendants(FloatingBtn)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		ShowNotification("UI layout cache reset.", "Success")
+		ShowNotification("UI layout cache successfully reset.", "Success")
 	end)
 end
