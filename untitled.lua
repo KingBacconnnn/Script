@@ -11,6 +11,7 @@ end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
+local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
 if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
@@ -67,6 +68,8 @@ local Theme = {
 	Error = Color3.fromRGB(239, 68, 68),
 	Warning = Color3.fromRGB(245, 158, 11),
 	Info = Color3.fromRGB(56, 189, 248),
+	System = Color3.fromRGB(168, 85, 247),
+	Execution = Color3.fromRGB(236, 72, 153),
 	Stroke = Color3.fromRGB(51, 65, 85),
 	ToggleOff = Color3.fromRGB(71, 85, 105)
 }
@@ -142,9 +145,9 @@ end
 
 local function TrackTask(fn)
 	local thread
-	thread = task.spawn(function()
+	thread = task.defer(function()
 		local ok, err = pcall(fn)
-		PendingTasks[coroutine.running()] = nil
+		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
 			warn("Velox task error:", tostring(err))
 		end
@@ -330,7 +333,13 @@ LoadConfiguration()
 local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
-		if reqSuccess and reqResult and reqResult.StatusCode == 200 then return reqResult.Body end
+		if reqSuccess and reqResult then
+			local body = reqResult.Body or reqResult.body or reqResult.Response
+			local status = reqResult.StatusCode or reqResult.Status or reqResult.status_code
+			if (status == 200 or status == nil) and body then
+				return body
+			end
+		end
 	end
 	local success, result = pcall(function() return game:HttpGet(url) end)
 	if success and result then return result end
@@ -461,7 +470,7 @@ RegConn(UserInputService.WindowFocusReleased:Connect(function()
 end))
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = "VeloxFloatingIcon"
+FloatingBtn.Name = FloatBtnName
 FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
@@ -594,7 +603,8 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
-local function FallbackSystemNotification(msg, title)
+local function EmergencyFallbackNotification(msg, title)
+	print("[Velox Hub Fallback - " .. tostring(title or "Notice") .. "]: " .. tostring(msg))
 	pcall(function()
 		if StarterGui and type(StarterGui.SetCore) == "function" then
 			StarterGui:SetCore("SendNotification", {
@@ -602,24 +612,74 @@ local function FallbackSystemNotification(msg, title)
 				Text = tostring(msg),
 				Duration = NOTIF_DURATION
 			})
-		else
-			print("[Velox Hub Notification]: " .. tostring(msg))
 		end
+	end)
+end
+
+local function StandaloneBannerNotification(msg, notifType)
+	local parent = GetSecureParent()
+	if not parent then
+		EmergencyFallbackNotification(msg, notifType)
+		return
+	end
+
+	pcall(function()
+		local bannerGui = Instance.new("ScreenGui")
+		bannerGui.Name = "VeloxBanner_" .. GenerateRandomString(8)
+		bannerGui.DisplayOrder = 9999
+		bannerGui.ResetOnSpawn = false
+		bannerGui.Parent = parent
+
+		local frame = Instance.new("Frame", bannerGui)
+		frame.Size = UDim2.new(0, IsMobile and 260 or 340, 0, 45)
+		frame.Position = UDim2.new(0.5, 0, 0, -60)
+		frame.AnchorPoint = Vector2.new(0.5, 0)
+		frame.BackgroundColor3 = Theme.BackgroundSecondary
+		frame.BorderSizePixel = 0
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+		
+		local stroke = Instance.new("UIStroke", frame)
+		stroke.Color = Theme[notifType] or Theme.Info
+		stroke.Thickness = 1.5
+
+		local txt = Instance.new("TextLabel", frame)
+		txt.Size = UDim2.new(1, -20, 1, 0)
+		txt.Position = UDim2.new(0, 10, 0, 0)
+		txt.BackgroundTransparency = 1
+		txt.Text = "[" .. tostring(notifType or "Notice") .. "] " .. tostring(msg)
+		txt.TextColor3 = Theme.TextPrimary
+		txt.Font = Enum.Font.GothamMedium
+		txt.TextSize = IsMobile and 11 or 13
+		txt.TextWrapped = true
+
+		TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.5, 0, 0, 20)
+		}):Play()
+
+		task.delay(NOTIF_DURATION, function()
+			local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.5, 0, 0, -60)
+			})
+			outro:Play()
+			outro.Completed:Connect(function()
+				bannerGui:Destroy()
+			end)
+		end)
 	end)
 end
 
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
 	
-	if not ToastContainer or not ToastContainer.Parent then
-		FallbackSystemNotification(msg, "Velox Hub - " .. tostring(notifType or "Notice"))
-		return
-	end
-
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
 
-	local success, err = pcall(function()
+	if not ToastContainer or not ToastContainer.Parent then
+		StandaloneBannerNotification(msg, nType)
+		return
+	end
+
+	local success = pcall(function()
 		local wrapper = Instance.new("Frame", ToastContainer)
 		wrapper.Size = UDim2.new(1, 0, 0, 0)
 		wrapper.AutomaticSize = Enum.AutomaticSize.Y
@@ -671,7 +731,7 @@ local function ShowNotification(msg, notifType)
 	end)
 
 	if not success then
-		FallbackSystemNotification(msg, "Velox Hub")
+		StandaloneBannerNotification(msg, nType)
 	end
 end
 
@@ -1136,7 +1196,6 @@ local function UpdateFilter()
 	filterVersion = filterVersion + 1
 	local currentVersion = filterVersion
 	task.defer(function()
-		local savedScroll = ScriptsView.CanvasPosition
 		local queryText = SearchInput.Text
 		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1")) 
 		local words = {}
@@ -1211,7 +1270,9 @@ local function UpdateFilter()
 			end
 			if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		end
-		if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
+		if ScriptsView and ScriptsView.Parent and query ~= "" then
+			ScriptsView.CanvasPosition = Vector2.new(0, 0)
+		end
 	end)
 end
 
@@ -1359,13 +1420,11 @@ end
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, tostring(compileErr) end
-	task.spawn(function()
-		local success, err = pcall(chunk)
-		if not success then
-			warn("Velox Hub Execution Error: ", tostring(err))
-		end
-	end)
-	return true, "Execution started successfully"
+	local success, err = pcall(chunk)
+	if not success then
+		return false, tostring(err)
+	end
+	return true, "Execution completed successfully"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1512,10 +1571,10 @@ local function CreateScriptCard(data, renderParent)
 				else
 					local success, err = ExecuteSandboxed(raw)
 					if success then
-						ShowNotification("Script executed: " .. exactName, "Success")
+						ShowNotification("Script executed: " .. exactName, "Execution")
 					else
 						ShowNotification("Execution failed. Check console.", "Error")
-						warn("Velox Hub Execution Error: ", tostring(err))
+						warn("Velox Hub Execution Error [" .. exactName .. "]: " .. tostring(err))
 					end
 				end
 				
@@ -1540,10 +1599,10 @@ local function LoadDynamicCatalog()
 	if dbRefreshing or isDestroying then return end
 
 	dbRefreshing = true
-	CatalogGeneration += 1
+	CatalogGeneration = CatalogGeneration + 1
 	local generation = CatalogGeneration
 
-	ShowNotification("Fetching latest script catalog...", "Info")
+	ShowNotification("Fetching latest script catalog...", "System")
 	local savedScroll = ScriptsView.CanvasPosition
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
@@ -1647,16 +1706,19 @@ local function LoadDynamicCatalog()
 								if scrRaw then
 									if string.find(scrRaw, "404: Not Found") then
 										warn("Velox Hub: Skipping Auto-Execute for " .. scriptData.Name .. " (404 Not Found)")
+										ShowNotification("Auto-Execute 404: " .. scriptData.Name, "Warning")
 									else
 										local exSuccess, err = ExecuteSandboxed(scrRaw)
 										if exSuccess then
 											successCount = successCount + 1
 										else
-											warn("Velox Hub: Auto-Execute compile failed for " .. scriptData.Name)
+											warn("Velox Hub: Auto-Execute compile failed for " .. scriptData.Name .. " -> " .. tostring(err))
+											ShowNotification("Auto-Execute error: " .. scriptData.Name, "Error")
 										end
 									end
 								else
 									warn("Velox Hub: Auto-Execute fetch failed for " .. scriptData.Name)
+									ShowNotification("Auto-Execute network error: " .. scriptData.Name, "Error")
 								end
 								task.wait(0.2)
 							end
@@ -2029,10 +2091,15 @@ pcall(function()
 						end
 						return filtered
 					end
-				elseif method == "FindFirstChild" or method == "WaitForChild" then
+				elseif method == "FindFirstChild" then
 					local args = {...}
-					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
+					if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
 						return nil
+					end
+				elseif method == "WaitForChild" then
+					local args = {...}
+					if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+						return oldNamecall(self, GenerateRandomString(20), args[2] or 1)
 					end
 				elseif method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
 					local result = oldNamecall(self, ...)
