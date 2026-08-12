@@ -1,6 +1,3 @@
--- [[ Velox Hub Core Script - Full Implementation V3.5 (Patched) ]] --
--- Optimized, Asynchronous, Sandboxed, Auto-Execute Fixed & Memory Hardened
-
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -281,8 +278,11 @@ local function SaveConfiguration()
 		}
 		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
 		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" and v.PlaceId then 
-				cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } 
+			if type(v) == "table" then 
+				cleanData.AutoExecutes[tostring(k)] = { 
+					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+					GameId = tonumber(v.GameId) or game.GameId 
+				} 
 			end
 		end
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
@@ -316,8 +316,11 @@ local function LoadConfiguration()
 			end
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
-					if type(k) == "string" and type(v) == "table" and type(v.PlaceId) == "number" then
-						SavedData.AutoExecutes[tostring(k)] = { PlaceId = v.PlaceId }
+					if type(k) == "string" and type(v) == "table" then
+						SavedData.AutoExecutes[tostring(k)] = { 
+							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
+							GameId = type(v.GameId) == "number" and v.GameId or nil
+						}
 					end
 				end
 			end
@@ -1433,7 +1436,6 @@ local function RefreshAllCardStates()
 	end
 end
 
--- Synchronous Sandboxed Execution Handler with Precise Error Catching
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then 
@@ -1547,6 +1549,8 @@ local function CreateScriptCard(data, renderParent)
 		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1
 	}
 
+	local innerActionTime = 0
+
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[exactName]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
@@ -1557,6 +1561,7 @@ local function CreateScriptCard(data, renderParent)
 
 	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
+		innerActionTime = tick()
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
 		else
@@ -1567,16 +1572,20 @@ local function CreateScriptCard(data, renderParent)
 
 	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
+		innerActionTime = tick()
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
 		else
-			SavedData.AutoExecutes[exactName] = {PlaceId = PlaceId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
+			SavedData.AutoExecutes[exactName] = {PlaceId = game.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 
 	RegCardConn(card.Activated:Connect(function()
 		if isDestroying then return end
+		
+		if tick() - innerActionTime < 0.2 then return end
+
 		local function executeScript()
 			if type(loadstring) ~= "function" then
 				ShowNotification("Execution disabled: 'loadstring' is missing or blocked by your executor.", "Error")
@@ -1677,7 +1686,6 @@ local function LoadDynamicCatalog()
 					end
 				end
 
-				-- Clean up auto-execute data for removed catalog scripts
 				local cleaned = false
 				for k in pairs(SavedData.AutoExecutes) do
 					if not vMap[k] then
@@ -1694,7 +1702,6 @@ local function LoadDynamicCatalog()
 				end
 				detachedFolder:Destroy()
 
-				-- Robust Auto-Execute Logic Fix
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
 
@@ -1702,9 +1709,17 @@ local function LoadDynamicCatalog()
 					for _, scriptData in ipairs(parsed) do
 						if type(scriptData) == "table" and scriptData.Name then
 							local auto = SavedData.AutoExecutes[scriptData.Name]
-							if auto and type(auto) == "table"
-								and (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId) then
-								table.insert(autoQueue, scriptData)
+							if auto and type(auto) == "table" then
+								local isValid = false
+								if auto.GameId and auto.GameId ~= 0 then
+									isValid = (auto.GameId == game.GameId)
+								else
+									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
+								end
+								
+								if isValid then
+									table.insert(autoQueue, scriptData)
+								end
 							end
 						end
 					end
@@ -2095,7 +2110,6 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
--- Safe Metatable Hook to protect GUI without crashing threads
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
