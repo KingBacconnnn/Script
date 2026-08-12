@@ -1,5 +1,5 @@
--- [[ Velox Hub Core Script - Full Implementation V3.5 ]] --
--- Optimized, Asynchronous, and Sandboxed with Robust Fallbacks & Clear Notifications
+-- [[ Velox Hub Core Script - Full Implementation V3.5 (Patched) ]] --
+-- Optimized, Asynchronous, Sandboxed, Auto-Execute Fixed & Memory Hardened
 
 local rng = Random.new()
 local function GenerateRandomString(len)
@@ -55,7 +55,7 @@ local protectgui = protectgui or (syn and syn.protect_gui) or function(...) retu
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
 local write_file = writefile or function() end
-local read_file = readfile or function() return "" end
+local read_file = readfile or function() end
 local is_file = isfile or function() return false end
 local del_file = delfile or function() end
 
@@ -281,7 +281,9 @@ local function SaveConfiguration()
 		}
 		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
 		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" and v.PlaceId then cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } end
+			if type(v) == "table" and v.PlaceId then 
+				cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } 
+			end
 		end
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
 		if success then 
@@ -315,7 +317,7 @@ local function LoadConfiguration()
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
 					if type(k) == "string" and type(v) == "table" and type(v.PlaceId) == "number" then
-						SavedData.AutoExecutes[tostring(k)] = {PlaceId = v.PlaceId}
+						SavedData.AutoExecutes[tostring(k)] = { PlaceId = v.PlaceId }
 					end
 				end
 			end
@@ -326,7 +328,7 @@ local function LoadConfiguration()
 				end
 			end
 		else
-            print("[Velox Hub]: Failed to decode saved config. Generating a new fresh configuration file.")
+			print("[Velox Hub]: Failed to decode saved config. Generating fresh configuration file.")
 			SaveConfiguration()
 		end
 	end
@@ -607,7 +609,6 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
--- [[ Understandable Fallback & Notification System ]]
 local function EmergencyFallbackNotification(msg, title)
 	pcall(function()
 		if StarterGui and type(StarterGui.SetCore) == "function" then
@@ -1387,10 +1388,10 @@ local function CreateTab(name, index)
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then 
-            UpdateFilter() 
-        elseif SearchInput and SearchInput.Parent then 
-            pcall(function() SearchInput:ReleaseFocus() end) 
-        end
+			UpdateFilter() 
+		elseif SearchInput and SearchInput.Parent then 
+			pcall(function() SearchInput:ReleaseFocus() end) 
+		end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
 			if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
@@ -1423,7 +1424,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.5.0 - Security & UX Stability Update", "• Added rich execution notifications and strict fallback GUIs for total UX clarity.\n• Re-engineered the auto-execute queue with real-time success and error tracking.\n• Implemented context-aware sandboxing so error logs explicitly name the failed script.\n• Cleaned up internal connection logic to eliminate silent memory leaks.", ChangelogsView)
+CreateParagraph("v3.5.0 - Security & UX Stability Update", "• Fixed Auto-Execute queue processing to execute scripts seamlessly on start.\n• Added rich execution notifications and strict fallback GUIs for total UX clarity.\n• Implemented context-aware sandboxing so error logs explicitly name failed scripts.\n• Hardened namecall metatable hook against client crashes.", ChangelogsView)
 CreateParagraph("v3.4.0 - Performance Overhaul", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
 
 local function RefreshAllCardStates()
@@ -1432,18 +1433,21 @@ local function RefreshAllCardStates()
 	end
 end
 
+-- Synchronous Sandboxed Execution Handler with Precise Error Catching
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code)
-	if not chunk then return false, tostring(compileErr) end
+	if not chunk then 
+		warn("[Velox Compile Error - " .. tostring(scriptName) .. "]: " .. tostring(compileErr))
+		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		return false, tostring(compileErr) 
+	end
 	
-	-- Run asynchronously so heavy infinite loops/waits never freeze the hub
-	task.spawn(function()
-		local success, err = pcall(chunk)
-		if not success and not isDestroying then
-			warn("[Velox Runtime Error - " .. tostring(scriptName) .. "]: " .. tostring(err))
-			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		end
-	end)
+	local success, runtimeErr = pcall(chunk)
+	if not success then
+		warn("[Velox Runtime Error - " .. tostring(scriptName) .. "]: " .. tostring(runtimeErr))
+		ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		return false, tostring(runtimeErr)
+	end
 	
 	return true, "Script executed successfully"
 end
@@ -1590,9 +1594,6 @@ local function CreateScriptCard(data, renderParent)
 					local success, err = ExecuteSandboxed(raw, exactName)
 					if success then
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
-					else
-						ShowNotification("Failed to load script. Check the console for details.", "Error")
-						warn("[Velox Hub Execution Error - " .. exactName .. "]: " .. tostring(err))
 					end
 				end
 				
@@ -1676,6 +1677,7 @@ local function LoadDynamicCatalog()
 					end
 				end
 
+				-- Clean up auto-execute data for removed catalog scripts
 				local cleaned = false
 				for k in pairs(SavedData.AutoExecutes) do
 					if not vMap[k] then
@@ -1692,7 +1694,7 @@ local function LoadDynamicCatalog()
 				end
 				detachedFolder:Destroy()
 
-				-- Improved Auto-Execute Queue with Understandable Notifications
+				-- Robust Auto-Execute Logic Fix
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
 
@@ -1701,7 +1703,7 @@ local function LoadDynamicCatalog()
 						if type(scriptData) == "table" and scriptData.Name then
 							local auto = SavedData.AutoExecutes[scriptData.Name]
 							if auto and type(auto) == "table"
-								and (auto.PlaceId == PlaceId or auto.PlaceId == 0) then
+								and (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId) then
 								table.insert(autoQueue, scriptData)
 							end
 						end
@@ -1710,12 +1712,14 @@ local function LoadDynamicCatalog()
 					if #autoQueue > 0 then
 						TrackTask(function()
 							if type(loadstring) ~= "function" then
-								ShowNotification("Auto-execute skipped: Your executor lacks loadstring support.", "Error")
+								ShowNotification("Auto-execute skipped: Executor lacks loadstring support.", "Error")
 								return
 							end
 
 							local successList = {}
 							local failList = {}
+
+							ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
@@ -1723,25 +1727,21 @@ local function LoadDynamicCatalog()
 								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
 								if isDestroying or generation ~= CatalogGeneration then return end
 
-								if scrRaw then
-									if string.find(scrRaw, "404: Not Found") then
-										table.insert(failList, scriptData.Name)
+								if scrRaw and not string.find(scrRaw, "404: Not Found") then
+									local exSuccess, err = ExecuteSandboxed(scrRaw, scriptData.Name)
+									if exSuccess then
+										table.insert(successList, scriptData.Name)
 									else
-										local exSuccess, err = ExecuteSandboxed(scrRaw, scriptData.Name)
-										if exSuccess then
-											table.insert(successList, scriptData.Name)
-										else
-											table.insert(failList, scriptData.Name)
-										end
+										table.insert(failList, scriptData.Name)
 									end
 								else
 									table.insert(failList, scriptData.Name)
 								end
-								task.wait(0.2)
+								task.wait(0.3)
 							end
 							
 							if #successList > 0 then
-								ShowNotification("Auto-executed successfully: " .. table.concat(successList, ", "), "Success")
+								ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success")
 							end
 							if #failList > 0 then
 								ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning")
@@ -2046,7 +2046,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 				if type(conn) == "table" and conn.Disable then
 					conn:Disable()
-                    table.insert(AfkConnections, conn)
+					table.insert(AfkConnections, conn)
 				end
 			end
 		end
@@ -2080,7 +2080,7 @@ if SavedData.Settings.AntiAFK then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 			if type(conn) == "table" and conn.Disable then
 				conn:Disable()
-                table.insert(AfkConnections, conn)
+				table.insert(AfkConnections, conn)
 			end
 		end
 	end
@@ -2095,31 +2095,33 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
--- Optimized Metatable Hook to protect GUI without heavy performance lag
+-- Safe Metatable Hook to protect GUI without crashing threads
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-			local method = getnamecallmethod()
-			
-			if not checkcaller() and ScreenGui and typeof(self) == "Instance" then
-				if self == TargetParent then
-					if method == "GetDescendants" or method == "GetChildren" then
-						local result = oldNamecall(self, ...)
-						if type(result) == "table" then
-							local filtered = {}
-							for i = 1, #result do
-								local v = result[i]
-								if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-									table.insert(filtered, v)
+			local ok, isCaller = pcall(checkcaller)
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
+				local mOk, method = pcall(getnamecallmethod)
+				if mOk and method then
+					if self == TargetParent then
+						if method == "GetDescendants" or method == "GetChildren" then
+							local result = oldNamecall(self, ...)
+							if type(result) == "table" then
+								local filtered = {}
+								for i = 1, #result do
+									local v = result[i]
+									if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+										table.insert(filtered, v)
+									end
 								end
+								return filtered
 							end
-							return filtered
-						end
-					elseif method == "FindFirstChild" or method == "WaitForChild" then
-						local args = {...}
-						if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-							return method == "WaitForChild" and oldNamecall(self, GenerateRandomString(20), args[2] or 1) or nil
+						elseif method == "FindFirstChild" or method == "WaitForChild" then
+							local args = {...}
+							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+								return method == "WaitForChild" and oldNamecall(self, GenerateRandomString(20), args[2] or 1) or nil
+							end
 						end
 					end
 				end
