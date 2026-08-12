@@ -252,7 +252,10 @@ local function SaveConfiguration()
 		}
 		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
 		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" and v.PlaceId then cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } end
+			if type(v) == "table" and v.PlaceId then 
+				-- Handles both locked GameIds and dynamic "0" for Universal
+				cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } 
+			end
 		end
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
 		if success then 
@@ -1457,7 +1460,7 @@ local function CreateScriptCard(data, renderParent)
 	table.insert(RegisteredScripts, scriptEntry)
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
 local dbRefreshing = false
 
 local function LoadDynamicCatalog()
@@ -1487,27 +1490,24 @@ local function LoadDynamicCatalog()
 				end
 				table.clear(RegisteredScripts)
 				local detachedFolder = Instance.new("Folder")
-				local vMap = {}
 				for index, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
-						vMap[scriptData.Name] = true
 						if isDestroying then return end
 						CreateScriptCard(scriptData, detachedFolder)
 					end
 					if index % 25 == 0 then task.wait() end
 				end
-				local cleaned = false
-				for k, _ in pairs(SavedData.AutoExecutes) do
-					if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
-				end
-				if cleaned then SaveConfiguration() end
+				
+				-- The aggressive cleanup loop has been completely removed to preserve user preferences
+				
 				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
 				pcall(function() detachedFolder:Destroy() end)
 				local autoIndex = 0
 				for _, scriptData in ipairs(parsed) do
 					if type(scriptData) == "table" and scriptData.Name then
 						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" and auto.PlaceId == PlaceId then
+						-- Updated validation to check for PlaceId: 0 (Universal) or strict PlaceId lock
+						if auto and type(auto) == "table" and (auto.PlaceId == 0 or auto.PlaceId == PlaceId) then
 							autoIndex = autoIndex + 1
 							local delayTime = 0.2 * autoIndex
 							
@@ -1519,7 +1519,7 @@ local function LoadDynamicCatalog()
 									if exSuccess then
 										ShowNotification("Auto-executed: " .. scriptData.Name, "Success")
 									else
-										ShowNotification("Wrong game/unsupported for: " .. scriptData.Name, "Error")
+										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
 										warn("Velox Hub Auto-Execute Error: ", tostring(err))
 									end
 								end
