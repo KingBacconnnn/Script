@@ -73,7 +73,7 @@ local VeloxConnections = {}
 local CardConnections = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
-local PendingTasks = {} -- keyed by thread; prevents stale async work from surviving unloads
+local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local AutoExecuteRanThisSession = false
@@ -150,6 +150,7 @@ local function TrackTask(fn)
 	PendingTasks[thread] = true
 	return thread
 end
+
 local function CancelTrackedTasks()
 	for thread in pairs(PendingTasks) do
 		pcall(task.cancel, thread)
@@ -761,7 +762,7 @@ local function BindToggleKey(keyCode)
 	end
 	
 	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
+		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
 		
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
 			if SearchInput and SearchInput:IsFocused() then
@@ -917,10 +918,10 @@ task.spawn(function()
 	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		local thumb, ready = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-		if thumb and ready then 
+		local success, content, isReady = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		if success and content then 
 			if isDestroying then return end
-			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = ready end
+			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
 			break 
 		else 
 			task.wait(2) 
@@ -1053,27 +1054,34 @@ Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-if workspace.CurrentCamera then
-	RegConn(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-		if DropdownContainer and DropdownContainer.Visible then
-			DropdownContainer.Visible = false
-		end
-		if MainPanel and MainPanel.Parent then
-			local viewport = workspace.CurrentCamera.ViewportSize
-			local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-			local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-			local currentOffsetX = MainPanel.Position.X.Offset
-			local currentOffsetY = MainPanel.Position.Y.Offset
-			if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
-				currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
-				currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
+local viewportConn
+local function BindCamera()
+	if viewportConn then viewportConn:Disconnect() end
+	local cam = workspace.CurrentCamera
+	if cam then
+		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			if DropdownContainer and DropdownContainer.Visible then
+				DropdownContainer.Visible = false
 			end
-			local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-			local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-			MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
-		end
-	end))
+			if MainPanel and MainPanel.Parent then
+				local viewport = cam.ViewportSize
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				local currentOffsetX = MainPanel.Position.X.Offset
+				local currentOffsetY = MainPanel.Position.Y.Offset
+				if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
+					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
+					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
+				end
+				local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
+			end
+		end))
+	end
 end
+RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
+BindCamera()
 
 local FilterFavoritesActive = false
 local filterVersion = 0
@@ -1133,12 +1141,15 @@ local function UpdateFilter()
 			if SortMode == "Most Relevant" and query ~= "" then
 				local aExact = string.sub(a.SearchTitle, 1, #query) == query
 				local bExact = string.sub(b.SearchTitle, 1, #query) == query
-				if aExact and not bExact then return true end
-				if not aExact and bExact then return false end
-			elseif SortMode == "A-Z" then return a.SearchTitle < b.SearchTitle
-			elseif SortMode == "Z-A" then return a.SearchTitle > b.SearchTitle
-			elseif SortMode == "Newest" then return (a.LastUpdated or 0) > (b.LastUpdated or 0)
-			elseif SortMode == "Oldest" then return (a.LastUpdated or 0) < (b.LastUpdated or 0)
+				if aExact ~= bExact then return aExact end
+			elseif SortMode == "A-Z" then 
+				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
+			elseif SortMode == "Z-A" then 
+				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
+			elseif SortMode == "Newest" then 
+				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (a.LastUpdated or 0) > (b.LastUpdated or 0) end
+			elseif SortMode == "Oldest" then 
+				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (a.LastUpdated or 0) < (b.LastUpdated or 0) end
 			elseif SortMode == "Favorites" then
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
@@ -1312,7 +1323,7 @@ local function ExecuteSandboxed(code)
 
 	local env = setmetatable({}, {
 		__index = function(_, key) return getgenv()[key] or getfenv()[key] end,
-		__newindex = function(_, key, value) getgenv()[key] = value end
+		__newindex = function(self, key, value) rawset(self, key, value) end
 	})
 	
 	setfenv(chunk, env)
@@ -1512,7 +1523,6 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
-				-- Disconnect only card-local handlers. Global UI handlers survive refreshes.
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 						conn:Disconnect()
@@ -1562,8 +1572,6 @@ local function LoadDynamicCatalog()
 				end
 				detachedFolder:Destroy()
 
-				-- Auto-execute only once for this running Velox instance.
-				-- Refreshing the catalog must not execute user scripts a second time.
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
 
@@ -1969,6 +1977,12 @@ pcall(function()
 					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
 						return nil
 					end
+				elseif method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
+					local result = oldNamecall(self, ...)
+					if result == ScreenGui or result == FloatingBtn then 
+						return nil 
+					end
+					return result
 				end
 			end
 			return oldNamecall(self, ...)
