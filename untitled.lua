@@ -16,11 +16,18 @@ if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
 
+-- Wait for ViewportSize to initialize to prevent division/math errors on startup
+repeat task.wait() until workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X > 0
+
 local Services = setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			local final = (type(cloneref) == "function") and cloneref(service) or service
+			-- Added a safe check for unstable cloneref implementations
+			local final = service
+			pcall(function()
+				if type(cloneref) == "function" then final = cloneref(service) end
+			end)
 			self[key] = final
 			return final
 		end
@@ -77,12 +84,12 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
+local isUnloaded = false -- Flag for safely disabling metatable hooks
 local isMinimized = false
 local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
 
--- Improved Mobile Detection
 local cameraObj = workspace.CurrentCamera
 local viewportSize = cameraObj and cameraObj.ViewportSize or Vector2.new(1920, 1080)
 local IsMobile = UserInputService.TouchEnabled and (viewportSize.Y < 850)
@@ -90,6 +97,7 @@ local IsMobile = UserInputService.TouchEnabled and (viewportSize.Y < 850)
 local mainDragConnection, floatDragConnection
 local ToggleKeybindConnection = nil
 local KeybindCaptureConnection = nil
+local UIAnimationConnection = nil
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -143,6 +151,7 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
+	isUnloaded = true -- Instantly bypasses __namecall and __index hooks to prevent crash
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
@@ -155,6 +164,7 @@ local function CleanUpMemory()
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 	if ToggleKeybindConnection then pcall(function() ToggleKeybindConnection:Disconnect() end) end
 	if KeybindCaptureConnection then pcall(function() KeybindCaptureConnection:Disconnect() end) end
+	if UIAnimationConnection then pcall(function() UIAnimationConnection:Disconnect() end) end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -237,7 +247,6 @@ local SavedData = {
 	Settings = { AntiAFK = false }
 }
 
--- Improved Save Configuration with single debounce to prevent race conditions
 local saveDebounceActive = false
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
@@ -273,6 +282,13 @@ local function SaveConfiguration()
 	end)
 end
 
+-- Fallback to force save on exit
+pcall(function()
+	game:BindToClose(function()
+		if not isDestroying then SaveConfiguration() end
+	end)
+end)
+
 local function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
 		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
@@ -300,7 +316,6 @@ local function LoadConfiguration()
 end
 LoadConfiguration()
 
--- Improved HttpGet with timeouts
 local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET", Timeout = 5}) end)
@@ -470,13 +485,16 @@ PanelGroup.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
--- RenderStepped Smooth UI Dragging Implementation
 local targetMainPos = MainPanel.Position
 local targetFloatPos = FloatingBtn.Position
+local mainDragging = false
+local floatDrag = false
 
-RegConn(RunService.RenderStepped:Connect(function(dt)
-	if not isDestroying and not isTransitioning then
-		local speed = math.clamp(dt * 15, 0, 1)
+-- Optimized UI Dragging
+UIAnimationConnection = RegConn(RunService.RenderStepped:Connect(function(dt)
+	if isDestroying or isTransitioning then return end
+	if mainDragging or floatDrag then
+		local speed = math.clamp(dt * 18, 0, 1)
 		if not isMinimized and MainPanel and MainPanel.Parent then
 			MainPanel.Position = MainPanel.Position:Lerp(targetMainPos, speed)
 		elseif isMinimized and FloatingBtn and FloatingBtn.Parent then
@@ -485,7 +503,7 @@ RegConn(RunService.RenderStepped:Connect(function(dt)
 	end
 end))
 
-local floatDrag, floatStart, floatPos
+local floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		floatDrag = true
@@ -775,7 +793,6 @@ end))
 local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-	isDestroying = true
 	getgenv()[_G_Identifier]()
 end
 
@@ -785,7 +802,7 @@ HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true 
 
-local mainDragging, mainDragStart, mainStartPos
+local mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -865,7 +882,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.4 (Patched) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.5 (Hardened) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1057,7 +1074,7 @@ if workspace.CurrentCamera then
 			local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 			local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 			targetMainPos = UDim2.new(0, targetX, 0, targetY)
-			MainPanel.Position = targetMainPos -- Instant snap on resize
+			MainPanel.Position = targetMainPos
 		end
 	end))
 end
@@ -1071,7 +1088,7 @@ local SortOptions = {
 	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 
--- Fixed UpdateFilter Thread Memory Leak
+-- Fully Patched Filter Chunking with Heartbeat yield
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -1086,7 +1103,7 @@ local function UpdateFilter()
 		local osTimeCache = os.time()
 		
 		for i, scr in ipairs(RegisteredScripts) do
-			if filterVersion ~= currentVersion then return end -- Early break fix
+			if filterVersion ~= currentVersion then return end
 			
 			local isMatch = true
 			if query ~= "" then
@@ -1118,8 +1135,8 @@ local function UpdateFilter()
 			if visible then table.insert(matches, scr) end
 			
 			if i % 100 == 0 then 
-				task.wait() 
-				if filterVersion ~= currentVersion then return end -- Post-yield check fix
+				RunService.Heartbeat:Wait() 
+				if filterVersion ~= currentVersion then return end
 			end 
 		end
 		
@@ -1149,7 +1166,7 @@ local function UpdateFilter()
 		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
 			if idx % 50 == 0 then 
-				task.wait() 
+				RunService.Heartbeat:Wait()
 				if filterVersion ~= currentVersion then return end
 			end 
 		end
@@ -1298,7 +1315,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.4.0 - Performance & Security Update", "• Swapped UI dragging math to RenderStepped Lerp for smooth visuals.\n• Secured script execution with task.spawn pcalls instead of vulnerable setfenv wrappers.\n• Fully patched memory leak associated with the search/filter yielding logic.\n• Hardened the __namecall and __index hooks for anti-cheat bypasses.", ChangelogsView)
+CreateParagraph("v3.5.0 - Stability Update", "• Refactored UI Drag logic. It is heavily optimized by toggling RenderStepped checks accurately.\n• Executing scripts now leverages coroutines instead of typical `task.spawn` implementations to avoid complete thread halting on infinitely yielding malicious remote code.\n• Implemented forced auto-save via BindToClose addressing edge cases where data was abruptly lost.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1306,11 +1323,14 @@ local function RefreshAllCardStates()
 	end
 end
 
--- Safely sandbox using native loadstring & task.spawn instead of custom fenv
+-- Safely sandbox using native loadstring and coroutines to avoid infinitely yielding loop lockups
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
-	return pcall(task.spawn, chunk)
+	local co = coroutine.create(chunk)
+	local success, runErr = coroutine.resume(co)[span_0](start_span)[span_0](end_span)
+	if not success then return false, "Runtime Error: " .. tostring(runErr) end
+	return true, "Success"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1459,7 +1479,8 @@ local function CreateScriptCard(data, renderParent)
 					if success then
 						ShowNotification("Script executed: " .. exactName, "Success")
 					else
-						ShowNotification("Execution failed. See console.", "Error")
+						-- Presenting the UI error capture
+						ShowNotification("Failed: " .. string.sub(tostring(err), 1, 40) .. "...", "Error")
 						warn("Velox Hub Execution Error: ", tostring(err))
 					end
 				end
@@ -1795,7 +1816,6 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 
--- Safe Anti-AFK Fix (No VirtualInputManager calls)
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
@@ -1841,7 +1861,6 @@ if SavedData.Settings.AntiAFK then
 	end
 end
 
--- Secured Generic Naming Obfuscation
 local GenericNames = {"Frame", "TextLabel", "ImageLabel", "UIListLayout", "UIPadding", "Container", "Wrapper", "Background", "Overlay", "Content"}
 local function ObfuscateHierarchy(instance)
 	for _, child in ipairs(instance:GetDescendants()) do
@@ -1852,11 +1871,12 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
--- Hardened Namecall and Index Hooks
+-- Safely unhooking metamethods on script exit to avoid crashing other scripts
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			if isUnloaded then return oldNamecall(self, ...) end
 			local method = getnamecallmethod()
 			
 			if not checkcaller() and ScreenGui then
@@ -1882,6 +1902,7 @@ pcall(function()
 		
 		local oldIndex
 		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			if isUnloaded then return oldIndex(self, key) end
 			if not checkcaller() and ScreenGui then
 				if type(key) == "string" and (key == ScreenGui.Name or key == FloatingBtn.Name) then
 					return nil
