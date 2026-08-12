@@ -16,16 +16,11 @@ if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
 
-repeat task.wait() until workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X > 0
-
 local Services = setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			local final = service
-			pcall(function()
-				if type(cloneref) == "function" then final = cloneref(service) end
-			end)
+			local final = (type(cloneref) == "function") and cloneref(service) or service
 			self[key] = final
 			return final
 		end
@@ -36,14 +31,15 @@ local Services = setmetatable({}, {
 local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
+local VirtualInputManager = Services.VirtualInputManager
 local RunService = Services.RunService
 local Stats = Services.Stats
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 
 local LocalPlayer = Players.LocalPlayer
-while not LocalPlayer do
-	task.wait()
+if not LocalPlayer then
+	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 	LocalPlayer = Players.LocalPlayer
 end
 local PlaceId = game.PlaceId
@@ -82,20 +78,15 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
-local isUnloaded = false
 local isMinimized = false
 local isTransitioning = false
 local GlobalExecutionCooldown = false
 local IsBindingKey = false
-
-local cameraObj = workspace.CurrentCamera
-local viewportSize = cameraObj and cameraObj.ViewportSize or Vector2.new(1920, 1080)
-local IsMobile = UserInputService.TouchEnabled and (viewportSize.Y < 850)
+local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 local mainDragConnection, floatDragConnection
 local ToggleKeybindConnection = nil
 local KeybindCaptureConnection = nil
-local UIAnimationConnection = nil
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -149,7 +140,6 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	isUnloaded = true
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
@@ -162,7 +152,6 @@ local function CleanUpMemory()
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 	if ToggleKeybindConnection then pcall(function() ToggleKeybindConnection:Disconnect() end) end
 	if KeybindCaptureConnection then pcall(function() KeybindCaptureConnection:Disconnect() end) end
-	if UIAnimationConnection then pcall(function() UIAnimationConnection:Disconnect() end) end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -245,13 +234,17 @@ local SavedData = {
 	Settings = { AntiAFK = false }
 }
 
-local saveDebounceActive = false
+local isSaving = false
+local saveQueued = false
+
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
-	if saveDebounceActive then return end
-	saveDebounceActive = true
-	
-	task.delay(1, function()
+	if isSaving then 
+		saveQueued = true 
+		return 
+	end
+	isSaving = true
+	task.spawn(function()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
@@ -261,7 +254,6 @@ local function SaveConfiguration()
 		for k, v in pairs(SavedData.AutoExecutes) do
 			if type(v) == "table" and v.PlaceId then cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId } end
 		end
-		
 		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
 		if success then 
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
@@ -276,15 +268,13 @@ local function SaveConfiguration()
 			end
 			pcall(function() del_file(TEMP_FILE) end)
 		end
-		saveDebounceActive = false
+		isSaving = false
+		if saveQueued then
+			saveQueued = false
+			SaveConfiguration() 
+		end
 	end)
 end
-
-pcall(function()
-	game:BindToClose(function()
-		if not isDestroying then SaveConfiguration() end
-	end)
-end)
 
 local function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
@@ -315,13 +305,11 @@ LoadConfiguration()
 
 local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
-		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET", Timeout = 5}) end)
+		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
 		if reqSuccess and reqResult and reqResult.StatusCode == 200 then return reqResult.Body end
 	end
 	local success, result = pcall(function() return game:HttpGet(url) end)
 	if success and result then return result end
-	local asyncSuccess, asyncResult = pcall(function() return game:HttpGetAsync(url) end)
-	if asyncSuccess and asyncResult then return asyncResult end
 	return nil
 end
 
@@ -355,14 +343,12 @@ end
 local function GetSecureParent()
 	local success, target = pcall(function() return CoreGui end)
 	if success and target then return target end
+	
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and huiTarget ~= LocalPlayer:FindFirstChild("PlayerGui") then
 		return huiTarget
 	end
-	local directCoreGuiSuccess, directCoreGui = pcall(function() return game.CoreGui end)
-	if directCoreGuiSuccess and directCoreGui then return directCoreGui end
-	local directPlayerGuiSuccess, directPlayerGui = pcall(function() return LocalPlayer:FindFirstChildOfClass("PlayerGui") end)
-	if directPlayerGuiSuccess and directPlayerGui then return directPlayerGui end
+	
 	return nil
 end
 
@@ -453,6 +439,32 @@ Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
+local floatDrag, floatStart, floatPos
+RegConn(FloatingBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		floatDrag = true
+		floatStart = input.Position
+		floatPos = FloatingBtn.Position
+		
+		if floatDragConnection then floatDragConnection:Disconnect() end
+		floatDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
+			if isDestroying then return end
+			if floatDrag and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+				local delta = moveInput.Position - floatStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
+				local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
+				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
+				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
+				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
+			end
+		end)
+	end
+end))
+
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -485,49 +497,6 @@ PanelGroup.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 
-local targetMainPos = MainPanel.Position
-local targetFloatPos = FloatingBtn.Position
-local mainDragging = false
-local floatDrag = false
-
-UIAnimationConnection = RegConn(RunService.RenderStepped:Connect(function(dt)
-	if isDestroying or isTransitioning then return end
-	if mainDragging or floatDrag then
-		local speed = math.clamp(dt * 18, 0, 1)
-		if not isMinimized and MainPanel and MainPanel.Parent then
-			MainPanel.Position = MainPanel.Position:Lerp(targetMainPos, speed)
-		elseif isMinimized and FloatingBtn and FloatingBtn.Parent then
-			FloatingBtn.Position = FloatingBtn.Position:Lerp(targetFloatPos, speed)
-		end
-	end
-end))
-
-local floatStart, floatPos
-RegConn(FloatingBtn.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		floatDrag = true
-		floatStart = input.Position
-		floatPos = targetFloatPos
-		
-		if floatDragConnection then floatDragConnection:Disconnect() end
-		floatDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
-			if isDestroying then return end
-			if floatDrag and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
-				local delta = moveInput.Position - floatStart
-				local camera = workspace.CurrentCamera
-				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-				local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
-				local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
-				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-				targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
-				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
-				targetFloatPos = UDim2.new(0, targetX, 0, targetY)
-			end
-		end)
-	end
-end))
-
 local SearchInput
 
 local function RestoreCachedProperties()
@@ -557,7 +526,6 @@ local function ToggleUI()
 		
 		MainPanel.Visible = false
 		RestoreCachedProperties()
-		targetFloatPos = FloatingBtn.Position
 		FloatingBtn.Visible = true
 		FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
 		FloatingBtn.ImageTransparency = 0
@@ -567,7 +535,6 @@ local function ToggleUI()
 		FloatingBtn.Visible = false
 		MainPanel.Visible = true
 		RestoreCachedProperties()
-		targetMainPos = MainPanel.Position
 	end
 	
 	isTransitioning = false
@@ -792,6 +759,7 @@ end))
 local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
+	isDestroying = true
 	getgenv()[_G_Identifier]()
 end
 
@@ -801,13 +769,13 @@ HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true 
 
-local mainDragStart, mainStartPos
+local mainDragging, mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		mainDragging = true
 		mainDragStart = input.Position
-		mainStartPos = targetMainPos
+		mainStartPos = MainPanel.Position
 		
 		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
@@ -822,7 +790,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 				targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 				targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-				targetMainPos = UDim2.new(0, targetX, 0, targetY)
+				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end)
 	end
@@ -834,7 +802,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 		if mainDragging then
 			mainDragging = false
 			if mainDragConnection then mainDragConnection:Disconnect(); mainDragConnection = nil end
-			if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = targetMainPos end
+			if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
 		end
 		if floatDrag then
 			floatDrag = false
@@ -844,7 +812,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 				if dist < 12 then
 					ToggleUI()
 				else
-					if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = targetFloatPos end
+					if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
 				end
 			end
 		end
@@ -881,7 +849,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.5 (Hardened) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.3 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1028,7 +996,10 @@ ClearSearchBtn.ZIndex = 53
 ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 
 RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
-RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
+
+RegConn(SearchInput.FocusLost:Connect(function() 
+	SearchStroke.Color = Theme.Stroke
+end))
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
@@ -1072,8 +1043,7 @@ if workspace.CurrentCamera then
 			end
 			local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 			local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-			targetMainPos = UDim2.new(0, targetX, 0, targetY)
-			MainPanel.Position = targetMainPos
+			MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 		end
 	end))
 end
@@ -1099,10 +1069,8 @@ local function UpdateFilter()
 		for word in string.gmatch(query, "%S+") do table.insert(words, word) end
 		local matches = {}
 		local osTimeCache = os.time()
-		
 		for i, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
-			
 			local isMatch = true
 			if query ~= "" then
 				for _, w in ipairs(words) do
@@ -1131,13 +1099,8 @@ local function UpdateFilter()
 			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then table.insert(matches, scr) end
-			
-			if i % 100 == 0 then 
-				RunService.Heartbeat:Wait() 
-				if filterVersion ~= currentVersion then return end
-			end 
+			if i % 50 == 0 then task.wait() end 
 		end
-		
 		if filterVersion ~= currentVersion then return end
 		table.sort(matches, function(a, b)
 			if SortMode == "Most Relevant" and query ~= "" then
@@ -1160,15 +1123,10 @@ local function UpdateFilter()
 			end
 			return a.OriginalIndex < b.OriginalIndex
 		end)
-		
 		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
-			if idx % 50 == 0 then 
-				RunService.Heartbeat:Wait()
-				if filterVersion ~= currentVersion then return end
-			end 
+			if idx % 50 == 0 then task.wait() end 
 		end
-		
 		if #RegisteredScripts > 0 then
 			local shouldShowEmpty = (#matches == 0)
 			if EmptyStateMessage.Visible ~= shouldShowEmpty then
@@ -1313,7 +1271,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v3.5.0 - Stability Update", "• Refactored UI Drag logic. It is heavily optimized by toggling RenderStepped checks accurately.\n• Executing scripts now leverages coroutines instead of typical `task.spawn` implementations to avoid complete thread halting on infinitely yielding malicious remote code.\n• Implemented forced auto-save via BindToClose addressing edge cases where data was abruptly lost.", ChangelogsView)
+CreateParagraph("v3.4.0 - Security & Stability Update", "• Implemented dynamic metatable hooks to hide GUI from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe sandbox environment.\n• Removed global environment vulnerabilities and memory leaks.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1324,10 +1282,14 @@ end
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
-	local co = coroutine.create(chunk)
-	local success, runErr = coroutine.resume(co)
-	if not success then return false, "Runtime Error: " .. tostring(runErr) end
-	return true, "Success"
+
+	local env = setmetatable({}, {
+		__index = function(_, key) return getgenv()[key] or getfenv()[key] end,
+		__newindex = function(_, key, value) getgenv()[key] = value end
+	})
+	
+	setfenv(chunk, env)
+	return pcall(chunk)
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1476,7 +1438,7 @@ local function CreateScriptCard(data, renderParent)
 					if success then
 						ShowNotification("Script executed: " .. exactName, "Success")
 					else
-						ShowNotification("Failed: " .. string.sub(tostring(err), 1, 40) .. "...", "Error")
+						ShowNotification("Execution failed. See console.", "Error")
 						warn("Velox Hub Execution Error: ", tostring(err))
 					end
 				end
@@ -1495,7 +1457,7 @@ local function CreateScriptCard(data, renderParent)
 	table.insert(RegisteredScripts, scriptEntry)
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
 local dbRefreshing = false
 
 local function LoadDynamicCatalog()
@@ -1530,7 +1492,7 @@ local function LoadDynamicCatalog()
 					if type(scriptData) == "table" and scriptData.Name then
 						vMap[scriptData.Name] = true
 						if isDestroying then return end
-						pcall(function() CreateScriptCard(scriptData, detachedFolder) end)
+						CreateScriptCard(scriptData, detachedFolder)
 					end
 					if index % 25 == 0 then task.wait() end
 				end
@@ -1817,16 +1779,27 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle disconnects.", 
 	SaveConfiguration()
 	if val then
 		ShowNotification("Anti-AFK enabled.", "Success")
+		if not AfkConnections.Idled then
+			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
+				if VirtualInputManager then
+					pcall(function()
+						VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+						task.wait(0.1)
+						VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+					end)
+				end
+			end))
+		end
 		if getconnections then
 			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 				if type(conn) == "table" and conn.Disable then
-					conn:Disable()
-					AfkConnections[conn] = conn
+					conn:Disable(); AfkConnections[conn] = conn
 				end
 			end
 		end
 	else
 		ShowNotification("Anti-AFK disabled.", "Warning")
+		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
 		for conn, _ in pairs(AfkConnections) do
 			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
 		end
@@ -1847,21 +1820,30 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes hub entirely.", "
 end)
 
 if SavedData.Settings.AntiAFK then
+	if not AfkConnections.Idled then
+		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
+			if VirtualInputManager then
+				pcall(function()
+					VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+					task.wait(0.1)
+					VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+				end)
+			end
+		end))
+	end
 	if getconnections then
 		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
 			if type(conn) == "table" and conn.Disable then
-				conn:Disable()
-				AfkConnections[conn] = conn
+				conn:Disable(); AfkConnections[conn] = conn
 			end
 		end
 	end
 end
 
-local GenericNames = {"Frame", "TextLabel", "ImageLabel", "UIListLayout", "UIPadding", "Container", "Wrapper", "Background", "Overlay", "Content"}
 local function ObfuscateHierarchy(instance)
 	for _, child in ipairs(instance:GetDescendants()) do
 		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
-			child.Name = GenericNames[math.random(1, #GenericNames)]
+			child.Name = GenerateRandomString(15)
 		end
 	end
 end
@@ -1871,24 +1853,20 @@ pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-			if isUnloaded then return oldNamecall(self, ...) end
 			local method = getnamecallmethod()
 			
 			if not checkcaller() and ScreenGui then
 				if method == "GetDescendants" or method == "GetChildren" then
 					local result = oldNamecall(self, ...)
-					if type(result) == "table" then
-						local filtered = {}
-						for i = 1, #result do
-							local v = result[i]
-							if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-								table.insert(filtered, v)
-							end
+					local filtered = {}
+					for i = 1, #result do
+						local v = result[i]
+						if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+							table.insert(filtered, v)
 						end
-						return filtered
 					end
-					return result
-				elseif method == "FindFirstChild" or method == "WaitForChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
+					return filtered
+				elseif method == "FindFirstChild" or method == "WaitForChild" then
 					local args = {...}
 					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
 						return nil
@@ -1896,17 +1874,6 @@ pcall(function()
 				end
 			end
 			return oldNamecall(self, ...)
-		end)
-		
-		local oldIndex
-		oldIndex = hookmetamethod(game, "__index", function(self, key)
-			if isUnloaded then return oldIndex(self, key) end
-			if not checkcaller() and ScreenGui then
-				if type(key) == "string" and (key == ScreenGui.Name or key == FloatingBtn.Name) then
-					return nil
-				end
-			end
-			return oldIndex(self, key)
 		end)
 	end
 end)
