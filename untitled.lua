@@ -642,7 +642,7 @@ ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ConfirmOverlay.BackgroundTransparency = 1
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
-ConfirmOverlay.Active = true
+ConfirmOverlay.Active = false
 
 local ConfirmBox = Instance.new("Frame", ConfirmOverlay)
 ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
@@ -725,6 +725,7 @@ local function OpenConfirmDialog(scriptName, onExecute)
 	ConfirmExecuteBtn.Text = "Execute"
 	ConfirmOverlay.BackgroundTransparency = 0.5
 	ConfirmOverlay.Visible = true
+	ConfirmOverlay.Active = true
 end
 
 local function CloseConfirmDialog(shouldExecute)
@@ -732,6 +733,7 @@ local function CloseConfirmDialog(shouldExecute)
 	ConfirmExecuteBtn.Active = false
 	ConfirmOverlay.BackgroundTransparency = 1
 	ConfirmOverlay.Visible = false
+	ConfirmOverlay.Active = false
 	isConfirming = false
 	local cb = pendingExecuteCallback
 	pendingExecuteCallback = nil
@@ -1319,15 +1321,14 @@ end
 
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
-	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
-
-	local env = setmetatable({}, {
-		__index = function(_, key) return getgenv()[key] or getfenv()[key] end,
-		__newindex = function(self, key, value) rawset(self, key, value) end
-	})
-	
-	setfenv(chunk, env)
-	return pcall(chunk)
+	if not chunk then return false, tostring(compileErr) end
+	task.spawn(function()
+		local success, err = pcall(chunk)
+		if not success then
+			warn("Velox Hub Execution Error: ", tostring(err))
+		end
+	end)
+	return true, "Execution started successfully"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1593,6 +1594,7 @@ local function LoadDynamicCatalog()
 								return
 							end
 
+							local successCount = 0
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
@@ -1600,18 +1602,24 @@ local function LoadDynamicCatalog()
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw then
-									local exSuccess, err = ExecuteSandboxed(scrRaw)
-									if exSuccess then
-										ShowNotification("Successfully auto-executed: " .. scriptData.Name, "Success")
+									if string.find(scrRaw, "404: Not Found") then
+										warn("Velox Hub: Skipping Auto-Execute for " .. scriptData.Name .. " (404 Not Found)")
 									else
-										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
-										warn("Velox auto-execute error:", tostring(err))
+										local exSuccess, err = ExecuteSandboxed(scrRaw)
+										if exSuccess then
+											successCount = successCount + 1
+										else
+											warn("Velox Hub: Auto-Execute compile failed for " .. scriptData.Name)
+										end
 									end
 								else
-									ShowNotification("Auto-Execute fetch failed: " .. scriptData.Name, "Error")
+									warn("Velox Hub: Auto-Execute fetch failed for " .. scriptData.Name)
 								end
-
-								task.wait(0.5)
+								task.wait(0.2)
+							end
+							
+							if successCount > 0 then
+								ShowNotification("Auto-executed " .. tostring(successCount) .. " scripts.", "Success")
 							end
 						end)
 					end
@@ -1999,7 +2007,7 @@ MainPanel.Visible = true
 SearchRow.Visible = false
 FloatingBtn.Visible = false
 
-ShowNotification("Welcome to Velox Hub v3.3", "Success")
+ShowNotification("Welcome to Velox Hub", "Success")
 
 if IsMobile then
 	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
