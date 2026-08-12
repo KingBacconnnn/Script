@@ -16,14 +16,12 @@ if getgenv()[_G_Identifier] then
 	pcall(function() getgenv()[_G_Identifier]() end)
 end
 
--- Wait for ViewportSize to initialize to prevent division/math errors on startup
 repeat task.wait() until workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X > 0
 
 local Services = setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			-- Added a safe check for unstable cloneref implementations
 			local final = service
 			pcall(function()
 				if type(cloneref) == "function" then final = cloneref(service) end
@@ -44,8 +42,8 @@ local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+while not LocalPlayer do
+	task.wait()
 	LocalPlayer = Players.LocalPlayer
 end
 local PlaceId = game.PlaceId
@@ -84,7 +82,7 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
-local isUnloaded = false -- Flag for safely disabling metatable hooks
+local isUnloaded = false
 local isMinimized = false
 local isTransitioning = false
 local GlobalExecutionCooldown = false
@@ -151,7 +149,7 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	isUnloaded = true -- Instantly bypasses __namecall and __index hooks to prevent crash
+	isUnloaded = true
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
@@ -282,7 +280,6 @@ local function SaveConfiguration()
 	end)
 end
 
--- Fallback to force save on exit
 pcall(function()
 	game:BindToClose(function()
 		if not isDestroying then SaveConfiguration() end
@@ -321,9 +318,10 @@ local function UniversalHttpGet(url)
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET", Timeout = 5}) end)
 		if reqSuccess and reqResult and reqResult.StatusCode == 200 then return reqResult.Body end
 	end
-	
 	local success, result = pcall(function() return game:HttpGet(url) end)
 	if success and result then return result end
+	local asyncSuccess, asyncResult = pcall(function() return game:HttpGetAsync(url) end)
+	if asyncSuccess and asyncResult then return asyncResult end
 	return nil
 end
 
@@ -357,12 +355,14 @@ end
 local function GetSecureParent()
 	local success, target = pcall(function() return CoreGui end)
 	if success and target then return target end
-	
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and huiTarget ~= LocalPlayer:FindFirstChild("PlayerGui") then
 		return huiTarget
 	end
-	
+	local directCoreGuiSuccess, directCoreGui = pcall(function() return game.CoreGui end)
+	if directCoreGuiSuccess and directCoreGui then return directCoreGui end
+	local directPlayerGuiSuccess, directPlayerGui = pcall(function() return LocalPlayer:FindFirstChildOfClass("PlayerGui") end)
+	if directPlayerGuiSuccess and directPlayerGui then return directPlayerGui end
 	return nil
 end
 
@@ -490,7 +490,6 @@ local targetFloatPos = FloatingBtn.Position
 local mainDragging = false
 local floatDrag = false
 
--- Optimized UI Dragging
 UIAnimationConnection = RegConn(RunService.RenderStepped:Connect(function(dt)
 	if isDestroying or isTransitioning then return end
 	if mainDragging or floatDrag then
@@ -1088,7 +1087,6 @@ local SortOptions = {
 	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 
--- Fully Patched Filter Chunking with Heartbeat yield
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -1323,12 +1321,11 @@ local function RefreshAllCardStates()
 	end
 end
 
--- Safely sandbox using native loadstring and coroutines to avoid infinitely yielding loop lockups
 local function ExecuteSandboxed(code)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then return false, "Compile Error: " .. tostring(compileErr) end
 	local co = coroutine.create(chunk)
-	local success, runErr = coroutine.resume(co)[span_0](start_span)[span_0](end_span)
+	local success, runErr = coroutine.resume(co)
 	if not success then return false, "Runtime Error: " .. tostring(runErr) end
 	return true, "Success"
 end
@@ -1479,7 +1476,6 @@ local function CreateScriptCard(data, renderParent)
 					if success then
 						ShowNotification("Script executed: " .. exactName, "Success")
 					else
-						-- Presenting the UI error capture
 						ShowNotification("Failed: " .. string.sub(tostring(err), 1, 40) .. "...", "Error")
 						warn("Velox Hub Execution Error: ", tostring(err))
 					end
@@ -1534,7 +1530,7 @@ local function LoadDynamicCatalog()
 					if type(scriptData) == "table" and scriptData.Name then
 						vMap[scriptData.Name] = true
 						if isDestroying then return end
-						CreateScriptCard(scriptData, detachedFolder)
+						pcall(function() CreateScriptCard(scriptData, detachedFolder) end)
 					end
 					if index % 25 == 0 then task.wait() end
 				end
@@ -1871,7 +1867,6 @@ local function ObfuscateHierarchy(instance)
 end
 ObfuscateHierarchy(ScreenGui)
 
--- Safely unhooking metamethods on script exit to avoid crashing other scripts
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
@@ -1882,14 +1877,17 @@ pcall(function()
 			if not checkcaller() and ScreenGui then
 				if method == "GetDescendants" or method == "GetChildren" then
 					local result = oldNamecall(self, ...)
-					local filtered = {}
-					for i = 1, #result do
-						local v = result[i]
-						if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-							table.insert(filtered, v)
+					if type(result) == "table" then
+						local filtered = {}
+						for i = 1, #result do
+							local v = result[i]
+							if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+								table.insert(filtered, v)
+							end
 						end
+						return filtered
 					end
-					return filtered
+					return result
 				elseif method == "FindFirstChild" or method == "WaitForChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
 					local args = {...}
 					if type(args[1]) == "string" and (args[1] == ScreenGui.Name or args[1] == FloatingBtn.Name) then
