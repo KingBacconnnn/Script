@@ -73,8 +73,10 @@ local VeloxConnections = {}
 local CardConnections = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
-local PendingTasks = {}
+local PendingTasks = {} -- keyed by thread; prevents stale async work from surviving unloads
 local ActiveTweens = setmetatable({}, { __mode = "k" })
+local CatalogGeneration = 0
+local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
@@ -136,6 +138,25 @@ local function RegCardConn(connection)
 	return connection
 end
 
+local function TrackTask(fn)
+	local thread
+	thread = task.spawn(function()
+		local ok, err = pcall(fn)
+		PendingTasks[coroutine.running()] = nil
+		if not ok and not isDestroying then
+			warn("Velox task error:", tostring(err))
+		end
+	end)
+	PendingTasks[thread] = true
+	return thread
+end
+local function CancelTrackedTasks()
+	for thread in pairs(PendingTasks) do
+		pcall(task.cancel, thread)
+	end
+	table.clear(PendingTasks)
+end
+
 local typingTask = nil
 
 local function CleanUpMemory()
@@ -143,10 +164,7 @@ local function CleanUpMemory()
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
-	for _, thread in ipairs(PendingTasks) do
-		if type(thread) == "thread" then pcall(task.cancel, thread) end
-	end
-	table.clear(PendingTasks)
+	CancelTrackedTasks()
 
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
@@ -182,6 +200,8 @@ local function CleanUpMemory()
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
+	table.clear(ActiveTweens)
+	table.clear(InteractiveElements)
 end
 
 local function SafeTween(instance, tweenInfo, properties)
@@ -376,27 +396,35 @@ end
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
-local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke)
+local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
+	connectionRegistry = connectionRegistry or VeloxConnections
 	InteractiveElements[gui] = {BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj}
-	
-	RegConn(gui.MouseEnter:Connect(function()
+
+	local function RegInteractive(connection)
+		if connectionRegistry == CardConnections then
+			return RegCardConn(connection)
+		end
+		return RegConn(connection)
+	end
+
+	RegInteractive(gui.MouseEnter:Connect(function()
 		if isDestroying or isTransitioning or IsMobile then return end
 		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
 		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
 	end))
-	RegConn(gui.MouseLeave:Connect(function()
+	RegInteractive(gui.MouseLeave:Connect(function()
 		if isDestroying or isTransitioning or IsMobile then return end
 		if originalColor then gui.BackgroundColor3 = originalColor end
 		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
 	end))
-	RegConn(gui.InputBegan:Connect(function(input)
+	RegInteractive(gui.InputBegan:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if clickColor then gui.BackgroundColor3 = clickColor end
 		end
 	end))
-	RegConn(gui.InputEnded:Connect(function(input)
+	RegInteractive(gui.InputEnded:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if not IsMobile and hoverColor then 
@@ -1375,9 +1403,9 @@ local function CreateScriptCard(data, renderParent)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 
-	ApplyInteractiveAnimations(card, Theme.Card, Theme.CardHover, Color3.fromRGB(20, 29, 45), cardStroke, Color3.fromRGB(44, 58, 77), Theme.Accent)
-	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30))
-	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil)
+	ApplyInteractiveAnimations(card, Theme.Card, Theme.CardHover, Color3.fromRGB(20, 29, 45), cardStroke, Color3.fromRGB(44, 58, 77), Theme.Accent, CardConnections)
+	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
+	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, CardConnections)
 
 	local exactName = data.Name or "Unnamed Script"
 	local scriptEntry = {
@@ -1460,97 +1488,157 @@ local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScript
 local dbRefreshing = false
 
 local function LoadDynamicCatalog()
-	if dbRefreshing then return end
+	if dbRefreshing or isDestroying then return end
+
 	dbRefreshing = true
+	CatalogGeneration += 1
+	local generation = CatalogGeneration
+
 	ShowNotification("Fetching latest scripts...", "Info")
 	local savedScroll = ScriptsView.CanvasPosition
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
-	EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Loading script repository..."
+	EmptyStateMessage.Visible = true
+	EmptyStateMessage.Text = "Loading script repository..."
 
-	task.spawn(function()
+	TrackTask(function()
 		local raw = FetchWithRetry(CATALOG_URL, 3, 2)
-		if isDestroying then return end
+		if isDestroying or generation ~= CatalogGeneration then return end
+
 		if raw then
-			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			local success, parsed = pcall(function()
+				return HttpService:JSONDecode(raw)
+			end)
+
 			if success and type(parsed) == "table" then
+				-- Disconnect only card-local handlers. Global UI handlers survive refreshes.
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 						conn:Disconnect()
 					end
 				end
 				table.clear(CardConnections)
+
 				for _, child in ipairs(ScriptsView:GetChildren()) do
-					if child:IsA("TextButton") then child:Destroy() end
+					if child:IsA("TextButton") then
+						child:Destroy()
+					end
 				end
 				table.clear(RegisteredScripts)
+
 				local detachedFolder = Instance.new("Folder")
 				local vMap = {}
+
 				for index, scriptData in ipairs(parsed) do
+					if isDestroying or generation ~= CatalogGeneration then
+						detachedFolder:Destroy()
+						return
+					end
+
 					if type(scriptData) == "table" and scriptData.Name then
 						vMap[scriptData.Name] = true
-						if isDestroying then return end
 						CreateScriptCard(scriptData, detachedFolder)
 					end
-					if index % 25 == 0 then task.wait() end
-				end
-				local cleaned = false
-				for k, _ in pairs(SavedData.AutoExecutes) do
-					if not vMap[k] then SavedData.AutoExecutes[k] = nil; cleaned = true end
-				end
-				if cleaned then SaveConfiguration() end
-				for _, card in ipairs(detachedFolder:GetChildren()) do card.Parent = ScriptsView end
-				pcall(function() detachedFolder:Destroy() end)
-				
-				local autoQueue = {}
-				for _, scriptData in ipairs(parsed) do
-					if type(scriptData) == "table" and scriptData.Name then
-						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" and (auto.PlaceId == PlaceId or auto.PlaceId == 0) then
-							table.insert(autoQueue, scriptData)
-						end
+
+					if index % 25 == 0 then
+						task.wait()
 					end
 				end
 
-				if #autoQueue > 0 then
-					local th = task.spawn(function()
-						if type(loadstring) ~= "function" then
-							ShowNotification("Auto-Execute failed: Executor lacks loadstring", "Error")
-							return
-						end
-						for _, scriptData in ipairs(autoQueue) do
-							if isDestroying then return end
-							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
-							if scrRaw then
-								local exSuccess, err = ExecuteSandboxed(scrRaw)
-								if exSuccess then
-									ShowNotification("Successfully auto-executed: " .. scriptData.Name, "Success")
-								else
-									ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
-								end
-							else
-								ShowNotification("Auto-Execute fetch failed: " .. scriptData.Name, "Error")
+				local cleaned = false
+				for k in pairs(SavedData.AutoExecutes) do
+					if not vMap[k] then
+						SavedData.AutoExecutes[k] = nil
+						cleaned = true
+					end
+				end
+				if cleaned then
+					SaveConfiguration()
+				end
+
+				for _, card in ipairs(detachedFolder:GetChildren()) do
+					card.Parent = ScriptsView
+				end
+				detachedFolder:Destroy()
+
+				-- Auto-execute only once for this running Velox instance.
+				-- Refreshing the catalog must not execute user scripts a second time.
+				if not AutoExecuteRanThisSession then
+					AutoExecuteRanThisSession = true
+
+					local autoQueue = {}
+					for _, scriptData in ipairs(parsed) do
+						if type(scriptData) == "table" and scriptData.Name then
+							local auto = SavedData.AutoExecutes[scriptData.Name]
+							if auto and type(auto) == "table"
+								and (auto.PlaceId == PlaceId or auto.PlaceId == 0) then
+								table.insert(autoQueue, scriptData)
 							end
-							task.wait(0.5)
 						end
-					end)
-					table.insert(PendingTasks, th)
+					end
+
+					if #autoQueue > 0 then
+						TrackTask(function()
+							if type(loadstring) ~= "function" then
+								ShowNotification("Auto-Execute failed: Executor lacks loadstring", "Error")
+								return
+							end
+
+							for _, scriptData in ipairs(autoQueue) do
+								if isDestroying or generation ~= CatalogGeneration then return end
+
+								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+								if isDestroying or generation ~= CatalogGeneration then return end
+
+								if scrRaw then
+									local exSuccess, err = ExecuteSandboxed(scrRaw)
+									if exSuccess then
+										ShowNotification("Successfully auto-executed: " .. scriptData.Name, "Success")
+									else
+										ShowNotification("Auto-Execute failed: " .. scriptData.Name, "Error")
+										warn("Velox auto-execute error:", tostring(err))
+									end
+								else
+									ShowNotification("Auto-Execute fetch failed: " .. scriptData.Name, "Error")
+								end
+
+								task.wait(0.5)
+							end
+						end)
+					end
 				end
 
 				UpdateFilter()
-				task.defer(function() if ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end end)
-				StatusDot.BackgroundColor3 = Theme.Success; StatusText.Text = "Online"; StatusText.TextColor3 = Theme.Success
-				ShowNotification("Catalog refreshed successfully.", "Success")
+				task.defer(function()
+					if not isDestroying and generation == CatalogGeneration
+						and ScriptsView and ScriptsView.Parent then
+						ScriptsView.CanvasPosition = savedScroll
+					end
+				end)
+
+				if not isDestroying and generation == CatalogGeneration then
+					StatusDot.BackgroundColor3 = Theme.Success
+					StatusText.Text = "Online"
+					StatusText.TextColor3 = Theme.Success
+					ShowNotification("Catalog refreshed successfully.", "Success")
+				end
 			else
-				EmptyStateMessage.Text = "Catalog parsing error. Check console."; StatusText.Text = "Data Error"
+				if not isDestroying and generation == CatalogGeneration then
+					EmptyStateMessage.Text = "Catalog parsing error. Check console."
+					StatusText.Text = "Data Error"
+				end
 			end
 		else
-			EmptyStateMessage.Text = "Unable to connect or unsupported executor API."
-			StatusText.Text = "Offline"
-			ShowNotification("Network error or unsupported executor request API.", "Error")
+			if not isDestroying and generation == CatalogGeneration then
+				EmptyStateMessage.Text = "Unable to connect or unsupported executor API."
+				StatusText.Text = "Offline"
+				ShowNotification("Network error or unsupported executor request API.", "Error")
+			end
 		end
-		dbRefreshing = false
+		if generation == CatalogGeneration then
+			dbRefreshing = false
+		end
 	end)
 end
 LoadDynamicCatalog()
