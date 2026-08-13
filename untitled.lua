@@ -93,6 +93,7 @@ local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEna
 local mainDragConnection, floatDragConnection
 local ToggleKeybindConnection = nil
 local KeybindCaptureConnection = nil
+local DropdownContainer = nil
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -200,6 +201,9 @@ local function CleanUpMemory()
 				end)
 			end
 		end
+	end
+	if DropdownContainer and DropdownContainer.Parent then
+		pcall(function() DropdownContainer:Destroy() end)
 	end
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
@@ -366,7 +370,10 @@ local function FetchWithRetry(url, retries, delayTime)
 end
 
 local function GetRelativeTime(timestamp)
-	if type(timestamp) ~= "number" then return "Unknown" end
+	if type(timestamp) == "string" then
+		timestamp = tonumber(timestamp)
+	end
+	if type(timestamp) ~= "number" or timestamp ~= timestamp then return "Updated recently" end
 	local diff = os.time() - timestamp
 	if diff < 0 then return "Just now" end
 	local days = math.floor(diff / 86400)
@@ -992,7 +999,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.5 (Stable) | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v3.5.1 (Stable) | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1158,7 +1165,7 @@ Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
 local SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
-local DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
+DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
 DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownContainer.BorderSizePixel = 0
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -1229,7 +1236,7 @@ local function UpdateFilter()
 				end
 			end
 			local filterPass = true
-			local age = scr.LastUpdated and (osTimeCache - scr.LastUpdated) or math.huge
+			local age = scr.LastUpdated and (osTimeCache - (tonumber(scr.LastUpdated) or osTimeCache)) or math.huge
 			if FilterFavoritesActive then
 				if not SavedData.Favorites[scr.ExactName] then filterPass = false end
 			end
@@ -1257,9 +1264,9 @@ local function UpdateFilter()
 			elseif SortMode == "Z-A" then 
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
 			elseif SortMode == "Newest" then 
-				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (a.LastUpdated or 0) > (b.LastUpdated or 0) end
+				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (tonumber(a.LastUpdated) or 0) > (tonumber(b.LastUpdated) or 0) end
 			elseif SortMode == "Oldest" then 
-				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (a.LastUpdated or 0) < (b.LastUpdated or 0) end
+				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (tonumber(a.LastUpdated) or 0) < (tonumber(b.LastUpdated) or 0) end
 			elseif SortMode == "Favorites" then
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
@@ -1427,6 +1434,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
+CreateParagraph("v3.5.1 - Engine & Connection Safety Update", "• Updated 3 days ago with enhanced executor compatibility.\n• Hardened Anti-AFK connection disabling using safe pcall wrappers.\n• Fixed relative timestamp parsing for non-numeric catalog timestamps.\n• Resolved potential memory leaks on dropdown UI elements during cleanup.", ChangelogsView)
 CreateParagraph("v3.5.0 - Security & UX Stability Update", "• Fixed Auto-Execute queue processing to execute scripts seamlessly on start.\n• Added rich execution notifications and strict fallback GUIs for total UX clarity.\n• Implemented context-aware sandboxing so error logs explicitly name failed scripts.\n• Hardened namecall metatable hook against client crashes.", ChangelogsView)
 CreateParagraph("v3.4.0 - Performance Overhaul", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
 
@@ -2058,18 +2066,31 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 		end
 		if getconnections then
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				if type(conn) == "table" and conn.Disable then
-					conn:Disable()
-					table.insert(AfkConnections, conn)
+			pcall(function()
+				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+					pcall(function()
+						if type(conn) == "table" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						end
+					end)
 				end
-			end
+			end)
 		end
 	else
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
 		for _, conn in ipairs(AfkConnections) do
-			if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end) end
+			pcall(function()
+				if type(conn) == "table" and conn.Enable then
+					conn:Enable()
+				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
+					conn:Enable()
+				end
+			end)
 		end
 		table.clear(AfkConnections)
 	end
@@ -2092,12 +2113,19 @@ if SavedData.Settings.AntiAFK then
 		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 	end
 	if getconnections then
-		for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-			if type(conn) == "table" and conn.Disable then
-				conn:Disable()
-				table.insert(AfkConnections, conn)
+		pcall(function()
+			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+				pcall(function()
+					if type(conn) == "table" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					end
+				end)
 			end
-		end
+		end)
 	end
 end
 
@@ -2120,8 +2148,8 @@ pcall(function()
 				if mOk and method then
 					if self == TargetParent then
 						if method == "GetDescendants" or method == "GetChildren" then
-							local result = oldNamecall(self, ...)
-							if type(result) == "table" then
+							local nOk, result = pcall(oldNamecall, self, ...)
+							if nOk and type(result) == "table" then
 								local filtered = {}
 								for i = 1, #result do
 									local v = result[i]
