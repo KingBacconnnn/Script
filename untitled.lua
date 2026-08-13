@@ -39,6 +39,7 @@ local RunService = Services.RunService
 local Stats = Services.Stats
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
+local GuiService = Services.GuiService
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -88,7 +89,7 @@ local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
 local IsBindingKey = false
-local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
 local ToggleKeybindConnection = nil
@@ -267,6 +268,24 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
+local function SanitizeForJSON(data)
+	if type(data) == "table" then
+		local clean = {}
+		for k, v in pairs(data) do
+			if type(k) == "string" or type(k) == "number" then
+				local cleanVal = SanitizeForJSON(v)
+				if cleanVal ~= nil then
+					clean[tostring(k)] = cleanVal
+				end
+			end
+		end
+		return clean
+	elseif type(data) == "string" or type(data) == "number" or type(data) == "boolean" then
+		return data
+	end
+	return nil
+end
+
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
 	if isSaving then 
@@ -289,7 +308,9 @@ local function SaveConfiguration()
 				} 
 			end
 		end
-		local success, result = pcall(function() return HttpService:JSONEncode(cleanData) end)
+		
+		local safeData = SanitizeForJSON(cleanData)
+		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
 		if success then 
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
 			if writeSuccess then
@@ -335,7 +356,6 @@ local function LoadConfiguration()
 				end
 			end
 		else
-			print("[Velox Hub]: Failed to decode saved config. Generating fresh configuration file.")
 			SaveConfiguration()
 		end
 	end
@@ -358,13 +378,12 @@ local function UniversalHttpGet(url)
 	return nil
 end
 
-local function FetchWithRetry(url, retries, delayTime)
+local function FetchWithRetry(url, retries)
 	retries = retries or 3
-	delayTime = delayTime or 2
 	for i = 1, retries do
 		local response = UniversalHttpGet(url)
 		if response then return response end
-		if i < retries then task.wait(delayTime) end
+		if i < retries then task.wait(math.pow(2, i)) end
 	end
 	return nil
 end
@@ -629,7 +648,6 @@ local function EmergencyFallbackNotification(msg, title)
 			})
 		end
 	end)
-	print("[Velox Hub Fallback - " .. tostring(title or "Notice") .. "]: " .. tostring(msg))
 end
 
 local function StandaloneBannerNotification(msg, notifType)
@@ -1224,6 +1242,7 @@ local function UpdateFilter()
 		local osTimeCache = os.time()
 		for i, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
+			if i % 50 == 0 then task.wait() end
 			local isMatch = true
 			if query ~= "" then
 				for _, w in ipairs(words) do
@@ -1447,14 +1466,12 @@ end
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code)
 	if not chunk then 
-		warn("[Velox Compile Error - " .. tostring(scriptName) .. "]: " .. tostring(compileErr))
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		return false, tostring(compileErr) 
 	end
 	
 	local success, runtimeErr = pcall(chunk)
 	if not success then
-		warn("[Velox Runtime Error - " .. tostring(scriptName) .. "]: " .. tostring(runtimeErr))
 		ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		return false, tostring(runtimeErr)
 	end
@@ -1601,7 +1618,7 @@ local function CreateScriptCard(data, renderParent)
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = FetchWithRetry(data.RawUrl, 2, 1)
+				local raw = FetchWithRetry(data.RawUrl, 2)
 				if isDestroying then return end
 				if not raw then 
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
@@ -1646,7 +1663,7 @@ local function LoadDynamicCatalog()
 	EmptyStateMessage.Text = "Loading script repository..."
 
 	TrackTask(function()
-		local raw = FetchWithRetry(CATALOG_URL, 3, 2)
+		local raw = FetchWithRetry(CATALOG_URL, 3)
 		if isDestroying or generation ~= CatalogGeneration then return end
 
 		if raw then
@@ -1747,7 +1764,7 @@ local function LoadDynamicCatalog()
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, 1)
+								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
@@ -2162,13 +2179,26 @@ pcall(function()
 						elseif method == "FindFirstChild" or method == "WaitForChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return method == "WaitForChild" and oldNamecall(self, GenerateRandomString(20), args[2] or 1) or nil
+								return nil
 							end
 						end
 					end
 				end
 			end
 			return oldNamecall(self, ...)
+		end)
+		
+		local oldIndex
+		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			local ok, isCaller = pcall(checkcaller)
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
+				if self == TargetParent and type(key) == "string" then
+					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
+						return nil
+					end
+				end
+			end
+			return oldIndex(self, key)
 		end)
 	end
 end)
