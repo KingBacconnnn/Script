@@ -92,9 +92,12 @@ local IsBindingKey = false
 local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
+local activeMainDragInput, activeFloatDragInput
 local ToggleKeybindConnection = nil
 local KeybindCaptureConnection = nil
 local DropdownContainer = nil
+local ToastContainer = nil
+local ConfirmOverlay = nil
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -137,6 +140,19 @@ local function RegConn(connection)
 	return connection
 end
 
+local function UnregConn(connection)
+	if not connection then return end
+	for i = #VeloxConnections, 1, -1 do
+		if VeloxConnections[i] == connection then
+			table.remove(VeloxConnections, i)
+			break
+		end
+	end
+	if typeof(connection) == "RBXScriptConnection" and connection.Connected then
+		pcall(function() connection:Disconnect() end)
+	end
+end
+
 local function RegCardConn(connection)
 	if connection and typeof(connection) == "RBXScriptConnection" then
 		table.insert(CardConnections, connection)
@@ -175,8 +191,8 @@ local function CleanUpMemory()
 
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
-	if ToggleKeybindConnection then pcall(function() ToggleKeybindConnection:Disconnect() end) end
-	if KeybindCaptureConnection then pcall(function() KeybindCaptureConnection:Disconnect() end) end
+	if ToggleKeybindConnection then UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
+	if KeybindCaptureConnection then UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -206,12 +222,19 @@ local function CleanUpMemory()
 	if DropdownContainer and DropdownContainer.Parent then
 		pcall(function() DropdownContainer:Destroy() end)
 	end
+	if ToastContainer and ToastContainer.Parent then
+		pcall(function() ToastContainer:Destroy() end)
+	end
+	if ConfirmOverlay and ConfirmOverlay.Parent then
+		pcall(function() ConfirmOverlay:Destroy() end)
+	end
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
 	table.clear(ActiveTweens)
 	table.clear(InteractiveElements)
+	table.clear(OriginalCache)
 end
 
 local function SafeTween(instance, tweenInfo, properties)
@@ -523,17 +546,17 @@ Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
-local floatDrag, floatStart, floatPos
+local floatStart, floatPos
 RegConn(FloatingBtn.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		floatDrag = true
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeFloatDragInput then
+		activeFloatDragInput = input
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		
 		if floatDragConnection then floatDragConnection:Disconnect() end
-		floatDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
+		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
-			if floatDrag and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - floatStart
 				local camera = workspace.CurrentCamera
 				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
@@ -545,7 +568,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
-		end)
+		end))
 	end
 end))
 
@@ -603,6 +626,10 @@ end
 local function ToggleUI()
 	if isDestroying or isTransitioning then return end
 	isTransitioning = true
+
+	if DropdownContainer and DropdownContainer.Visible then
+		DropdownContainer.Visible = false
+	end
 	
 	if not isMinimized then
 		isMinimized = true
@@ -624,7 +651,7 @@ local function ToggleUI()
 	isTransitioning = false
 end
 
-local ToastContainer = Instance.new("Frame", ScreenGui)
+ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Name = "ToastContainer"
 ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
 ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
@@ -773,7 +800,7 @@ local function ShowNotification(msg, notifType)
 	end
 end
 
-local ConfirmOverlay = Instance.new("Frame", ScreenGui)
+ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
 ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -897,7 +924,7 @@ local KeybindButtonRef = nil
 
 local function BindToggleKey(keyCode)
 	if ToggleKeybindConnection then
-		ToggleKeybindConnection:Disconnect()
+		UnregConn(ToggleKeybindConnection)
 		ToggleKeybindConnection = nil
 	end
 	
@@ -937,18 +964,18 @@ HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true 
 
-local mainDragging, mainDragStart, mainStartPos
+local mainDragStart, mainStartPos
 
 RegConn(HeaderContainer.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		mainDragging = true
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeMainDragInput then
+		activeMainDragInput = input
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
 		
 		if mainDragConnection then mainDragConnection:Disconnect() end
-		mainDragConnection = UserInputService.InputChanged:Connect(function(moveInput)
+		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
-			if mainDragging and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - mainDragStart
 				local camera = workspace.CurrentCamera
 				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
@@ -960,28 +987,32 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 				targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
-		end)
+		end))
 	end
 end))
 
 RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		if mainDragging then
-			mainDragging = false
-			if mainDragConnection then mainDragConnection:Disconnect(); mainDragConnection = nil end
-			if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
+	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
+		activeMainDragInput = nil
+		if mainDragConnection then
+			mainDragConnection:Disconnect()
+			mainDragConnection = nil
 		end
-		if floatDrag then
-			floatDrag = false
-			if floatDragConnection then floatDragConnection:Disconnect(); floatDragConnection = nil end
-			if floatStart then
-				local dist = (input.Position - floatStart).Magnitude
-				if dist < 12 then
-					ToggleUI()
-				else
-					if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
-				end
+		if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
+	end
+	if activeFloatDragInput and (input == activeFloatDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
+		activeFloatDragInput = nil
+		if floatDragConnection then
+			floatDragConnection:Disconnect()
+			floatDragConnection = nil
+		end
+		if floatStart then
+			local dist = (input.Position - floatStart).Magnitude
+			if dist < 12 then
+				ToggleUI()
+			else
+				if OriginalCache[FloatingBtn] then OriginalCache[FloatingBtn].Position = FloatingBtn.Position end
 			end
 		end
 	end
@@ -1242,7 +1273,6 @@ local function UpdateFilter()
 		local osTimeCache = os.time()
 		for i, scr in ipairs(RegisteredScripts) do
 			if filterVersion ~= currentVersion then return end
-			if i % 50 == 0 then task.wait() end
 			local isMatch = true
 			if query ~= "" then
 				for _, w in ipairs(words) do
@@ -1464,19 +1494,22 @@ local function RefreshAllCardStates()
 end
 
 local function ExecuteSandboxed(code, scriptName)
-	local chunk, compileErr = loadstring(code)
+	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then 
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		warn("[Velox Compile Error]: " .. tostring(compileErr))
 		return false, tostring(compileErr) 
 	end
 	
-	local success, runtimeErr = pcall(chunk)
-	if not success then
-		ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		return false, tostring(runtimeErr)
-	end
+	TrackTask(function()
+		local success, runtimeErr = pcall(chunk)
+		if not success and not isDestroying then
+			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
+		end
+	end)
 	
-	return true, "Script executed successfully"
+	return true, "Script dispatched successfully"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1608,7 +1641,6 @@ local function CreateScriptCard(data, renderParent)
 
 	RegCardConn(card.Activated:Connect(function()
 		if isDestroying then return end
-		
 		if tick() - innerActionTime < 0.2 then return end
 
 		local function executeScript()
@@ -1625,7 +1657,7 @@ local function CreateScriptCard(data, renderParent)
 				elseif string.find(raw, "404: Not Found") then 
 					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
-					local success, err = ExecuteSandboxed(raw, exactName)
+					local success = ExecuteSandboxed(raw, exactName)
 					if success then
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
@@ -1768,7 +1800,7 @@ local function LoadDynamicCatalog()
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
-									local exSuccess, err = ExecuteSandboxed(scrRaw, scriptData.Name)
+									local exSuccess = ExecuteSandboxed(scrRaw, scriptData.Name)
 									if exSuccess then
 										table.insert(successList, scriptData.Name)
 									else
@@ -2016,7 +2048,8 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
 	
 	if KeybindCaptureConnection then 
-		KeybindCaptureConnection:Disconnect() 
+		UnregConn(KeybindCaptureConnection)
+		KeybindCaptureConnection = nil
 	end
 
 	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
@@ -2027,7 +2060,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
 				if KeybindCaptureConnection then 
-					KeybindCaptureConnection:Disconnect()
+					UnregConn(KeybindCaptureConnection)
 					KeybindCaptureConnection = nil 
 				end
 				return
@@ -2043,7 +2076,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				BindToggleKey(ToggleKeybind)
 				
 				if KeybindCaptureConnection then 
-					KeybindCaptureConnection:Disconnect()
+					UnregConn(KeybindCaptureConnection)
 					KeybindCaptureConnection = nil 
 				end
 			end
@@ -2052,7 +2085,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 			ShowNotification("Keybind mapping canceled.", "Warning")
 			if KeybindCaptureConnection then 
-				KeybindCaptureConnection:Disconnect()
+				UnregConn(KeybindCaptureConnection)
 				KeybindCaptureConnection = nil 
 			end
 		end
@@ -2147,6 +2180,7 @@ if SavedData.Settings.AntiAFK then
 end
 
 local function ObfuscateHierarchy(instance)
+	instance.Name = GenerateRandomString(15)
 	for _, child in ipairs(instance:GetDescendants()) do
 		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
 			child.Name = GenerateRandomString(15)
@@ -2176,9 +2210,16 @@ pcall(function()
 								end
 								return filtered
 							end
-						elseif method == "FindFirstChild" or method == "WaitForChild" then
+						elseif method == "FindFirstChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+								return nil
+							end
+						elseif method == "WaitForChild" then
+							local args = {...}
+							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+								local timeOut = tonumber(args[2]) or 5
+								task.wait(timeOut)
 								return nil
 							end
 						end
