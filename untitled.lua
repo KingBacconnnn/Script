@@ -66,11 +66,11 @@ local Theme = {
 	TextPrimary = Color3.fromRGB(248, 250, 252),
 	TextSecondary = Color3.fromRGB(148, 163, 184),
 	Success = Color3.fromRGB(16, 185, 129),
-	Error = Color3.fromRGB(239, 68, 68),
-	Warning = Color3.fromRGB(245, 158, 11),
+	Error = Color3.fromRGB(180, 50, 50), -- Softer, darker, less saturated red
+	Warning = Color3.fromRGB(220, 140, 15),
 	Info = Color3.fromRGB(56, 189, 248),
 	System = Color3.fromRGB(168, 85, 247),
-	Execution = Color3.fromRGB(236, 72, 153),
+	Execution = Color3.fromRGB(190, 55, 110), -- Muted pinkish-red
 	Stroke = Color3.fromRGB(51, 65, 85),
 	ToggleOff = Color3.fromRGB(71, 85, 105)
 }
@@ -98,6 +98,10 @@ local KeybindCaptureConnection = nil
 local DropdownContainer = nil
 local ToastContainer = nil
 local ConfirmOverlay = nil
+
+local GlobalCooldownBanner = nil
+local GlobalCooldownLoopVersion = 0
+local GlobalActionCooldownEndTime = 0
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
 
@@ -227,6 +231,9 @@ local function CleanUpMemory()
 	end
 	if ConfirmOverlay and ConfirmOverlay.Parent then
 		pcall(function() ConfirmOverlay:Destroy() end)
+	end
+	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then
+		pcall(function() GlobalCooldownBanner:Destroy() end)
 	end
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
@@ -800,6 +807,94 @@ local function ShowNotification(msg, notifType)
 	end
 end
 
+local function AttemptActionWithCooldown(actionFunc)
+	local now = tick()
+	if now < GlobalActionCooldownEndTime then
+		if not GlobalCooldownBanner or not GlobalCooldownBanner.Parent then
+			GlobalCooldownLoopVersion = GlobalCooldownLoopVersion + 1
+			local currentLoop = GlobalCooldownLoopVersion
+
+			local parent = GetSecureParent()
+			if not parent then return end
+			
+			local bannerGui = Instance.new("ScreenGui")
+			bannerGui.Name = "VeloxCooldown_" .. GenerateRandomString(8)
+			bannerGui.DisplayOrder = 10000
+			bannerGui.ResetOnSpawn = false
+			bannerGui.Parent = parent
+			GlobalCooldownBanner = bannerGui
+
+			local frame = Instance.new("Frame", bannerGui)
+			frame.Size = UDim2.new(0, IsMobile and 280 or 340, 0, 45)
+			frame.Position = UDim2.new(0.5, 0, 0, -60)
+			frame.AnchorPoint = Vector2.new(0.5, 0)
+			frame.BackgroundColor3 = Theme.BackgroundSecondary
+			frame.BorderSizePixel = 0
+			Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+			
+			local stroke = Instance.new("UIStroke", frame)
+			stroke.Color = Theme.Warning
+			stroke.Thickness = 1.5
+
+			local txt = Instance.new("TextLabel", frame)
+			txt.Size = UDim2.new(1, -20, 1, 0)
+			txt.Position = UDim2.new(0, 10, 0, 0)
+			txt.BackgroundTransparency = 1
+			txt.TextColor3 = Theme.TextPrimary
+			txt.Font = Enum.Font.GothamMedium
+			txt.TextSize = IsMobile and 11 or 13
+			txt.TextWrapped = true
+
+			TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+				Position = UDim2.new(0.5, 0, 0, 20)
+			}):Play()
+
+			task.spawn(function()
+				while currentLoop == GlobalCooldownLoopVersion do
+					local rem = math.ceil(GlobalActionCooldownEndTime - tick())
+					if rem > 1 then
+						if txt and txt.Parent then txt.Text = "Please try again in " .. rem .. " seconds" end
+					elseif rem == 1 then
+						if txt and txt.Parent then txt.Text = "Please try again in 1 second" end
+					else
+						if txt and txt.Parent then 
+							txt.Text = "Ready" 
+							stroke.Color = Theme.Success
+						end
+						task.wait(1)
+						if currentLoop == GlobalCooldownLoopVersion then
+							if frame and frame.Parent then
+								local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+									Position = UDim2.new(0.5, 0, 0, -60)
+								})
+								outro:Play()
+								outro.Completed:Wait()
+							end
+							if bannerGui and bannerGui.Parent then bannerGui:Destroy() end
+							if GlobalCooldownBanner == bannerGui then
+								GlobalCooldownBanner = nil
+							end
+						end
+						break
+					end
+					task.wait(0.1)
+				end
+			end)
+		end
+		return
+	end
+
+	GlobalActionCooldownEndTime = tick() + 3
+	
+	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then
+		GlobalCooldownLoopVersion = GlobalCooldownLoopVersion + 1
+		pcall(function() GlobalCooldownBanner:Destroy() end)
+		GlobalCooldownBanner = nil
+	end
+
+	task.spawn(actionFunc)
+end
+
 ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
@@ -906,7 +1001,11 @@ local function CloseConfirmDialog(shouldExecute)
 end
 
 RegConn(ConfirmCancelBtn.Activated:Connect(CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
-RegConn(ConfirmExecuteBtn.Activated:Connect(CreateDebounce(0.1, function() CloseConfirmDialog(true) end)))
+RegConn(ConfirmExecuteBtn.Activated:Connect(function()
+	AttemptActionWithCooldown(function()
+		CloseConfirmDialog(true)
+	end)
+end))
 
 RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	if not isConfirming then return end
@@ -1668,7 +1767,12 @@ local function CreateScriptCard(data, renderParent)
 				end
 			end)
 		end
-		if SavedData.AutoExecutes[exactName] ~= nil then executeScript() else OpenConfirmDialog(exactName, executeScript) end
+		
+		if SavedData.AutoExecutes[exactName] ~= nil then 
+			AttemptActionWithCooldown(executeScript)
+		else 
+			OpenConfirmDialog(exactName, executeScript) 
+		end
 	end))
 
 	card.Parent = renderParent
@@ -2012,7 +2116,7 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	local btnStroke = Instance.new("UIStroke", btn)
 	btnStroke.Color = isDestructive and Theme.Error or Theme.Stroke
 	btnStroke.Thickness = 1
-	local hoverColor = isDestructive and Color3.fromRGB(50, 20, 20) or Theme.CardHover
+	local hoverColor = isDestructive and Color3.fromRGB(55, 25, 25) or Theme.CardHover
 	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
 	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
@@ -2149,7 +2253,9 @@ end)
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
-	LoadDynamicCatalog()
+	AttemptActionWithCooldown(function()
+		LoadDynamicCatalog()
+	end)
 end)
 
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
