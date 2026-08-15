@@ -66,11 +66,11 @@ local Theme = {
 	TextPrimary = Color3.fromRGB(248, 250, 252),
 	TextSecondary = Color3.fromRGB(148, 163, 184),
 	Success = Color3.fromRGB(16, 185, 129),
-	Error = Color3.fromRGB(180, 50, 50), -- Softer, darker, less saturated red
+	Error = Color3.fromRGB(180, 50, 50), 
 	Warning = Color3.fromRGB(220, 140, 15),
 	Info = Color3.fromRGB(56, 189, 248),
 	System = Color3.fromRGB(168, 85, 247),
-	Execution = Color3.fromRGB(190, 55, 110), -- Muted pinkish-red
+	Execution = Color3.fromRGB(190, 55, 110), 
 	Stroke = Color3.fromRGB(51, 65, 85),
 	ToggleOff = Color3.fromRGB(71, 85, 105)
 }
@@ -298,12 +298,15 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
-local function SanitizeForJSON(data)
+local function SanitizeForJSON(data, seen)
+	seen = seen or {}
 	if type(data) == "table" then
+		if seen[data] then return nil end
+		seen[data] = true
 		local clean = {}
 		for k, v in pairs(data) do
 			if type(k) == "string" or type(k) == "number" then
-				local cleanVal = SanitizeForJSON(v)
+				local cleanVal = SanitizeForJSON(v, seen)
 				if cleanVal ~= nil then
 					clean[tostring(k)] = cleanVal
 				end
@@ -1053,8 +1056,8 @@ end))
 local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-	isDestroying = true
-	getgenv()[_G_Identifier]()
+	CleanUpMemory()
+	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1595,7 +1598,7 @@ end
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then 
-		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check Console.", "Error")
 		warn("[Velox Compile Error]: " .. tostring(compileErr))
 		return false, tostring(compileErr) 
 	end
@@ -1603,7 +1606,7 @@ local function ExecuteSandboxed(code, scriptName)
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
-			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check Console.", "Error")
 			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
 		end
 	end)
@@ -2299,6 +2302,8 @@ pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			if isDestroying then return oldNamecall(self, ...) end
+			
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				local mOk, method = pcall(getnamecallmethod)
@@ -2316,16 +2321,13 @@ pcall(function()
 								end
 								return filtered
 							end
-						elseif method == "FindFirstChild" then
+						elseif method == "FindFirstChild" or method == "WaitForChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return nil
-							end
-						elseif method == "WaitForChild" then
-							local args = {...}
-							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								local timeOut = tonumber(args[2]) or 5
-								task.wait(timeOut)
+								if method == "WaitForChild" then
+									local timeOut = tonumber(args[2]) or 5
+									task.wait(timeOut)
+								end
 								return nil
 							end
 						end
@@ -2337,9 +2339,11 @@ pcall(function()
 		
 		local oldIndex
 		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			if isDestroying then return oldIndex(self, key) end
+			
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
-				if self == TargetParent and type(key) == "string" then
+				if self == TargetParent then
 					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
 						return nil
 					end
@@ -2350,26 +2354,4 @@ pcall(function()
 	end
 end)
 
-TabViews["Changelogs"].Visible = true
-TabViews["Scripts"].Visible = false
-TabViews["Settings"].Visible = false
-TabIndicator.Position = UDim2.new(0, 4, 1, -2)
-SectionHeaderLabel.Text = "Updates"
-MainPanel.Visible = true
-SearchRow.Visible = false
-FloatingBtn.Visible = false
-
-ShowNotification("Velox Hub is ready for use!", "Success")
-
-if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
-		if isDestroying then return end
-		table.clear(OriginalCache)
-		CacheInstanceAndDescendants(MainPanel)
-		CacheInstanceAndDescendants(FloatingBtn)
-		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		ShowNotification("UI layout cache successfully reset.", "Success")
-	end)
-end
+ShowNotification("Velox Hub initialized successfully.", "Success")
