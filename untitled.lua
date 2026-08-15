@@ -2107,7 +2107,7 @@ local function TriggerAntiAFKAction()
 	end
 end
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10709782497", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -2115,9 +2115,34 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		if not AfkConnections.Idled then
 			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 		end
+		if getconnections then
+			pcall(function()
+				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+					pcall(function()
+						if type(conn) == "table" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						end
+					end)
+				end
+			end)
+		end
 	else
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
+		for _, conn in ipairs(AfkConnections) do
+			pcall(function()
+				if type(conn) == "table" and conn.Enable then
+					conn:Enable()
+				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
+					conn:Enable()
+				end
+			end)
+		end
+		table.clear(AfkConnections)
 	end
 end)
 
@@ -2137,14 +2162,39 @@ if SavedData.Settings.AntiAFK then
 	if not AfkConnections.Idled then
 		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
 	end
+	if getconnections then
+		pcall(function()
+			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+				pcall(function()
+					if type(conn) == "table" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					end
+				end)
+			end
+		end)
+	end
 end
+
+local function ObfuscateHierarchy(instance)
+	instance.Name = GenerateRandomString(15)
+	for _, child in ipairs(instance:GetDescendants()) do
+		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
+			child.Name = GenerateRandomString(15)
+		end
+	end
+end
+ObfuscateHierarchy(ScreenGui)
 
 pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 			local ok, isCaller = pcall(checkcaller)
-			if ok and not isCaller and ScreenGui and ScreenGui.Parent and typeof(self) == "Instance" then
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				local mOk, method = pcall(getnamecallmethod)
 				if mOk and method then
 					if self == TargetParent then
@@ -2160,7 +2210,7 @@ pcall(function()
 								end
 								return filtered
 							end
-						elseif method == "FindFirstChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
+						elseif method == "FindFirstChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
 								return nil
@@ -2168,14 +2218,9 @@ pcall(function()
 						elseif method == "WaitForChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								-- Emulate a proper wait block to hide from client waits
-								if type(args[2]) == "number" then
-									task.wait(args[2])
-									return nil
-								else
-									coroutine.yield()
-									return nil
-								end
+								local timeOut = tonumber(args[2]) or 5
+								task.wait(timeOut)
+								return nil
 							end
 						end
 					end
@@ -2183,5 +2228,42 @@ pcall(function()
 			end
 			return oldNamecall(self, ...)
 		end)
+		
+		local oldIndex
+		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			local ok, isCaller = pcall(checkcaller)
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
+				if self == TargetParent and type(key) == "string" then
+					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
+						return nil
+					end
+				end
+			end
+			return oldIndex(self, key)
+		end)
 	end
 end)
+
+TabViews["Changelogs"].Visible = true
+TabViews["Scripts"].Visible = false
+TabViews["Settings"].Visible = false
+TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+SectionHeaderLabel.Text = "Updates"
+MainPanel.Visible = true
+SearchRow.Visible = false
+FloatingBtn.Visible = false
+
+ShowNotification("Velox Hub is ready for use!", "Success")
+
+if IsMobile then
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+		if isDestroying then return end
+		table.clear(OriginalCache)
+		CacheInstanceAndDescendants(MainPanel)
+		CacheInstanceAndDescendants(FloatingBtn)
+		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
+		ShowNotification("UI layout cache successfully reset.", "Success")
+	end)
+end
