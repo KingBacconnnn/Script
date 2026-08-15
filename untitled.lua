@@ -1200,7 +1200,7 @@ task.spawn(function()
 end)
 
 local MinBtn = Instance.new("TextButton", RightHeaderFrame)
-MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = "—"
+MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = "â€”"
 MinBtn.TextColor3 = Theme.TextSecondary; MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = IsMobile and 14 or 18; MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
@@ -1286,7 +1286,7 @@ local ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
 ClearSearchBtn.Position = UDim2.new(1, -28, 0.5, -12)
 ClearSearchBtn.BackgroundTransparency = 1
-ClearSearchBtn.Text = "×"
+ClearSearchBtn.Text = "Ã—"
 ClearSearchBtn.TextColor3 = Color3.fromRGB(148, 163, 184)
 ClearSearchBtn.TextSize = 18
 ClearSearchBtn.Font = Enum.Font.GothamBold
@@ -1298,7 +1298,7 @@ RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stro
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
-FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "☆"
+FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "â˜†"
 FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterBtn.TextSize = 15
 FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
@@ -1306,7 +1306,7 @@ local FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.
 
 local SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
-SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
+SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "â†•"
 SortDropdownBtn.TextColor3 = Theme.TextSecondary; SortDropdownBtn.TextSize = 15
 SortDropdownBtn.Font = Enum.Font.GothamBold; SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
@@ -1457,10 +1457,10 @@ RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	if isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
-		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		FavFilterBtn.Text = "â˜…"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
 		ShowNotification("Showing your favorite scripts only.", "Info")
 	else
-		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		FavFilterBtn.Text = "â˜†"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
 		ShowNotification("Showing all scripts.", "Info")
 	end
 	UpdateFilter()
@@ -1582,9 +1582,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v2.0.0 - Engine & Connection Safety Update", "• Updated 3 days ago with enhanced executor compatibility.\n• Hardened Anti-AFK connection disabling using safe pcall wrappers.\n• Fixed relative timestamp parsing for non-numeric catalog timestamps.\n• Resolved potential memory leaks on dropdown UI elements during cleanup.", ChangelogsView)
-CreateParagraph("v2.0.0 - Security & UX Stability Update", "• Fixed Auto-Execute queue processing to execute scripts seamlessly on start.\n• Added rich execution notifications and strict fallback GUIs for total UX clarity.\n• Implemented context-aware sandboxing so error logs explicitly name failed scripts.\n• Hardened namecall metatable hook against client crashes.", ChangelogsView)
-CreateParagraph("v2.0.0 - Performance Overhaul", "• Implemented dynamic metatable hooks to hide GUI safely from client scans.\n• Refactored input event connections to stop heavy CPU usage when dragging UI.\n• Migrated executed scripts to run in a safe asynchronous sandbox environment.\n• Optimized auto-execute queue so scripts never freeze your interface.", ChangelogsView)
+CreateParagraph("v2.0.0 - Stability, Compatibility & UX Update", "• Fixed Auto-Execute queue processing to execute queued scripts seamlessly on startup.\n• Added rich execution notifications with clear success and failure feedback.\n• Added reliable fallback GUI notifications when standard notification systems are unavailable.\n• Implemented context-aware execution handling with script-specific error reporting for easier debugging.\n• Improved namecall hook stability with additional validation and caller checks.\n• Improved executor compatibility through additional API detection and graceful fallbacks.\n• Enhanced HTTP request handling with multiple supported request-method fallbacks.\n• Improved dynamic catalog loading, refreshing, searching, filtering, and metadata handling.\n• Added protection against outdated catalog data replacing newer catalog results.\n• Improved script-card creation, metadata display, favorites, and Auto-Execute state synchronization.\n• Improved script execution reliability with validation, protected execution, cooldowns, and duplicate-execution protection.\n• Refined UI animations, interactions, navigation, notifications, and viewport handling.\n• Improved mobile and environment-specific UI behavior.\n• Improved configuration saving, loading, serialization, validation, and state restoration.\n• Enhanced Anti-AFK handling with additional API checks, cooldown protection, and improved lifecycle management.\n• Improved asynchronous task tracking and connection management.\n• Enhanced cleanup of connections, tasks, UI objects, and temporary resources during unload and shutdown.\n• Improved handling of failed network requests and unavailable optional APIs.\n• Fixed multiple UI state synchronization, catalog refresh, configuration, and lifecycle edge cases.\n• Improved internal caching, debouncing, cooldowns, and state management.\n• Refined error handling across core systems to improve overall application resilience.\n• General performance, stability, compatibility, reliability, and user-experience improvements across VeloxHub.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1710,7 +1708,7 @@ local function CreateScriptCard(data, renderParent)
 
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[exactName]
-		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
+		starBtn.Text = isFav and "â˜…" or "â˜†"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
 	end
