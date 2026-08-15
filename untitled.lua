@@ -42,10 +42,11 @@ local TweenService = Services.TweenService
 local GuiService = Services.GuiService
 
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+while not LocalPlayer do
+	task.wait()
 	LocalPlayer = Players.LocalPlayer
 end
+
 local PlaceId = game.PlaceId
 
 local gethui = gethui or function() return nil end
@@ -130,7 +131,6 @@ local function CacheInstanceAndDescendants(root)
 		end
 		OriginalCache[obj] = c
 	end
-
 	CacheObj(root)
 	for _, desc in ipairs(root:GetDescendants()) do
 		CacheObj(desc)
@@ -189,7 +189,7 @@ local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
-	if typingTask then pcall(task.cancel, typingTask); typingTask = nil end
+	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
 	CancelTrackedTasks()
 
@@ -200,12 +200,12 @@ local function CleanUpMemory()
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-			pcall(function() conn:Disconnect() end)
+			conn:Disconnect()
 		end
 	end
 	for _, conn in ipairs(CardConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-			pcall(function() conn:Disconnect() end)
+			conn:Disconnect()
 		end
 	end
 	for _, conn in pairs(AfkConnections) do
@@ -471,7 +471,7 @@ pcall(function() protectgui(ScreenGui) end)
 
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
-	if ScreenGui and ScreenGui.Parent then pcall(function() ScreenGui:Destroy() end) end
+	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
@@ -553,7 +553,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		
-		if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
+		if floatDragConnection then floatDragConnection:Disconnect() end
 		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
@@ -1064,7 +1064,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
 		
-		if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
+		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
@@ -1088,7 +1088,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
 		if mainDragConnection then
-			pcall(function() mainDragConnection:Disconnect() end)
+			mainDragConnection:Disconnect()
 			mainDragConnection = nil
 		end
 		if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
@@ -1096,7 +1096,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeFloatDragInput and (input == activeFloatDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeFloatDragInput = nil
 		if floatDragConnection then
-			pcall(function() floatDragConnection:Disconnect() end)
+			floatDragConnection:Disconnect()
 			floatDragConnection = nil
 		end
 		if floatStart then
@@ -1193,7 +1193,7 @@ task.spawn(function()
 end)
 
 local MinBtn = Instance.new("TextButton", RightHeaderFrame)
-MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = "â€”"
+MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = "—"
 MinBtn.TextColor3 = Theme.TextSecondary; MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = IsMobile and 14 or 18; MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
@@ -1279,7 +1279,7 @@ local ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
 ClearSearchBtn.Position = UDim2.new(1, -28, 0.5, -12)
 ClearSearchBtn.BackgroundTransparency = 1
-ClearSearchBtn.Text = "Ã—"
+ClearSearchBtn.Text = "×"
 ClearSearchBtn.TextColor3 = Color3.fromRGB(148, 163, 184)
 ClearSearchBtn.TextSize = 18
 ClearSearchBtn.Font = Enum.Font.GothamBold
@@ -1291,7 +1291,7 @@ RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stro
 
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
-FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "â˜†"
+FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "☆"
 FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterBtn.TextSize = 15
 FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
@@ -1299,7 +1299,7 @@ local FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.
 
 local SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
-SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "â†•"
+SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
 SortDropdownBtn.TextColor3 = Theme.TextSecondary; SortDropdownBtn.TextSize = 15
 SortDropdownBtn.Font = Enum.Font.GothamBold; SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
@@ -1316,7 +1316,7 @@ local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortO
 
 local viewportConn
 local function BindCamera()
-	if viewportConn then pcall(function() viewportConn:Disconnect() end) end
+	if viewportConn then viewportConn:Disconnect() end
 	local cam = workspace.CurrentCamera
 	if cam then
 		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
@@ -1437,7 +1437,7 @@ end
 
 RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
-	if typingTask then pcall(task.cancel, typingTask) end
+	if typingTask then task.cancel(typingTask) end
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
 
@@ -1450,10 +1450,10 @@ RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	if isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
-		FavFilterBtn.Text = "â˜…"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
 		ShowNotification("Showing your favorite scripts only.", "Info")
 	else
-		FavFilterBtn.Text = "â˜†"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
 		ShowNotification("Showing all scripts.", "Info")
 	end
 	UpdateFilter()
@@ -1575,7 +1575,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v2.0.0 - Stability, Compatibility & UX Update", "â€¢ Fixed Auto-Execute queue processing to execute queued scripts seamlessly on startup.\nâ€¢ Added rich execution notifications with clear success and failure feedback.\nâ€¢ Added reliable fallback GUI notifications when standard notification systems are unavailable.\nâ€¢ Implemented context-aware execution handling with script-specific error reporting for easier debugging.\nâ€¢ Improved namecall hook stability with additional validation and caller checks.\nâ€¢ Improved executor compatibility through additional API detection and graceful fallbacks.\nâ€¢ Enhanced HTTP request handling with multiple supported request-method fallbacks.\nâ€¢ Improved dynamic catalog loading, refreshing, searching, filtering, and metadata handling.\nâ€¢ Added protection against outdated catalog data replacing newer catalog results.\nâ€¢ Improved script-card creation, metadata display, favorites, and Auto-Execute state synchronization.\nâ€¢ Improved script execution reliability with validation, protected execution, cooldowns, and duplicate-execution protection.\nâ€¢ Refined UI animations, interactions, navigation, notifications, and viewport handling.\nâ€¢ Improved mobile and environment-specific UI behavior.\nâ€¢ Improved configuration saving, loading, serialization, validation, and state restoration.\nâ€¢ Enhanced Anti-AFK handling with additional API checks, cooldown protection, and improved lifecycle management.\nâ€¢ Improved asynchronous task tracking and connection management.\nâ€¢ Enhanced cleanup of connections, tasks, UI objects, and temporary resources during unload and shutdown.\nâ€¢ Improved handling of failed network requests and unavailable optional APIs.\nâ€¢ Fixed multiple UI state synchronization, catalog refresh, configuration, and lifecycle edge cases.\nâ€¢ Improved internal caching, debouncing, cooldowns, and state management.\nâ€¢ Refined error handling across core systems to improve overall application resilience.\nâ€¢ General performance, stability, compatibility, reliability, and user-experience improvements across VeloxHub.", ChangelogsView)
+CreateParagraph("v2.0.0 - Security & UX Stability Update", "â€¢ Fixed Auto-Execute queue processing to execute scripts seamlessly on start.\nâ€¢ Added rich execution notifications and strict fallback GUIs for total UX clarity.\nâ€¢ Implemented context-aware sandboxing so error logs explicitly name failed scripts.\nâ€¢ Hardened namecall metatable hook against client crashes.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1701,7 +1701,7 @@ local function CreateScriptCard(data, renderParent)
 
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[exactName]
-		starBtn.Text = isFav and "â˜…" or "â˜†"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
+		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
 	end
@@ -1801,7 +1801,7 @@ local function LoadDynamicCatalog()
 			if success and type(parsed) == "table" then
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-						pcall(function() conn:Disconnect() end)
+						conn:Disconnect()
 					end
 				end
 				table.clear(CardConnections)
@@ -1814,7 +1814,7 @@ local function LoadDynamicCatalog()
 
 				for _, child in ipairs(ScriptsView:GetChildren()) do
 					if child:IsA("TextButton") then
-						pcall(function() child:Destroy() end)
+						child:Destroy()
 					end
 				end
 				table.clear(RegisteredScripts)
@@ -1824,7 +1824,7 @@ local function LoadDynamicCatalog()
 
 				for index, scriptData in ipairs(parsed) do
 					if isDestroying or generation ~= CatalogGeneration then
-						pcall(function() detachedFolder:Destroy() end)
+						detachedFolder:Destroy()
 						return
 					end
 
@@ -1852,7 +1852,7 @@ local function LoadDynamicCatalog()
 				for _, card in ipairs(detachedFolder:GetChildren()) do
 					card.Parent = ScriptsView
 				end
-				pcall(function() detachedFolder:Destroy() end)
+				detachedFolder:Destroy()
 
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
@@ -2227,7 +2227,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		end
 	else
 		ShowNotification("Anti-AFK deactivated.", "Warning")
-		if AfkConnections.Idled then pcall(function() AfkConnections.Idled:Disconnect() end); AfkConnections.Idled = nil end
+		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
 		for _, conn in ipairs(AfkConnections) do
 			pcall(function()
 				if type(conn) == "table" and conn.Enable then
@@ -2296,8 +2296,8 @@ pcall(function()
 				if mOk and method then
 					if self == TargetParent then
 						if method == "GetDescendants" or method == "GetChildren" then
-							local nOk, result = pcall(oldNamecall, self, ...)
-							if nOk and type(result) == "table" then
+							local result = oldNamecall(self, ...)
+							if type(result) == "table" then
 								local filtered = {}
 								for i = 1, #result do
 									local v = result[i]
@@ -2307,6 +2307,7 @@ pcall(function()
 								end
 								return filtered
 							end
+							return result
 						elseif method == "FindFirstChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
@@ -2315,8 +2316,6 @@ pcall(function()
 						elseif method == "WaitForChild" then
 							local args = {...}
 							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								local timeOut = tonumber(args[2]) or 5
-								task.wait(timeOut)
 								return nil
 							end
 						end
@@ -2349,3 +2348,18 @@ SectionHeaderLabel.Text = "Updates"
 MainPanel.Visible = true
 SearchRow.Visible = false
 FloatingBtn.Visible = false
+
+ShowNotification("Velox Hub is ready for use!", "Success")
+
+if IsMobile then
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+		if isDestroying then return end
+		table.clear(OriginalCache)
+		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
+		CacheInstanceAndDescendants(MainPanel)
+		CacheInstanceAndDescendants(FloatingBtn)
+		ShowNotification("UI Cache cleared successfully.", "Success")
+	end)
+end
