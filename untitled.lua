@@ -109,8 +109,21 @@ local OriginalCache = setmetatable({}, { __mode = "k" })
 
 local HookState = GlobalEnv.__VeloxHubHookState
 if type(HookState) ~= "table" then
-	HookState = { Installed = false, Active = false, ScreenGui = nil, TargetParent = nil, MainGuiName = nil, FloatBtnName = nil }
+	HookState = {
+		NamecallInstalled = false,
+		IndexInstalled = false,
+		Active = false,
+		ScreenGui = nil,
+		TargetParent = nil,
+		MainGuiName = nil,
+		FloatBtnName = nil,
+		RestoreNamecall = nil,
+		RestoreIndex = nil,
+	}
 	GlobalEnv.__VeloxHubHookState = HookState
+else
+	HookState.NamecallInstalled = HookState.NamecallInstalled == true
+	HookState.IndexInstalled = HookState.IndexInstalled == true
 end
 
 local function CacheInstanceAndDescendants(root)
@@ -172,24 +185,68 @@ local function RegCardConn(connection)
 end
 
 local function TrackTask(fn)
+	if isDestroying then
+		return nil
+	end
+
 	local cancelled = false
-	local thread = coroutine.create(function()
-		local ok, err = pcall(fn, function() return cancelled or isDestroying end)
+	local thread
+
+	thread = coroutine.create(function()
+		local ok, err = pcall(fn, function()
+			return cancelled or isDestroying
+		end)
+
 		PendingTasks[thread] = nil
+
 		if not ok and not isDestroying then
 			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
-	PendingTasks[thread] = { Cancel = function() cancelled = true end }
+
+	PendingTasks[thread] = {
+		Cancel = function()
+			cancelled = true
+		end
+	}
+
 	task.spawn(thread)
 	return thread
 end
 
 local typingTask = nil
 
+local function CancelTrackedTasks()
+	for thread, taskData in pairs(PendingTasks) do
+		if type(taskData) == "table" and type(taskData.Cancel) == "function" then
+			pcall(taskData.Cancel)
+		end
+		pcall(function()
+			if thread and coroutine.status(thread) ~= "dead" then
+				task.cancel(thread)
+			end
+		end)
+		PendingTasks[thread] = nil
+	end
+end
+
 local function CleanUpMemory()
+	if isDestroying then return end
 	isDestroying = true
+
 	HookState.Active = false
+
+	if type(HookState.RestoreNamecall) == "function" then
+		pcall(HookState.RestoreNamecall)
+	end
+	if type(HookState.RestoreIndex) == "function" then
+		pcall(HookState.RestoreIndex)
+	end
+
+	HookState.RestoreNamecall = nil
+	HookState.RestoreIndex = nil
+	HookState.NamecallInstalled = false
+	HookState.IndexInstalled = false
 	HookState.ScreenGui = nil
 	HookState.TargetParent = nil
 	HookState.MainGuiName = nil
@@ -273,20 +330,33 @@ end
 
 local function CreateDebounce(cooldown, func)
 	local isRunning = false
+
 	return function(...)
 		if isRunning or isDestroying then return end
 		isRunning = true
-		local args = {...}
+
+		local args = table.pack(...)
+
 		TrackTask(function(isCancelled)
-			pcall(func, unpack(args))
-			if isCancelled() then return end
-			task.wait(cooldown)
-			if not isCancelled() then isRunning = false end
+			local ok, err = pcall(function()
+				func(table.unpack(args, 1, args.n))
+			end)
+
+			if not ok and not isDestroying then
+				warn("[Velox Debounce Error]:", tostring(err))
+			end
+
+			if not isCancelled() and cooldown > 0 then
+				task.wait(cooldown)
+			end
+
+			isRunning = false
 		end)
 	end
 end
 
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local CONFIG_VERSION = 2
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
@@ -325,6 +395,7 @@ local function SaveConfiguration()
 	isSaving = true
 	TrackTask(function(isCancelled)
 		local cleanData = {
+			ConfigVersion = CONFIG_VERSION,
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
@@ -1188,17 +1259,29 @@ AvatarFrame.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"; AvatarFram
 Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(0, 8)
 local AvatarStroke = Instance.new("UIStroke", AvatarFrame); AvatarStroke.Color = Theme.Accent; AvatarStroke.Thickness = 1.5
 
-task.spawn(function()
+TrackTask(function(isCancelled)
 	local attempts = 0
-	while attempts < 3 and not isDestroying do
-		attempts = attempts + 1
-		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-		if success and content then 
-			if isDestroying then return end
-			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
-			break 
-		else 
-			task.wait(2) 
+
+	while attempts < 3 and not isCancelled() do
+		attempts += 1
+
+		local success, content = pcall(function()
+			return Players:GetUserThumbnailAsync(
+				LocalPlayer.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size150x150
+			)
+		end)
+
+		if success and type(content) == "string" and content ~= "" then
+			if AvatarFrame and AvatarFrame.Parent then
+				AvatarFrame.Image = content
+			end
+			break
+		end
+
+		if attempts < 3 and not isCancelled() then
+			task.wait(2)
 		end
 	end
 end)
@@ -1719,6 +1802,7 @@ local function CreateScriptCard(data, renderParent)
 	local innerActionTime = 0
 
 	scriptEntry.UpdateUI = function()
+		if isDestroying or not card.Parent then return end
 		local isFav = SavedData.Favorites[scriptId]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[scriptId] ~= nil)
@@ -1795,18 +1879,31 @@ local dbRefreshing = false
 
 local function NormalizeCatalogEntry(data)
 	if type(data) ~= "table" then return nil end
-	if type(data.Name) ~= "string" or data.Name == "" then return nil end
-	if type(data.RawUrl) ~= "string" or data.RawUrl == "" then return nil end
+
+	local name = type(data.Name) == "string" and data.Name:match("^%s*(.-)%s*$") or ""
+	local rawUrl = type(data.RawUrl) == "string" and data.RawUrl:match("^%s*(.-)%s*$") or ""
+
+	if name == "" or rawUrl == "" then return nil end
+	if not rawUrl:match("^https?://") then return nil end
+
 	local tag = type(data.TagType) == "string" and string.upper(data.TagType) or "NONE"
-	if tag ~= "NONE" and tag ~= "HOT" and tag ~= "UPDATED" then tag = "NONE" end
+	if tag ~= "NONE" and tag ~= "HOT" and tag ~= "UPDATED" then
+		tag = "NONE"
+	end
+
+	local image = type(data.ImageAssetId) == "string" and data.ImageAssetId or ""
+	if image == "" then
+		image = "rbxassetid://99657752206675"
+	end
+
 	return {
-		Name = data.Name,
+		Name = name,
 		Description = type(data.Description) == "string" and data.Description or "No description provided.",
-		RawUrl = data.RawUrl,
-		ImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675",
+		RawUrl = rawUrl,
+		ImageAssetId = image,
 		TagType = tag,
-		LastUpdated = tonumber(data.LastUpdated) or 0,
-		PlaceId = tonumber(data.PlaceId) or 0,
+		LastUpdated = math.max(0, tonumber(data.LastUpdated) or 0),
+		PlaceId = math.max(0, tonumber(data.PlaceId) or 0),
 	}
 end
 
@@ -2031,7 +2128,7 @@ local function LoadDynamicCatalog()
 			StatusDot.BackgroundColor3 = Theme.Error
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
-			EmptyStateMessage.Visible = true
+			EmptyStateMessage.Visible = (#RegisteredScripts == 0)
 			EmptyStateMessage.Text = "Something went wrong while updating the catalog. Your previous catalog was kept."
 			warn("[Velox Catalog Error]:", tostring(err))
 		end
@@ -2332,59 +2429,85 @@ end
 ObfuscateHierarchy(ScreenGui)
 
 pcall(function()
-	if type(hookmetamethod) == "function" and type(checkcaller) == "function" and type(getnamecallmethod) == "function" then
-		HookState.Active = true
-		HookState.ScreenGui = ScreenGui
-		HookState.TargetParent = TargetParent
-		HookState.MainGuiName = MainGuiName
-		HookState.FloatBtnName = FloatBtnName
+	if type(hookmetamethod) ~= "function" or type(checkcaller) ~= "function" or type(getnamecallmethod) ~= "function" then
+		return
+	end
 
-		if not HookState.Installed then
-			HookState.Installed = true
-			local oldNamecall
-			oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-				if HookState.Active and HookState.ScreenGui then
-					local okCaller, isCaller = pcall(checkcaller)
-					if okCaller and not isCaller and typeof(self) == "Instance" then
-						local method = getnamecallmethod()
-						if self == HookState.TargetParent then
-							if method == "GetDescendants" or method == "GetChildren" then
-								local result = oldNamecall(self, ...)
-								if type(result) == "table" then
-									local filtered = {}
-									for i = 1, #result do
-										local v = result[i]
-										local keep = true
-										pcall(function() keep = v ~= HookState.ScreenGui and not v:IsDescendantOf(HookState.ScreenGui) end)
-										if keep then table.insert(filtered, v) end
+	HookState.Active = true
+	HookState.ScreenGui = ScreenGui
+	HookState.TargetParent = TargetParent
+	HookState.MainGuiName = MainGuiName
+	HookState.FloatBtnName = FloatBtnName
+
+	if not HookState.NamecallInstalled then
+		local oldNamecall
+		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			if HookState.Active and HookState.ScreenGui then
+				local okCaller, isCaller = pcall(checkcaller)
+				if okCaller and not isCaller and typeof(self) == "Instance" then
+					local method = getnamecallmethod()
+					if self == HookState.TargetParent then
+						if method == "GetDescendants" or method == "GetChildren" then
+							local result = oldNamecall(self, ...)
+							if type(result) == "table" then
+								local filtered = table.create(#result)
+								for i = 1, #result do
+									local value = result[i]
+									local keep = true
+									pcall(function()
+										keep = value ~= HookState.ScreenGui and not value:IsDescendantOf(HookState.ScreenGui)
+									end)
+									if keep then
+										filtered[#filtered + 1] = value
 									end
-									return filtered
 								end
-								return result
-							elseif method == "FindFirstChild" or method == "WaitForChild" then
-								local childName = select(1, ...)
-								if type(childName) == "string" and (childName == HookState.MainGuiName or childName == HookState.FloatBtnName) then
-									return nil
-								end
+								return filtered
+							end
+							return result
+						elseif method == "FindFirstChild" or method == "WaitForChild" then
+							local childName = select(1, ...)
+							if type(childName) == "string" and (childName == HookState.MainGuiName or childName == HookState.FloatBtnName) then
+								return nil
 							end
 						end
 					end
 				end
-				return oldNamecall(self, ...)
-			end)
+			end
+			return oldNamecall(self, ...)
+		end)
 
-			local oldIndex
-			oldIndex = hookmetamethod(game, "__index", function(self, key)
-				if HookState.Active and HookState.ScreenGui then
-					local okCaller, isCaller = pcall(checkcaller)
-					if okCaller and not isCaller and typeof(self) == "Instance" then
-						if self == HookState.TargetParent and type(key) == "string" and (key == HookState.MainGuiName or key == HookState.FloatBtnName) then
-							return nil
-						end
+		HookState.NamecallInstalled = true
+		HookState.RestoreNamecall = function()
+			if type(hookmetamethod) == "function" and oldNamecall then
+				pcall(function()
+					hookmetamethod(game, "__namecall", oldNamecall)
+				end)
+			end
+		end
+	end
+
+	if not HookState.IndexInstalled then
+		local oldIndex
+		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			if HookState.Active and HookState.ScreenGui then
+				local okCaller, isCaller = pcall(checkcaller)
+				if okCaller and not isCaller and typeof(self) == "Instance" then
+					if self == HookState.TargetParent and type(key) == "string" and
+						(key == HookState.MainGuiName or key == HookState.FloatBtnName) then
+						return nil
 					end
 				end
-				return oldIndex(self, key)
-			end)
+			end
+			return oldIndex(self, key)
+		end)
+
+		HookState.IndexInstalled = true
+		HookState.RestoreIndex = function()
+			if type(hookmetamethod) == "function" and oldIndex then
+				pcall(function()
+					hookmetamethod(game, "__index", oldIndex)
+				end)
+			end
 		end
 	end
 end)
