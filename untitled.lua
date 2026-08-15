@@ -57,6 +57,20 @@ local write_file = writefile or function() end
 local read_file = readfile or function() end
 local is_file = isfile or function() return false end
 local del_file = delfile or function() end
+local get_custom_asset = getcustomasset or getsynasset or function() return nil end
+
+local function ResolveImage(defaultAssetId)
+	if type(is_file) == "function" and type(get_custom_asset) == "function" then
+		local fileExists = pcall(function() return is_file("18407.jpg") end)
+		if fileExists then
+			local success, customAsset = pcall(function() return get_custom_asset("18407.jpg") end)
+			if success and customAsset then
+				return customAsset
+			end
+		end
+	end
+	return defaultAssetId
+end
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -169,9 +183,6 @@ local function TrackTask(fn)
 	thread = task.spawn(function()
 		local ok, err = pcall(fn)
 		PendingTasks[thread] = nil
-		if not ok and not isDestroying then
-			warn("[Velox Task Error]:", tostring(err))
-		end
 	end)
 	PendingTasks[thread] = true
 	return thread
@@ -532,7 +543,7 @@ FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
 FloatingBtn.BackgroundColor3 = Theme.BackgroundMain
-FloatingBtn.Image = "rbxassetid://124635602201411"
+FloatingBtn.Image = ResolveImage("rbxassetid://124635602201411")
 FloatingBtn.ScaleType = Enum.ScaleType.Fit
 FloatingBtn.Visible = false
 FloatingBtn.ZIndex = 100
@@ -1173,7 +1184,7 @@ UI_Username.TextXAlignment = Enum.TextXAlignment.Right; UI_Username.LayoutOrder 
 
 local AvatarFrame = Instance.new("ImageLabel", RightHeaderFrame)
 AvatarFrame.Size = UDim2.new(0, IsMobile and 26 or 32, 0, IsMobile and 26 or 32); AvatarFrame.BackgroundColor3 = Theme.CardHover
-AvatarFrame.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"; AvatarFrame.LayoutOrder = 2
+AvatarFrame.Image = ResolveImage("rbxasset://textures/ui/GuiImagePlaceholder.png"); AvatarFrame.LayoutOrder = 2
 Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(0, 8)
 local AvatarStroke = Instance.new("UIStroke", AvatarFrame); AvatarStroke.Color = Theme.Accent; AvatarStroke.Thickness = 1.5
 
@@ -1615,7 +1626,7 @@ local function CreateScriptCard(data, renderParent)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	local img = Instance.new("ImageLabel", card)
 	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
-	img.BorderSizePixel = 0; img.Image = data.ImageAssetId or "rbxassetid://99657752206675"
+	img.BorderSizePixel = 0; img.Image = ResolveImage(data.ImageAssetId or "rbxassetid://99657752206675")
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 	local content = Instance.new("Frame", card)
@@ -2141,7 +2152,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
-	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
+	ShowNotification("Press any key to bind.", "System")
 	
 	if KeybindCaptureConnection then 
 		UnregConn(KeybindCaptureConnection)
@@ -2353,14 +2364,6 @@ FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 
 if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
-		if isDestroying then return end
-		table.clear(OriginalCache)
-		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		CacheInstanceAndDescendants(MainPanel)
-		CacheInstanceAndDescendants(FloatingBtn)
-		ShowNotification("UI Cache cleared successfully.", "Success")
-	end)
+	local UserDataGroup = CreateSettingsGroup("Mobile Adjustments", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Adjust Interface", "Optimize layouts for small touch screens.", "rbxassetid://10709782497", "Modify", 1, false, function() end)
 end
