@@ -189,7 +189,7 @@ local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
-	if typingTask then task.cancel(typingTask); typingTask = nil end
+	if typingTask then pcall(task.cancel, typingTask); typingTask = nil end
 	
 	CancelTrackedTasks()
 
@@ -200,12 +200,12 @@ local function CleanUpMemory()
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-			conn:Disconnect()
+			pcall(function() conn:Disconnect() end)
 		end
 	end
 	for _, conn in ipairs(CardConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-			conn:Disconnect()
+			pcall(function() conn:Disconnect() end)
 		end
 	end
 	for _, conn in pairs(AfkConnections) do
@@ -223,18 +223,11 @@ local function CleanUpMemory()
 			end
 		end
 	end
-	if DropdownContainer and DropdownContainer.Parent then
-		pcall(function() DropdownContainer:Destroy() end)
-	end
-	if ToastContainer and ToastContainer.Parent then
-		pcall(function() ToastContainer:Destroy() end)
-	end
-	if ConfirmOverlay and ConfirmOverlay.Parent then
-		pcall(function() ConfirmOverlay:Destroy() end)
-	end
-	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then
-		pcall(function() GlobalCooldownBanner:Destroy() end)
-	end
+	if DropdownContainer and DropdownContainer.Parent then pcall(function() DropdownContainer:Destroy() end) end
+	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
+	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
+	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
+	
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
@@ -478,7 +471,7 @@ pcall(function() protectgui(ScreenGui) end)
 
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
-	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+	if ScreenGui and ScreenGui.Parent then pcall(function() ScreenGui:Destroy() end) end
 end
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
@@ -560,7 +553,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		
-		if floatDragConnection then floatDragConnection:Disconnect() end
+		if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
@@ -1071,7 +1064,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
 		
-		if mainDragConnection then mainDragConnection:Disconnect() end
+		if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
@@ -1095,7 +1088,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
 		if mainDragConnection then
-			mainDragConnection:Disconnect()
+			pcall(function() mainDragConnection:Disconnect() end)
 			mainDragConnection = nil
 		end
 		if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
@@ -1103,7 +1096,7 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeFloatDragInput and (input == activeFloatDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeFloatDragInput = nil
 		if floatDragConnection then
-			floatDragConnection:Disconnect()
+			pcall(function() floatDragConnection:Disconnect() end)
 			floatDragConnection = nil
 		end
 		if floatStart then
@@ -1323,7 +1316,7 @@ local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortO
 
 local viewportConn
 local function BindCamera()
-	if viewportConn then viewportConn:Disconnect() end
+	if viewportConn then pcall(function() viewportConn:Disconnect() end) end
 	local cam = workspace.CurrentCamera
 	if cam then
 		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
@@ -1444,7 +1437,7 @@ end
 
 RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
-	if typingTask then task.cancel(typingTask) end
+	if typingTask then pcall(task.cancel, typingTask) end
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
 
@@ -1582,7 +1575,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-CreateParagraph("v2.0.0 - Stability, Compatibility & UX Update", "• Fixed Auto-Execute queue processing to execute queued scripts seamlessly on startup.\n• Added rich execution notifications with clear success and failure feedback.\n• Added reliable fallback GUI notifications when standard notification systems are unavailable.\n• Implemented context-aware execution handling with script-specific error reporting for easier debugging.\n• Improved namecall hook stability with additional validation and caller checks.\n• Improved executor compatibility through additional API detection and graceful fallbacks.\n• Enhanced HTTP request handling with multiple supported request-method fallbacks.\n• Improved dynamic catalog loading, refreshing, searching, filtering, and metadata handling.\n• Added protection against outdated catalog data replacing newer catalog results.\n• Improved script-card creation, metadata display, favorites, and Auto-Execute state synchronization.\n• Improved script execution reliability with validation, protected execution, cooldowns, and duplicate-execution protection.\n• Refined UI animations, interactions, navigation, notifications, and viewport handling.\n• Improved mobile and environment-specific UI behavior.\n• Improved configuration saving, loading, serialization, validation, and state restoration.\n• Enhanced Anti-AFK handling with additional API checks, cooldown protection, and improved lifecycle management.\n• Improved asynchronous task tracking and connection management.\n• Enhanced cleanup of connections, tasks, UI objects, and temporary resources during unload and shutdown.\n• Improved handling of failed network requests and unavailable optional APIs.\n• Fixed multiple UI state synchronization, catalog refresh, configuration, and lifecycle edge cases.\n• Improved internal caching, debouncing, cooldowns, and state management.\n• Refined error handling across core systems to improve overall application resilience.\n• General performance, stability, compatibility, reliability, and user-experience improvements across VeloxHub.", ChangelogsView)
+CreateParagraph("v2.0.0 - Stability, Compatibility & UX Update", "â€¢ Fixed Auto-Execute queue processing to execute queued scripts seamlessly on startup.\nâ€¢ Added rich execution notifications with clear success and failure feedback.\nâ€¢ Added reliable fallback GUI notifications when standard notification systems are unavailable.\nâ€¢ Implemented context-aware execution handling with script-specific error reporting for easier debugging.\nâ€¢ Improved namecall hook stability with additional validation and caller checks.\nâ€¢ Improved executor compatibility through additional API detection and graceful fallbacks.\nâ€¢ Enhanced HTTP request handling with multiple supported request-method fallbacks.\nâ€¢ Improved dynamic catalog loading, refreshing, searching, filtering, and metadata handling.\nâ€¢ Added protection against outdated catalog data replacing newer catalog results.\nâ€¢ Improved script-card creation, metadata display, favorites, and Auto-Execute state synchronization.\nâ€¢ Improved script execution reliability with validation, protected execution, cooldowns, and duplicate-execution protection.\nâ€¢ Refined UI animations, interactions, navigation, notifications, and viewport handling.\nâ€¢ Improved mobile and environment-specific UI behavior.\nâ€¢ Improved configuration saving, loading, serialization, validation, and state restoration.\nâ€¢ Enhanced Anti-AFK handling with additional API checks, cooldown protection, and improved lifecycle management.\nâ€¢ Improved asynchronous task tracking and connection management.\nâ€¢ Enhanced cleanup of connections, tasks, UI objects, and temporary resources during unload and shutdown.\nâ€¢ Improved handling of failed network requests and unavailable optional APIs.\nâ€¢ Fixed multiple UI state synchronization, catalog refresh, configuration, and lifecycle edge cases.\nâ€¢ Improved internal caching, debouncing, cooldowns, and state management.\nâ€¢ Refined error handling across core systems to improve overall application resilience.\nâ€¢ General performance, stability, compatibility, reliability, and user-experience improvements across VeloxHub.", ChangelogsView)
 
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -1808,7 +1801,7 @@ local function LoadDynamicCatalog()
 			if success and type(parsed) == "table" then
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-						conn:Disconnect()
+						pcall(function() conn:Disconnect() end)
 					end
 				end
 				table.clear(CardConnections)
@@ -1821,7 +1814,7 @@ local function LoadDynamicCatalog()
 
 				for _, child in ipairs(ScriptsView:GetChildren()) do
 					if child:IsA("TextButton") then
-						child:Destroy()
+						pcall(function() child:Destroy() end)
 					end
 				end
 				table.clear(RegisteredScripts)
@@ -1831,7 +1824,7 @@ local function LoadDynamicCatalog()
 
 				for index, scriptData in ipairs(parsed) do
 					if isDestroying or generation ~= CatalogGeneration then
-						detachedFolder:Destroy()
+						pcall(function() detachedFolder:Destroy() end)
 						return
 					end
 
@@ -1859,7 +1852,7 @@ local function LoadDynamicCatalog()
 				for _, card in ipairs(detachedFolder:GetChildren()) do
 					card.Parent = ScriptsView
 				end
-				detachedFolder:Destroy()
+				pcall(function() detachedFolder:Destroy() end)
 
 				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
@@ -2234,7 +2227,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		end
 	else
 		ShowNotification("Anti-AFK deactivated.", "Warning")
-		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
+		if AfkConnections.Idled then pcall(function() AfkConnections.Idled:Disconnect() end); AfkConnections.Idled = nil end
 		for _, conn in ipairs(AfkConnections) do
 			pcall(function()
 				if type(conn) == "table" and conn.Enable then
@@ -2356,18 +2349,3 @@ SectionHeaderLabel.Text = "Updates"
 MainPanel.Visible = true
 SearchRow.Visible = false
 FloatingBtn.Visible = false
-
-ShowNotification("Velox Hub is ready for use!", "Success")
-
-if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
-		if isDestroying then return end
-		table.clear(OriginalCache)
-		CacheInstanceAndDescendants(MainPanel)
-		CacheInstanceAndDescendants(FloatingBtn)
-		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		ShowNotification("UI Cache Cleared", "Success")
-	end)
-end
