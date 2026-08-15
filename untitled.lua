@@ -667,8 +667,10 @@ MainPanel.ZIndex = 1
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
-MainModalBtn.Visible = true
-MainModalBtn.Modal = true
+MainModalBtn.Visible = false
+MainModalBtn.Active = false
+MainModalBtn.Selectable = false
+MainModalBtn.Modal = false
 MainModalBtn.Text = ""
 
 local MainGradient = Instance.new("UIGradient", MainPanel)
@@ -1708,6 +1710,8 @@ local function CreateScriptCard(data, renderParent)
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = Theme.Card; card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
+card.Active = true
+card.Selectable = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
 	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = Color3.fromRGB(44, 58, 77)
 	local pad = Instance.new("UIPadding", card)
@@ -1771,6 +1775,8 @@ local function CreateScriptCard(data, renderParent)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
+autoExecBtn.Active = true
+autoExecBtn.Selectable = true
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
@@ -1783,8 +1789,11 @@ local function CreateScriptCard(data, renderParent)
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
+aeStateTxt.Text = "OFF"
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
+starBtn.Active = true
+starBtn.Selectable = true
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 
 	ApplyInteractiveAnimations(card, Theme.Card, Theme.CardHover, Color3.fromRGB(20, 29, 45), cardStroke, Color3.fromRGB(44, 58, 77), Theme.Accent, CardConnections)
