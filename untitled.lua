@@ -2024,7 +2024,7 @@ end
 
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 
-local kbRow, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709782497", 1)
+local kbRow, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10723424160", 1)
 local KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 95, 0, 26)
 KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
@@ -2148,11 +2148,11 @@ end)
 
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10709782230", "Refresh", 1, false, function()
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10723341499", "Refresh", 1, false, function()
 	LoadDynamicCatalog()
 end)
 
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709782230", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
 	ShowNotification("Unloading Velox Hub...", "Info")
 	task.wait(0.3)
 	CloseUI()
