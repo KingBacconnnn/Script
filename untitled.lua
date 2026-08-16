@@ -401,12 +401,29 @@ local function UniversalHttpGet(url)
 	return nil
 end
 
-local function FetchWithRetry(url, retries)
+local function AddCacheBuster(url)
+	if type(url) ~= "string" or url == "" then return url end
+	local separator = string.find(url, "?", 1, true) and "&" or "?"
+	local nonce = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+	return url .. separator .. "velox_cache=" .. nonce
+end
+
+local function FetchWithRetry(url, retries, cacheBust)
 	retries = retries or 3
 	for i = 1, retries do
-		local response = UniversalHttpGet(url)
-		if response then return response end
-		if i < retries then task.wait(math.pow(2, i)) end
+		local requestUrl = url
+		if cacheBust then
+			requestUrl = AddCacheBuster(url)
+		end
+
+		local response = UniversalHttpGet(requestUrl)
+		if response and type(response) == "string" and #response > 0 then
+			return response
+		end
+
+		if i < retries then
+			task.wait(math.pow(2, i))
+		end
 	end
 	return nil
 end
@@ -1772,8 +1789,11 @@ local function CreateScriptCard(data, renderParent)
 	table.insert(RegisteredScripts, scriptEntry)
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/main/catalogtest.json"
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
+local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
+local CatalogRefreshQueued = false
+local LastCatalogFingerprint = nil
 
 local function LoadDynamicCatalog()
 	if dbRefreshing or isDestroying then return end
@@ -1791,7 +1811,7 @@ local function LoadDynamicCatalog()
 	EmptyStateMessage.Text = "Loading script repository..."
 
 	TrackTask(function()
-		local raw = FetchWithRetry(CATALOG_URL, 3)
+		local raw = FetchWithRetry(CATALOG_URL, 3, true)
 		if isDestroying or generation ~= CatalogGeneration then return end
 
 		if raw then
@@ -1800,6 +1820,35 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
+				-- Avoid rebuilding the entire catalog when the server response is unchanged.
+				local fingerprintParts = {}
+				for index, entry in ipairs(parsed) do
+					if type(entry) == "table" then
+						fingerprintParts[#fingerprintParts + 1] = table.concat({
+							tostring(entry.Name or ""),
+							tostring(entry.Description or ""),
+							tostring(entry.RawUrl or ""),
+							tostring(entry.ImageAssetId or ""),
+							tostring(entry.TagType or ""),
+							tostring(entry.LastUpdated or ""),
+							tostring(entry.PlaceId or ""),
+						}, "\31")
+					end
+				end
+				local fingerprint = table.concat(fingerprintParts, "\30")
+				if fingerprint == LastCatalogFingerprint then
+					UpdateFilter()
+					StatusDot.BackgroundColor3 = Theme.Success
+					StatusText.Text = "Online"
+					StatusText.TextColor3 = Theme.Success
+					ShowNotification("Catalog is already up to date.", "Info")
+					if generation == CatalogGeneration then
+						dbRefreshing = false
+					end
+					return
+				end
+				LastCatalogFingerprint = fingerprint
+
 				for _, conn in ipairs(CardConnections) do
 					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 						conn:Disconnect()
@@ -1952,10 +2001,27 @@ local function LoadDynamicCatalog()
 		end
 		if generation == CatalogGeneration then
 			dbRefreshing = false
+			if CatalogRefreshQueued and not isDestroying then
+				CatalogRefreshQueued = false
+				task.defer(LoadDynamicCatalog)
+			end
 		end
 	end)
 end
 LoadDynamicCatalog()
+
+-- Keep an already-open hub in sync with the remote catalog.
+-- The request uses a cache-busting nonce, while the fingerprint prevents
+-- unnecessary card reconstruction when nothing actually changed.
+TrackTask(function()
+	while not isDestroying do
+		task.wait(CATALOG_REFRESH_INTERVAL)
+		if isDestroying then break end
+		if not dbRefreshing then
+			LoadDynamicCatalog()
+		end
+	end
+end)
 
 local function CreateSettingsGroup(titleText, parentView, order)
 	local container = Instance.new("Frame", parentView)
@@ -2246,6 +2312,11 @@ local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
+		if dbRefreshing then
+			CatalogRefreshQueued = true
+			ShowNotification("Catalog refresh queued.", "Info")
+			return
+		end
 		LoadDynamicCatalog()
 	end)
 end)
