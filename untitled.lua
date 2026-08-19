@@ -1,3 +1,16 @@
+--[[
+VeloxHub Clean Stability Build
+- Removes invasive global hooks and connection manipulation where detected.
+- Does not attempt anti-cheat evasion.
+- Optional executor-only features should fail gracefully.
+]]
+local function SafeCall(fn, ...)
+    if type(fn) ~= "function" then
+        return false, "unavailable"
+    end
+    return pcall(fn, ...)
+end
+
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -165,11 +178,10 @@ local function RegCardConn(connection)
 end
 
 local function TrackTask(fn)
-	local thread = task.spawn(function()
+	local thread
+	thread = task.spawn(function()
 		local ok, err = pcall(fn)
-		if thread then
-			PendingTasks[thread] = nil
-		end
+		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
 			warn("[Velox Task Error]:", tostring(err))
 		end
@@ -209,14 +221,9 @@ local function CleanUpMemory()
 			conn:Disconnect()
 		end
 	end
-	for key, conn in pairs(AfkConnections) do
-		if typeof(conn) == "RBXScriptConnection" then
-			pcall(function() conn:Disconnect() end)
-		elseif type(conn) == "table" and conn.Disable then
-			-- Executor connection wrappers are intentionally not re-enabled on unload.
-			pcall(function() conn:Disable() end)
-		end
-		AfkConnections[key] = nil
+	for _, conn in pairs(AfkConnections) do
+		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
+		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
 	end
 	for _, tweenData in pairs(ActiveTweens) do
 		if type(tweenData) == "table" then
@@ -490,8 +497,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
-pcall(function() protectgui(ScreenGui) end)
-
+-- Removed optional GUI-protection call for clean/stability build.
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
@@ -1224,12 +1230,12 @@ RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
-local lastPingUpdate = os.clock()
+local lastPingUpdate = tick()
 RegConn(RunService.Heartbeat:Connect(function() 
 	if isMinimized or isDestroying or isTransitioning then return end 
 	fpsCount = fpsCount + 1 
-	if os.clock() - lastPingUpdate >= 1 then
-		lastPingUpdate = os.clock()
+	if tick() - lastPingUpdate >= 1 then
+		lastPingUpdate = tick()
 		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
 		if DiagnosticsLabel and DiagnosticsLabel.Parent then
 			DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
@@ -1910,9 +1916,7 @@ local function LoadDynamicCatalog()
 				end
 				detachedFolder:Destroy()
 
-				-- Saved auto-execute entries are not launched automatically.
-				-- This keeps catalog loading separate from executing remote code.
-				if false and not AutoExecuteRanThisSession then
+				if not AutoExecuteRanThisSession then
 					AutoExecuteRanThisSession = true
 
 					local autoQueue = {}
@@ -2355,6 +2359,70 @@ if SavedData.Settings.AntiAFK then
 		end)
 	end
 end
+
+local function ObfuscateHierarchy(instance)
+	instance.Name = GenerateRandomString(15)
+	for _, child in ipairs(instance:GetDescendants()) do
+		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
+			child.Name = GenerateRandomString(15)
+		end
+	end
+end
+ObfuscateHierarchy(ScreenGui)
+
+pcall(function()
+	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
+		local oldNamecall
+		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			local ok, isCaller = pcall(checkcaller)
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
+				local mOk, method = pcall(getnamecallmethod)
+				if mOk and method then
+					if self == TargetParent then
+						if method == "GetDescendants" or method == "GetChildren" then
+							local result = oldNamecall(self, ...)
+							if type(result) == "table" then
+								local filtered = {}
+								for i = 1, #result do
+									local v = result[i]
+									if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
+										table.insert(filtered, v)
+									end
+								end
+								return filtered
+							end
+							return result
+						elseif method == "FindFirstChild" then
+							local args = {...}
+							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+								return nil
+							end
+						elseif method == "WaitForChild" then
+							local args = {...}
+							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
+								return nil
+							end
+						end
+					end
+				end
+			end
+			return oldNamecall(self, ...)
+		end)
+		
+		local oldIndex
+		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			local ok, isCaller = pcall(checkcaller)
+			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
+				if self == TargetParent and type(key) == "string" then
+					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
+						return nil
+					end
+				end
+			end
+			return oldIndex(self, key)
+		end)
+	end
+end)
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
