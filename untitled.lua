@@ -190,7 +190,7 @@ local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-	
+
 	CancelTrackedTasks()
 
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
@@ -216,9 +216,9 @@ local function CleanUpMemory()
 		if type(tweenData) == "table" then
 			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
 			if tweenData.Tween then
-				pcall(function() 
-					tweenData.Tween:Cancel() 
-					tweenData.Tween:Destroy() 
+				pcall(function()
+					tweenData.Tween:Cancel()
+					tweenData.Tween:Destroy()
 				end)
 			end
 		end
@@ -227,7 +227,7 @@ local function CleanUpMemory()
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
-	
+
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
@@ -244,9 +244,9 @@ local function SafeTween(instance, tweenInfo, properties)
 		if oldData and type(oldData) == "table" then
 			if oldData.Connection then pcall(function() oldData.Connection:Disconnect() end) end
 			if oldData.Tween then
-				pcall(function() 
-					oldData.Tween:Cancel() 
-					oldData.Tween:Destroy() 
+				pcall(function()
+					oldData.Tween:Cancel()
+					oldData.Tween:Destroy()
 				end)
 			end
 		end
@@ -311,9 +311,9 @@ end
 
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
-	if isSaving then 
-		saveQueued = true 
-		return 
+	if isSaving then
+		saveQueued = true
+		return
 	end
 	isSaving = true
 	task.spawn(function()
@@ -324,17 +324,17 @@ local function SaveConfiguration()
 		}
 		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
 		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" then 
-				cleanData.AutoExecutes[tostring(k)] = { 
+			if type(v) == "table" then
+				cleanData.AutoExecutes[tostring(k)] = {
 					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
-					GameId = tonumber(v.GameId) or game.GameId 
-				} 
+					GameId = tonumber(v.GameId) or game.GameId
+				}
 			end
 		end
-		
+
 		local safeData = SanitizeForJSON(cleanData)
 		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
-		if success then 
+		if success then
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
 			if writeSuccess then
 				local verifySuccess = pcall(function()
@@ -350,7 +350,7 @@ local function SaveConfiguration()
 		isSaving = false
 		if saveQueued then
 			saveQueued = false
-			SaveConfiguration() 
+			SaveConfiguration()
 		end
 	end)
 end
@@ -365,7 +365,7 @@ local function LoadConfiguration()
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
 					if type(k) == "string" and type(v) == "table" then
-						SavedData.AutoExecutes[tostring(k)] = { 
+						SavedData.AutoExecutes[tostring(k)] = {
 							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
 							GameId = type(v.GameId) == "number" and v.GameId or nil
 						}
@@ -428,20 +428,63 @@ local function FetchWithRetry(url, retries, cacheBust)
 	return nil
 end
 
+local TagTypeConfig = {
+	UPDATED = {
+		Priority = 5,
+		BadgeColor = Theme.Success,
+		CardColor = Color3.fromRGB(25, 44, 42),
+		HoverColor = Color3.fromRGB(31, 55, 51),
+		StrokeColor = Color3.fromRGB(58, 122, 106)
+	},
+	HOT = {
+		Priority = 4,
+		BadgeColor = Theme.Error,
+		CardColor = Color3.fromRGB(43, 31, 37),
+		HoverColor = Color3.fromRGB(57, 38, 46),
+		StrokeColor = Color3.fromRGB(116, 67, 80)
+	},
+	NEW = {
+		Priority = 3,
+		BadgeColor = Theme.Info,
+		CardColor = Color3.fromRGB(27, 38, 47),
+		HoverColor = Color3.fromRGB(35, 49, 60),
+		StrokeColor = Color3.fromRGB(62, 102, 126)
+	},
+	FEATURED = {
+		Priority = 2,
+		BadgeColor = Theme.System,
+		CardColor = Color3.fromRGB(39, 32, 48),
+		HoverColor = Color3.fromRGB(51, 40, 63),
+		StrokeColor = Color3.fromRGB(92, 72, 117)
+	},
+	NONE = {
+		Priority = 1,
+		BadgeColor = Color3.fromRGB(100, 116, 139),
+		CardColor = Theme.Card,
+		HoverColor = Theme.CardHover,
+		StrokeColor = Color3.fromRGB(44, 58, 77)
+	}
+}
+
+local function NormalizeTagType(value)
+	if type(value) ~= "string" then return "NONE" end
+	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	if TagTypeConfig[normalized] then return normalized end
+	return "NONE"
+end
+
+local function GetSafeTimestamp(value)
+	local timestamp = tonumber(value)
+	if type(timestamp) ~= "number" or timestamp ~= timestamp then return 0 end
+	return timestamp
+end
+
 local function GetRelativeTime(timestamp)
-	local numericTimestamp = tonumber(timestamp)
-	if type(numericTimestamp) ~= "number" or numericTimestamp ~= numericTimestamp then
-		return "Updated just now"
-	end
-
-	local diff = os.time() - numericTimestamp
-	if diff < 0 then
-		return "Updated just now"
-	end
-
-	if diff < 60 then
-		return "Updated just now"
-	end
+	local value = tonumber(timestamp)
+	if type(value) ~= "number" or value ~= value then return "Updated just now" end
+	local diff = os.time() - value
+	if diff <= 0 then return "Updated just now" end
+	if diff < 60 then return "Updated just now" end
 
 	local minutes = math.floor(diff / 60)
 	if minutes < 60 then
@@ -454,11 +497,9 @@ local function GetRelativeTime(timestamp)
 	end
 
 	local days = math.floor(diff / 86400)
-	if days == 1 then
-		return "Updated yesterday"
-	end
+	if days == 1 then return "Updated yesterday" end
 	if days < 7 then
-		return "Updated " .. days .. " days ago"
+		return "Updated " .. days .. (days == 1 and " day ago" or " days ago")
 	end
 
 	local weeks = math.floor(days / 7)
@@ -466,12 +507,12 @@ local function GetRelativeTime(timestamp)
 		return "Updated " .. weeks .. (weeks == 1 and " week ago" or " weeks ago")
 	end
 
-	local months = math.max(1, math.floor(days / 30))
+	local months = math.floor(days / 30.44)
 	if months < 12 then
 		return "Updated " .. months .. (months == 1 and " month ago" or " months ago")
 	end
 
-	local years = math.max(1, math.floor(days / 365))
+	local years = math.floor(days / 365.25)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
@@ -480,7 +521,7 @@ local function GetSecureParent()
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
 		return huiTarget
 	end
-	
+
 	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
 		local testAccess = pcall(function()
@@ -490,12 +531,12 @@ local function GetSecureParent()
 		end)
 		if testAccess then return coreTarget end
 	end
-	
+
 	if LocalPlayer then
 		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 		if playerGui then return playerGui end
 	end
-	
+
 	return nil
 end
 
@@ -552,9 +593,9 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	RegInteractive(gui.InputEnded:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if not IsMobile and hoverColor then 
+			if not IsMobile and hoverColor then
 				gui.BackgroundColor3 = hoverColor
-			elseif originalColor then 
+			elseif originalColor then
 				gui.BackgroundColor3 = originalColor
 			end
 		end
@@ -597,7 +638,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		activeFloatDragInput = input
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		
+
 		if floatDragConnection then floatDragConnection:Disconnect() end
 		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -675,11 +716,11 @@ local function ToggleUI()
 	if DropdownContainer and DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	end
-	
+
 	if not isMinimized then
 		isMinimized = true
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-		
+
 		MainPanel.Visible = false
 		RestoreCachedProperties()
 		FloatingBtn.Visible = true
@@ -692,7 +733,7 @@ local function ToggleUI()
 		MainPanel.Visible = true
 		RestoreCachedProperties()
 	end
-	
+
 	isTransitioning = false
 end
 
@@ -743,7 +784,7 @@ local function StandaloneBannerNotification(msg, notifType)
 		frame.BackgroundColor3 = Theme.BackgroundSecondary
 		frame.BorderSizePixel = 0
 		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-		
+
 		local stroke = Instance.new("UIStroke", frame)
 		stroke.Color = Theme[notifType] or Theme.Info
 		stroke.Thickness = 1.5
@@ -780,7 +821,7 @@ end
 
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
-	
+
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
 
@@ -854,7 +895,7 @@ local function AttemptActionWithCooldown(actionFunc)
 
 			local parent = GetSecureParent()
 			if not parent then return end
-			
+
 			local bannerGui = Instance.new("ScreenGui")
 			bannerGui.Name = "VeloxCooldown_" .. GenerateRandomString(8)
 			bannerGui.DisplayOrder = 10000
@@ -869,7 +910,7 @@ local function AttemptActionWithCooldown(actionFunc)
 			frame.BackgroundColor3 = Theme.BackgroundSecondary
 			frame.BorderSizePixel = 0
 			Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-			
+
 			local stroke = Instance.new("UIStroke", frame)
 			stroke.Color = Theme.Warning
 			stroke.Thickness = 1.5
@@ -895,8 +936,8 @@ local function AttemptActionWithCooldown(actionFunc)
 					elseif rem == 1 then
 						if txt and txt.Parent then txt.Text = "Please try again in 1 second" end
 					else
-						if txt and txt.Parent then 
-							txt.Text = "Ready" 
+						if txt and txt.Parent then
+							txt.Text = "Ready"
 							stroke.Color = Theme.Success
 						end
 						task.wait(1)
@@ -923,7 +964,7 @@ local function AttemptActionWithCooldown(actionFunc)
 	end
 
 	GlobalActionCooldownEndTime = tick() + 3
-	
+
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then
 		GlobalCooldownLoopVersion = GlobalCooldownLoopVersion + 1
 		pcall(function() GlobalCooldownBanner:Destroy() end)
@@ -1064,10 +1105,10 @@ local function BindToggleKey(keyCode)
 		UnregConn(ToggleKeybindConnection)
 		ToggleKeybindConnection = nil
 	end
-	
+
 	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
-		
+
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
 			if SearchInput and SearchInput:IsFocused() then
 				SearchInput:ReleaseFocus()
@@ -1099,7 +1140,7 @@ local HeaderContainer = Instance.new("Frame", PanelGroup)
 HeaderContainer.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 56)
 HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
-HeaderContainer.Active = true 
+HeaderContainer.Active = true
 
 local mainDragStart, mainStartPos
 
@@ -1108,7 +1149,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		activeMainDragInput = input
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
-		
+
 		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -1227,12 +1268,12 @@ task.spawn(function()
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
 		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-		if success and content then 
+		if success and content then
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
-			break 
-		else 
-			task.wait(2) 
+			break
+		else
+			task.wait(2)
 		end
 	end
 end)
@@ -1247,9 +1288,9 @@ ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, n
 
 local fpsCount = 0
 local lastPingUpdate = tick()
-RegConn(RunService.Heartbeat:Connect(function() 
-	if isMinimized or isDestroying or isTransitioning then return end 
-	fpsCount = fpsCount + 1 
+RegConn(RunService.Heartbeat:Connect(function()
+	if isMinimized or isDestroying or isTransitioning then return end
+	fpsCount = fpsCount + 1
 	if tick() - lastPingUpdate >= 1 then
 		lastPingUpdate = tick()
 		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
@@ -1403,7 +1444,7 @@ local function UpdateFilter()
 	local currentVersion = filterVersion
 	task.defer(function()
 		local queryText = SearchInput.Text
-		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1")) 
+		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1"))
 		local words = {}
 		for word in string.gmatch(query, "%S+") do table.insert(words, word) end
 		local matches = {}
@@ -1445,18 +1486,20 @@ local function UpdateFilter()
 				return a.TagPriority > b.TagPriority
 			end
 
-			if a.LastUpdated ~= b.LastUpdated then
-				return a.LastUpdated > b.LastUpdated
-			end
-
-			if SortMode == "Most Relevant" and query ~= "" then
-				local aExact = string.sub(a.SearchTitle, 1, #query) == query
-				local bExact = string.sub(b.SearchTitle, 1, #query) == query
-				if aExact ~= bExact then return aExact end
+			local aUpdated = GetSafeTimestamp(a.LastUpdated)
+			local bUpdated = GetSafeTimestamp(b.LastUpdated)
+			if SortMode == "Most Relevant" then
+				if aUpdated ~= bUpdated then
+					return aUpdated > bUpdated
+				end
 			elseif SortMode == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif SortMode == "Z-A" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
+			elseif SortMode == "Newest" then
+				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
+			elseif SortMode == "Oldest" then
+				if aUpdated ~= bUpdated then return aUpdated < bUpdated end
 			elseif SortMode == "Favorites" then
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
@@ -1467,9 +1510,12 @@ local function UpdateFilter()
 				if aAuto ~= bAuto then return aAuto > bAuto end
 			end
 
+			if aUpdated ~= bUpdated and SortMode ~= "Oldest" and SortMode ~= "A-Z" and SortMode ~= "Z-A" and SortMode ~= "Favorites" and SortMode ~= "Auto Execute: ON" and SortMode ~= "Auto Execute: OFF" then
+				return aUpdated > bUpdated
+			end
 			return a.OriginalIndex < b.OriginalIndex
 		end)
-		for idx, scr in ipairs(matches) do 
+		for idx, scr in ipairs(matches) do
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
 		end
 		if #RegisteredScripts > 0 then
@@ -1539,8 +1585,8 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 		local dropWidth, dropHeight = 190, 210
 		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
 		local posY = absPos.Y + absSize.Y + 4
-		if posY + dropHeight > viewportSize.Y - 10 then 
-			posY = absPos.Y - dropHeight - 4 
+		if posY + dropHeight > viewportSize.Y - 10 then
+			posY = absPos.Y - dropHeight - 4
 		end
 		if posY < 10 then posY = 10 end
 		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
@@ -1588,10 +1634,10 @@ local function CreateTab(name, index)
 		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
-		if name == "Scripts" then 
-			UpdateFilter() 
-		elseif SearchInput and SearchInput.Parent then 
-			pcall(function() SearchInput:ReleaseFocus() end) 
+		if name == "Scripts" then
+			UpdateFilter()
+		elseif SearchInput and SearchInput.Parent then
+			pcall(function() SearchInput:ReleaseFocus() end)
 		end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
@@ -1636,12 +1682,12 @@ end
 
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
-	if not chunk then 
+	if not chunk then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		warn("[Velox Compile Error]: " .. tostring(compileErr))
-		return false, tostring(compileErr) 
+		return false, tostring(compileErr)
 	end
-	
+
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
@@ -1649,83 +1695,27 @@ local function ExecuteSandboxed(code, scriptName)
 			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
 		end
 	end)
-	
+
 	return true, "Script dispatched successfully"
 end
 
-local TagTypeConfig = {
-	UPDATED = {Priority = 5, Color = Theme.Success},
-	HOT = {Priority = 4, Color = Theme.Error},
-	NEW = {Priority = 3, Color = Theme.Info},
-	FEATURED = {Priority = 2, Color = Theme.Accent},
-	NONE = {Priority = 1, Color = Theme.TextSecondary}
-}
-
-local function NormalizeTagType(value)
-	if type(value) ~= "string" then
-		return "NONE"
-	end
-	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
-	if TagTypeConfig[normalized] then
-		return normalized
-	end
-	return "NONE"
-end
-
-local function GetTagConfig(value)
-	local normalized = NormalizeTagType(value)
-	return normalized, TagTypeConfig[normalized]
-end
-
-local function GetCatalogTimestamp(value)
-	local timestamp = tonumber(value)
-	if type(timestamp) ~= "number" or timestamp ~= timestamp then
-		return 0
-	end
-	return timestamp
-end
-
-local function GetSearchMeta(data, normalizedTag)
-	local parts = {
-		tostring(data.Category or ""),
-		tostring(data.Author or ""),
-		normalizedTag
-	}
-	if type(data.Tags) == "table" then
-		for _, tag in ipairs(data.Tags) do
-			if type(tag) == "string" then
-				parts[#parts + 1] = tag
-			end
-		end
-	end
-	return string.lower(table.concat(parts, " "))
-end
-
 local function CreateScriptCard(data, renderParent)
-	if type(data) ~= "table" or type(data.Name) ~= "string" or data.Name == "" then
-		return false
-	end
-
-	local normalizedTag, tagConfig = GetTagConfig(data.TagType)
+	local tagType = NormalizeTagType(data and data.TagType)
+	local tagConfig = TagTypeConfig[tagType]
+	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
+	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = (normalizedTag == "NONE") and Theme.Card or Color3.new(
-		math.clamp(Theme.Card.R + (tagConfig.Color.R - Theme.Card.R) * 0.12, 0, 1),
-		math.clamp(Theme.Card.G + (tagConfig.Color.G - Theme.Card.G) * 0.12, 0, 1),
-		math.clamp(Theme.Card.B + (tagConfig.Color.B - Theme.Card.B) * 0.12, 0, 1)
-	); card.Text = ""
+	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-	local cardStroke = Instance.new("UIStroke", card)
-	cardStroke.Color = (normalizedTag == "NONE") and Color3.fromRGB(44, 58, 77) or tagConfig.Color
-	cardStroke.Transparency = (normalizedTag == "NONE") and 0 or 0.55
-	cardStroke.Thickness = (normalizedTag == "NONE") and 1 or 1.1
+	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = tagConfig.StrokeColor
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	local img = Instance.new("ImageLabel", card)
 	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
-	img.BorderSizePixel = 0; img.Image = (type(data.ImageAssetId) == "string" and data.ImageAssetId ~= "") and data.ImageAssetId or "rbxassetid://99657752206675"
+	img.BorderSizePixel = 0; img.Image = safeImageAssetId
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 	local content = Instance.new("Frame", card)
@@ -1743,7 +1733,7 @@ local function CreateScriptCard(data, renderParent)
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
 	local titleLbl = Instance.new("TextLabel", titleContainer)
 	titleLbl.Size = UDim2.new(1, 0, 0, 0); titleLbl.AutomaticSize = Enum.AutomaticSize.Y
-	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name
+	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	local metaRightContainer = Instance.new("Frame", topRow)
@@ -1751,7 +1741,7 @@ local function CreateScriptCard(data, renderParent)
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 6)
 
-	if normalizedTag ~= "NONE" then
+	if tagType ~= "NONE" then
 		local tag = Instance.new("Frame", metaRightContainer)
 		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
 		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 4)
@@ -1759,10 +1749,9 @@ local function CreateScriptCard(data, renderParent)
 		tPad.PaddingLeft = UDim.new(0, 5); tPad.PaddingRight = UDim.new(0, 5)
 		local tText = Instance.new("TextLabel", tag)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
-		tText.BackgroundTransparency = 1; tText.Text = normalizedTag
+		tText.BackgroundTransparency = 1; tText.Text = tagType
 		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 9
-		tag.BackgroundColor3 = tagConfig.Color
-		tag.BackgroundTransparency = 0.08
+		tag.BackgroundColor3 = tagConfig.BadgeColor
 		tag.LayoutOrder = 1
 	end
 
@@ -1773,7 +1762,7 @@ local function CreateScriptCard(data, renderParent)
 	dateLbl.TextSize = 10; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
-	descLbl.BackgroundTransparency = 1; descLbl.Text = (description ~= "") and description or "No description provided."
+	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
 	local btmRow = Instance.new("Frame", content)
@@ -1798,18 +1787,16 @@ local function CreateScriptCard(data, renderParent)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 
-	ApplyInteractiveAnimations(card, Theme.Card, Theme.CardHover, Color3.fromRGB(20, 29, 45), cardStroke, Color3.fromRGB(44, 58, 77), Theme.Accent, CardConnections)
+	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), cardStroke, tagConfig.StrokeColor, Theme.Accent, CardConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, CardConnections)
 
-	local exactName = data.Name
 	local description = type(data.Description) == "string" and data.Description or ""
-	local lastUpdated = GetCatalogTimestamp(data.LastUpdated)
+	local tagSearch = tagType
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
-		SearchMeta = GetSearchMeta(data, normalizedTag),
-		ExactName = exactName, LastUpdated = lastUpdated, TagType = normalizedTag,
-		TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
+		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch}, " ")),
+		ExactName = exactName, LastUpdated = data.LastUpdated, TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
 	}
 
 	local innerActionTime = 0
@@ -1819,11 +1806,6 @@ local function CreateScriptCard(data, renderParent)
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
-	end
-	scriptEntry.UpdateRelativeTime = function()
-		if dateLbl.Parent then
-			dateLbl.Text = GetRelativeTime(lastUpdated)
-		end
 	end
 	scriptEntry.UpdateUI()
 
@@ -1860,11 +1842,11 @@ local function CreateScriptCard(data, renderParent)
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = (type(data.RawUrl) == "string" and data.RawUrl ~= "") and FetchWithRetry(data.RawUrl, 2) or nil
+				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
 				if isDestroying then return end
-				if not raw then 
+				if not raw then
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
-				elseif string.find(raw, "404: Not Found") then 
+				elseif string.find(raw, "404: Not Found") then
 					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
 					local success = ExecuteSandboxed(raw, exactName)
@@ -1872,17 +1854,17 @@ local function CreateScriptCard(data, renderParent)
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
-				
+
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
 			end)
 		end
-		
-		if SavedData.AutoExecutes[exactName] ~= nil then 
+
+		if SavedData.AutoExecutes[exactName] ~= nil then
 			AttemptActionWithCooldown(executeScript)
-		else 
-			OpenConfirmDialog(exactName, executeScript) 
+		else
+			OpenConfirmDialog(exactName, executeScript)
 		end
 	end))
 
@@ -1922,6 +1904,7 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
+
 				local fingerprintParts = {}
 				for index, entry in ipairs(parsed) do
 					if type(entry) == "table" then
@@ -2010,7 +1993,7 @@ local function LoadDynamicCatalog()
 
 					local autoQueue = {}
 					for _, scriptData in ipairs(parsed) do
-						if type(scriptData) == "table" and scriptData.Name then
+						if type(scriptData) == "table" and type(scriptData.Name) == "string" and scriptData.Name ~= "" then
 							local auto = SavedData.AutoExecutes[scriptData.Name]
 							if auto and type(auto) == "table" then
 								local isValid = false
@@ -2019,7 +2002,7 @@ local function LoadDynamicCatalog()
 								else
 									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
 								end
-								
+
 								if isValid then
 									table.insert(autoQueue, scriptData)
 								end
@@ -2042,7 +2025,7 @@ local function LoadDynamicCatalog()
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
-								local scrRaw = (type(scriptData.RawUrl) == "string" and scriptData.RawUrl ~= "") and FetchWithRetry(scriptData.RawUrl, 2) or nil
+								local scrRaw = FetchWithRetry(type(scriptData.RawUrl) == "string" and scriptData.RawUrl or "", 2)
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
@@ -2057,7 +2040,7 @@ local function LoadDynamicCatalog()
 								end
 								task.wait(0.3)
 							end
-							
+
 							if #successList > 0 then
 								ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success")
 							end
@@ -2110,14 +2093,16 @@ local function LoadDynamicCatalog()
 	end)
 end
 LoadDynamicCatalog()
+
+
+
+
 TrackTask(function()
 	while not isDestroying do
-		task.wait(60)
+		task.wait(CATALOG_REFRESH_INTERVAL)
 		if isDestroying then break end
-		for _, scriptEntry in ipairs(RegisteredScripts) do
-			if scriptEntry.Instance and scriptEntry.Instance.Parent and scriptEntry.Instance.Visible and scriptEntry.UpdateRelativeTime then
-				scriptEntry.UpdateRelativeTime()
-			end
+		if not dbRefreshing then
+			LoadDynamicCatalog()
 		end
 	end
 end)
@@ -2307,8 +2292,8 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
 	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
-	
-	if KeybindCaptureConnection then 
+
+	if KeybindCaptureConnection then
 		UnregConn(KeybindCaptureConnection)
 		KeybindCaptureConnection = nil
 	end
@@ -2320,9 +2305,9 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				IsBindingKey = false
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
-				if KeybindCaptureConnection then 
+				if KeybindCaptureConnection then
 					UnregConn(KeybindCaptureConnection)
-					KeybindCaptureConnection = nil 
+					KeybindCaptureConnection = nil
 				end
 				return
 			end
@@ -2333,21 +2318,21 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				SaveConfiguration()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
-				
+
 				BindToggleKey(ToggleKeybind)
-				
-				if KeybindCaptureConnection then 
+
+				if KeybindCaptureConnection then
 					UnregConn(KeybindCaptureConnection)
-					KeybindCaptureConnection = nil 
+					KeybindCaptureConnection = nil
 				end
 			end
 		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			IsBindingKey = false
 			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 			ShowNotification("Keybind mapping canceled.", "Warning")
-			if KeybindCaptureConnection then 
+			if KeybindCaptureConnection then
 				UnregConn(KeybindCaptureConnection)
-				KeybindCaptureConnection = nil 
+				KeybindCaptureConnection = nil
 			end
 		end
 	end))
@@ -2495,7 +2480,7 @@ pcall(function()
 			end
 			return oldNamecall(self, ...)
 		end)
-		
+
 		local oldIndex
 		oldIndex = hookmetamethod(game, "__index", function(self, key)
 			local ok, isCaller = pcall(checkcaller)
