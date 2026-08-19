@@ -1,12 +1,12 @@
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local parts = table.create(len)
+	local str = ""
 	for i = 1, len do
 		local r = rng:NextInteger(1, #chars)
-		parts[i] = string.sub(chars, r, r)
+		str = str .. string.sub(chars, r, r)
 	end
-	return table.concat(parts)
+	return str
 end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
@@ -53,10 +53,10 @@ local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
-local write_file = writefile
-local read_file = readfile
-local is_file = isfile
-local del_file = delfile
+local write_file = writefile or function() end
+local read_file = readfile or function() end
+local is_file = isfile or function() return false end
+local del_file = delfile or function() end
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -77,14 +77,10 @@ local Theme = {
 }
 
 local VeloxConnections = {}
-local VeloxConnectionIndex = {}
 local CardConnections = {}
-local CardConnectionIndex = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
 local PendingTasks = {}
-local PendingNotifications = {}
-local NotifyUser = nil
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local AutoExecuteRanThisSession = false
@@ -109,7 +105,6 @@ local GlobalCooldownLoopVersion = 0
 local GlobalActionCooldownEndTime = 0
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
-local HookState = { Active = true }
 
 local function CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
@@ -143,23 +138,19 @@ local function CacheInstanceAndDescendants(root)
 end
 
 local function RegConn(connection)
-	if connection and typeof(connection) == "RBXScriptConnection" and not VeloxConnectionIndex[connection] then
-		local index = #VeloxConnections + 1
-		VeloxConnections[index] = connection
-		VeloxConnectionIndex[connection] = index
+	if connection and typeof(connection) == "RBXScriptConnection" then
+		table.insert(VeloxConnections, connection)
 	end
 	return connection
 end
 
 local function UnregConn(connection)
 	if not connection then return end
-	local index = VeloxConnectionIndex[connection]
-	if index then
-		local last = VeloxConnections[#VeloxConnections]
-		VeloxConnections[index] = last
-		VeloxConnections[#VeloxConnections] = nil
-		VeloxConnectionIndex[connection] = nil
-		if last and last ~= connection then VeloxConnectionIndex[last] = index end
+	for i = #VeloxConnections, 1, -1 do
+		if VeloxConnections[i] == connection then
+			table.remove(VeloxConnections, i)
+			break
+		end
 	end
 	if typeof(connection) == "RBXScriptConnection" and connection.Connected then
 		pcall(function() connection:Disconnect() end)
@@ -167,42 +158,30 @@ local function UnregConn(connection)
 end
 
 local function RegCardConn(connection)
-	if connection and typeof(connection) == "RBXScriptConnection" and not CardConnectionIndex[connection] then
-		local index = #CardConnections + 1
-		CardConnections[index] = connection
-		CardConnectionIndex[connection] = index
+	if connection and typeof(connection) == "RBXScriptConnection" then
+		table.insert(CardConnections, connection)
 	end
 	return connection
 end
 
 local function TrackTask(fn)
-	if isDestroying or type(fn) ~= "function" then return nil end
-	local token = {}
-	local completed = false
-	local thread = task.spawn(function()
+	local thread
+	thread = task.spawn(function()
 		local ok, err = pcall(fn)
-		completed = true
-		PendingTasks[token] = nil
+		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
-			local message = "Background task failed: " .. tostring(err)
-			if NotifyUser then
-				NotifyUser(message, "Error")
-			else
-				table.insert(PendingNotifications, {message, "Error"})
-			end
+			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
-	if not completed and not isDestroying then
-		PendingTasks[token] = thread
-	end
+	PendingTasks[thread] = true
 	return thread
 end
 
 local function CancelTrackedTasks()
-	for token, thread in pairs(PendingTasks) do
-		PendingTasks[token] = nil
-		if thread then pcall(task.cancel, thread) end
+	for thread in pairs(PendingTasks) do
+		pcall(task.cancel, thread)
 	end
+	table.clear(PendingTasks)
 end
 
 local typingTask = nil
@@ -210,10 +189,8 @@ local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
-
-	HookState.Active = false
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-
+	
 	CancelTrackedTasks()
 
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
@@ -239,9 +216,9 @@ local function CleanUpMemory()
 		if type(tweenData) == "table" then
 			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
 			if tweenData.Tween then
-				pcall(function()
-					tweenData.Tween:Cancel()
-					tweenData.Tween:Destroy()
+				pcall(function() 
+					tweenData.Tween:Cancel() 
+					tweenData.Tween:Destroy() 
 				end)
 			end
 		end
@@ -250,11 +227,9 @@ local function CleanUpMemory()
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
-
+	
 	table.clear(VeloxConnections)
-	table.clear(VeloxConnectionIndex)
 	table.clear(CardConnections)
-	table.clear(CardConnectionIndex)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
 	table.clear(ActiveTweens)
@@ -269,9 +244,9 @@ local function SafeTween(instance, tweenInfo, properties)
 		if oldData and type(oldData) == "table" then
 			if oldData.Connection then pcall(function() oldData.Connection:Disconnect() end) end
 			if oldData.Tween then
-				pcall(function()
-					oldData.Tween:Cancel()
-					oldData.Tween:Destroy()
+				pcall(function() 
+					oldData.Tween:Cancel() 
+					oldData.Tween:Destroy() 
 				end)
 			end
 		end
@@ -306,7 +281,6 @@ end
 
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
-local CONFIG_VERSION = 4
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -317,201 +291,68 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
-local function SanitizeConfiguration(data)
-	if type(data) ~= "table" then
-		return nil
-	end
-	return data
-end
-
-local TagConfig = {
-	UPDATED = { Priority = 1, Highlight = true },
-	HOT = { Priority = 2, Highlight = true },
-	NEW = { Priority = 3, Highlight = true },
-	FEATURED = { Priority = 4, Highlight = true },
-	NONE = { Priority = 999, Highlight = false },
-}
-
-local function NormalizeTagType(value)
-	local tag = string.upper(tostring(value or "NONE"))
-	if TagConfig[tag] then
-		return tag
-	end
-	return "NONE"
-end
-
-local function GetTagInfo(entry)
-	local tag = NormalizeTagType(entry and entry.TagType)
-	return tag, TagConfig[tag]
-end
-
-local function GetCatalogSortKey(entry, originalIndex)
-	local tag, info = GetTagInfo(entry)
-	local priority = info.Priority
-	local updated = tonumber(entry and entry.LastUpdated) or 0
-	return priority, updated, tonumber(originalIndex) or 0, tostring(entry and entry.Name or "")
-end
-
-local function BuildSanitizedConfiguration()
-	local cleanData = {
-		Version = CONFIG_VERSION,
-		Favorites = {},
-		AutoExecutes = {},
-		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-		Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
-	}
-
-	for k, v in pairs(SavedData.Favorites) do
-		if type(k) == "string" and v == true and #k <= 120 then
-			cleanData.Favorites[k] = true
-		end
-	end
-
-	for k, v in pairs(SavedData.AutoExecutes) do
-		if type(k) == "string" and #k <= 120 and type(v) == "table" then
-			local savedPlaceId = tonumber(v.PlaceId) or 0
-			local savedGameId = tonumber(v.GameId) or 0
-			cleanData.AutoExecutes[k] = {
-				PlaceId = savedPlaceId,
-				GameId = savedGameId
-			}
-		end
-	end
-
-	return SanitizeConfiguration(cleanData)
-end
-
-local function ConfigurationMatches(a, b)
-	if type(a) ~= "table" or type(b) ~= "table" then
-		return false
-	end
-
-	if tonumber(a.Version) ~= tonumber(b.Version) then
-		return false
-	end
-
-	if tostring(a.ToggleKeybind or "") ~= tostring(b.ToggleKeybind or "") then
-		return false
-	end
-
-	local aSettings = type(a.Settings) == "table" and a.Settings or {}
-	local bSettings = type(b.Settings) == "table" and b.Settings or {}
-	if (aSettings.AntiAFK == true) ~= (bSettings.AntiAFK == true) then
-		return false
-	end
-
-	local function CompareMap(aMap, bMap, isAuto)
-		if type(aMap) ~= "table" or type(bMap) ~= "table" then
-			return false
-		end
-
-		for key, value in pairs(aMap) do
-			if isAuto then
-				if type(value) ~= "table" or type(bMap[key]) ~= "table" then
-					return false
-				end
-				local bv = bMap[key]
-				if tonumber(value.PlaceId) ~= tonumber(bv.PlaceId)
-					or tonumber(value.GameId) ~= tonumber(bv.GameId) then
-					return false
-				end
-			else
-				if value ~= bMap[key] then
-					return false
+local function SanitizeForJSON(data)
+	if type(data) == "table" then
+		local clean = {}
+		for k, v in pairs(data) do
+			if type(k) == "string" or type(k) == "number" then
+				local cleanVal = SanitizeForJSON(v)
+				if cleanVal ~= nil then
+					clean[tostring(k)] = cleanVal
 				end
 			end
 		end
-
-		for key in pairs(bMap) do
-			if aMap[key] == nil then
-				return false
-			end
-		end
-
-		return true
+		return clean
+	elseif type(data) == "string" or type(data) == "number" or type(data) == "boolean" then
+		return data
 	end
-
-	return CompareMap(a.Favorites, b.Favorites, false)
-		and CompareMap(a.AutoExecutes, b.AutoExecutes, true)
+	return nil
 end
 
 local function SaveConfiguration()
-	if isDestroying then return false end
-	if type(write_file) ~= "function" then
-		if NotifyUser then NotifyUser("Configuration storage is unavailable in this executor.", "Warning") end
-		return false
+	if type(write_file) ~= "function" then return end
+	if isSaving then 
+		saveQueued = true 
+		return 
 	end
-
-	local ok, result = pcall(function()
-		local safeData = BuildSanitizedConfiguration()
-		if type(safeData) ~= "table" then return false end
-
-		local encodeOk, encoded = pcall(function()
-			return HttpService:JSONEncode(safeData)
-		end)
-		if not encodeOk or type(encoded) ~= "string" then return false end
-
-		local canRead = type(read_file) == "function"
-		local canDelete = type(del_file) == "function"
-
-		if canRead then
-			write_file(TEMP_FILE, encoded)
-			local rawTemp = read_file(TEMP_FILE)
-			local decodeOk, decoded = pcall(function() return HttpService:JSONDecode(rawTemp) end)
-			if not decodeOk or not ConfigurationMatches(decoded, safeData) then return false end
-
-			write_file(DATA_FILE, encoded)
-			local rawFinal = read_file(DATA_FILE)
-			local finalOk, finalDecoded = pcall(function() return HttpService:JSONDecode(rawFinal) end)
-			if not finalOk or not ConfigurationMatches(finalDecoded, safeData) then return false end
-			if canDelete then pcall(function() del_file(TEMP_FILE) end) end
-		else
-			write_file(DATA_FILE, encoded)
-			if canDelete then pcall(function() del_file(TEMP_FILE) end) end
+	isSaving = true
+	task.spawn(function()
+		local cleanData = {
+			Favorites = {}, AutoExecutes = {},
+			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
+		}
+		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
+		for k, v in pairs(SavedData.AutoExecutes) do
+			if type(v) == "table" then 
+				cleanData.AutoExecutes[tostring(k)] = { 
+					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+					GameId = tonumber(v.GameId) or game.GameId 
+				} 
+			end
 		end
-		return true
+		
+		local safeData = SanitizeForJSON(cleanData)
+		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
+		if success then 
+			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
+			if writeSuccess then
+				local verifySuccess = pcall(function()
+					local check = read_file(TEMP_FILE)
+					return HttpService:JSONDecode(check)
+				end)
+				if verifySuccess then
+					pcall(function() write_file(DATA_FILE, result) end)
+				end
+			end
+			pcall(function() del_file(TEMP_FILE) end)
+		end
+		isSaving = false
+		if saveQueued then
+			saveQueued = false
+			SaveConfiguration() 
+		end
 	end)
-
-	isSaving = false
-	saveQueued = false
-	if not ok or result ~= true then
-		if NotifyUser then NotifyUser("Could not save your Velox configuration.", "Error") end
-		return false
-	end
-	return true
-end
-
-local function GetCurrentPlaceId()
-	return tonumber(game.PlaceId) or 0
-end
-
-local function GetCurrentGameId()
-	return tonumber(game.GameId) or 0
-end
-
-local function IsAutoExecuteEntryValid(entry)
-	if type(entry) ~= "table" then
-		return false
-	end
-
-	local placeId = tonumber(entry.PlaceId)
-	local gameId = tonumber(entry.GameId)
-
-	return (placeId == nil or placeId >= 0)
-		and (gameId == nil or gameId >= 0)
-end
-
-local function ShouldAutoExecuteScript(scriptEntry, savedAutoExecute)
-	if type(scriptEntry) ~= "table" or type(savedAutoExecute) ~= "table" then
-		return false
-	end
-
-	local scriptPlaceId = tonumber(scriptEntry.PlaceId) or 0
-	if scriptPlaceId == 0 then
-		return true
-	end
-
-	return scriptPlaceId == GetCurrentPlaceId()
 end
 
 local function LoadConfiguration()
@@ -519,23 +360,23 @@ local function LoadConfiguration()
 		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
-				for k, v in pairs(result.Favorites) do
-					if type(k) == "string" and v == true and #k <= 120 then SavedData.Favorites[k] = true end
-				end
+				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
 			end
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
-					if type(k) == "string" and #k <= 120 and type(v) == "table" then
-						SavedData.AutoExecutes[k] = {
+					if type(k) == "string" and type(v) == "table" then
+						SavedData.AutoExecutes[tostring(k)] = { 
 							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
 							GameId = type(v.GameId) == "number" and v.GameId or nil
 						}
 					end
 				end
 			end
-			if type(result.ToggleKeybind) == "string" and #result.ToggleKeybind <= 40 then SavedData.ToggleKeybind = result.ToggleKeybind end
-			if type(result.Settings) == "table" and type(result.Settings.AntiAFK) == "boolean" then
-				SavedData.Settings.AntiAFK = result.Settings.AntiAFK
+			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
+			if type(result.Settings) == "table" then
+				for k, _ in pairs(result.Settings) do
+					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
+				end
 			end
 		else
 			SaveConfiguration()
@@ -544,31 +385,22 @@ local function LoadConfiguration()
 end
 LoadConfiguration()
 
-local HTTP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024
-local SCRIPT_MAX_RESPONSE_BYTES = 1 * 1024 * 1024
-local CATALOG_MAX_ENTRIES = 500
-
-local function IsValidHttpUrl(url)
-	return type(url) == "string" and (string.match(url, "^https://") ~= nil or string.match(url, "^http://") ~= nil) and #url <= 2048
-end
-
-local function UniversalHttpGet(url, maxBytes)
-	if not IsValidHttpUrl(url) then return nil end
-	maxBytes = maxBytes or HTTP_MAX_RESPONSE_BYTES
+local function UniversalHttpGet(url)
 	if type(exec_request) == "function" then
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
-		if reqSuccess and type(reqResult) == "table" then
+		if reqSuccess and reqResult then
 			local body = reqResult.Body or reqResult.body or reqResult.Response
-			local status = tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code)
-			if type(body) == "string" and #body <= maxBytes and (status == nil or status >= 200 and status < 300) then
+			local status = reqResult.StatusCode or reqResult.Status or reqResult.status_code
+			if (status == 200 or status == nil) and body then
 				return body
 			end
 		end
 	end
 	local success, result = pcall(function() return game:HttpGet(url) end)
-	if success and type(result) == "string" and #result <= maxBytes then return result end
+	if success and result then return result end
 	return nil
 end
+
 local function AddCacheBuster(url)
 	if type(url) ~= "string" or url == "" then return url end
 	local separator = string.find(url, "?", 1, true) and "&" or "?"
@@ -576,38 +408,71 @@ local function AddCacheBuster(url)
 	return url .. separator .. "velox_cache=" .. nonce
 end
 
-local function FetchWithRetry(url, retries, cacheBust, maxBytes)
-	retries = math.clamp(tonumber(retries) or 3, 1, 5)
-	maxBytes = maxBytes or HTTP_MAX_RESPONSE_BYTES
-	if not IsValidHttpUrl(url) then return nil end
+local function FetchWithRetry(url, retries, cacheBust)
+	retries = retries or 3
 	for i = 1, retries do
-		if isDestroying then return nil end
-		local requestUrl = cacheBust and AddCacheBuster(url) or url
-		local response = UniversalHttpGet(requestUrl, maxBytes)
-		if type(response) == "string" and #response > 0 and #response <= maxBytes then
+		local requestUrl = url
+		if cacheBust then
+			requestUrl = AddCacheBuster(url)
+		end
+
+		local response = UniversalHttpGet(requestUrl)
+		if response and type(response) == "string" and #response > 0 then
 			return response
 		end
-		if i < retries then task.wait(math.min(2 ^ (i - 1), 4)) end
+
+		if i < retries then
+			task.wait(math.pow(2, i))
+		end
 	end
 	return nil
 end
+
 local function GetRelativeTime(timestamp)
-	if type(timestamp) == "string" then
-		timestamp = tonumber(timestamp)
+	local numericTimestamp = tonumber(timestamp)
+	if type(numericTimestamp) ~= "number" or numericTimestamp ~= numericTimestamp then
+		return "Updated just now"
 	end
-	if type(timestamp) ~= "number" or timestamp ~= timestamp then return "Updated recently" end
-	local diff = os.time() - timestamp
-	if diff < 0 then return "Just now" end
+
+	local diff = os.time() - numericTimestamp
+	if diff < 0 then
+		return "Updated just now"
+	end
+
+	if diff < 60 then
+		return "Updated just now"
+	end
+
+	local minutes = math.floor(diff / 60)
+	if minutes < 60 then
+		return "Updated " .. minutes .. (minutes == 1 and " minute ago" or " minutes ago")
+	end
+
+	local hours = math.floor(diff / 3600)
+	if hours < 24 then
+		return "Updated " .. hours .. (hours == 1 and " hour ago" or " hours ago")
+	end
+
 	local days = math.floor(diff / 86400)
-	if days == 0 then return "Today" end
-	if days == 1 then return "Yesterday" end
-	if days < 7 then return days .. " days ago" end
+	if days == 1 then
+		return "Updated yesterday"
+	end
+	if days < 7 then
+		return "Updated " .. days .. " days ago"
+	end
+
 	local weeks = math.floor(days / 7)
-	if weeks < 4 then return weeks .. (weeks == 1 and " week ago" or " weeks ago") end
-	local months = math.floor(days / 30.44)
-	if months < 12 then return months .. (months == 1 and " month ago" or " months ago") end
-	local years = math.floor(days / 365.25)
-	return years .. (years == 1 and " year ago" or " years ago")
+	if weeks < 4 then
+		return "Updated " .. weeks .. (weeks == 1 and " week ago" or " weeks ago")
+	end
+
+	local months = math.max(1, math.floor(days / 30))
+	if months < 12 then
+		return "Updated " .. months .. (months == 1 and " month ago" or " months ago")
+	end
+
+	local years = math.max(1, math.floor(days / 365))
+	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
 local function GetSecureParent()
@@ -615,7 +480,7 @@ local function GetSecureParent()
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
 		return huiTarget
 	end
-
+	
 	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
 		local testAccess = pcall(function()
@@ -625,12 +490,12 @@ local function GetSecureParent()
 		end)
 		if testAccess then return coreTarget end
 	end
-
+	
 	if LocalPlayer then
 		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 		if playerGui then return playerGui end
 	end
-
+	
 	return nil
 end
 
@@ -687,9 +552,9 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	RegInteractive(gui.InputEnded:Connect(function(input)
 		if isDestroying or isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if not IsMobile and hoverColor then
+			if not IsMobile and hoverColor then 
 				gui.BackgroundColor3 = hoverColor
-			elseif originalColor then
+			elseif originalColor then 
 				gui.BackgroundColor3 = originalColor
 			end
 		end
@@ -732,7 +597,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		activeFloatDragInput = input
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-
+		
 		if floatDragConnection then floatDragConnection:Disconnect() end
 		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -810,11 +675,11 @@ local function ToggleUI()
 	if DropdownContainer and DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	end
-
+	
 	if not isMinimized then
 		isMinimized = true
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-
+		
 		MainPanel.Visible = false
 		RestoreCachedProperties()
 		FloatingBtn.Visible = true
@@ -827,7 +692,7 @@ local function ToggleUI()
 		MainPanel.Visible = true
 		RestoreCachedProperties()
 	end
-
+	
 	isTransitioning = false
 end
 
@@ -878,7 +743,7 @@ local function StandaloneBannerNotification(msg, notifType)
 		frame.BackgroundColor3 = Theme.BackgroundSecondary
 		frame.BorderSizePixel = 0
 		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-
+		
 		local stroke = Instance.new("UIStroke", frame)
 		stroke.Color = Theme[notifType] or Theme.Info
 		stroke.Thickness = 1.5
@@ -915,7 +780,7 @@ end
 
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
-
+	
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
 
@@ -980,14 +845,6 @@ local function ShowNotification(msg, notifType)
 	end
 end
 
-NotifyUser = ShowNotification
-if #PendingNotifications > 0 then
-	for _, notification in ipairs(PendingNotifications) do
-		ShowNotification(notification[1], notification[2])
-	end
-	table.clear(PendingNotifications)
-end
-
 local function AttemptActionWithCooldown(actionFunc)
 	local now = tick()
 	if now < GlobalActionCooldownEndTime then
@@ -997,7 +854,7 @@ local function AttemptActionWithCooldown(actionFunc)
 
 			local parent = GetSecureParent()
 			if not parent then return end
-
+			
 			local bannerGui = Instance.new("ScreenGui")
 			bannerGui.Name = "VeloxCooldown_" .. GenerateRandomString(8)
 			bannerGui.DisplayOrder = 10000
@@ -1012,7 +869,7 @@ local function AttemptActionWithCooldown(actionFunc)
 			frame.BackgroundColor3 = Theme.BackgroundSecondary
 			frame.BorderSizePixel = 0
 			Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-
+			
 			local stroke = Instance.new("UIStroke", frame)
 			stroke.Color = Theme.Warning
 			stroke.Thickness = 1.5
@@ -1038,8 +895,8 @@ local function AttemptActionWithCooldown(actionFunc)
 					elseif rem == 1 then
 						if txt and txt.Parent then txt.Text = "Please try again in 1 second" end
 					else
-						if txt and txt.Parent then
-							txt.Text = "Ready"
+						if txt and txt.Parent then 
+							txt.Text = "Ready" 
 							stroke.Color = Theme.Success
 						end
 						task.wait(1)
@@ -1066,7 +923,7 @@ local function AttemptActionWithCooldown(actionFunc)
 	end
 
 	GlobalActionCooldownEndTime = tick() + 3
-
+	
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then
 		GlobalCooldownLoopVersion = GlobalCooldownLoopVersion + 1
 		pcall(function() GlobalCooldownBanner:Destroy() end)
@@ -1207,10 +1064,10 @@ local function BindToggleKey(keyCode)
 		UnregConn(ToggleKeybindConnection)
 		ToggleKeybindConnection = nil
 	end
-
+	
 	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
-
+		
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
 			if SearchInput and SearchInput:IsFocused() then
 				SearchInput:ReleaseFocus()
@@ -1242,7 +1099,7 @@ local HeaderContainer = Instance.new("Frame", PanelGroup)
 HeaderContainer.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 56)
 HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
-HeaderContainer.Active = true
+HeaderContainer.Active = true 
 
 local mainDragStart, mainStartPos
 
@@ -1251,7 +1108,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		activeMainDragInput = input
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
-
+		
 		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
@@ -1370,12 +1227,12 @@ task.spawn(function()
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
 		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
-		if success and content then
+		if success and content then 
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
-			break
-		else
-			task.wait(2)
+			break 
+		else 
+			task.wait(2) 
 		end
 	end
 end)
@@ -1389,24 +1246,18 @@ RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
-TrackTask(function()
-	local last = os.clock()
-	while not isDestroying do
-		task.wait(1)
-		if not isMinimized and not isTransitioning then
-			local now = os.clock()
-			local elapsed = math.max(now - last, 0.001)
-			local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-			if DiagnosticsLabel and DiagnosticsLabel.Parent then
-				DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", math.floor(fpsCount / elapsed + 0.5), success and ping or 0)
-			end
-			fpsCount = 0
+local lastPingUpdate = tick()
+RegConn(RunService.Heartbeat:Connect(function() 
+	if isMinimized or isDestroying or isTransitioning then return end 
+	fpsCount = fpsCount + 1 
+	if tick() - lastPingUpdate >= 1 then
+		lastPingUpdate = tick()
+		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+		if DiagnosticsLabel and DiagnosticsLabel.Parent then
+			DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
 		end
-		last = os.clock()
+		fpsCount = 0
 	end
-end)
-RegConn(RunService.Heartbeat:Connect(function()
-	if not isMinimized and not isDestroying and not isTransitioning then fpsCount = fpsCount + 1 end
 end))
 
 local TabContainer = Instance.new("Frame", PanelGroup)
@@ -1540,7 +1391,6 @@ BindCamera()
 local FilterFavoritesActive = false
 local filterVersion = 0
 local SortMode = "Most Relevant"
-local LastFilterQuery = nil
 local SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
@@ -1553,7 +1403,7 @@ local function UpdateFilter()
 	local currentVersion = filterVersion
 	task.defer(function()
 		local queryText = SearchInput.Text
-		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1"))
+		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1")) 
 		local words = {}
 		for word in string.gmatch(query, "%S+") do table.insert(words, word) end
 		local matches = {}
@@ -1581,10 +1431,8 @@ local function UpdateFilter()
 				elseif SortMode == "Updated This Week" then filterPass = (age <= 604800)
 				elseif SortMode == "Updated This Month" then filterPass = (age <= 2592000)
 				elseif SortMode == "Favorites" then filterPass = SavedData.Favorites[scr.ExactName]
-				elseif SortMode == "Auto Execute: ON" then
-					filterPass = SavedData.AutoExecutes[scr.ExactName] ~= nil
-				elseif SortMode == "Auto Execute: OFF" then
-					filterPass = SavedData.AutoExecutes[scr.ExactName] == nil
+				elseif SortMode == "Auto Execute: ON" then filterPass = (SavedData.AutoExecutes[scr.ExactName] ~= nil)
+				elseif SortMode == "Auto Execute: OFF" then filterPass = (SavedData.AutoExecutes[scr.ExactName] == nil)
 				end
 			end
 			local visible = isMatch and filterPass
@@ -1593,12 +1441,12 @@ local function UpdateFilter()
 		end
 		if filterVersion ~= currentVersion then return end
 		table.sort(matches, function(a, b)
-			local _, aTagInfo = GetTagInfo(a.CatalogData)
-			local _, bTagInfo = GetTagInfo(b.CatalogData)
-			local aPriority = aTagInfo.Priority
-			local bPriority = bTagInfo.Priority
-			if aPriority ~= bPriority then
-				return aPriority < bPriority
+			if a.TagPriority ~= b.TagPriority then
+				return a.TagPriority > b.TagPriority
+			end
+
+			if a.LastUpdated ~= b.LastUpdated then
+				return a.LastUpdated > b.LastUpdated
 			end
 
 			if SortMode == "Most Relevant" and query ~= "" then
@@ -1609,10 +1457,6 @@ local function UpdateFilter()
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif SortMode == "Z-A" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
-			elseif SortMode == "Newest" then
-				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (tonumber(a.LastUpdated) or 0) > (tonumber(b.LastUpdated) or 0) end
-			elseif SortMode == "Oldest" then
-				if (a.LastUpdated or 0) ~= (b.LastUpdated or 0) then return (tonumber(a.LastUpdated) or 0) < (tonumber(b.LastUpdated) or 0) end
 			elseif SortMode == "Favorites" then
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
@@ -1622,9 +1466,10 @@ local function UpdateFilter()
 				local bAuto = SavedData.AutoExecutes[b.ExactName] and 1 or 0
 				if aAuto ~= bAuto then return aAuto > bAuto end
 			end
+
 			return a.OriginalIndex < b.OriginalIndex
 		end)
-		for idx, scr in ipairs(matches) do
+		for idx, scr in ipairs(matches) do 
 			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
 		end
 		if #RegisteredScripts > 0 then
@@ -1634,10 +1479,9 @@ local function UpdateFilter()
 			end
 			if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		end
-		if ScriptsView and ScriptsView.Parent and LastFilterQuery ~= nil and LastFilterQuery ~= query then
+		if ScriptsView and ScriptsView.Parent and query ~= "" then
 			ScriptsView.CanvasPosition = Vector2.new(0, 0)
 		end
-		LastFilterQuery = query
 	end)
 end
 
@@ -1695,8 +1539,8 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 		local dropWidth, dropHeight = 190, 210
 		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
 		local posY = absPos.Y + absSize.Y + 4
-		if posY + dropHeight > viewportSize.Y - 10 then
-			posY = absPos.Y - dropHeight - 4
+		if posY + dropHeight > viewportSize.Y - 10 then 
+			posY = absPos.Y - dropHeight - 4 
 		end
 		if posY < 10 then posY = 10 end
 		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
@@ -1744,10 +1588,10 @@ local function CreateTab(name, index)
 		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
-		if name == "Scripts" then
-			UpdateFilter()
-		elseif SearchInput and SearchInput.Parent then
-			pcall(function() SearchInput:ReleaseFocus() end)
+		if name == "Scripts" then 
+			UpdateFilter() 
+		elseif SearchInput and SearchInput.Parent then 
+			pcall(function() SearchInput:ReleaseFocus() end) 
 		end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
@@ -1790,91 +1634,98 @@ local function RefreshAllCardStates()
 	end
 end
 
-local function ExtractDirectHttpLoader(code)
-	if type(code) ~= "string" then return nil end
-	local source = string.gsub(code, "^%s+", "")
-	local url = string.match(source, '^loadstring%s*%(%s*game%s*:%s*HttpGet%s*%(%s*["\'](https?://[^"\']+)["\']%s*%)%s*%)%s*%(%s*%)%s*;?%s*$')
-	if url then return url end
-	url = string.match(source, '^loadstring%s*%(%s*game%s*:%s*HttpGetAsync%s*%(%s*["\'](https?://[^"\']+)["\']%s*%)%s*%)%s*%(%s*%)%s*;?%s*$')
-	if url then return url end
-	return nil
-end
-
-local function ResolveDirectHttpLoader(code, scriptName, depth)
-	if type(code) ~= "string" then return nil, "invalid source" end
-	depth = tonumber(depth) or 0
-	if depth > 3 then
-		return nil, "nested loader depth exceeded"
-	end
-
-	local nestedUrl = ExtractDirectHttpLoader(code)
-	if not nestedUrl then
-		return code, nil
-	end
-
-	local nested = FetchWithRetry(nestedUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
-	if not nested then
-		return nil, "could not download nested loader"
-	end
-	if string.find(nested, "404: Not Found", 1, true) then
-		return nil, "nested loader returned 404"
-	end
-
-	return ResolveDirectHttpLoader(nested, scriptName, depth + 1)
-end
-
 local function ExecuteSandboxed(code, scriptName)
-	if isDestroying or type(code) ~= "string" then return false, "invalid execution request" end
-	if #code > SCRIPT_MAX_RESPONSE_BYTES then
-		ShowNotification("Execution blocked: script is larger than the configured safety limit.", "Error")
-		return false, "script too large"
+	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
+	if not chunk then 
+		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		warn("[Velox Compile Error]: " .. tostring(compileErr))
+		return false, tostring(compileErr) 
 	end
-	if type(loadstring) ~= "function" then
-		ShowNotification("Execution is unavailable in this environment.", "Error")
-		return false, "loadstring unavailable"
-	end
-
-	local resolved, resolveErr = ResolveDirectHttpLoader(code, scriptName, 0)
-	if not resolved then
-		ShowNotification("Could not load [" .. tostring(scriptName) .. "]: " .. tostring(resolveErr), "Error")
-		return false, tostring(resolveErr)
-	end
-	if #resolved > SCRIPT_MAX_RESPONSE_BYTES then
-		ShowNotification("Execution blocked: resolved script is larger than the configured safety limit.", "Error")
-		return false, "resolved script too large"
-	end
-
-	local chunk, compileErr = loadstring(resolved, "=" .. tostring(scriptName))
-	if not chunk then
-		ShowNotification("Could not compile [" .. tostring(scriptName) .. "]: " .. tostring(compileErr), "Error")
-		return false, tostring(compileErr)
-	end
-
+	
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
-			local cleanErr = tostring(runtimeErr):gsub("^%s+", ""):gsub("%s+$", "")
-			ShowNotification("Execution error in [" .. tostring(scriptName) .. "]: " .. cleanErr, "Error")
+			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
 		end
 	end)
+	
+	return true, "Script dispatched successfully"
+end
 
-	return true, "Script started"
+local TagTypeConfig = {
+	UPDATED = {Priority = 5, Color = Theme.Success},
+	HOT = {Priority = 4, Color = Theme.Error},
+	NEW = {Priority = 3, Color = Theme.Info},
+	FEATURED = {Priority = 2, Color = Theme.Accent},
+	NONE = {Priority = 1, Color = Theme.TextSecondary}
+}
+
+local function NormalizeTagType(value)
+	if type(value) ~= "string" then
+		return "NONE"
+	end
+	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	if TagTypeConfig[normalized] then
+		return normalized
+	end
+	return "NONE"
+end
+
+local function GetTagConfig(value)
+	local normalized = NormalizeTagType(value)
+	return normalized, TagTypeConfig[normalized]
+end
+
+local function GetCatalogTimestamp(value)
+	local timestamp = tonumber(value)
+	if type(timestamp) ~= "number" or timestamp ~= timestamp then
+		return 0
+	end
+	return timestamp
+end
+
+local function GetSearchMeta(data, normalizedTag)
+	local parts = {
+		tostring(data.Category or ""),
+		tostring(data.Author or ""),
+		normalizedTag
+	}
+	if type(data.Tags) == "table" then
+		for _, tag in ipairs(data.Tags) do
+			if type(tag) == "string" then
+				parts[#parts + 1] = tag
+			end
+		end
+	end
+	return string.lower(table.concat(parts, " "))
 end
 
 local function CreateScriptCard(data, renderParent)
-	local tagType, tagInfo = GetTagInfo(data)
+	if type(data) ~= "table" or type(data.Name) ~= "string" or data.Name == "" then
+		return false
+	end
+
+	local normalizedTag, tagConfig = GetTagConfig(data.TagType)
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = Theme.Card; card.Text = ""
+	card.BackgroundColor3 = (normalizedTag == "NONE") and Theme.Card or Color3.new(
+		math.clamp(Theme.Card.R + (tagConfig.Color.R - Theme.Card.R) * 0.12, 0, 1),
+		math.clamp(Theme.Card.G + (tagConfig.Color.G - Theme.Card.G) * 0.12, 0, 1),
+		math.clamp(Theme.Card.B + (tagConfig.Color.B - Theme.Card.B) * 0.12, 0, 1)
+	); card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = Color3.fromRGB(44, 58, 77)
+	local cardStroke = Instance.new("UIStroke", card)
+	cardStroke.Color = (normalizedTag == "NONE") and Color3.fromRGB(44, 58, 77) or tagConfig.Color
+	cardStroke.Transparency = (normalizedTag == "NONE") and 0 or 0.55
+	cardStroke.Thickness = (normalizedTag == "NONE") and 1 or 1.1
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	local img = Instance.new("ImageLabel", card)
 	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
-	img.BorderSizePixel = 0; img.Image = data.ImageAssetId or "rbxassetid://99657752206675"
+	img.BorderSizePixel = 0; img.Image = (type(data.ImageAssetId) == "string" and data.ImageAssetId ~= "") and data.ImageAssetId or "rbxassetid://99657752206675"
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 	local content = Instance.new("Frame", card)
@@ -1892,7 +1743,7 @@ local function CreateScriptCard(data, renderParent)
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
 	local titleLbl = Instance.new("TextLabel", titleContainer)
 	titleLbl.Size = UDim2.new(1, 0, 0, 0); titleLbl.AutomaticSize = Enum.AutomaticSize.Y
-	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
+	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	local metaRightContainer = Instance.new("Frame", topRow)
@@ -1900,35 +1751,19 @@ local function CreateScriptCard(data, renderParent)
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 6)
 
-	local tagBadge = nil
-	if tagType ~= "NONE" then
-		tagBadge = Instance.new("Frame", metaRightContainer)
-		tagBadge.AutomaticSize = Enum.AutomaticSize.X; tagBadge.Size = UDim2.new(0, 0, 0, 14)
-		Instance.new("UICorner", tagBadge).CornerRadius = UDim.new(0, 4)
-		local tPad = Instance.new("UIPadding", tagBadge)
+	if normalizedTag ~= "NONE" then
+		local tag = Instance.new("Frame", metaRightContainer)
+		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
+		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 4)
+		local tPad = Instance.new("UIPadding", tag)
 		tPad.PaddingLeft = UDim.new(0, 5); tPad.PaddingRight = UDim.new(0, 5)
-		local tText = Instance.new("TextLabel", tagBadge)
+		local tText = Instance.new("TextLabel", tag)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
-		tText.BackgroundTransparency = 1; tText.Text = tagType
+		tText.BackgroundTransparency = 1; tText.Text = normalizedTag
 		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 9
-		tagBadge.LayoutOrder = 1
-	end
-
-	local baseStrokeColor = Color3.fromRGB(44, 58, 77)
-	local baseCardColor = Theme.Card
-
-	if tagType ~= "NONE" and tagInfo.Highlight then
-		if tagType == "HOT" then
-			cardStroke.Color = Theme.Error
-		elseif tagType == "UPDATED" then
-			cardStroke.Color = Theme.Success
-		else
-			cardStroke.Color = Theme.Accent
-		end
-		cardStroke.Thickness = 1.5
-	else
-		cardStroke.Color = baseStrokeColor
-		cardStroke.Thickness = 1
+		tag.BackgroundColor3 = tagConfig.Color
+		tag.BackgroundTransparency = 0.08
+		tag.LayoutOrder = 1
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
@@ -1938,7 +1773,7 @@ local function CreateScriptCard(data, renderParent)
 	dateLbl.TextSize = 10; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
-	descLbl.BackgroundTransparency = 1; descLbl.Text = data.Description or "No description provided."
+	descLbl.BackgroundTransparency = 1; descLbl.Text = (description ~= "") and description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
 	local btmRow = Instance.new("Frame", content)
@@ -1967,12 +1802,14 @@ local function CreateScriptCard(data, renderParent)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, CardConnections)
 
-	local exactName = data.Name or "Unnamed Script"
+	local exactName = data.Name
+	local description = type(data.Description) == "string" and data.Description or ""
+	local lastUpdated = GetCatalogTimestamp(data.LastUpdated)
 	local scriptEntry = {
-		Instance = card, SearchTitle = exactName:lower(), SearchDesc = (data.Description or ""):lower(),
-		SearchMeta = table.concat({data.Category or "", data.Author or "", data.TagType or "", table.concat(data.Tags or {}, " ")}, " "):lower(),
-		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1,
-		CatalogData = data
+		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
+		SearchMeta = GetSearchMeta(data, normalizedTag),
+		ExactName = exactName, LastUpdated = lastUpdated, TagType = normalizedTag,
+		TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
 	}
 
 	local innerActionTime = 0
@@ -1982,17 +1819,10 @@ local function CreateScriptCard(data, renderParent)
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
-
-		if tagBadge then
-			if tagType == "HOT" then
-				tagBadge.BackgroundColor3 = Theme.Error
-			elseif tagType == "UPDATED" then
-				tagBadge.BackgroundColor3 = Theme.Success
-			elseif tagType == "NEW" then
-				tagBadge.BackgroundColor3 = Theme.Accent
-			else
-				tagBadge.BackgroundColor3 = Color3.fromRGB(100, 116, 139)
-			end
+	end
+	scriptEntry.UpdateRelativeTime = function()
+		if dateLbl.Parent then
+			dateLbl.Text = GetRelativeTime(lastUpdated)
 		end
 	end
 	scriptEntry.UpdateUI()
@@ -2030,29 +1860,29 @@ local function CreateScriptCard(data, renderParent)
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = FetchWithRetry(data.RawUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
+				local raw = (type(data.RawUrl) == "string" and data.RawUrl ~= "") and FetchWithRetry(data.RawUrl, 2) or nil
 				if isDestroying then return end
-				if not raw then
+				if not raw then 
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
-				elseif string.find(raw, "404: Not Found") then
+				elseif string.find(raw, "404: Not Found") then 
 					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
-						ShowNotification("Started [" .. exactName .. "].", "Execution")
+						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
-
+				
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
 			end)
 		end
-
-		if SavedData.AutoExecutes[exactName] ~= nil then
+		
+		if SavedData.AutoExecutes[exactName] ~= nil then 
 			AttemptActionWithCooldown(executeScript)
-		else
-			OpenConfirmDialog(exactName, executeScript)
+		else 
+			OpenConfirmDialog(exactName, executeScript) 
 		end
 	end))
 
@@ -2066,32 +1896,6 @@ local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
-
-local function ValidateCatalogEntry(entry)
-	if type(entry) ~= "table" then return nil end
-	local name = tostring(entry.Name or "")
-	local rawUrl = tostring(entry.RawUrl or "")
-	if name == "" or #name > 120 or not IsValidHttpUrl(rawUrl) then return nil end
-	local description = tostring(entry.Description or "No description provided.")
-	if #description > 1000 then description = string.sub(description, 1, 1000) end
-	local category = tostring(entry.Category or "")
-	local author = tostring(entry.Author or "")
-	local tagType = tostring(entry.TagType or "NONE")
-	local lastUpdated = tonumber(entry.LastUpdated)
-	if lastUpdated and lastUpdated ~= lastUpdated then lastUpdated = nil end
-	local tags = {}
-	if type(entry.Tags) == "table" then
-		for i, tag in ipairs(entry.Tags) do
-			if i > 20 then break end
-			if type(tag) == "string" and #tag <= 40 then tags[#tags + 1] = tag end
-		end
-	end
-	return {
-		Name = name, RawUrl = rawUrl, Description = description, Category = category,
-		Author = author, TagType = tagType, LastUpdated = lastUpdated, Tags = tags,
-		ImageAssetId = entry.ImageAssetId, PlaceId = tonumber(entry.PlaceId)
-	}
-end
 
 local function LoadDynamicCatalog()
 	if dbRefreshing or isDestroying then return end
@@ -2118,40 +1922,19 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
-				if #parsed > CATALOG_MAX_ENTRIES then
-					parsed = { table.unpack(parsed, 1, CATALOG_MAX_ENTRIES) }
-				end
-				local normalized = {}
-				local seenNames = {}
-				local invalidCount = 0
-				for _, rawEntry in ipairs(parsed) do
-					local entry = ValidateCatalogEntry(rawEntry)
-					if entry and not seenNames[entry.Name] then
-						seenNames[entry.Name] = true
-						normalized[#normalized + 1] = entry
-					else
-						invalidCount = invalidCount + 1
-					end
-				end
-				if #normalized == 0 then
-					if not isDestroying and generation == CatalogGeneration then
-						EmptyStateMessage.Text = "Catalog returned no valid script entries."
-						StatusText.Text = "Data Error"
-						StatusDot.BackgroundColor3 = Theme.Error
-						StatusText.TextColor3 = Theme.Error
-						ShowNotification("Catalog data was empty or invalid; keeping the current catalog.", "Error")
-					end
-					return
-				end
-				parsed = normalized
-
 				local fingerprintParts = {}
-				for _, entry in ipairs(parsed) do
-					fingerprintParts[#fingerprintParts + 1] = table.concat({
-						tostring(entry.Name), tostring(entry.Description), tostring(entry.RawUrl),
-						tostring(entry.ImageAssetId or ""), tostring(entry.TagType or ""),
-						tostring(entry.LastUpdated or ""), tostring(entry.PlaceId or ""),
-					}, "\31")
+				for index, entry in ipairs(parsed) do
+					if type(entry) == "table" then
+						fingerprintParts[#fingerprintParts + 1] = table.concat({
+							tostring(entry.Name or ""),
+							tostring(entry.Description or ""),
+							tostring(entry.RawUrl or ""),
+							tostring(entry.ImageAssetId or ""),
+							tostring(entry.TagType or ""),
+							tostring(entry.LastUpdated or ""),
+							tostring(entry.PlaceId or ""),
+						}, "\31")
+					end
 				end
 				local fingerprint = table.concat(fingerprintParts, "\30")
 				if fingerprint == LastCatalogFingerprint then
@@ -2196,7 +1979,7 @@ local function LoadDynamicCatalog()
 						return
 					end
 
-					if type(scriptData) == "table" and scriptData.Name then
+					if type(scriptData) == "table" and type(scriptData.Name) == "string" and scriptData.Name ~= "" then
 						vMap[scriptData.Name] = true
 						CreateScriptCard(scriptData, detachedFolder)
 					end
@@ -2229,8 +2012,17 @@ local function LoadDynamicCatalog()
 					for _, scriptData in ipairs(parsed) do
 						if type(scriptData) == "table" and scriptData.Name then
 							local auto = SavedData.AutoExecutes[scriptData.Name]
-							if auto and ShouldAutoExecuteScript(scriptData, auto) then
-								table.insert(autoQueue, scriptData)
+							if auto and type(auto) == "table" then
+								local isValid = false
+								if auto.GameId and auto.GameId ~= 0 then
+									isValid = (auto.GameId == game.GameId)
+								else
+									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
+								end
+								
+								if isValid then
+									table.insert(autoQueue, scriptData)
+								end
 							end
 						end
 					end
@@ -2250,7 +2042,7 @@ local function LoadDynamicCatalog()
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
+								local scrRaw = (type(scriptData.RawUrl) == "string" and scriptData.RawUrl ~= "") and FetchWithRetry(scriptData.RawUrl, 2) or nil
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
@@ -2265,7 +2057,7 @@ local function LoadDynamicCatalog()
 								end
 								task.wait(0.3)
 							end
-
+							
 							if #successList > 0 then
 								ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success")
 							end
@@ -2318,13 +2110,14 @@ local function LoadDynamicCatalog()
 	end)
 end
 LoadDynamicCatalog()
-
 TrackTask(function()
 	while not isDestroying do
-		task.wait(CATALOG_REFRESH_INTERVAL)
+		task.wait(60)
 		if isDestroying then break end
-		if not dbRefreshing then
-			LoadDynamicCatalog()
+		for _, scriptEntry in ipairs(RegisteredScripts) do
+			if scriptEntry.Instance and scriptEntry.Instance.Parent and scriptEntry.Instance.Visible and scriptEntry.UpdateRelativeTime then
+				scriptEntry.UpdateRelativeTime()
+			end
 		end
 	end
 end)
@@ -2514,8 +2307,8 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
 	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
-
-	if KeybindCaptureConnection then
+	
+	if KeybindCaptureConnection then 
 		UnregConn(KeybindCaptureConnection)
 		KeybindCaptureConnection = nil
 	end
@@ -2527,9 +2320,9 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				IsBindingKey = false
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
-				if KeybindCaptureConnection then
+				if KeybindCaptureConnection then 
 					UnregConn(KeybindCaptureConnection)
-					KeybindCaptureConnection = nil
+					KeybindCaptureConnection = nil 
 				end
 				return
 			end
@@ -2540,21 +2333,21 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				SaveConfiguration()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
-
+				
 				BindToggleKey(ToggleKeybind)
-
-				if KeybindCaptureConnection then
+				
+				if KeybindCaptureConnection then 
 					UnregConn(KeybindCaptureConnection)
-					KeybindCaptureConnection = nil
+					KeybindCaptureConnection = nil 
 				end
 			end
 		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			IsBindingKey = false
 			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 			ShowNotification("Keybind mapping canceled.", "Warning")
-			if KeybindCaptureConnection then
+			if KeybindCaptureConnection then 
 				UnregConn(KeybindCaptureConnection)
-				KeybindCaptureConnection = nil
+				KeybindCaptureConnection = nil 
 			end
 		end
 	end))
@@ -2668,7 +2461,6 @@ pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-			if not HookState.Active then return oldNamecall(self, ...) end
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				local mOk, method = pcall(getnamecallmethod)
@@ -2703,10 +2495,9 @@ pcall(function()
 			end
 			return oldNamecall(self, ...)
 		end)
-
+		
 		local oldIndex
 		oldIndex = hookmetamethod(game, "__index", function(self, key)
-			if not HookState.Active then return oldIndex(self, key) end
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				if self == TargetParent and type(key) == "string" then
