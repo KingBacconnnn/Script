@@ -1,3 +1,97 @@
+local function ApplyAntiCheatBypass()
+	local rawmeta = getrawmetatable or getmetatable
+	local setreadonly = setreadonly or make_writeable or function() end
+	local isreadonly = isreadonly or function() return true end
+	local checkcaller = checkcaller or function() return false end
+	local newcclosure = newcclosure or function(f) return f end
+	local hookmetamethod = hookmetamethod
+
+	local gameMeta = rawmeta and rawmeta(game)
+	if not gameMeta then return end
+
+	local blacklistedKeywords = {
+		"ban", "detect", "flag", "cheat", "exploit", "kick", "log", 
+		"anti", "admin", "report", "hash", "mem", "check", "vulnerability"
+	}
+
+	local function isHoneypot(remoteName)
+		if type(remoteName) ~= "string" then return false end
+		local lowerName = string.lower(remoteName)
+		for _, kw in ipairs(blacklistedKeywords) do
+			if string.find(lowerName, kw, 1, true) then
+				return true
+			end
+		end
+		return false
+	end
+
+	if hookmetamethod then
+		local originalNamecall
+		originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+			if not checkcaller() then
+				local method = getnamecallmethod()
+				if method == "Kick" or method == "kick" then
+					task.wait(9e9)
+					return
+				elseif method == "FireServer" or method == "InvokeServer" then
+					if isHoneypot(self.Name) then
+						return
+					end
+				end
+			end
+			return originalNamecall(self, ...)
+		end))
+
+		local originalIndex
+		originalIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+			if not checkcaller() and type(key) == "string" then
+				local lowerKey = string.lower(key)
+				if lowerKey == "kick" then
+					return newcclosure(function()
+						task.wait(9e9)
+					end)
+				end
+			end
+			return originalIndex(self, key)
+		end))
+	elseif gameMeta then
+		local oldNamecall = gameMeta.__namecall
+		local oldIndex = gameMeta.__index
+		local wasReadOnly = isreadonly(gameMeta)
+
+		setreadonly(gameMeta, false)
+
+		gameMeta.__namecall = newcclosure(function(self, ...)
+			if not checkcaller() then
+				local method = getnamecallmethod()
+				if method == "Kick" or method == "kick" then
+					task.wait(9e9)
+					return
+				elseif method == "FireServer" or method == "InvokeServer" then
+					if isHoneypot(self.Name) then
+						return
+					end
+				end
+			end
+			return oldNamecall(self, ...)
+		end)
+
+		gameMeta.__index = newcclosure(function(self, key)
+			if not checkcaller() and type(key) == "string" and string.lower(key) == "kick" then
+				return newcclosure(function()
+					task.wait(9e9)
+				end)
+			end
+			return oldIndex(self, key)
+		end)
+
+		if wasReadOnly then
+			setreadonly(gameMeta, true)
+		end
+	end
+end
+pcall(ApplyAntiCheatBypass)
+
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -1820,7 +1914,6 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
-				-- Avoid rebuilding the entire catalog when the server response is unchanged.
 				local fingerprintParts = {}
 				for index, entry in ipairs(parsed) do
 					if type(entry) == "table" then
@@ -2010,9 +2103,6 @@ local function LoadDynamicCatalog()
 end
 LoadDynamicCatalog()
 
--- Keep an already-open hub in sync with the remote catalog.
--- The request uses a cache-busting nonce, while the fingerprint prevents
--- unnecessary card reconstruction when nothing actually changed.
 TrackTask(function()
 	while not isDestroying do
 		task.wait(CATALOG_REFRESH_INTERVAL)
@@ -2252,186 +2342,8 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 			end
 		end
 	end))
-end)))
+end))
 
-local function TriggerAntiAFKAction()
-	if VirtualUser then
-		pcall(function()
-			VirtualUser:CaptureController()
-			VirtualUser:ClickButton2(Vector2.new())
-		end)
-	elseif VirtualInputManager then
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
-			task.wait(0.1)
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
-		end)
-	end
-end
-
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
-	SaveConfiguration()
-	if val then
-		ShowNotification("Anti-AFK system engaged.", "Success")
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-		end
-		if getconnections then
-			pcall(function()
-				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-					pcall(function()
-						if type(conn) == "table" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						end
-					end)
-				end
-			end)
-		end
-	else
-		ShowNotification("Anti-AFK deactivated.", "Warning")
-		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
-		for _, conn in ipairs(AfkConnections) do
-			pcall(function()
-				if type(conn) == "table" and conn.Enable then
-					conn:Enable()
-				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
-					conn:Enable()
-				end
-			end)
-		end
-		table.clear(AfkConnections)
-	end
-end)
-
-local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
-	AttemptActionWithCooldown(function()
-		if dbRefreshing then
-			CatalogRefreshQueued = true
-			ShowNotification("Catalog refresh queued.", "Info")
-			return
-		end
-		LoadDynamicCatalog()
-	end)
-end)
-
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
-	ShowNotification("Unloading Velox Hub...", "Info")
-	task.wait(0.3)
+CreateButtonSettingInGroup(prefGroup, "Unload Hub", "Safely destroy interface and connections.", "rbxassetid://10709790600", "Unload", 2, true, function()
 	CloseUI()
 end)
-
-if SavedData.Settings.AntiAFK then
-	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-	end
-	if getconnections then
-		pcall(function()
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				pcall(function()
-					if type(conn) == "table" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					end
-				end)
-			end
-		end)
-	end
-end
-
-local function ObfuscateHierarchy(instance)
-	instance.Name = GenerateRandomString(15)
-	for _, child in ipairs(instance:GetDescendants()) do
-		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
-			child.Name = GenerateRandomString(15)
-		end
-	end
-end
-ObfuscateHierarchy(ScreenGui)
-
-pcall(function()
-	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
-		local oldNamecall
-		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-			local ok, isCaller = pcall(checkcaller)
-			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
-				local mOk, method = pcall(getnamecallmethod)
-				if mOk and method then
-					if self == TargetParent then
-						if method == "GetDescendants" or method == "GetChildren" then
-							local result = oldNamecall(self, ...)
-							if type(result) == "table" then
-								local filtered = {}
-								for i = 1, #result do
-									local v = result[i]
-									if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-										table.insert(filtered, v)
-									end
-								end
-								return filtered
-							end
-							return result
-						elseif method == "FindFirstChild" then
-							local args = {...}
-							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return nil
-							end
-						elseif method == "WaitForChild" then
-							local args = {...}
-							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return nil
-							end
-						end
-					end
-				end
-			end
-			return oldNamecall(self, ...)
-		end)
-		
-		local oldIndex
-		oldIndex = hookmetamethod(game, "__index", function(self, key)
-			local ok, isCaller = pcall(checkcaller)
-			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
-				if self == TargetParent and type(key) == "string" then
-					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
-						return nil
-					end
-				end
-			end
-			return oldIndex(self, key)
-		end)
-	end
-end)
-
-TabViews["Changelogs"].Visible = true
-TabViews["Scripts"].Visible = false
-TabViews["Settings"].Visible = false
-TabIndicator.Position = UDim2.new(0, 4, 1, -2)
-SectionHeaderLabel.Text = "Updates"
-MainPanel.Visible = true
-SearchRow.Visible = false
-FloatingBtn.Visible = false
-
-ShowNotification("Velox Hub is ready for use!", "Success")
-
-if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
-		if isDestroying then return end
-		table.clear(OriginalCache)
-		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		CacheInstanceAndDescendants(MainPanel)
-		CacheInstanceAndDescendants(FloatingBtn)
-		ShowNotification("UI Cache cleared successfully.", "Success")
-	end)
-end
