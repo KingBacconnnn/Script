@@ -1728,7 +1728,7 @@ local function CreateScriptCard(data, renderParent)
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	local metaWidth = IsMobile and 225 or 250
+	local metaWidth = IsMobile and 235 or 265
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -1757,11 +1757,14 @@ local function CreateScriptCard(data, renderParent)
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 145 or 165, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 150 or 175, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
-	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
-	dateLbl.TextWrapped = false; dateLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	dateLbl.TextSize = 9; dateLbl.TextScaled = true; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
+	dateLbl.TextWrapped = false; dateLbl.TextTruncate = Enum.TextTruncate.None
+	local dateConstraint = Instance.new("UITextSizeConstraint", dateLbl)
+	dateConstraint.MinTextSize = IsMobile and 7 or 8
+	dateConstraint.MaxTextSize = 9
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
 	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
