@@ -1728,7 +1728,7 @@ local function CreateScriptCard(data, renderParent)
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	local metaWidth = IsMobile and 155 or 180
+	local metaWidth = IsMobile and 205 or 220
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -1757,7 +1757,7 @@ local function CreateScriptCard(data, renderParent)
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 95 or 110, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 120 or 140, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 10; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
