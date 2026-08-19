@@ -53,10 +53,10 @@ local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
-local write_file = writefile or function() end
-local read_file = readfile or function() end
-local is_file = isfile or function() return false end
-local del_file = delfile or function() end
+local write_file = writefile
+local read_file = readfile
+local is_file = isfile
+local del_file = delfile
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -311,6 +311,16 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
+-- Configuration data is already constructed from primitive JSON-safe values.
+-- Keep this helper local and deterministic; the previous build referenced a
+-- missing SanitizeForJSON function, which caused every save to fail inside pcall.
+local function SanitizeConfiguration(data)
+	if type(data) ~= "table" then
+		return nil
+	end
+	return data
+end
+
 local function BuildSanitizedConfiguration()
 	local cleanData = {
 		Version = CONFIG_VERSION,
@@ -319,11 +329,13 @@ local function BuildSanitizedConfiguration()
 		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 		Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
 	}
+
 	for k, v in pairs(SavedData.Favorites) do
 		if type(k) == "string" and v == true and #k <= 120 then
 			cleanData.Favorites[k] = true
 		end
 	end
+
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(k) == "string" and #k <= 120 and type(v) == "table" then
 			cleanData.AutoExecutes[k] = {
@@ -332,40 +344,135 @@ local function BuildSanitizedConfiguration()
 			}
 		end
 	end
-	return SanitizeForJSON(cleanData)
+
+	return SanitizeConfiguration(cleanData)
+end
+
+local function ConfigurationMatches(a, b)
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return false
+	end
+
+	if tonumber(a.Version) ~= tonumber(b.Version) then
+		return false
+	end
+
+	if tostring(a.ToggleKeybind or "") ~= tostring(b.ToggleKeybind or "") then
+		return false
+	end
+
+	local aSettings = type(a.Settings) == "table" and a.Settings or {}
+	local bSettings = type(b.Settings) == "table" and b.Settings or {}
+	if (aSettings.AntiAFK == true) ~= (bSettings.AntiAFK == true) then
+		return false
+	end
+
+	local function CompareMap(aMap, bMap, isAuto)
+		if type(aMap) ~= "table" or type(bMap) ~= "table" then
+			return false
+		end
+
+		for key, value in pairs(aMap) do
+			if isAuto then
+				if type(value) ~= "table" or type(bMap[key]) ~= "table" then
+					return false
+				end
+				local bv = bMap[key]
+				if tonumber(value.PlaceId) ~= tonumber(bv.PlaceId)
+					or tonumber(value.GameId) ~= tonumber(bv.GameId) then
+					return false
+				end
+			else
+				if value ~= bMap[key] then
+					return false
+				end
+			end
+		end
+
+		for key in pairs(bMap) do
+			if aMap[key] == nil then
+				return false
+			end
+		end
+
+		return true
+	end
+
+	return CompareMap(a.Favorites, b.Favorites, false)
+		and CompareMap(a.AutoExecutes, b.AutoExecutes, true)
 end
 
 local function SaveConfiguration()
-	if type(write_file) ~= "function" or isDestroying then return end
-	if isSaving then
-		saveQueued = true
-		return
+	if isDestroying then
+		return false
 	end
-	isSaving = true
-	task.spawn(function()
-		local ok, err = pcall(function()
-			local safeData = BuildSanitizedConfiguration()
-			local encodeSuccess, result = pcall(function() return HttpService:JSONEncode(safeData) end)
-			if not encodeSuccess or type(result) ~= "string" then return end
-			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
-			if not writeSuccess then return end
-			local verifyCallSuccess, verified = pcall(function()
-				local check = read_file(TEMP_FILE)
-				local decoded = HttpService:JSONDecode(check)
-				return type(decoded) == "table" and tonumber(decoded.Version) == CONFIG_VERSION
-			end)
-			if verifyCallSuccess and verified == true then pcall(function() write_file(DATA_FILE, result) end) end
-			pcall(function() del_file(TEMP_FILE) end)
+
+	if type(write_file) ~= "function" then
+		warn("[Velox Config] writefile is unavailable; configuration cannot be persisted.")
+		return false
+	end
+
+	-- The configuration is tiny, so writing it synchronously is intentional.
+	-- This prevents a re-execution from starting before an asynchronous save
+	-- has actually reached disk.
+	local ok, err = pcall(function()
+		local safeData = BuildSanitizedConfiguration()
+		if type(safeData) ~= "table" then
+			error("failed to build sanitized configuration")
+		end
+
+		local encodeSuccess, encoded = pcall(function()
+			return HttpService:JSONEncode(safeData)
 		end)
-		isSaving = false
-		if not ok and not isDestroying then warn("[Velox Config Save Error]:", tostring(err)) end
-		if saveQueued and not isDestroying then
-			saveQueued = false
-			SaveConfiguration()
+		if not encodeSuccess or type(encoded) ~= "string" then
+			error("failed to encode configuration")
+		end
+
+		local canReadBack = type(read_file) == "function"
+		local canDelete = type(del_file) == "function"
+
+		if canReadBack then
+			-- Write the complete snapshot first, then verify it can be decoded
+			-- and matches the state we intended to persist.
+			write_file(TEMP_FILE, encoded)
+
+			local check = read_file(TEMP_FILE)
+			local decoded = HttpService:JSONDecode(check)
+			if not ConfigurationMatches(decoded, safeData) then
+				error("temporary configuration verification failed")
+			end
+
+			write_file(DATA_FILE, encoded)
+
+			local finalCheck = read_file(DATA_FILE)
+			local finalDecoded = HttpService:JSONDecode(finalCheck)
+			if not ConfigurationMatches(finalDecoded, safeData) then
+				error("final configuration verification failed")
+			end
+
+			if canDelete then
+				pcall(function() del_file(TEMP_FILE) end)
+			end
 		else
-			saveQueued = false
+			-- Some environments expose writefile but not readfile. In that
+			-- case, use the available writer rather than silently discarding
+			-- the configuration.
+			write_file(DATA_FILE, encoded)
+			if canDelete then
+				pcall(function() del_file(TEMP_FILE) end)
+			end
 		end
 	end)
+
+	isSaving = false
+	saveQueued = false
+
+	if not ok then
+		warn("[Velox Config Save Error]:", tostring(err))
+		return false
+	end
+
+	return true
 end
 
 local function LoadConfiguration()
