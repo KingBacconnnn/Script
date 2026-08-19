@@ -321,6 +321,38 @@ local function SanitizeConfiguration(data)
 	return data
 end
 
+
+-- Catalog presentation policy.
+-- TagType is the source of truth; title prefixes such as [UPD] or [NEW!] do
+-- not affect sorting/visual state.
+local TagConfig = {
+	UPDATED = { Priority = 1, Highlight = true },
+	HOT = { Priority = 2, Highlight = true },
+	NEW = { Priority = 3, Highlight = true },
+	FEATURED = { Priority = 4, Highlight = true },
+	NONE = { Priority = 999, Highlight = false },
+}
+
+local function NormalizeTagType(value)
+	local tag = string.upper(tostring(value or "NONE"))
+	if TagConfig[tag] then
+		return tag
+	end
+	return "NONE"
+end
+
+local function GetTagInfo(entry)
+	local tag = NormalizeTagType(entry and entry.TagType)
+	return tag, TagConfig[tag]
+end
+
+local function GetCatalogSortKey(entry, originalIndex)
+	local tag, info = GetTagInfo(entry)
+	local priority = info.Priority
+	local updated = tonumber(entry and entry.LastUpdated) or 0
+	return priority, updated, tonumber(originalIndex) or 0, tostring(entry and entry.Name or "")
+end
+
 local function BuildSanitizedConfiguration()
 	local cleanData = {
 		Version = CONFIG_VERSION,
@@ -338,9 +370,11 @@ local function BuildSanitizedConfiguration()
 
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(k) == "string" and #k <= 120 and type(v) == "table" then
+			local savedPlaceId = tonumber(v.PlaceId) or 0
+			local savedGameId = tonumber(v.GameId) or 0
 			cleanData.AutoExecutes[k] = {
-				PlaceId = tonumber(v.PlaceId) or game.PlaceId,
-				GameId = tonumber(v.GameId) or game.GameId
+				PlaceId = savedPlaceId,
+				GameId = savedGameId
 			}
 		end
 	end
@@ -473,6 +507,45 @@ local function SaveConfiguration()
 	end
 
 	return true
+end
+
+
+local function GetCurrentPlaceId()
+	return tonumber(game.PlaceId) or 0
+end
+
+local function GetCurrentGameId()
+	return tonumber(game.GameId) or 0
+end
+
+local function IsAutoExecuteEntryValid(entry)
+	if type(entry) ~= "table" then
+		return false
+	end
+
+	local placeId = tonumber(entry.PlaceId)
+	local gameId = tonumber(entry.GameId)
+
+	-- Saved state is a preference, not the catalog's compatibility authority.
+	-- Keep it as long as its stored values are sane; the live catalog entry
+	-- decides whether it may execute in the current place.
+	return (placeId == nil or placeId >= 0)
+		and (gameId == nil or gameId >= 0)
+end
+
+local function ShouldAutoExecuteScript(scriptEntry, savedAutoExecute)
+	if type(scriptEntry) ~= "table" or type(savedAutoExecute) ~= "table" then
+		return false
+	end
+
+	-- The catalog entry is the source of truth for where a script is valid.
+	-- PlaceId == 0 means the script is universal and may auto-execute anywhere.
+	local scriptPlaceId = tonumber(scriptEntry.PlaceId) or 0
+	if scriptPlaceId == 0 then
+		return true
+	end
+
+	return scriptPlaceId == GetCurrentPlaceId()
 end
 
 local function LoadConfiguration()
@@ -1534,8 +1607,10 @@ local function UpdateFilter()
 				elseif SortMode == "Updated This Week" then filterPass = (age <= 604800)
 				elseif SortMode == "Updated This Month" then filterPass = (age <= 2592000)
 				elseif SortMode == "Favorites" then filterPass = SavedData.Favorites[scr.ExactName]
-				elseif SortMode == "Auto Execute: ON" then filterPass = (SavedData.AutoExecutes[scr.ExactName] ~= nil)
-				elseif SortMode == "Auto Execute: OFF" then filterPass = (SavedData.AutoExecutes[scr.ExactName] == nil)
+				elseif SortMode == "Auto Execute: ON" then
+					filterPass = SavedData.AutoExecutes[scr.ExactName] ~= nil
+				elseif SortMode == "Auto Execute: OFF" then
+					filterPass = SavedData.AutoExecutes[scr.ExactName] == nil
 				end
 			end
 			local visible = isMatch and filterPass
@@ -1544,6 +1619,12 @@ local function UpdateFilter()
 		end
 		if filterVersion ~= currentVersion then return end
 		table.sort(matches, function(a, b)
+			local aPriority = GetTagInfo(a.CatalogData).Priority
+			local bPriority = GetTagInfo(b.CatalogData).Priority
+			if aPriority ~= bPriority then
+				return aPriority < bPriority
+			end
+
 			if SortMode == "Most Relevant" and query ~= "" then
 				local aExact = string.sub(a.SearchTitle, 1, #query) == query
 				local bExact = string.sub(b.SearchTitle, 1, #query) == query
@@ -1758,6 +1839,7 @@ local function ExecuteSandboxed(code, scriptName)
 end
 
 local function CreateScriptCard(data, renderParent)
+	local tagType, tagInfo = GetTagInfo(data)
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = Theme.Card; card.Text = ""
@@ -1795,18 +1877,35 @@ local function CreateScriptCard(data, renderParent)
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 6)
 
-	if data.TagType and data.TagType ~= "NONE" then
-		local tag = Instance.new("Frame", metaRightContainer)
-		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
-		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 4)
-		local tPad = Instance.new("UIPadding", tag)
+	local tagBadge = nil
+	if tagType ~= "NONE" then
+		tagBadge = Instance.new("Frame", metaRightContainer)
+		tagBadge.AutomaticSize = Enum.AutomaticSize.X; tagBadge.Size = UDim2.new(0, 0, 0, 14)
+		Instance.new("UICorner", tagBadge).CornerRadius = UDim.new(0, 4)
+		local tPad = Instance.new("UIPadding", tagBadge)
 		tPad.PaddingLeft = UDim.new(0, 5); tPad.PaddingRight = UDim.new(0, 5)
-		local tText = Instance.new("TextLabel", tag)
+		local tText = Instance.new("TextLabel", tagBadge)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
-		tText.BackgroundTransparency = 1; tText.Text = data.TagType
+		tText.BackgroundTransparency = 1; tText.Text = tagType
 		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 9
-		tag.BackgroundColor3 = (data.TagType == "HOT") and Theme.Error or (data.TagType == "UPDATED") and Theme.Success or Color3.fromRGB(100, 116, 139)
-		tag.LayoutOrder = 1
+		tagBadge.LayoutOrder = 1
+	end
+
+	local baseStrokeColor = Color3.fromRGB(44, 58, 77)
+	local baseCardColor = Theme.Card
+
+	if tagType ~= "NONE" and tagInfo.Highlight then
+		if tagType == "HOT" then
+			cardStroke.Color = Theme.Error
+		elseif tagType == "UPDATED" then
+			cardStroke.Color = Theme.Success
+		else
+			cardStroke.Color = Theme.Accent
+		end
+		cardStroke.Thickness = 1.5
+	else
+		cardStroke.Color = baseStrokeColor
+		cardStroke.Thickness = 1
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
@@ -1849,7 +1948,8 @@ local function CreateScriptCard(data, renderParent)
 	local scriptEntry = {
 		Instance = card, SearchTitle = exactName:lower(), SearchDesc = (data.Description or ""):lower(),
 		SearchMeta = table.concat({data.Category or "", data.Author or "", data.TagType or "", table.concat(data.Tags or {}, " ")}, " "):lower(),
-		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1
+		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1,
+		CatalogData = data
 	}
 
 	local innerActionTime = 0
@@ -1859,6 +1959,18 @@ local function CreateScriptCard(data, renderParent)
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
+
+		if tagBadge then
+			if tagType == "HOT" then
+				tagBadge.BackgroundColor3 = Theme.Error
+			elseif tagType == "UPDATED" then
+				tagBadge.BackgroundColor3 = Theme.Success
+			elseif tagType == "NEW" then
+				tagBadge.BackgroundColor3 = Theme.Accent
+			else
+				tagBadge.BackgroundColor3 = Color3.fromRGB(100, 116, 139)
+			end
+		end
 	end
 	scriptEntry.UpdateUI()
 
@@ -2094,17 +2206,8 @@ local function LoadDynamicCatalog()
 					for _, scriptData in ipairs(parsed) do
 						if type(scriptData) == "table" and scriptData.Name then
 							local auto = SavedData.AutoExecutes[scriptData.Name]
-							if auto and type(auto) == "table" then
-								local isValid = false
-								if auto.GameId and auto.GameId ~= 0 then
-									isValid = (auto.GameId == game.GameId)
-								else
-									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
-								end
-								
-								if isValid then
-									table.insert(autoQueue, scriptData)
-								end
+							if auto and ShouldAutoExecuteScript(scriptData, auto) then
+								table.insert(autoQueue, scriptData)
 							end
 						end
 					end
