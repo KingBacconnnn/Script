@@ -1,25 +1,12 @@
---[[
-VeloxHub Clean Stability Build
-- Removes invasive global hooks and connection manipulation where detected.
-- Does not attempt anti-cheat evasion.
-- Optional executor-only features should fail gracefully.
-]]
-local function SafeCall(fn, ...)
-    if type(fn) ~= "function" then
-        return false, "unavailable"
-    end
-    return pcall(fn, ...)
-end
-
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local str = ""
+	local parts = table.create(len)
 	for i = 1, len do
 		local r = rng:NextInteger(1, #chars)
-		str = str .. string.sub(chars, r, r)
+		parts[i] = string.sub(chars, r, r)
 	end
-	return str
+	return table.concat(parts)
 end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
@@ -90,7 +77,9 @@ local Theme = {
 }
 
 local VeloxConnections = {}
+local VeloxConnectionIndex = {}
 local CardConnections = {}
+local CardConnectionIndex = {}
 local RegisteredScripts = {}
 local AfkConnections = {}
 local PendingTasks = {}
@@ -118,6 +107,7 @@ local GlobalCooldownLoopVersion = 0
 local GlobalActionCooldownEndTime = 0
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
+local HookState = { Active = true }
 
 local function CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
@@ -151,19 +141,23 @@ local function CacheInstanceAndDescendants(root)
 end
 
 local function RegConn(connection)
-	if connection and typeof(connection) == "RBXScriptConnection" then
-		table.insert(VeloxConnections, connection)
+	if connection and typeof(connection) == "RBXScriptConnection" and not VeloxConnectionIndex[connection] then
+		local index = #VeloxConnections + 1
+		VeloxConnections[index] = connection
+		VeloxConnectionIndex[connection] = index
 	end
 	return connection
 end
 
 local function UnregConn(connection)
 	if not connection then return end
-	for i = #VeloxConnections, 1, -1 do
-		if VeloxConnections[i] == connection then
-			table.remove(VeloxConnections, i)
-			break
-		end
+	local index = VeloxConnectionIndex[connection]
+	if index then
+		local last = VeloxConnections[#VeloxConnections]
+		VeloxConnections[index] = last
+		VeloxConnections[#VeloxConnections] = nil
+		VeloxConnectionIndex[connection] = nil
+		if last and last ~= connection then VeloxConnectionIndex[last] = index end
 	end
 	if typeof(connection) == "RBXScriptConnection" and connection.Connected then
 		pcall(function() connection:Disconnect() end)
@@ -171,30 +165,37 @@ local function UnregConn(connection)
 end
 
 local function RegCardConn(connection)
-	if connection and typeof(connection) == "RBXScriptConnection" then
-		table.insert(CardConnections, connection)
+	if connection and typeof(connection) == "RBXScriptConnection" and not CardConnectionIndex[connection] then
+		local index = #CardConnections + 1
+		CardConnections[index] = connection
+		CardConnectionIndex[connection] = index
 	end
 	return connection
 end
 
 local function TrackTask(fn)
-	local thread
-	thread = task.spawn(function()
+	if isDestroying or type(fn) ~= "function" then return nil end
+	local token = {}
+	local completed = false
+	local thread = task.spawn(function()
 		local ok, err = pcall(fn)
-		PendingTasks[thread] = nil
+		completed = true
+		PendingTasks[token] = nil
 		if not ok and not isDestroying then
 			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
-	PendingTasks[thread] = true
+	if not completed and not isDestroying then
+		PendingTasks[token] = thread
+	end
 	return thread
 end
 
 local function CancelTrackedTasks()
-	for thread in pairs(PendingTasks) do
-		pcall(task.cancel, thread)
+	for token, thread in pairs(PendingTasks) do
+		PendingTasks[token] = nil
+		if thread then pcall(task.cancel, thread) end
 	end
-	table.clear(PendingTasks)
 end
 
 local typingTask = nil
@@ -202,6 +203,9 @@ local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
 	getgenv()[_G_Identifier] = nil
+	-- Hooks cannot be portably uninstalled across all supported executors, so
+	-- the handlers are switched to a transparent pass-through immediately.
+	HookState.Active = false
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	
 	CancelTrackedTasks()
@@ -242,7 +246,9 @@ local function CleanUpMemory()
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
 	
 	table.clear(VeloxConnections)
+	table.clear(VeloxConnectionIndex)
 	table.clear(CardConnections)
+	table.clear(CardConnectionIndex)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
 	table.clear(ActiveTweens)
@@ -294,6 +300,7 @@ end
 
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
+local CONFIG_VERSION = 4
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -304,66 +311,59 @@ local SavedData = {
 local isSaving = false
 local saveQueued = false
 
-local function SanitizeForJSON(data)
-	if type(data) == "table" then
-		local clean = {}
-		for k, v in pairs(data) do
-			if type(k) == "string" or type(k) == "number" then
-				local cleanVal = SanitizeForJSON(v)
-				if cleanVal ~= nil then
-					clean[tostring(k)] = cleanVal
-				end
-			end
+local function BuildSanitizedConfiguration()
+	local cleanData = {
+		Version = CONFIG_VERSION,
+		Favorites = {},
+		AutoExecutes = {},
+		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+		Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
+	}
+	for k, v in pairs(SavedData.Favorites) do
+		if type(k) == "string" and v == true and #k <= 120 then
+			cleanData.Favorites[k] = true
 		end
-		return clean
-	elseif type(data) == "string" or type(data) == "number" or type(data) == "boolean" then
-		return data
 	end
-	return nil
+	for k, v in pairs(SavedData.AutoExecutes) do
+		if type(k) == "string" and #k <= 120 and type(v) == "table" then
+			cleanData.AutoExecutes[k] = {
+				PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+				GameId = tonumber(v.GameId) or game.GameId
+			}
+		end
+	end
+	return SanitizeForJSON(cleanData)
 end
 
 local function SaveConfiguration()
-	if type(write_file) ~= "function" then return end
-	if isSaving then 
-		saveQueued = true 
-		return 
+	if type(write_file) ~= "function" or isDestroying then return end
+	if isSaving then
+		saveQueued = true
+		return
 	end
 	isSaving = true
 	task.spawn(function()
-		local cleanData = {
-			Favorites = {}, AutoExecutes = {},
-			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
-		}
-		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
-		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" then 
-				cleanData.AutoExecutes[tostring(k)] = { 
-					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
-					GameId = tonumber(v.GameId) or game.GameId 
-				} 
-			end
-		end
-		
-		local safeData = SanitizeForJSON(cleanData)
-		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
-		if success then 
+		local ok, err = pcall(function()
+			local safeData = BuildSanitizedConfiguration()
+			local encodeSuccess, result = pcall(function() return HttpService:JSONEncode(safeData) end)
+			if not encodeSuccess or type(result) ~= "string" then return end
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
-			if writeSuccess then
-				local verifySuccess = pcall(function()
-					local check = read_file(TEMP_FILE)
-					return HttpService:JSONDecode(check)
-				end)
-				if verifySuccess then
-					pcall(function() write_file(DATA_FILE, result) end)
-				end
-			end
+			if not writeSuccess then return end
+			local verifyCallSuccess, verified = pcall(function()
+				local check = read_file(TEMP_FILE)
+				local decoded = HttpService:JSONDecode(check)
+				return type(decoded) == "table" and tonumber(decoded.Version) == CONFIG_VERSION
+			end)
+			if verifyCallSuccess and verified == true then pcall(function() write_file(DATA_FILE, result) end) end
 			pcall(function() del_file(TEMP_FILE) end)
-		end
+		end)
 		isSaving = false
-		if saveQueued then
+		if not ok and not isDestroying then warn("[Velox Config Save Error]:", tostring(err)) end
+		if saveQueued and not isDestroying then
 			saveQueued = false
-			SaveConfiguration() 
+			SaveConfiguration()
+		else
+			saveQueued = false
 		end
 	end)
 end
@@ -373,23 +373,23 @@ local function LoadConfiguration()
 		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
-				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
+				for k, v in pairs(result.Favorites) do
+					if type(k) == "string" and v == true and #k <= 120 then SavedData.Favorites[k] = true end
+				end
 			end
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
-					if type(k) == "string" and type(v) == "table" then
-						SavedData.AutoExecutes[tostring(k)] = { 
+					if type(k) == "string" and #k <= 120 and type(v) == "table" then
+						SavedData.AutoExecutes[k] = {
 							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
 							GameId = type(v.GameId) == "number" and v.GameId or nil
 						}
 					end
 				end
 			end
-			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
-			if type(result.Settings) == "table" then
-				for k, _ in pairs(result.Settings) do
-					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
-				end
+			if type(result.ToggleKeybind) == "string" and #result.ToggleKeybind <= 40 then SavedData.ToggleKeybind = result.ToggleKeybind end
+			if type(result.Settings) == "table" and type(result.Settings.AntiAFK) == "boolean" then
+				SavedData.Settings.AntiAFK = result.Settings.AntiAFK
 			end
 		else
 			SaveConfiguration()
@@ -398,22 +398,31 @@ local function LoadConfiguration()
 end
 LoadConfiguration()
 
-local function UniversalHttpGet(url)
+local HTTP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+local SCRIPT_MAX_RESPONSE_BYTES = 1 * 1024 * 1024
+local CATALOG_MAX_ENTRIES = 500
+
+local function IsValidHttpUrl(url)
+	return type(url) == "string" and (string.match(url, "^https://") ~= nil or string.match(url, "^http://") ~= nil) and #url <= 2048
+end
+
+local function UniversalHttpGet(url, maxBytes)
+	if not IsValidHttpUrl(url) then return nil end
+	maxBytes = maxBytes or HTTP_MAX_RESPONSE_BYTES
 	if type(exec_request) == "function" then
 		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
-		if reqSuccess and reqResult then
+		if reqSuccess and type(reqResult) == "table" then
 			local body = reqResult.Body or reqResult.body or reqResult.Response
-			local status = reqResult.StatusCode or reqResult.Status or reqResult.status_code
-			if (status == 200 or status == nil) and body then
+			local status = tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code)
+			if type(body) == "string" and #body <= maxBytes and (status == nil or status >= 200 and status < 300) then
 				return body
 			end
 		end
 	end
 	local success, result = pcall(function() return game:HttpGet(url) end)
-	if success and result then return result end
+	if success and type(result) == "string" and #result <= maxBytes then return result end
 	return nil
 end
-
 local function AddCacheBuster(url)
 	if type(url) ~= "string" or url == "" then return url end
 	local separator = string.find(url, "?", 1, true) and "&" or "?"
@@ -421,26 +430,21 @@ local function AddCacheBuster(url)
 	return url .. separator .. "velox_cache=" .. nonce
 end
 
-local function FetchWithRetry(url, retries, cacheBust)
-	retries = retries or 3
+local function FetchWithRetry(url, retries, cacheBust, maxBytes)
+	retries = math.clamp(tonumber(retries) or 3, 1, 5)
+	maxBytes = maxBytes or HTTP_MAX_RESPONSE_BYTES
+	if not IsValidHttpUrl(url) then return nil end
 	for i = 1, retries do
-		local requestUrl = url
-		if cacheBust then
-			requestUrl = AddCacheBuster(url)
-		end
-
-		local response = UniversalHttpGet(requestUrl)
-		if response and type(response) == "string" and #response > 0 then
+		if isDestroying then return nil end
+		local requestUrl = cacheBust and AddCacheBuster(url) or url
+		local response = UniversalHttpGet(requestUrl, maxBytes)
+		if type(response) == "string" and #response > 0 and #response <= maxBytes then
 			return response
 		end
-
-		if i < retries then
-			task.wait(math.pow(2, i))
-		end
+		if i < retries then task.wait(math.min(2 ^ (i - 1), 4)) end
 	end
 	return nil
 end
-
 local function GetRelativeTime(timestamp)
 	if type(timestamp) == "string" then
 		timestamp = tonumber(timestamp)
@@ -497,7 +501,8 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
--- Removed optional GUI-protection call for clean/stability build.
+pcall(function() protectgui(ScreenGui) end)
+
 getgenv()[_G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
@@ -1230,18 +1235,24 @@ RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
-local lastPingUpdate = tick()
-RegConn(RunService.Heartbeat:Connect(function() 
-	if isMinimized or isDestroying or isTransitioning then return end 
-	fpsCount = fpsCount + 1 
-	if tick() - lastPingUpdate >= 1 then
-		lastPingUpdate = tick()
-		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-		if DiagnosticsLabel and DiagnosticsLabel.Parent then
-			DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
+TrackTask(function()
+	local last = os.clock()
+	while not isDestroying do
+		task.wait(1)
+		if not isMinimized and not isTransitioning then
+			local now = os.clock()
+			local elapsed = math.max(now - last, 0.001)
+			local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+			if DiagnosticsLabel and DiagnosticsLabel.Parent then
+				DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", math.floor(fpsCount / elapsed + 0.5), success and ping or 0)
+			end
+			fpsCount = 0
 		end
-		fpsCount = 0
+		last = os.clock()
 	end
+end)
+RegConn(RunService.Heartbeat:Connect(function()
+	if not isMinimized and not isDestroying and not isTransitioning then fpsCount = fpsCount + 1 end
 end))
 
 local TabContainer = Instance.new("Frame", PanelGroup)
@@ -1375,6 +1386,7 @@ BindCamera()
 local FilterFavoritesActive = false
 local filterVersion = 0
 local SortMode = "Most Relevant"
+local LastFilterQuery = nil
 local SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
@@ -1458,9 +1470,10 @@ local function UpdateFilter()
 			end
 			if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		end
-		if ScriptsView and ScriptsView.Parent and query ~= "" then
+		if ScriptsView and ScriptsView.Parent and LastFilterQuery ~= nil and LastFilterQuery ~= query then
 			ScriptsView.CanvasPosition = Vector2.new(0, 0)
 		end
+		LastFilterQuery = query
 	end)
 end
 
@@ -1614,6 +1627,11 @@ local function RefreshAllCardStates()
 end
 
 local function ExecuteSandboxed(code, scriptName)
+	if isDestroying or type(code) ~= "string" then return false, "invalid execution request" end
+	if #code > SCRIPT_MAX_RESPONSE_BYTES then
+		ShowNotification("Execution blocked: script is larger than the configured safety limit.", "Error")
+		return false, "script too large"
+	end
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then 
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
@@ -1629,7 +1647,7 @@ local function ExecuteSandboxed(code, scriptName)
 		end
 	end)
 	
-	return true, "Script dispatched successfully"
+	return true, "Script started"
 end
 
 local function CreateScriptCard(data, renderParent)
@@ -1770,7 +1788,7 @@ local function CreateScriptCard(data, renderParent)
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = FetchWithRetry(data.RawUrl, 2)
+				local raw = FetchWithRetry(data.RawUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
 				if isDestroying then return end
 				if not raw then 
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
@@ -1779,7 +1797,7 @@ local function CreateScriptCard(data, renderParent)
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
-						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
+						ShowNotification("Started [" .. exactName .. "].", "Execution")
 					end
 				end
 				
@@ -1807,6 +1825,32 @@ local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
 
+local function ValidateCatalogEntry(entry)
+	if type(entry) ~= "table" then return nil end
+	local name = tostring(entry.Name or "")
+	local rawUrl = tostring(entry.RawUrl or "")
+	if name == "" or #name > 120 or not IsValidHttpUrl(rawUrl) then return nil end
+	local description = tostring(entry.Description or "No description provided.")
+	if #description > 1000 then description = string.sub(description, 1, 1000) end
+	local category = tostring(entry.Category or "")
+	local author = tostring(entry.Author or "")
+	local tagType = tostring(entry.TagType or "NONE")
+	local lastUpdated = tonumber(entry.LastUpdated)
+	if lastUpdated and lastUpdated ~= lastUpdated then lastUpdated = nil end
+	local tags = {}
+	if type(entry.Tags) == "table" then
+		for i, tag in ipairs(entry.Tags) do
+			if i > 20 then break end
+			if type(tag) == "string" and #tag <= 40 then tags[#tags + 1] = tag end
+		end
+	end
+	return {
+		Name = name, RawUrl = rawUrl, Description = description, Category = category,
+		Author = author, TagType = tagType, LastUpdated = lastUpdated, Tags = tags,
+		ImageAssetId = entry.ImageAssetId, PlaceId = tonumber(entry.PlaceId)
+	}
+end
+
 local function LoadDynamicCatalog()
 	if dbRefreshing or isDestroying then return end
 
@@ -1832,20 +1876,40 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
+				if #parsed > CATALOG_MAX_ENTRIES then
+					parsed = { table.unpack(parsed, 1, CATALOG_MAX_ENTRIES) }
+				end
+				local normalized = {}
+				local seenNames = {}
+				local invalidCount = 0
+				for _, rawEntry in ipairs(parsed) do
+					local entry = ValidateCatalogEntry(rawEntry)
+					if entry and not seenNames[entry.Name] then
+						seenNames[entry.Name] = true
+						normalized[#normalized + 1] = entry
+					else
+						invalidCount = invalidCount + 1
+					end
+				end
+				if #normalized == 0 then
+					if not isDestroying and generation == CatalogGeneration then
+						EmptyStateMessage.Text = "Catalog returned no valid script entries."
+						StatusText.Text = "Data Error"
+						StatusDot.BackgroundColor3 = Theme.Error
+						StatusText.TextColor3 = Theme.Error
+						ShowNotification("Catalog data was empty or invalid; keeping the current catalog.", "Error")
+					end
+					return
+				end
+				parsed = normalized
 				-- Avoid rebuilding the entire catalog when the server response is unchanged.
 				local fingerprintParts = {}
-				for index, entry in ipairs(parsed) do
-					if type(entry) == "table" then
-						fingerprintParts[#fingerprintParts + 1] = table.concat({
-							tostring(entry.Name or ""),
-							tostring(entry.Description or ""),
-							tostring(entry.RawUrl or ""),
-							tostring(entry.ImageAssetId or ""),
-							tostring(entry.TagType or ""),
-							tostring(entry.LastUpdated or ""),
-							tostring(entry.PlaceId or ""),
-						}, "\31")
-					end
+				for _, entry in ipairs(parsed) do
+					fingerprintParts[#fingerprintParts + 1] = table.concat({
+						tostring(entry.Name), tostring(entry.Description), tostring(entry.RawUrl),
+						tostring(entry.ImageAssetId or ""), tostring(entry.TagType or ""),
+						tostring(entry.LastUpdated or ""), tostring(entry.PlaceId or ""),
+					}, "\31")
 				end
 				local fingerprint = table.concat(fingerprintParts, "\30")
 				if fingerprint == LastCatalogFingerprint then
@@ -1953,7 +2017,7 @@ local function LoadDynamicCatalog()
 							for _, scriptData in ipairs(autoQueue) do
 								if isDestroying or generation ~= CatalogGeneration then return end
 
-								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
 								if isDestroying or generation ~= CatalogGeneration then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
@@ -2374,6 +2438,7 @@ pcall(function()
 	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
 		local oldNamecall
 		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			if not HookState.Active then return oldNamecall(self, ...) end
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				local mOk, method = pcall(getnamecallmethod)
@@ -2411,6 +2476,7 @@ pcall(function()
 		
 		local oldIndex
 		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			if not HookState.Active then return oldIndex(self, key) end
 			local ok, isCaller = pcall(checkcaller)
 			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
 				if self == TargetParent and type(key) == "string" then
