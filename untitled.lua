@@ -1,97 +1,3 @@
-local function ApplyAntiCheatBypass()
-	local rawmeta = getrawmetatable or getmetatable
-	local setreadonly = setreadonly or make_writeable or function() end
-	local isreadonly = isreadonly or function() return true end
-	local checkcaller = checkcaller or function() return false end
-	local newcclosure = newcclosure or function(f) return f end
-	local hookmetamethod = hookmetamethod
-
-	local gameMeta = rawmeta and rawmeta(game)
-	if not gameMeta then return end
-
-	local blacklistedKeywords = {
-		"ban", "detect", "flag", "cheat", "exploit", "kick", "log", 
-		"anti", "admin", "report", "hash", "mem", "check", "vulnerability"
-	}
-
-	local function isHoneypot(remoteName)
-		if type(remoteName) ~= "string" then return false end
-		local lowerName = string.lower(remoteName)
-		for _, kw in ipairs(blacklistedKeywords) do
-			if string.find(lowerName, kw, 1, true) then
-				return true
-			end
-		end
-		return false
-	end
-
-	if hookmetamethod then
-		local originalNamecall
-		originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-			if not checkcaller() then
-				local method = getnamecallmethod()
-				if method == "Kick" or method == "kick" then
-					task.wait(9e9)
-					return
-				elseif method == "FireServer" or method == "InvokeServer" then
-					if isHoneypot(self.Name) then
-						return
-					end
-				end
-			end
-			return originalNamecall(self, ...)
-		end))
-
-		local originalIndex
-		originalIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
-			if not checkcaller() and type(key) == "string" then
-				local lowerKey = string.lower(key)
-				if lowerKey == "kick" then
-					return newcclosure(function()
-						task.wait(9e9)
-					end)
-				end
-			end
-			return originalIndex(self, key)
-		end))
-	elseif gameMeta then
-		local oldNamecall = gameMeta.__namecall
-		local oldIndex = gameMeta.__index
-		local wasReadOnly = isreadonly(gameMeta)
-
-		setreadonly(gameMeta, false)
-
-		gameMeta.__namecall = newcclosure(function(self, ...)
-			if not checkcaller() then
-				local method = getnamecallmethod()
-				if method == "Kick" or method == "kick" then
-					task.wait(9e9)
-					return
-				elseif method == "FireServer" or method == "InvokeServer" then
-					if isHoneypot(self.Name) then
-						return
-					end
-				end
-			end
-			return oldNamecall(self, ...)
-		end)
-
-		gameMeta.__index = newcclosure(function(self, key)
-			if not checkcaller() and type(key) == "string" and string.lower(key) == "kick" then
-				return newcclosure(function()
-					task.wait(9e9)
-				end)
-			end
-			return oldIndex(self, key)
-		end)
-
-		if wasReadOnly then
-			setreadonly(gameMeta, true)
-		end
-	end
-end
-pcall(ApplyAntiCheatBypass)
-
 local rng = Random.new()
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -134,7 +40,6 @@ local Stats = Services.Stats
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
-local TeleportService = Services.TeleportService
 
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
@@ -260,10 +165,11 @@ local function RegCardConn(connection)
 end
 
 local function TrackTask(fn)
-	local thread
-	thread = task.spawn(function()
+	local thread = task.spawn(function()
 		local ok, err = pcall(fn)
-		PendingTasks[thread] = nil
+		if thread then
+			PendingTasks[thread] = nil
+		end
 		if not ok and not isDestroying then
 			warn("[Velox Task Error]:", tostring(err))
 		end
@@ -303,9 +209,14 @@ local function CleanUpMemory()
 			conn:Disconnect()
 		end
 	end
-	for _, conn in pairs(AfkConnections) do
-		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
-		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
+	for key, conn in pairs(AfkConnections) do
+		if typeof(conn) == "RBXScriptConnection" then
+			pcall(function() conn:Disconnect() end)
+		elseif type(conn) == "table" and conn.Disable then
+			-- Executor connection wrappers are intentionally not re-enabled on unload.
+			pcall(function() conn:Disable() end)
+		end
+		AfkConnections[key] = nil
 	end
 	for _, tweenData in pairs(ActiveTweens) do
 		if type(tweenData) == "table" then
@@ -1239,13 +1150,11 @@ Title.Font = Enum.Font.GothamBold; Title.TextSize = IsMobile and 16 or 19; Title
 
 local StatusDot = Instance.new("Frame", TopLeftRow)
 StatusDot.Size = UDim2.new(0, 8, 0, 8); StatusDot.LayoutOrder = 2
-StatusDot.BackgroundColor3 = Theme.Success
 Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
 
 local StatusText = Instance.new("TextLabel", TopLeftRow)
 StatusText.AutomaticSize = Enum.AutomaticSize.X; StatusText.Size = UDim2.new(0, 0, 1, 0); StatusText.BackgroundTransparency = 1
 StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.LayoutOrder = 3
-StatusText.Text = "ONLINE"; StatusText.TextColor3 = Theme.Success
 
 local BtmLeftRow = Instance.new("Frame", LeftHeaderFrame)
 BtmLeftRow.Size = UDim2.new(1, 0, 0, 14); BtmLeftRow.BackgroundTransparency = 1; BtmLeftRow.LayoutOrder = 2
@@ -1315,12 +1224,12 @@ RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
-local lastPingUpdate = tick()
+local lastPingUpdate = os.clock()
 RegConn(RunService.Heartbeat:Connect(function() 
 	if isMinimized or isDestroying or isTransitioning then return end 
 	fpsCount = fpsCount + 1 
-	if tick() - lastPingUpdate >= 1 then
-		lastPingUpdate = tick()
+	if os.clock() - lastPingUpdate >= 1 then
+		lastPingUpdate = os.clock()
 		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
 		if DiagnosticsLabel and DiagnosticsLabel.Parent then
 			DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
@@ -1809,8 +1718,7 @@ local function CreateScriptCard(data, renderParent)
 	local scriptEntry = {
 		Instance = card, SearchTitle = exactName:lower(), SearchDesc = (data.Description or ""):lower(),
 		SearchMeta = table.concat({data.Category or "", data.Author or "", data.TagType or "", table.concat(data.Tags or {}, " ")}, " "):lower(),
-		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1,
-		RawUrl = data.RawUrl or data.Url or data.ScriptUrl, ScriptCode = data.ScriptCode or data.Code or data.Script
+		ExactName = exactName, LastUpdated = data.LastUpdated, OriginalIndex = #RegisteredScripts + 1
 	}
 
 	local innerActionTime = 0
@@ -1838,310 +1746,636 @@ local function CreateScriptCard(data, renderParent)
 		if isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.AutoExecutes[exactName] then
-			SavedData.AutoExecutes[exactName] = nil
-			ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
+			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
 		else
-			SavedData.AutoExecutes[exactName] = {
-				PlaceId = game.PlaceId,
-				GameId = game.GameId
-			}
-			ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
+			SavedData.AutoExecutes[exactName] = {PlaceId = game.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
-		SaveConfiguration()
-		RefreshAllCardStates()
-		UpdateFilter()
+		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 
 	RegCardConn(card.Activated:Connect(function()
 		if isDestroying then return end
-		if tick() - innerActionTime < 0.25 then return end
-		
-		OpenConfirmDialog(exactName, function()
-			local code = data.ScriptCode or data.Code or data.Script
-			if not code and (data.RawUrl or data.Url or data.ScriptUrl) then
-				ShowNotification("Fetching script code...", "Info")
-				code = UniversalHttpGet(data.RawUrl or data.Url or data.ScriptUrl)
+		if tick() - innerActionTime < 0.2 then return end
+
+		local function executeScript()
+			if type(loadstring) ~= "function" then
+				ShowNotification("Execution disabled: 'loadstring' is missing or blocked by your executor.", "Error")
+				return
 			end
-			
-			if type(code) == "string" and #code > 0 then
-				local ok = ExecuteSandboxed(code, exactName)
-				if ok then
-					ShowNotification("Executed " .. exactName .. " successfully!", "Success")
+			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
+			task.spawn(function()
+				local raw = FetchWithRetry(data.RawUrl, 2)
+				if isDestroying then return end
+				if not raw then 
+					ShowNotification("Failed to download script. Please check your connection.", "Error")
+				elseif string.find(raw, "404: Not Found") then 
+					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
+				else
+					local success = ExecuteSandboxed(raw, exactName)
+					if success then
+						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
+					end
 				end
-			else
-				ShowNotification("Failed to load source code for " .. exactName, "Error")
-			end
-		end)
+				
+				if titleLbl and titleLbl.Parent then
+					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
+				end
+			end)
+		end
+		
+		if SavedData.AutoExecutes[exactName] ~= nil then 
+			AttemptActionWithCooldown(executeScript)
+		else 
+			OpenConfirmDialog(exactName, executeScript) 
+		end
 	end))
 
+	card.Parent = renderParent
+	CacheInstanceAndDescendants(card)
 	table.insert(RegisteredScripts, scriptEntry)
-	card.Parent = renderParent or ScriptsView
-	return card
 end
 
-local DefaultCatalog = {
-	{
-		Name = "Infinite Yield",
-		Description = "Feature-rich admin command script with hundreds of commands for general games.",
-		Category = "Universal",
-		Author = "Edge & IY Team",
-		TagType = "HOT",
-		LastUpdated = os.time(),
-		RawUrl = "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"
-	},
-	{
-		Name = "Dex Explorer V4",
-		Description = "Advanced game object inspection and property editing tool for developers and security analysts.",
-		Category = "Universal",
-		Author = "DarkDex",
-		TagType = "UPDATED",
-		LastUpdated = os.time() - 86400,
-		RawUrl = "https://raw.githubusercontent.com/infiniu/Dex-Explorer/main/source.lua"
-	},
-	{
-		Name = "SimpleSpy V3",
-		Description = "Remote event and function logger/spy utility for analyzing network traffic.",
-		Category = "Universal",
-		Author = "exx",
-		TagType = "NONE",
-		LastUpdated = os.time() - 172800,
-		RawUrl = "https://raw.githubusercontent.com/exx-s/SimpleSpy/main/source.lua"
-	}
-}
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+local CATALOG_REFRESH_INTERVAL = 300
+local dbRefreshing = false
+local CatalogRefreshQueued = false
+local LastCatalogFingerprint = nil
 
-local function PopulateCatalog(scriptsData)
+local function LoadDynamicCatalog()
+	if dbRefreshing or isDestroying then return end
+
+	dbRefreshing = true
 	CatalogGeneration = CatalogGeneration + 1
-	local currentGen = CatalogGeneration
-	
-	for _, conn in ipairs(CardConnections) do
-		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-			conn:Disconnect()
-		end
-	end
-	table.clear(CardConnections)
-	
-	for _, scr in ipairs(RegisteredScripts) do
-		if scr.Instance and scr.Instance.Parent then
-			scr.Instance:Destroy()
-		end
-	end
-	table.clear(RegisteredScripts)
-	
-	if type(scriptsData) ~= "table" then return end
-	
-	for _, item in ipairs(scriptsData) do
-		if CatalogGeneration ~= currentGen then return end
-		if type(item) == "table" and item.Name then
-			CreateScriptCard(item, ScriptsView)
-		end
-	end
-	
-	UpdateFilter()
-end
+	local generation = CatalogGeneration
 
-local CATALOG_URL = "https://raw.githubusercontent.com/VeloxHub/Catalog/main/catalog.json"
+	ShowNotification("Fetching latest script catalog...", "System")
+	local savedScroll = ScriptsView.CanvasPosition
+	StatusDot.BackgroundColor3 = Theme.Warning
+	StatusText.Text = "Connecting..."
+	StatusText.TextColor3 = Theme.Warning
+	EmptyStateMessage.Visible = true
+	EmptyStateMessage.Text = "Loading script repository..."
 
-local function LoadCatalogAsync()
 	TrackTask(function()
-		local fetched = FetchWithRetry(CATALOG_URL, 2, true)
-		local parsed = nil
-		if fetched then
-			local ok, res = pcall(function() return HttpService:JSONDecode(fetched) end)
-			if ok and type(res) == "table" then
-				parsed = res
-			end
-		end
-		
-		if parsed and #parsed > 0 then
-			PopulateCatalog(parsed)
-		else
-			PopulateCatalog(DefaultCatalog)
-		end
-		
-		if not AutoExecuteRanThisSession then
-			AutoExecuteRanThisSession = true
-			for _, scr in ipairs(RegisteredScripts) do
-				if SavedData.AutoExecutes[scr.ExactName] then
-					local autoData = SavedData.AutoExecutes[scr.ExactName]
-					if not autoData.PlaceId or autoData.PlaceId == game.PlaceId then
-						task.spawn(function()
-							ShowNotification("Auto-executing: " .. scr.ExactName, "Info")
-							local code = scr.ScriptCode
-							if not code and scr.RawUrl then
-								code = UniversalHttpGet(scr.RawUrl)
+		local raw = FetchWithRetry(CATALOG_URL, 3, true)
+		if isDestroying or generation ~= CatalogGeneration then return end
+
+		if raw then
+			local success, parsed = pcall(function()
+				return HttpService:JSONDecode(raw)
+			end)
+
+			if success and type(parsed) == "table" then
+				-- Avoid rebuilding the entire catalog when the server response is unchanged.
+				local fingerprintParts = {}
+				for index, entry in ipairs(parsed) do
+					if type(entry) == "table" then
+						fingerprintParts[#fingerprintParts + 1] = table.concat({
+							tostring(entry.Name or ""),
+							tostring(entry.Description or ""),
+							tostring(entry.RawUrl or ""),
+							tostring(entry.ImageAssetId or ""),
+							tostring(entry.TagType or ""),
+							tostring(entry.LastUpdated or ""),
+							tostring(entry.PlaceId or ""),
+						}, "\31")
+					end
+				end
+				local fingerprint = table.concat(fingerprintParts, "\30")
+				if fingerprint == LastCatalogFingerprint then
+					UpdateFilter()
+					StatusDot.BackgroundColor3 = Theme.Success
+					StatusText.Text = "Online"
+					StatusText.TextColor3 = Theme.Success
+					ShowNotification("Catalog is already up to date.", "Info")
+					if generation == CatalogGeneration then
+						dbRefreshing = false
+					end
+					return
+				end
+				LastCatalogFingerprint = fingerprint
+
+				for _, conn in ipairs(CardConnections) do
+					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
+						conn:Disconnect()
+					end
+				end
+				table.clear(CardConnections)
+
+				for elem in pairs(InteractiveElements) do
+					if elem:IsDescendantOf(ScriptsView) then
+						InteractiveElements[elem] = nil
+					end
+				end
+
+				for _, child in ipairs(ScriptsView:GetChildren()) do
+					if child:IsA("TextButton") then
+						child:Destroy()
+					end
+				end
+				table.clear(RegisteredScripts)
+
+				local detachedFolder = Instance.new("Folder")
+				local vMap = {}
+
+				for index, scriptData in ipairs(parsed) do
+					if isDestroying or generation ~= CatalogGeneration then
+						detachedFolder:Destroy()
+						return
+					end
+
+					if type(scriptData) == "table" and scriptData.Name then
+						vMap[scriptData.Name] = true
+						CreateScriptCard(scriptData, detachedFolder)
+					end
+
+					if index % 25 == 0 then
+						task.wait()
+					end
+				end
+
+				local cleaned = false
+				for k in pairs(SavedData.AutoExecutes) do
+					if not vMap[k] then
+						SavedData.AutoExecutes[k] = nil
+						cleaned = true
+					end
+				end
+				if cleaned then
+					SaveConfiguration()
+				end
+
+				for _, card in ipairs(detachedFolder:GetChildren()) do
+					card.Parent = ScriptsView
+				end
+				detachedFolder:Destroy()
+
+				-- Saved auto-execute entries are not launched automatically.
+				-- This keeps catalog loading separate from executing remote code.
+				if false and not AutoExecuteRanThisSession then
+					AutoExecuteRanThisSession = true
+
+					local autoQueue = {}
+					for _, scriptData in ipairs(parsed) do
+						if type(scriptData) == "table" and scriptData.Name then
+							local auto = SavedData.AutoExecutes[scriptData.Name]
+							if auto and type(auto) == "table" then
+								local isValid = false
+								if auto.GameId and auto.GameId ~= 0 then
+									isValid = (auto.GameId == game.GameId)
+								else
+									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
+								end
+								
+								if isValid then
+									table.insert(autoQueue, scriptData)
+								end
 							end
-							if code then
-								ExecuteSandboxed(code, scr.ExactName)
+						end
+					end
+
+					if #autoQueue > 0 then
+						TrackTask(function()
+							if type(loadstring) ~= "function" then
+								ShowNotification("Auto-execute skipped: Executor lacks loadstring support.", "Error")
+								return
+							end
+
+							local successList = {}
+							local failList = {}
+
+							ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
+
+							for _, scriptData in ipairs(autoQueue) do
+								if isDestroying or generation ~= CatalogGeneration then return end
+
+								local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+								if isDestroying or generation ~= CatalogGeneration then return end
+
+								if scrRaw and not string.find(scrRaw, "404: Not Found") then
+									local exSuccess = ExecuteSandboxed(scrRaw, scriptData.Name)
+									if exSuccess then
+										table.insert(successList, scriptData.Name)
+									else
+										table.insert(failList, scriptData.Name)
+									end
+								else
+									table.insert(failList, scriptData.Name)
+								end
+								task.wait(0.3)
+							end
+							
+							if #successList > 0 then
+								ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success")
+							end
+							if #failList > 0 then
+								ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning")
 							end
 						end)
 					end
 				end
+
+				UpdateFilter()
+				task.defer(function()
+					if not isDestroying and generation == CatalogGeneration
+						and ScriptsView and ScriptsView.Parent then
+						ScriptsView.CanvasPosition = savedScroll
+					end
+				end)
+
+				if not isDestroying and generation == CatalogGeneration then
+					StatusDot.BackgroundColor3 = Theme.Success
+					StatusText.Text = "Online"
+					StatusText.TextColor3 = Theme.Success
+					ShowNotification("Script catalog loaded successfully!", "Success")
+				end
+			else
+				if not isDestroying and generation == CatalogGeneration then
+					EmptyStateMessage.Text = "Failed to parse catalog data format."
+					StatusText.Text = "Data Error"
+					StatusDot.BackgroundColor3 = Theme.Error
+					StatusText.TextColor3 = Theme.Error
+					ShowNotification("Catalog data format error.", "Error")
+				end
+			end
+		else
+			if not isDestroying and generation == CatalogGeneration then
+				EmptyStateMessage.Text = "Unable to reach script catalog server."
+				StatusText.Text = "Offline"
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Could not connect to the script catalog server.", "Error")
+			end
+		end
+		if generation == CatalogGeneration then
+			dbRefreshing = false
+			if CatalogRefreshQueued and not isDestroying then
+				CatalogRefreshQueued = false
+				task.defer(LoadDynamicCatalog)
 			end
 		end
 	end)
 end
+LoadDynamicCatalog()
 
-local function CreateSettingToggle(title, desc, defaultVal, callback)
-	local frame = Instance.new("Frame", SettingsView)
-	frame.Size = UDim2.new(1, 0, 0, 50)
-	frame.BackgroundColor3 = Theme.Card
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-	local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(44, 58, 77)
-	
-	local pad = Instance.new("UIPadding", frame)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 8)
-	
-	local tLbl = Instance.new("TextLabel", frame)
-	tLbl.Size = UDim2.new(1, -60, 0, 18); tLbl.BackgroundTransparency = 1; tLbl.Text = title
-	tLbl.TextColor3 = Theme.TextPrimary; tLbl.Font = Enum.Font.GothamBold; tLbl.TextSize = 12
-	tLbl.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local dLbl = Instance.new("TextLabel", frame)
-	dLbl.Size = UDim2.new(1, -60, 0, 14); dLbl.Position = UDim2.new(0, 0, 0, 18); dLbl.BackgroundTransparency = 1; dLbl.Text = desc
-	dLbl.TextColor3 = Theme.TextSecondary; dLbl.Font = Enum.Font.Gotham; dLbl.TextSize = 10
-	dLbl.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local toggleBtn = Instance.new("TextButton", frame)
-	toggleBtn.Size = UDim2.new(0, 44, 0, 22); toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
-	toggleBtn.BackgroundColor3 = defaultVal and Theme.Success or Theme.ToggleOff
+-- Keep an already-open hub in sync with the remote catalog.
+-- The request uses a cache-busting nonce, while the fingerprint prevents
+-- unnecessary card reconstruction when nothing actually changed.
+TrackTask(function()
+	while not isDestroying do
+		task.wait(CATALOG_REFRESH_INTERVAL)
+		if isDestroying then break end
+		if not dbRefreshing then
+			LoadDynamicCatalog()
+		end
+	end
+end)
+
+local function CreateSettingsGroup(titleText, parentView, order)
+	local container = Instance.new("Frame", parentView)
+	container.Size = UDim2.new(1, 0, 0, 0)
+	container.AutomaticSize = Enum.AutomaticSize.Y
+	container.BackgroundTransparency = 1
+	container.LayoutOrder = order
+	local groupLayout = Instance.new("UIListLayout", container)
+	groupLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	groupLayout.Padding = UDim.new(0, 6)
+	local header = Instance.new("TextLabel", container)
+	header.Size = UDim2.new(1, 0, 0, 16)
+	header.BackgroundTransparency = 1
+	header.Text = string.upper(titleText)
+	header.TextColor3 = Theme.TextSecondary
+	header.Font = Enum.Font.GothamBold
+	header.TextSize = 10
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.LayoutOrder = 1
+	local card = Instance.new("Frame", container)
+	card.Size = UDim2.new(1, 0, 0, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = Theme.CardHover
+	card.LayoutOrder = 2
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+	local cardGradient = Instance.new("UIGradient", card)
+	cardGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Theme.CardHover),
+		ColorSequenceKeypoint.new(1, Theme.Card)
+	})
+	cardGradient.Rotation = 45
+	local cardLayout = Instance.new("UIListLayout", card)
+	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	cardLayout.Padding = UDim.new(0, 0)
+	return card
+end
+
+local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	if order > 1 then
+		local divider = Instance.new("Frame", groupCard)
+		divider.Size = UDim2.new(1, -24, 0, 1)
+		divider.Position = UDim2.new(0, 12, 0, 0)
+		divider.BackgroundColor3 = Theme.Stroke
+		divider.BackgroundTransparency = 0.6
+		divider.BorderSizePixel = 0
+		divider.LayoutOrder = (order - 1) * 2
+	end
+	local row = Instance.new("Frame", groupCard)
+	row.Size = UDim2.new(1, 0, 0, IsMobile and 56 or 60)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = (order * 2) - 1
+	local rowPad = Instance.new("UIPadding", row)
+	rowPad.PaddingLeft = UDim.new(0, 12)
+	rowPad.PaddingRight = UDim.new(0, 12)
+	rowPad.PaddingTop = UDim.new(0, 8)
+	rowPad.PaddingBottom = UDim.new(0, 8)
+	local iconContainer = Instance.new("Frame", row)
+	iconContainer.Size = UDim2.new(0, 32, 0, 32)
+	iconContainer.Position = UDim2.new(0, 0, 0.5, -16)
+	iconContainer.BackgroundColor3 = Theme.Accent
+	iconContainer.BackgroundTransparency = 0.85
+	Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
+	local iconImg = Instance.new("ImageLabel", iconContainer)
+	iconImg.Size = UDim2.new(0, 18, 0, 18)
+	iconImg.Position = UDim2.new(0.5, -9, 0.5, -9)
+	iconImg.BackgroundTransparency = 1
+	iconImg.Image = iconAsset or "rbxassetid://10709782497"
+	iconImg.ImageColor3 = Theme.Accent
+	local textContainer = Instance.new("Frame", row)
+	textContainer.Size = UDim2.new(1, -165, 1, 0)
+	textContainer.Position = UDim2.new(0, 42, 0, 0)
+	textContainer.BackgroundTransparency = 1
+	local tLay = Instance.new("UIListLayout", textContainer)
+	tLay.SortOrder = Enum.SortOrder.LayoutOrder
+	tLay.Padding = UDim.new(0, 2)
+	tLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	local t = Instance.new("TextLabel", textContainer)
+	t.Size = UDim2.new(1, 0, 0, 16)
+	t.BackgroundTransparency = 1
+	t.Text = title
+	t.TextColor3 = Theme.TextPrimary
+	t.Font = Enum.Font.GothamBold
+	t.TextSize = 12
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	t.LayoutOrder = 1
+	local d = Instance.new("TextLabel", textContainer)
+	d.Size = UDim2.new(1, 0, 0, 14)
+	d.BackgroundTransparency = 1
+	d.Text = desc
+	d.TextColor3 = Theme.TextSecondary
+	d.Font = Enum.Font.Gotham
+	d.TextSize = 10
+	d.TextXAlignment = Enum.TextXAlignment.Left
+	d.LayoutOrder = 2
+	d.TextWrapped = true
+	local rightContainer = Instance.new("Frame", row)
+	rightContainer.Size = UDim2.new(0, 110, 1, 0)
+	rightContainer.Position = UDim2.new(1, -110, 0, 0)
+	rightContainer.BackgroundTransparency = 1
+	return row, rightContainer
+end
+
+local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local toggleBtn = Instance.new("TextButton", rightContainer)
+	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
+	toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
+	toggleBtn.BackgroundColor3 = defaultValue and Theme.Accent or Theme.BackgroundMain
 	toggleBtn.Text = ""
+	toggleBtn.AutoButtonColor = false
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
-	
+	local toggleStroke = Instance.new("UIStroke", toggleBtn)
+	toggleStroke.Color = defaultValue and Theme.Accent or Theme.Stroke
+	toggleStroke.Thickness = 1
 	local circle = Instance.new("Frame", toggleBtn)
-	circle.Size = UDim2.new(0, 18, 0, 18)
-	circle.Position = defaultVal and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+	circle.Size = UDim2.new(0, 16, 0, 16)
+	circle.Position = defaultValue and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-	
-	local state = defaultVal
-	RegConn(toggleBtn.Activated:Connect(function()
+	local state = defaultValue
+	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
+		if isDestroying then return end
 		state = not state
-		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
 		})
-		toggleBtn.BackgroundColor3 = state and Theme.Success or Theme.ToggleOff
-		if callback then callback(state) end
-	end))
-	
-	ApplyInteractiveAnimations(frame, Theme.Card, Theme.CardHover, nil, stroke, Color3.fromRGB(44, 58, 77), Theme.Accent)
+		SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Color = state and Theme.Accent or Theme.Stroke
+		})
+		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+		})
+		if type(callback) == "function" then task.spawn(callback, state) end
+	end)))
 end
 
-local function CreateSettingButton(title, desc, btnText, callback)
-	local frame = Instance.new("Frame", SettingsView)
-	frame.Size = UDim2.new(1, 0, 0, 50)
-	frame.BackgroundColor3 = Theme.Card
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-	local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(44, 58, 77)
-	
-	local pad = Instance.new("UIPadding", frame)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 8)
-	
-	local tLbl = Instance.new("TextLabel", frame)
-	tLbl.Size = UDim2.new(1, -110, 0, 18); tLbl.BackgroundTransparency = 1; tLbl.Text = title
-	tLbl.TextColor3 = Theme.TextPrimary; tLbl.Font = Enum.Font.GothamBold; tLbl.TextSize = 12
-	tLbl.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local dLbl = Instance.new("TextLabel", frame)
-	dLbl.Size = UDim2.new(1, -110, 0, 14); dLbl.Position = UDim2.new(0, 0, 0, 18); dLbl.BackgroundTransparency = 1; dLbl.Text = desc
-	dLbl.TextColor3 = Theme.TextSecondary; dLbl.Font = Enum.Font.Gotham; dLbl.TextSize = 10
-	dLbl.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local actionBtn = Instance.new("TextButton", frame)
-	actionBtn.Size = UDim2.new(0, 95, 0, 26); actionBtn.Position = UDim2.new(1, -95, 0.5, -13)
-	actionBtn.BackgroundColor3 = Theme.CardHover; actionBtn.Text = btnText
-	actionBtn.TextColor3 = Theme.TextPrimary; actionBtn.Font = Enum.Font.GothamBold; actionBtn.TextSize = 10
-	Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 6)
-	local bStroke = Instance.new("UIStroke", actionBtn); bStroke.Color = Theme.Stroke
-	
-	ApplyInteractiveAnimations(actionBtn, Theme.CardHover, Color3.fromRGB(40, 53, 75), Color3.fromRGB(20, 29, 45), bStroke, Theme.Stroke, Theme.Accent)
-	
-	RegConn(actionBtn.Activated:Connect(function()
-		if callback then callback(actionBtn) end
-	end))
-	
-	ApplyInteractiveAnimations(frame, Theme.Card, Theme.CardHover, nil, stroke, Color3.fromRGB(44, 58, 77), Theme.Accent)
-	return actionBtn
+local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
+	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local btn = Instance.new("TextButton", rightContainer)
+	btn.Size = UDim2.new(0, 95, 0, 26)
+	btn.Position = UDim2.new(1, -95, 0.5, -13)
+	btn.BackgroundColor3 = Theme.BackgroundMain
+	btn.BackgroundTransparency = 0.4
+	btn.Text = btnText
+	btn.TextColor3 = isDestructive and Theme.Error or Theme.TextPrimary
+	btn.Font = Enum.Font.GothamMedium
+	btn.TextSize = 11
+	btn.AutoButtonColor = false
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	local btnStroke = Instance.new("UIStroke", btn)
+	btnStroke.Color = isDestructive and Theme.Error or Theme.Stroke
+	btnStroke.Thickness = 1
+	local hoverColor = isDestructive and Color3.fromRGB(55, 25, 25) or Theme.CardHover
+	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
+	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
+	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
+		if isDestroying then return end
+		if type(callback) == "function" then task.spawn(callback, btn) end
+	end)))
+	return btn
 end
 
-local function ToggleAntiAFK(enabled)
-	SavedData.Settings.AntiAFK = enabled
-	SaveConfiguration()
-	
-	if enabled then
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(function()
-				if SavedData.Settings.AntiAFK then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new())
-					ShowNotification("Anti-AFK active: Prevented idle kick.", "Info")
-				end
-			end))
-		end
-		ShowNotification("Anti-AFK Protection Enabled.", "Success")
-	else
-		if AfkConnections.Idled then
-			UnregConn(AfkConnections.Idled)
-			AfkConnections.Idled = nil
-		end
-		ShowNotification("Anti-AFK Protection Disabled.", "Warning")
-	end
-end
+local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 
-CreateSettingToggle("Anti-AFK Protection", "Prevents Roblox from disconnecting you due to 20m inactivity.", SavedData.Settings.AntiAFK, function(state)
-	ToggleAntiAFK(state)
-end)
+local kbRow, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
+local KeybindButton = Instance.new("TextButton", kbRightContainer)
+KeybindButton.Size = UDim2.new(0, 95, 0, 26)
+KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
+KeybindButton.BackgroundColor3 = Theme.BackgroundMain
+KeybindButton.BackgroundTransparency = 0.4
+KeybindButton.Text = ToggleKeybind.Name
+KeybindButton.TextColor3 = Theme.TextPrimary
+KeybindButton.Font = Enum.Font.GothamMedium
+KeybindButton.TextSize = 11
+KeybindButton.AutoButtonColor = false
+Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
+local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
+kbBtnStroke.Color = Theme.Stroke
+KeybindButtonRef = KeybindButton
+ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
-if SavedData.Settings.AntiAFK then
-	ToggleAntiAFK(true)
-end
-
-KeybindButtonRef = CreateSettingButton("Toggle Keybind", "Key used to show/hide the Velox Hub interface.", tostring(SavedData.ToggleKeybind), function(btn)
-	if IsBindingKey then return end
+RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
+	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
-	btn.Text = "Press key..."
-	btn.TextColor3 = Theme.Accent
+	KeybindButton.Text = "Press Any..."
+	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
 	
-	if KeybindCaptureConnection then UnregConn(KeybindCaptureConnection) end
-	
-	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gpe)
+	if KeybindCaptureConnection then 
+		UnregConn(KeybindCaptureConnection)
+		KeybindCaptureConnection = nil
+	end
+
+	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
+		if isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
-			local key = input.KeyCode
-			if key ~= Enum.KeyCode.Unknown and key ~= Enum.KeyCode.Escape then
-				SavedData.ToggleKeybind = key.Name
-				ToggleKeybind = key
-				BindToggleKey(key)
-				SaveConfiguration()
-				btn.Text = key.Name
-				btn.TextColor3 = Theme.TextPrimary
-				ShowNotification("Toggle keybind set to: " .. key.Name, "Success")
-			else
-				btn.Text = tostring(SavedData.ToggleKeybind)
-				btn.TextColor3 = Theme.TextPrimary
+			if input.KeyCode == Enum.KeyCode.Escape then
+				IsBindingKey = false
+				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				ShowNotification("Keybind mapping canceled.", "Warning")
+				if KeybindCaptureConnection then 
+					UnregConn(KeybindCaptureConnection)
+					KeybindCaptureConnection = nil 
+				end
+				return
 			end
+			if input.KeyCode.Name ~= "Unknown" then
+				ToggleKeybind = input.KeyCode
+				IsBindingKey = false
+				SavedData.ToggleKeybind = ToggleKeybind.Name
+				SaveConfiguration()
+				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
+				
+				BindToggleKey(ToggleKeybind)
+				
+				if KeybindCaptureConnection then 
+					UnregConn(KeybindCaptureConnection)
+					KeybindCaptureConnection = nil 
+				end
+			end
+		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			IsBindingKey = false
-			if KeybindCaptureConnection then
+			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+			ShowNotification("Keybind mapping canceled.", "Warning")
+			if KeybindCaptureConnection then 
 				UnregConn(KeybindCaptureConnection)
-				KeybindCaptureConnection = nil
+				KeybindCaptureConnection = nil 
 			end
 		end
 	end))
-end)
+end)))
 
-CreateSettingButton("Refresh Scripts Catalog", "Re-fetch the latest scripts catalog from remote server.", "Refresh", function()
-	ShowNotification("Refreshing script catalog...", "Info")
-	LoadCatalogAsync()
-end)
+local function TriggerAntiAFKAction()
+	if VirtualUser then
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	elseif VirtualInputManager then
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
+			task.wait(0.1)
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
+		end)
+	end
+end
 
-CreateSettingButton("Rejoin Game", "Reconnects you to the current Roblox server instance.", "Rejoin", function()
-	if TeleportService then
-		TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
+	SavedData.Settings.AntiAFK = val
+	SaveConfiguration()
+	if val then
+		ShowNotification("Anti-AFK system engaged.", "Success")
+		if not AfkConnections.Idled then
+			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
+		end
+		if getconnections then
+			pcall(function()
+				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+					pcall(function()
+						if type(conn) == "table" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+							conn:Disable()
+							table.insert(AfkConnections, conn)
+						end
+					end)
+				end
+			end)
+		end
+	else
+		ShowNotification("Anti-AFK deactivated.", "Warning")
+		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
+		for _, conn in ipairs(AfkConnections) do
+			pcall(function()
+				if type(conn) == "table" and conn.Enable then
+					conn:Enable()
+				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
+					conn:Enable()
+				end
+			end)
+		end
+		table.clear(AfkConnections)
 	end
 end)
 
-CreateSettingButton("Unload Velox Hub", "Safely destroy UI, disconnect signals, and free memory.", "Unload", function()
+local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
+
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
+	AttemptActionWithCooldown(function()
+		if dbRefreshing then
+			CatalogRefreshQueued = true
+			ShowNotification("Catalog refresh queued.", "Info")
+			return
+		end
+		LoadDynamicCatalog()
+	end)
+end)
+
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
+	ShowNotification("Unloading Velox Hub...", "Info")
+	task.wait(0.3)
 	CloseUI()
 end)
 
-LoadCatalogAsync()
+if SavedData.Settings.AntiAFK then
+	if not AfkConnections.Idled then
+		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
+	end
+	if getconnections then
+		pcall(function()
+			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+				pcall(function()
+					if type(conn) == "table" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
+						conn:Disable()
+						table.insert(AfkConnections, conn)
+					end
+				end)
+			end
+		end)
+	end
+end
+
+TabViews["Changelogs"].Visible = true
+TabViews["Scripts"].Visible = false
+TabViews["Settings"].Visible = false
+TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+SectionHeaderLabel.Text = "Updates"
+MainPanel.Visible = true
+SearchRow.Visible = false
+FloatingBtn.Visible = false
+
+ShowNotification("Velox Hub is ready for use!", "Success")
+
+if IsMobile then
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+		if isDestroying then return end
+		table.clear(OriginalCache)
+		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
+		CacheInstanceAndDescendants(MainPanel)
+		CacheInstanceAndDescendants(FloatingBtn)
+		ShowNotification("UI Cache cleared successfully.", "Success")
+	end)
+end
