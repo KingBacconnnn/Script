@@ -1790,13 +1790,61 @@ local function RefreshAllCardStates()
 	end
 end
 
+local function ExtractDirectHttpLoader(code)
+	if type(code) ~= "string" then return nil end
+	local source = string.gsub(code, "^%s+", "")
+	local url = string.match(source, '^loadstring%s*%(%s*game%s*:%s*HttpGet%s*%(%s*["\'](https?://[^"\']+)["\']%s*%)%s*%)%s*%(%s*%)%s*;?%s*$')
+	if url then return url end
+	url = string.match(source, '^loadstring%s*%(%s*game%s*:%s*HttpGetAsync%s*%(%s*["\'](https?://[^"\']+)["\']%s*%)%s*%)%s*%(%s*%)%s*;?%s*$')
+	if url then return url end
+	return nil
+end
+
+local function ResolveDirectHttpLoader(code, scriptName, depth)
+	if type(code) ~= "string" then return nil, "invalid source" end
+	depth = tonumber(depth) or 0
+	if depth > 3 then
+		return nil, "nested loader depth exceeded"
+	end
+
+	local nestedUrl = ExtractDirectHttpLoader(code)
+	if not nestedUrl then
+		return code, nil
+	end
+
+	local nested = FetchWithRetry(nestedUrl, 2, false, SCRIPT_MAX_RESPONSE_BYTES)
+	if not nested then
+		return nil, "could not download nested loader"
+	end
+	if string.find(nested, "404: Not Found", 1, true) then
+		return nil, "nested loader returned 404"
+	end
+
+	return ResolveDirectHttpLoader(nested, scriptName, depth + 1)
+end
+
 local function ExecuteSandboxed(code, scriptName)
 	if isDestroying or type(code) ~= "string" then return false, "invalid execution request" end
 	if #code > SCRIPT_MAX_RESPONSE_BYTES then
 		ShowNotification("Execution blocked: script is larger than the configured safety limit.", "Error")
 		return false, "script too large"
 	end
-	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
+	if type(loadstring) ~= "function" then
+		ShowNotification("Execution is unavailable in this environment.", "Error")
+		return false, "loadstring unavailable"
+	end
+
+	local resolved, resolveErr = ResolveDirectHttpLoader(code, scriptName, 0)
+	if not resolved then
+		ShowNotification("Could not load [" .. tostring(scriptName) .. "]: " .. tostring(resolveErr), "Error")
+		return false, tostring(resolveErr)
+	end
+	if #resolved > SCRIPT_MAX_RESPONSE_BYTES then
+		ShowNotification("Execution blocked: resolved script is larger than the configured safety limit.", "Error")
+		return false, "resolved script too large"
+	end
+
+	local chunk, compileErr = loadstring(resolved, "=" .. tostring(scriptName))
 	if not chunk then
 		ShowNotification("Could not compile [" .. tostring(scriptName) .. "]: " .. tostring(compileErr), "Error")
 		return false, tostring(compileErr)
@@ -1805,7 +1853,8 @@ local function ExecuteSandboxed(code, scriptName)
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
-			ShowNotification("Execution error in [" .. tostring(scriptName) .. "]: " .. tostring(runtimeErr), "Error")
+			local cleanErr = tostring(runtimeErr):gsub("^%s+", ""):gsub("%s+$", "")
+			ShowNotification("Execution error in [" .. tostring(scriptName) .. "]: " .. cleanErr, "Error")
 		end
 	end)
 
