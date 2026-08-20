@@ -185,7 +185,7 @@ end
 
 local function CancelTrackedTasks()
 	for thread in pairs(PendingTasks) do
-		pcall(task.cancel, thread)
+		if type(thread) == "thread" then pcall(task.cancel, thread) end
 	end
 	table.clear(PendingTasks)
 end
@@ -1710,6 +1710,9 @@ CreateParagraph("v2.0.0 - Stability, Compatibility & UX Update BETA", "• Fixed
 local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
 		if type(scrData.UpdateUI) == "function" then scrData.UpdateUI() end
+		if scrData.TimeLabel and scrData.TimeLabel.Parent then
+			scrData.TimeLabel.Text = GetRelativeTime(scrData.LastUpdatedNumber)
+		end
 	end
 end
 
@@ -1732,7 +1735,7 @@ local function ExecuteSandboxed(code, scriptName)
 	return true, "Script dispatched successfully"
 end
 
-local function CreateScriptCard(data, renderParent)
+local function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
 	local tagConfig = TagTypeConfig[tagType]
 	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
@@ -1761,7 +1764,7 @@ local function CreateScriptCard(data, renderParent)
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	local metaWidth = IsMobile and 190 or 220
+	local metaWidth = IsMobile and 196 or 226
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -1773,7 +1776,7 @@ local function CreateScriptCard(data, renderParent)
 	local metaRightContainer = Instance.new("Frame", topRow)
 	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
-	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
+	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 2)
 
 	if tagType ~= "NONE" then
 		local tag = Instance.new("Frame", metaRightContainer)
@@ -1795,6 +1798,17 @@ local function CreateScriptCard(data, renderParent)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 	dateLbl.TextWrapped = false; dateLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	local function UpdateCardMetaLayout()
+		local available = topRow.AbsoluteSize.X
+		if available <= 0 then return end
+		local target = metaWidth
+		if available < 440 then target = math.min(target, math.max(165, math.floor(available * 0.52))) end
+		if tagType == "NONE" then target = math.max(145, target - 34) end
+		titleContainer.Size = UDim2.new(1, -target, 0, 0)
+		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
+	end
+	RegCardConn(topRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateCardMetaLayout))
+	UpdateCardMetaLayout()
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
 	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
@@ -1831,7 +1845,7 @@ local function CreateScriptCard(data, renderParent)
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch}, " ")),
-		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
+		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 
 	local innerActionTime = 0
@@ -1905,7 +1919,8 @@ local function CreateScriptCard(data, renderParent)
 
 	card.Parent = renderParent
 	CacheInstanceAndDescendants(card)
-	table.insert(RegisteredScripts, scriptEntry)
+	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
+	return scriptEntry
 end
 
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
@@ -1919,24 +1934,21 @@ local function BuildCatalogFingerprint(entries)
 	for index, entry in ipairs(entries) do
 		if type(entry) == "table" then
 			parts[#parts + 1] = table.concat({
-				tostring(entry.Name or ""),
-				tostring(entry.Description or ""),
-				tostring(entry.RawUrl or ""),
-				tostring(entry.ImageAssetId or ""),
-				tostring(entry.TagType or ""),
-				tostring(entry.LastUpdated or ""),
-				tostring(entry.PlaceId or ""),
-				tostring(index)
+				tostring(entry.Name or ""), tostring(entry.Description or ""), tostring(entry.RawUrl or ""),
+				tostring(entry.ImageAssetId or ""), tostring(NormalizeTagType(entry.TagType)),
+				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.PlaceId) or 0),
+				tostring(entry.Category or ""), tostring(entry.Author or ""), tostring(index)
 			}, "\31")
 		end
 	end
 	return table.concat(parts, "\30")
 end
 
-local function LoadDynamicCatalog(force)
+PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
 	if dbRefreshing then
 		CatalogRefreshQueued = true
+		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		return false
 	end
 	local now = os.clock()
@@ -1947,220 +1959,249 @@ local function LoadDynamicCatalog(force)
 
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
-	CatalogRefreshQueued = false
-	CatalogGeneration = CatalogGeneration + 1
+	CatalogGeneration += 1
 	local generation = CatalogGeneration
-
-	ShowNotification("Fetching latest script catalog...", "System")
 	local savedScroll = ScriptsView.CanvasPosition
+	ShowNotification("Fetching latest script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
-	EmptyStateMessage.Visible = true
-	EmptyStateMessage.Text = "Loading script repository..."
+
+	local function FinishRefresh()
+		if generation ~= CatalogGeneration then return end
+		dbRefreshing = false
+		if CatalogRefreshQueued and not isDestroying then
+			local queuedForce = PendingTasks.__CatalogRefreshForce == true
+			CatalogRefreshQueued = false
+			PendingTasks.__CatalogRefreshForce = false
+			task.defer(function()
+				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
+			end)
+		end
+	end
+
+	local function DisconnectEntryConnections()
+		for i = #CardConnections, 1, -1 do
+			local conn = CardConnections[i]
+			if typeof(conn) == "RBXScriptConnection" and not conn.Connected then table.remove(CardConnections, i) end
+		end
+	end
+	local activeBuildFolder = nil
+	local activeNewEntries = {}
 
 	TrackTask(function()
-		local raw = FetchWithRetry(CATALOG_URL, 3, true)
-		if not IsTaskCurrent(generation) then return end
-
-		if raw then
-			local success, parsed = pcall(function()
-				return HttpService:JSONDecode(raw)
-			end)
-
-			if success and type(parsed) == "table" then
-				local validEntries = {}
-				for _, entry in ipairs(parsed) do
-					if type(entry) == "table" and type(entry.Name) == "string" and entry.Name ~= "" then
-						validEntries[#validEntries + 1] = entry
-					end
-				end
-
-				local fingerprint = BuildCatalogFingerprint(validEntries)
-				if fingerprint == LastCatalogFingerprint then
-					UpdateFilter()
-					StatusDot.BackgroundColor3 = Theme.Success
-					StatusText.Text = "Online"
-					StatusText.TextColor3 = Theme.Success
-					ShowNotification("Catalog is already up to date.", "Info")
-					if generation == CatalogGeneration then
-						dbRefreshing = false
-						if CatalogRefreshQueued and not isDestroying then
-							CatalogRefreshQueued = false
-							task.defer(function() LoadDynamicCatalog(true) end)
-						end
-					end
-					return
-				end
-				LastCatalogFingerprint = fingerprint
-
-				for _, conn in ipairs(CardConnections) do
-					if typeof(conn) == "RBXScriptConnection" and conn.Connected then
-						conn:Disconnect()
-					end
-				end
-				table.clear(CardConnections)
-
-				for elem in pairs(InteractiveElements) do
-					if elem:IsDescendantOf(ScriptsView) then
-						InteractiveElements[elem] = nil
-					end
-				end
-
-				for _, child in ipairs(ScriptsView:GetChildren()) do
-					if child:IsA("TextButton") then
-						child:Destroy()
-					end
-				end
-				table.clear(RegisteredScripts)
-
-				local detachedFolder = Instance.new("Folder")
-				local vMap = {}
-
-				for index, scriptData in ipairs(validEntries) do
-					if not IsTaskCurrent(generation) then
-						detachedFolder:Destroy()
-						return
-					end
-
-					if type(scriptData) == "table" and type(scriptData.Name) == "string" and scriptData.Name ~= "" then
-						vMap[scriptData.Name] = true
-						CreateScriptCard(scriptData, detachedFolder)
-					end
-
-					if index % 25 == 0 then
-						task.wait()
-					end
-				end
-
-				local cleaned = false
-				for k in pairs(SavedData.AutoExecutes) do
-					if not vMap[k] then
-						SavedData.AutoExecutes[k] = nil
-						cleaned = true
-					end
-				end
-				if cleaned then
-					SaveConfiguration()
-				end
-
-				for _, card in ipairs(detachedFolder:GetChildren()) do
-					card.Parent = ScriptsView
-				end
-				detachedFolder:Destroy()
-
-				if not AutoExecuteRanThisSession then
-					AutoExecuteRanThisSession = true
-
-					local autoQueue = {}
-					for _, scriptData in ipairs(validEntries) do
-						local auto = SavedData.AutoExecutes[scriptData.Name]
-						if auto and type(auto) == "table" then
-							local isValid = false
-							if auto.GameId and auto.GameId ~= 0 then
-								isValid = (auto.GameId == game.GameId)
-							else
-								isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
-							end
-							if isValid then
-								autoQueue[#autoQueue + 1] = scriptData
-							end
-						end
-					end
-
-					if #autoQueue > 0 then
-						TrackTask(function()
-							if type(loadstring) ~= "function" then
-								ShowNotification("Auto-execute skipped: Executor lacks loadstring support.", "Error")
-								return
-							end
-
-							local successList = {}
-							local failList = {}
-
-							ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
-
-							for _, scriptData in ipairs(autoQueue) do
-								if not IsTaskCurrent(generation) then return end
-
-								local scrRaw = FetchWithRetry(type(scriptData.RawUrl) == "string" and scriptData.RawUrl or "", 2)
-								if not IsTaskCurrent(generation) then return end
-
-								if scrRaw and not string.find(scrRaw, "404: Not Found") then
-									local exSuccess = ExecuteSandboxed(scrRaw, scriptData.Name)
-									if exSuccess then
-										table.insert(successList, scriptData.Name)
-									else
-										table.insert(failList, scriptData.Name)
-									end
-								else
-									table.insert(failList, scriptData.Name)
-								end
-								task.wait(0.3)
-							end
-
-							if #successList > 0 then
-								ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success")
-							end
-							if #failList > 0 then
-								ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning")
-							end
-						end)
-					end
-				end
-
-				UpdateFilter()
-				task.defer(function()
-					if not isDestroying and generation == CatalogGeneration
-						and ScriptsView and ScriptsView.Parent then
-						ScriptsView.CanvasPosition = savedScroll
-					end
-				end)
-
-				if not isDestroying and generation == CatalogGeneration then
-					StatusDot.BackgroundColor3 = Theme.Success
-					StatusText.Text = "Online"
-					StatusText.TextColor3 = Theme.Success
-					ShowNotification("Script catalog loaded successfully!", "Success")
-				end
-			else
-				if not isDestroying and generation == CatalogGeneration then
-					EmptyStateMessage.Text = "Failed to parse catalog data format."
-					StatusText.Text = "Data Error"
-					StatusDot.BackgroundColor3 = Theme.Error
-					StatusText.TextColor3 = Theme.Error
-					ShowNotification("Catalog data format error.", "Error")
-				end
-			end
-		else
-			if not isDestroying and generation == CatalogGeneration then
-				EmptyStateMessage.Text = "Unable to reach script catalog server."
-				StatusText.Text = "Offline"
+		local taskOk, taskErr = xpcall(function()
+			local raw = FetchWithRetry(CATALOG_URL, 3, true)
+			if not IsTaskCurrent(generation) then return end
+			if not raw then
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Offline"
 				StatusText.TextColor3 = Theme.Error
 				ShowNotification("Could not connect to the script catalog server.", "Error")
+				FinishRefresh()
+				return
 			end
-		end
-		if generation == CatalogGeneration then
-			dbRefreshing = false
-			if CatalogRefreshQueued and not isDestroying then
-				CatalogRefreshQueued = false
-				task.defer(function() LoadDynamicCatalog(true) end)
+
+			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			if not success or type(parsed) ~= "table" then
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Data Error"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Catalog data format error.", "Error")
+				FinishRefresh()
+				return
 			end
+
+			local validEntries = {}
+			local seenNames = {}
+			for _, entry in ipairs(parsed) do
+				if type(entry) == "table" and type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") ~= "" then
+					local normalized = {
+						Name = entry.Name,
+						Description = type(entry.Description) == "string" and entry.Description or "No description provided.",
+						RawUrl = type(entry.RawUrl) == "string" and entry.RawUrl or "",
+						ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
+						TagType = NormalizeTagType(entry.TagType),
+						LastUpdated = GetSafeTimestamp(entry.LastUpdated),
+						PlaceId = tonumber(entry.PlaceId) or 0,
+						Category = type(entry.Category) == "string" and entry.Category or "",
+						Author = type(entry.Author) == "string" and entry.Author or ""
+					}
+					if not seenNames[normalized.Name] then
+						seenNames[normalized.Name] = true
+						validEntries[#validEntries + 1] = normalized
+					end
+				end
+			end
+
+			local fingerprint = BuildCatalogFingerprint(validEntries)
+			if fingerprint == LastCatalogFingerprint then
+				RefreshAllCardStates()
+				StatusDot.BackgroundColor3 = Theme.Success
+				StatusText.Text = "Online"
+				StatusText.TextColor3 = Theme.Success
+				ShowNotification("Catalog is already up to date.", "Info")
+				FinishRefresh()
+				return
+			end
+
+			local previousByKey = RegisteredScripts.__ByKey or {}
+			local nextByKey = {}
+			local nextEntries = {}
+			local nextKeys = {}
+			local replacedEntries = {}
+			table.clear(activeNewEntries)
+			activeBuildFolder = Instance.new("Folder")
+			activeBuildFolder.Name = "__VeloxCatalogBuild"
+			activeBuildFolder.Parent = ScriptsView
+
+			local function BuildEntryFingerprint(data)
+				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+			end
+
+			local function DestroyEntry(entry)
+				if not entry or not entry.Instance then return end
+				if entry.Instance.Parent then pcall(function() entry.Instance:Destroy() end) end
+			end
+
+			local function CleanupNewEntries()
+				for _, entry in ipairs(activeNewEntries) do DestroyEntry(entry) end
+				if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
+				activeBuildFolder = nil
+				table.clear(activeNewEntries)
+				DisconnectEntryConnections()
+			end
+
+			for index, scriptData in ipairs(validEntries) do
+				if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
+				local key = tostring(scriptData.Name or "")
+				local entryFingerprint = BuildEntryFingerprint(scriptData)
+				local existing = previousByKey[key]
+				local entry
+				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
+					entry = existing
+					entry.OriginalIndex = index
+				else
+					if existing then replacedEntries[#replacedEntries + 1] = existing end
+					entry = CreateScriptCard(scriptData, activeBuildFolder, false, index)
+					entry.EntryFingerprint = entryFingerprint
+					entry.OriginalIndex = index
+					activeNewEntries[#activeNewEntries + 1] = entry
+				end
+				nextEntries[#nextEntries + 1] = entry
+				nextByKey[key] = entry
+				nextKeys[key] = true
+			end
+
+			if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
+			for key, oldEntry in pairs(previousByKey) do
+				if not nextKeys[key] then DestroyEntry(oldEntry) end
+			end
+			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
+			for _, entry in ipairs(nextEntries) do
+				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
+				entry.Instance.LayoutOrder = entry.OriginalIndex
+			end
+			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
+			activeBuildFolder = nil
+			table.clear(activeNewEntries)
+			DisconnectEntryConnections()
+
+			table.clear(RegisteredScripts)
+			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
+			RegisteredScripts.__ByKey = nextByKey
+			LastCatalogFingerprint = fingerprint
+			RefreshAllCardStates()
+			UpdateFilter()
+			task.defer(function()
+				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
+			end)
+
+			local validMap = {}
+			for _, scriptData in ipairs(validEntries) do validMap[scriptData.Name] = true end
+			local cleaned = false
+			for key in pairs(SavedData.AutoExecutes) do
+				if not validMap[key] then SavedData.AutoExecutes[key] = nil; cleaned = true end
+			end
+			if cleaned then SaveConfiguration() end
+
+			if not AutoExecuteRanThisSession then
+				AutoExecuteRanThisSession = true
+				local autoQueue = {}
+				for _, scriptData in ipairs(validEntries) do
+					local auto = SavedData.AutoExecutes[scriptData.Name]
+					if type(auto) == "table" then
+						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
+						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
+					end
+				end
+				if #autoQueue > 0 then
+					TrackTask(function()
+						if type(loadstring) ~= "function" then ShowNotification("Auto-execute skipped: Executor lacks loadstring support.", "Error"); return end
+						local successList, failList = {}, {}
+						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
+						for _, scriptData in ipairs(autoQueue) do
+							if not IsTaskCurrent(generation) then return end
+							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+							if not IsTaskCurrent(generation) then return end
+							if scrRaw and not string.find(scrRaw, "404: Not Found") then
+								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+							else
+								failList[#failList + 1] = scriptData.Name
+							end
+							task.wait(0.3)
+						end
+						if #successList > 0 then ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success") end
+						if #failList > 0 then ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning") end
+					end)
+				end
+			end
+
+			StatusDot.BackgroundColor3 = Theme.Success
+			StatusText.Text = "Online"
+			StatusText.TextColor3 = Theme.Success
+			ShowNotification("Script catalog loaded successfully!", "Success")
+		end, function(err) return tostring(err) end)
+
+		if not taskOk then
+			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
+			activeBuildFolder = nil
+			table.clear(activeNewEntries)
+			DisconnectEntryConnections()
 		end
+		if not taskOk and not isDestroying and generation == CatalogGeneration then
+			StatusDot.BackgroundColor3 = Theme.Error
+			StatusText.Text = "Catalog Error"
+			StatusText.TextColor3 = Theme.Error
+			ShowNotification("Catalog refresh failed safely.", "Error")
+			warn("[Velox Catalog Error]: " .. tostring(taskErr))
+		end
+		FinishRefresh()
 	end)
+	return true
 end
-LoadDynamicCatalog()
 
-
-
+PendingTasks.__LoadCatalog()
 
 TrackTask(function()
 	while not isDestroying do
 		task.wait(CATALOG_REFRESH_INTERVAL)
 		if isDestroying then break end
-		if not dbRefreshing then
-			LoadDynamicCatalog()
+		PendingTasks.__LoadCatalog(false)
+	end
+end)
+
+TrackTask(function()
+	while not isDestroying do
+		task.wait(60)
+		if isDestroying then break end
+		for _, scrData in ipairs(RegisteredScripts) do
+			if scrData.TimeLabel and scrData.TimeLabel.Parent then
+				scrData.TimeLabel.Text = GetRelativeTime(scrData.LastUpdatedNumber)
+			end
 		end
 	end
 end)
