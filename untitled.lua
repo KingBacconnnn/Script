@@ -172,7 +172,6 @@ local function TrackTask(fn)
 		local ok, err = pcall(fn)
 		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
-			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
 	PendingTasks[thread] = true
@@ -479,6 +478,29 @@ local function NormalizeTagType(value)
 	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 	if TagTypeConfig[normalized] then return normalized end
 	return "NONE"
+end
+
+local function GetOrCreateCardStroke(card)
+	if not card or not card:IsA("GuiObject") then return nil end
+	local stroke = card:FindFirstChild("TagTypeStroke")
+	if stroke and stroke:IsA("UIStroke") then return stroke end
+	if stroke then pcall(function() stroke:Destroy() end) end
+	stroke = Instance.new("UIStroke")
+	stroke.Name = "TagTypeStroke"
+	stroke.Parent = card
+	return stroke
+end
+
+local function ApplyTagBorder(card, tagType, stroke)
+	if not card or not card.Parent then return end
+	stroke = stroke or GetOrCreateCardStroke(card)
+	if not stroke or not stroke.Parent then return end
+
+	local normalized = NormalizeTagType(tagType)
+	local config = TagTypeConfig[normalized] or TagTypeConfig.NONE
+	stroke.Color = config.StrokeColor
+	stroke.Transparency = 0
+	stroke.Enabled = true
 end
 
 local function GetSafeTimestamp(value)
@@ -1720,7 +1742,6 @@ local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		warn("[Velox Compile Error]: " .. tostring(compileErr))
 		return false, tostring(compileErr)
 	end
 
@@ -1728,7 +1749,6 @@ local function ExecuteSandboxed(code, scriptName)
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
 			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
 		end
 	end)
 
@@ -1742,11 +1762,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
-	-- Keep the catalog card background fixed. Tag colors are used by the badge/stroke, not the card fill.
-	card.BackgroundColor3 = Theme.Card; card.Text = ""
-	card.AutoButtonColor = false; card.Selectable = false; card.ClipsDescendants = true
+	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
+	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = tagConfig.StrokeColor; cardStroke.Thickness = 1.5; cardStroke.Transparency = 0
+	local cardStroke = GetOrCreateCardStroke(card)
+	ApplyTagBorder(card, tagType, cardStroke)
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
@@ -1821,7 +1841,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
-	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.Selectable = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
+	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
 	aeLbl.Size = UDim2.new(1, -34, 1, 0); aeLbl.Position = UDim2.new(0, 6, 0, 0); aeLbl.BackgroundTransparency = 1
@@ -1836,11 +1856,8 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
-	starBtn.Selectable = false
 
-	-- Cards must never recolor themselves on touch/click. Keep the fill locked to Theme.Card
-	-- and use the existing UIStroke for any interaction feedback.
-	ApplyInteractiveAnimations(card, Theme.Card, nil, nil, cardStroke, tagConfig.StrokeColor, tagConfig.StrokeColor, CardConnections)
+	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, CardConnections)
 
@@ -1855,6 +1872,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local innerActionTime = 0
 
 	scriptEntry.UpdateUI = function()
+		ApplyTagBorder(card, tagType, cardStroke)
 		local isFav = SavedData.Favorites[exactName]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
@@ -2181,7 +2199,6 @@ PendingTasks.__LoadCatalog = function(force)
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
 			ShowNotification("Catalog refresh failed safely.", "Error")
-			warn("[Velox Catalog Error]: " .. tostring(taskErr))
 		end
 		FinishRefresh()
 	end)
