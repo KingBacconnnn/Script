@@ -1745,7 +1745,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = tagConfig.StrokeColor; cardStroke.Thickness = 1.5
+	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = tagConfig.StrokeColor; cardStroke.Thickness = 1.5; cardStroke.Transparency = 0
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
