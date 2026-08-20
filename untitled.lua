@@ -1,10 +1,16 @@
-local rng = Random.new()
-local GlobalEnv = (type(getgenv) == "function" and getgenv()) or _G
+local GlobalEnv = _G
+if type(getgenv) == "function" then
+	local ok, env = pcall(getgenv)
+	if ok and type(env) == "table" then
+		GlobalEnv = env
+	end
+end
+
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	local str = ""
 	for i = 1, len do
-		local r = rng:NextInteger(1, #chars)
+		local r = math.random(1, #chars)
 		str = str .. string.sub(chars, r, r)
 	end
 	return str
@@ -54,10 +60,17 @@ local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
-local write_file = writefile or function() end
-local read_file = readfile or function() end
-local is_file = isfile or function() return false end
-local del_file = delfile or function() end
+local write_file = type(writefile) == "function" and writefile or nil
+local read_file = type(readfile) == "function" and readfile or nil
+local is_file = type(isfile) == "function" and isfile or nil
+local del_file = type(delfile) == "function" and delfile or nil
+
+local CompileFunction
+if type(loadstring) == "function" then
+	CompileFunction = loadstring
+elseif type(load) == "function" then
+	CompileFunction = load
+end
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -170,10 +183,8 @@ end
 local function TrackTask(fn)
 	local thread
 	thread = task.spawn(function()
-		local ok, err = pcall(fn)
+		pcall(fn)
 		PendingTasks[thread] = nil
-		if not ok and not isDestroying then
-		end
 	end)
 	PendingTasks[thread] = true
 	return thread
@@ -351,7 +362,9 @@ local function SaveConfiguration()
 					pcall(function() write_file(DATA_FILE, result) end)
 				end
 			end
-			pcall(function() del_file(TEMP_FILE) end)
+			if del_file then
+				pcall(function() del_file(TEMP_FILE) end)
+			end
 		end
 		isSaving = false
 		if saveQueued then
@@ -1738,15 +1751,15 @@ local function RefreshAllCardStates()
 end
 
 local function ExecuteSandboxed(code, scriptName)
-	if type(loadstring) ~= "function" then
-		ShowNotification("Execution unavailable: this environment does not provide loadstring.", "Error")
-		return false, "loadstring is unavailable"
+	if type(CompileFunction) ~= "function" then
+		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
+		return false, "no compatible Lua compiler"
 	end
 
-	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
-	if not chunk then
+	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
+	if not ok or type(chunk) ~= "function" then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		return false, tostring(compileErr)
+		return false, tostring(compileErr or chunk or "unknown compiler error")
 	end
 
 	TrackTask(function()
@@ -1911,8 +1924,8 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		if tick() - innerActionTime < 0.2 then return end
 
 		local function executeScript()
-			if type(loadstring) ~= "function" then
-				ShowNotification("Execution disabled: 'loadstring' is missing or blocked by your executor.", "Error")
+			if type(CompileFunction) ~= "function" then
+				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
 				return
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
@@ -2166,7 +2179,7 @@ PendingTasks.__LoadCatalog = function(force)
 				end
 				if #autoQueue > 0 then
 					TrackTask(function()
-						if type(loadstring) ~= "function" then ShowNotification("Auto-execute skipped: Executor lacks loadstring support.", "Error"); return end
+						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
 						local successList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
