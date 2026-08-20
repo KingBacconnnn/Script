@@ -1,4 +1,5 @@
 local rng = Random.new()
+local GlobalEnv = (type(getgenv) == "function" and getgenv()) or _G
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	local str = ""
@@ -13,8 +14,8 @@ local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
-if getgenv()[_G_Identifier] then
-	pcall(function() getgenv()[_G_Identifier]() end)
+if GlobalEnv[_G_Identifier] then
+	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
 
 local Services = setmetatable({}, {
@@ -193,7 +194,7 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	getgenv()[_G_Identifier] = nil
+	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
 	CancelTrackedTasks()
@@ -235,8 +236,6 @@ local function CleanUpMemory()
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
 
-	table.clear(VeloxConnections)
-	table.clear(CardConnections)
 	table.clear(RegisteredScripts)
 	table.clear(AfkConnections)
 	table.clear(ActiveTweens)
@@ -585,7 +584,7 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-getgenv()[_G_Identifier] = function()
+GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
@@ -1163,7 +1162,7 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	getgenv()[_G_Identifier]()
+	GlobalEnv[_G_Identifier]()
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1739,6 +1738,11 @@ local function RefreshAllCardStates()
 end
 
 local function ExecuteSandboxed(code, scriptName)
+	if type(loadstring) ~= "function" then
+		ShowNotification("Execution unavailable: this environment does not provide loadstring.", "Error")
+		return false, "loadstring is unavailable"
+	end
+
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
@@ -2390,7 +2394,7 @@ end
 
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 
-local kbRow, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
+local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
 local KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 95, 0, 26)
 KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
@@ -2552,69 +2556,7 @@ if SavedData.Settings.AntiAFK then
 	end
 end
 
-local function ObfuscateHierarchy(instance)
-	instance.Name = GenerateRandomString(15)
-	for _, child in ipairs(instance:GetDescendants()) do
-		if child:IsA("GuiObject") or child:IsA("UIComponent") or child:IsA("Folder") then
-			child.Name = GenerateRandomString(15)
-		end
-	end
-end
-ObfuscateHierarchy(ScreenGui)
-
-pcall(function()
-	if type(hookmetamethod) == "function" and type(checkcaller) == "function" then
-		local oldNamecall
-		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-			local ok, isCaller = pcall(checkcaller)
-			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
-				local mOk, method = pcall(getnamecallmethod)
-				if mOk and method then
-					if self == TargetParent then
-						if method == "GetDescendants" or method == "GetChildren" then
-							local result = oldNamecall(self, ...)
-							if type(result) == "table" then
-								local filtered = {}
-								for i = 1, #result do
-									local v = result[i]
-									if v ~= ScreenGui and not v:IsDescendantOf(ScreenGui) then
-										table.insert(filtered, v)
-									end
-								end
-								return filtered
-							end
-							return result
-						elseif method == "FindFirstChild" then
-							local args = {...}
-							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return nil
-							end
-						elseif method == "WaitForChild" then
-							local args = {...}
-							if type(args[1]) == "string" and (args[1] == MainGuiName or args[1] == ScreenGui.Name or args[1] == FloatBtnName) then
-								return nil
-							end
-						end
-					end
-				end
-			end
-			return oldNamecall(self, ...)
-		end)
-
-		local oldIndex
-		oldIndex = hookmetamethod(game, "__index", function(self, key)
-			local ok, isCaller = pcall(checkcaller)
-			if ok and not isCaller and ScreenGui and typeof(self) == "Instance" then
-				if self == TargetParent and type(key) == "string" then
-					if key == MainGuiName or key == ScreenGui.Name or key == FloatBtnName then
-						return nil
-					end
-				end
-			end
-			return oldIndex(self, key)
-		end)
-	end
-end)
+-- Executor-specific hierarchy hiding/metamethod interception removed for compatibility.
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
