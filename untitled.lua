@@ -172,6 +172,7 @@ local function TrackTask(fn)
 		local ok, err = pcall(fn)
 		PendingTasks[thread] = nil
 		if not ok and not isDestroying then
+			warn("[Velox Task Error]:", tostring(err))
 		end
 	end)
 	PendingTasks[thread] = true
@@ -193,15 +194,6 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	NotificationActive = 0
-	NotificationSerial += 1
-	if ToastContainer and ToastContainer.Parent then
-		for _, child in ipairs(ToastContainer:GetChildren()) do
-			if child.Name == "VeloxNotification" then
-				pcall(function() child:Destroy() end)
-			end
-		end
-	end
 	getgenv()[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
@@ -767,38 +759,19 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local NOTIF_DURATION = 3.5
 
-local NOTIF_MAX_VISIBLE = 6
-local NOTIF_RETRY_COUNT = 3
-local NOTIF_RETRY_DELAY = 0.2
-local NotificationSerial = 0
-local NotificationActive = 0
-
 local function EmergencyFallbackNotification(msg, title)
-	if isDestroying then return end
-	local message = tostring(msg or "")
-	local header = tostring(title or "Velox Hub")
-	task.spawn(function()
-		for _ = 1, NOTIF_RETRY_COUNT do
-			if isDestroying then return end
-			local sent = false
-			pcall(function()
-				if StarterGui and type(StarterGui.SetCore) == "function" then
-					StarterGui:SetCore("SendNotification", {
-						Title = header,
-						Text = message,
-						Duration = NOTIF_DURATION
-					})
-					sent = true
-				end
-			end)
-			if sent then return end
-			task.wait(NOTIF_RETRY_DELAY)
+	pcall(function()
+		if StarterGui and type(StarterGui.SetCore) == "function" then
+			StarterGui:SetCore("SendNotification", {
+				Title = title or "Velox Hub Notice",
+				Text = tostring(msg),
+				Duration = NOTIF_DURATION
+			})
 		end
 	end)
 end
 
 local function StandaloneBannerNotification(msg, notifType)
-	if isDestroying then return end
 	local parent = GetSecureParent()
 	if not parent then
 		EmergencyFallbackNotification(msg, notifType)
@@ -810,78 +783,41 @@ local function StandaloneBannerNotification(msg, notifType)
 		bannerGui.Name = "VeloxBanner_" .. GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
-		bannerGui.IgnoreGuiInset = true
 		bannerGui.Parent = parent
 
 		local frame = Instance.new("Frame", bannerGui)
-		frame.Size = UDim2.new(0, IsMobile and 285 or 370, 0, IsMobile and 54 or 58)
-		frame.Position = UDim2.new(0.5, 0, 0, -80)
+		frame.Size = UDim2.new(0, IsMobile and 260 or 340, 0, 45)
+		frame.Position = UDim2.new(0.5, 0, 0, -60)
 		frame.AnchorPoint = Vector2.new(0.5, 0)
 		frame.BackgroundColor3 = Theme.BackgroundSecondary
 		frame.BorderSizePixel = 0
-		frame.ClipsDescendants = true
-		local corner = Instance.new("UICorner", frame)
-		corner.CornerRadius = UDim.new(0, 10)
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
 		local stroke = Instance.new("UIStroke", frame)
 		stroke.Color = Theme[notifType] or Theme.Info
 		stroke.Thickness = 1.5
 
-		local accent = Instance.new("Frame", frame)
-		accent.Size = UDim2.new(0, 4, 1, -12)
-		accent.Position = UDim2.new(0, 8, 0, 6)
-		accent.BackgroundColor3 = Theme[notifType] or Theme.Info
-		accent.BorderSizePixel = 0
-		Instance.new("UICorner", accent).CornerRadius = UDim.new(0, 4)
-
-		local titleLabel = Instance.new("TextLabel", frame)
-		titleLabel.Size = UDim2.new(1, -32, 0, 18)
-		titleLabel.Position = UDim2.new(0, 20, 0, 7)
-		titleLabel.BackgroundTransparency = 1
-		titleLabel.Text = tostring(notifType or "Info")
-		titleLabel.TextColor3 = Theme[notifType] or Theme.Info
-		titleLabel.Font = Enum.Font.GothamBold
-		titleLabel.TextSize = IsMobile and 10 or 11
-		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
 		local txt = Instance.new("TextLabel", frame)
-		txt.Size = UDim2.new(1, -32, 0, 28)
-		txt.Position = UDim2.new(0, 20, 0, 22)
+		txt.Size = UDim2.new(1, -20, 1, 0)
+		txt.Position = UDim2.new(0, 10, 0, 0)
 		txt.BackgroundTransparency = 1
 		txt.Text = tostring(msg)
 		txt.TextColor3 = Theme.TextPrimary
 		txt.Font = Enum.Font.GothamMedium
-		txt.TextSize = IsMobile and 10 or 12
-		txt.TextXAlignment = Enum.TextXAlignment.Left
-		txt.TextYAlignment = Enum.TextYAlignment.Top
+		txt.TextSize = IsMobile and 11 or 13
 		txt.TextWrapped = true
 
-		local progress = Instance.new("Frame", frame)
-		progress.Size = UDim2.new(1, 0, 0, 2)
-		progress.Position = UDim2.new(0, 0, 1, -2)
-		progress.BackgroundColor3 = Theme[notifType] or Theme.Info
-		progress.BorderSizePixel = 0
-
 		TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.5, 0, 0, 18)
-		}):Play()
-
-		TweenService:Create(progress, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear), {
-			Size = UDim2.new(0, 0, 0, 2)
+			Position = UDim2.new(0.5, 0, 0, 20)
 		}):Play()
 
 		task.delay(NOTIF_DURATION, function()
-			if not bannerGui or not bannerGui.Parent then return end
 			local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(0.5, 0, 0, -80)
+				Position = UDim2.new(0.5, 0, 0, -60)
 			})
 			outro:Play()
-			local conn
-			conn = outro.Completed:Connect(function()
-				if conn then conn:Disconnect() end
-				if bannerGui and bannerGui.Parent then
-					bannerGui:Destroy()
-				end
+			outro.Completed:Connect(function()
+				bannerGui:Destroy()
 			end)
 		end)
 	end)
@@ -891,135 +827,70 @@ local function StandaloneBannerNotification(msg, notifType)
 	end
 end
 
-local function TrimNotificationStack()
-	if not ToastContainer or not ToastContainer.Parent then return end
-	local wrappers = {}
-	for _, child in ipairs(ToastContainer:GetChildren()) do
-		if child:IsA("Frame") and child.Name == "VeloxNotification" then
-			table.insert(wrappers, child)
-		end
-	end
-	while #wrappers >= NOTIF_MAX_VISIBLE do
-		local oldest = table.remove(wrappers, 1)
-		if oldest and oldest.Parent then
-			oldest:Destroy()
-		end
-	end
-end
-
-ShowNotification = function(msg, notifType)
+local function ShowNotification(msg, notifType)
 	if isDestroying then return end
 
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	if not Theme[nType] then nType = "Info" end
 	local indicatorColor = Theme[nType] or Theme.Info
-	local message = tostring(msg or "")
-
-	TrimNotificationStack()
 
 	if not ToastContainer or not ToastContainer.Parent then
-		StandaloneBannerNotification(message, nType)
+		StandaloneBannerNotification(msg, nType)
 		return
 	end
 
-	NotificationSerial += 1
-	NotificationActive += 1
-	local serial = NotificationSerial
-
 	local success = pcall(function()
 		local wrapper = Instance.new("Frame", ToastContainer)
-		wrapper.Name = "VeloxNotification"
 		wrapper.Size = UDim2.new(1, 0, 0, 0)
 		wrapper.AutomaticSize = Enum.AutomaticSize.Y
 		wrapper.BackgroundTransparency = 1
 		wrapper.ZIndex = 2001
-		wrapper.LayoutOrder = serial
 
 		local box = Instance.new("Frame", wrapper)
 		box.Size = UDim2.new(1, 0, 0, 0)
 		box.AutomaticSize = Enum.AutomaticSize.Y
 		box.BackgroundColor3 = Theme.CardHover
-		box.Position = UDim2.new(1.15, 0, 0, 0)
+		box.Position = UDim2.new(1.2, 0, 0, 0)
 		box.ClipsDescendants = true
 		box.ZIndex = 2002
-		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
-		Instance.new("UIStroke", box).Color = Theme.Stroke
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+		Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
 
 		local pad = Instance.new("UIPadding", box)
-		pad.PaddingLeft = UDim.new(0, 16)
-		pad.PaddingRight = UDim.new(0, 12)
-		pad.PaddingTop = UDim.new(0, 9)
-		pad.PaddingBottom = UDim.new(0, 10)
+		pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
+		pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
 
 		local indicator = Instance.new("Frame", box)
-		indicator.Size = UDim2.new(0, 4, 1, -12)
-		indicator.Position = UDim2.new(0, -8, 0, -6)
+		indicator.Size = UDim2.new(0, 4, 1, 0)
+		indicator.Position = UDim2.new(0, -12, 0, -10)
 		indicator.BackgroundColor3 = indicatorColor
 		indicator.BorderSizePixel = 0
 		indicator.ZIndex = 2003
-		Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 5)
-
-		local titleLabel = Instance.new("TextLabel", box)
-		titleLabel.Size = UDim2.new(1, 0, 0, 17)
-		titleLabel.BackgroundTransparency = 1
-		titleLabel.Text = nType
-		titleLabel.TextColor3 = indicatorColor
-		titleLabel.Font = Enum.Font.GothamBold
-		titleLabel.TextSize = IsMobile and 10 or 11
-		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-		titleLabel.ZIndex = 2003
+		Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
 
 		local txt = Instance.new("TextLabel", box)
-		txt.Size = UDim2.new(1, 0, 0, 0)
-		txt.AutomaticSize = Enum.AutomaticSize.Y
-		txt.BackgroundTransparency = 1
-		txt.Text = message
-		txt.TextColor3 = Theme.TextPrimary
-		txt.Font = Enum.Font.GothamMedium
-		txt.TextSize = IsMobile and 11 or 13
-		txt.TextXAlignment = Enum.TextXAlignment.Left
-		txt.TextYAlignment = Enum.TextYAlignment.Top
-		txt.TextWrapped = true
-		txt.ZIndex = 2003
+		txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
+		txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
+		txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
+		txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
+		txt.TextWrapped = true; txt.ZIndex = 2003
 
-		local progress = Instance.new("Frame", box)
-		progress.Size = UDim2.new(1, 0, 0, 2)
-		progress.Position = UDim2.new(0, 0, 1, 0)
-		progress.AnchorPoint = Vector2.new(0, 1)
-		progress.BackgroundColor3 = indicatorColor
-		progress.BorderSizePixel = 0
-		progress.ZIndex = 2003
-
-		local introTween = TweenService:Create(box, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0, 0, 0, 0)
-		})
+		local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
 		introTween:Play()
 
-		TweenService:Create(progress, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear), {
-			Size = UDim2.new(0, 0, 0, 2)
-		}):Play()
-
 		task.delay(NOTIF_DURATION, function()
-			if not wrapper or not wrapper.Parent then
-				NotificationActive = math.max(0, NotificationActive - 1)
-				return
-			end
-			local outroTween = TweenService:Create(box, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(1.15, 0, 0, 0)
-			})
+			if not wrapper or not wrapper.Parent then return end
+			local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
 			outroTween:Play()
 			local conn
 			conn = outroTween.Completed:Connect(function()
 				if conn then conn:Disconnect() end
-				NotificationActive = math.max(0, NotificationActive - 1)
 				if wrapper and wrapper.Parent then wrapper:Destroy() end
 			end)
 		end)
 	end)
 
 	if not success then
-		NotificationActive = math.max(0, NotificationActive - 1)
-		StandaloneBannerNotification(message, nType)
+		StandaloneBannerNotification(msg, nType)
 	end
 end
 
@@ -1848,14 +1719,16 @@ end
 local function ExecuteSandboxed(code, scriptName)
 	local chunk, compileErr = loadstring(code, "=" .. tostring(scriptName))
 	if not chunk then
-		ShowNotification("Could not compile [" .. tostring(scriptName) .. "].", "Error")
+		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		warn("[Velox Compile Error]: " .. tostring(compileErr))
 		return false, tostring(compileErr)
 	end
 
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
-			ShowNotification("Execution failed for [" .. tostring(scriptName) .. "].", "Error")
+			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			warn("[Velox Runtime Error]: " .. tostring(runtimeErr))
 		end
 	end)
 
@@ -2304,6 +2177,7 @@ PendingTasks.__LoadCatalog = function(force)
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
 			ShowNotification("Catalog refresh failed safely.", "Error")
+			warn("[Velox Catalog Error]: " .. tostring(taskErr))
 		end
 		FinishRefresh()
 	end)
