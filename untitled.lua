@@ -1757,7 +1757,7 @@ local function CreateScriptCard(data, renderParent)
 	end
 
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 145 or 165, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 2; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
