@@ -1742,8 +1742,9 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
-	card.AutoButtonColor = false; card.ClipsDescendants = true
+	-- Keep the catalog card background fixed. Tag colors are used by the badge/stroke, not the card fill.
+	card.BackgroundColor3 = Theme.Card; card.Text = ""
+	card.AutoButtonColor = false; card.Selectable = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
 	local cardStroke = Instance.new("UIStroke", card); cardStroke.Color = tagConfig.StrokeColor; cardStroke.Thickness = 1.5; cardStroke.Transparency = 0
 	local pad = Instance.new("UIPadding", card)
@@ -1820,7 +1821,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
-	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
+	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.Selectable = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
 	aeLbl.Size = UDim2.new(1, -34, 1, 0); aeLbl.Position = UDim2.new(0, 6, 0, 0); aeLbl.BackgroundTransparency = 1
@@ -1835,8 +1836,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
+	starBtn.Selectable = false
 
-	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), cardStroke, tagConfig.StrokeColor, tagConfig.StrokeColor, CardConnections)
+	-- Cards must never recolor themselves on touch/click. Keep the fill locked to Theme.Card
+	-- and use the existing UIStroke for any interaction feedback.
+	ApplyInteractiveAnimations(card, Theme.Card, nil, nil, cardStroke, tagConfig.StrokeColor, tagConfig.StrokeColor, CardConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, CardConnections)
 
