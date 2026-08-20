@@ -83,6 +83,8 @@ local AfkConnections = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
+local CatalogRefreshCooldown = 5
+local LastCatalogRefreshAt = 0
 local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
@@ -177,6 +179,10 @@ local function TrackTask(fn)
 	return thread
 end
 
+local function IsTaskCurrent(generation)
+	return not isDestroying and generation == CatalogGeneration
+end
+
 local function CancelTrackedTasks()
 	for thread in pairs(PendingTasks) do
 		pcall(task.cancel, thread)
@@ -208,6 +214,8 @@ local function CleanUpMemory()
 			conn:Disconnect()
 		end
 	end
+	table.clear(VeloxConnections)
+	table.clear(CardConnections)
 	for _, conn in pairs(AfkConnections) do
 		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
 		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
@@ -1287,18 +1295,25 @@ RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 
 local fpsCount = 0
-local lastPingUpdate = tick()
-RegConn(RunService.Heartbeat:Connect(function()
-	if isMinimized or isDestroying or isTransitioning then return end
-	fpsCount = fpsCount + 1
-	if tick() - lastPingUpdate >= 1 then
-		lastPingUpdate = tick()
-		local success, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-		if DiagnosticsLabel and DiagnosticsLabel.Parent then
-			DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
-		end
+local diagnosticsElapsed = 0
+RegConn(RunService.Heartbeat:Connect(function(deltaTime)
+	if isDestroying then return end
+	if isMinimized or isTransitioning then
 		fpsCount = 0
+		diagnosticsElapsed = 0
+		return
 	end
+	fpsCount = fpsCount + 1
+	diagnosticsElapsed = diagnosticsElapsed + deltaTime
+	if diagnosticsElapsed < 1 then return end
+	diagnosticsElapsed = diagnosticsElapsed - 1
+	local success, ping = pcall(function()
+		return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+	end)
+	if DiagnosticsLabel and DiagnosticsLabel.Parent then
+		DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
+	end
+	fpsCount = 0
 end))
 
 local TabContainer = Instance.new("Frame", PanelGroup)
@@ -1443,90 +1458,108 @@ local function UpdateFilter()
 	filterVersion = filterVersion + 1
 	local currentVersion = filterVersion
 	task.defer(function()
-		local queryText = SearchInput.Text
+		if isDestroying or currentVersion ~= filterVersion then return end
+		local queryText = SearchInput.Text or ""
 		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1"))
 		local words = {}
-		for word in string.gmatch(query, "%S+") do table.insert(words, word) end
+		for word in string.gmatch(query, "%S+") do
+			words[#words + 1] = word
+		end
 		local matches = {}
-		local osTimeCache = os.time()
-		for i, scr in ipairs(RegisteredScripts) do
-			if filterVersion ~= currentVersion then return end
+		local now = os.time()
+		local activeFavorites = FilterFavoritesActive
+		local currentSort = SortMode
+
+		for _, scr in ipairs(RegisteredScripts) do
+			if currentVersion ~= filterVersion then return end
 			local isMatch = true
 			if query ~= "" then
-				for _, w in ipairs(words) do
-					if not (string.find(scr.SearchTitle, w, 1, true) or
-							string.find(scr.SearchDesc, w, 1, true) or
-							string.find(scr.SearchMeta, w, 1, true)) then
+				for _, word in ipairs(words) do
+					if not string.find(scr.SearchTitle, word, 1, true)
+						and not string.find(scr.SearchDesc, word, 1, true)
+						and not string.find(scr.SearchMeta, word, 1, true) then
 						isMatch = false
 						break
 					end
 				end
 			end
+
 			local filterPass = true
-			local age = scr.LastUpdated and (osTimeCache - (tonumber(scr.LastUpdated) or osTimeCache)) or math.huge
-			if FilterFavoritesActive then
-				if not SavedData.Favorites[scr.ExactName] then filterPass = false end
+			local age = scr.LastUpdatedNumber and (now - scr.LastUpdatedNumber) or math.huge
+			if activeFavorites then
+				filterPass = SavedData.Favorites[scr.ExactName] == true
 			end
 			if filterPass then
-				if SortMode == "Updated Today" then filterPass = (age <= 86400)
-				elseif SortMode == "Updated This Week" then filterPass = (age <= 604800)
-				elseif SortMode == "Updated This Month" then filterPass = (age <= 2592000)
-				elseif SortMode == "Favorites" then filterPass = SavedData.Favorites[scr.ExactName]
-				elseif SortMode == "Auto Execute: ON" then filterPass = (SavedData.AutoExecutes[scr.ExactName] ~= nil)
-				elseif SortMode == "Auto Execute: OFF" then filterPass = (SavedData.AutoExecutes[scr.ExactName] == nil)
+				if currentSort == "Updated Today" then
+					filterPass = age <= 86400
+				elseif currentSort == "Updated This Week" then
+					filterPass = age <= 604800
+				elseif currentSort == "Updated This Month" then
+					filterPass = age <= 2592000
+				elseif currentSort == "Favorites" then
+					filterPass = SavedData.Favorites[scr.ExactName] == true
+				elseif currentSort == "Auto Execute: ON" then
+					filterPass = SavedData.AutoExecutes[scr.ExactName] ~= nil
+				elseif currentSort == "Auto Execute: OFF" then
+					filterPass = SavedData.AutoExecutes[scr.ExactName] == nil
 				end
 			end
+
 			local visible = isMatch and filterPass
-			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
-			if visible then table.insert(matches, scr) end
+			if scr.Instance.Visible ~= visible then
+				scr.Instance.Visible = visible
+			end
+			if visible then
+				matches[#matches + 1] = scr
+			end
 		end
-		if filterVersion ~= currentVersion then return end
+
+		if currentVersion ~= filterVersion then return end
 		table.sort(matches, function(a, b)
 			if a.TagPriority ~= b.TagPriority then
 				return a.TagPriority > b.TagPriority
 			end
 
-			local aUpdated = GetSafeTimestamp(a.LastUpdated)
-			local bUpdated = GetSafeTimestamp(b.LastUpdated)
-			if SortMode == "Most Relevant" then
-				if aUpdated ~= bUpdated then
-					return aUpdated > bUpdated
-				end
-			elseif SortMode == "A-Z" then
+			local aUpdated = a.LastUpdatedNumber
+			local bUpdated = b.LastUpdatedNumber
+			if currentSort == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
-			elseif SortMode == "Z-A" then
+			elseif currentSort == "Z-A" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
-			elseif SortMode == "Newest" then
-				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
-			elseif SortMode == "Oldest" then
+			elseif currentSort == "Oldest" then
 				if aUpdated ~= bUpdated then return aUpdated < bUpdated end
-			elseif SortMode == "Favorites" then
+			elseif currentSort == "Favorites" then
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
 				if aFav ~= bFav then return aFav > bFav end
-			elseif SortMode == "Auto Execute: ON" or SortMode == "Auto Execute: OFF" then
+			elseif currentSort == "Auto Execute: ON" or currentSort == "Auto Execute: OFF" then
 				local aAuto = SavedData.AutoExecutes[a.ExactName] and 1 or 0
 				local bAuto = SavedData.AutoExecutes[b.ExactName] and 1 or 0
 				if aAuto ~= bAuto then return aAuto > bAuto end
-			end
-
-			if aUpdated ~= bUpdated and SortMode ~= "Oldest" and SortMode ~= "A-Z" and SortMode ~= "Z-A" and SortMode ~= "Favorites" and SortMode ~= "Auto Execute: ON" and SortMode ~= "Auto Execute: OFF" then
-				return aUpdated > bUpdated
+			else
+				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
 			end
 			return a.OriginalIndex < b.OriginalIndex
 		end)
+
 		for idx, scr in ipairs(matches) do
-			if scr.Instance.LayoutOrder ~= idx then scr.Instance.LayoutOrder = idx end
-		end
-		if #RegisteredScripts > 0 then
-			local shouldShowEmpty = (#matches == 0)
-			if EmptyStateMessage.Visible ~= shouldShowEmpty then
-				EmptyStateMessage.Visible = shouldShowEmpty
+			if scr.Instance.LayoutOrder ~= idx then
+				scr.Instance.LayoutOrder = idx
 			end
-			if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
+		end
+
+		local shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
+		if EmptyStateMessage.Visible ~= shouldShowEmpty then
+			EmptyStateMessage.Visible = shouldShowEmpty
+		end
+		if shouldShowEmpty then
+			EmptyStateMessage.Text = "No scripts matched your search or filters."
 		end
 		if ScriptsView and ScriptsView.Parent and query ~= "" then
-			ScriptsView.CanvasPosition = Vector2.new(0, 0)
+			local canvasPosition = ScriptsView.CanvasPosition
+			if canvasPosition.X ~= 0 or canvasPosition.Y ~= 0 then
+				ScriptsView.CanvasPosition = Vector2.new(0, 0)
+			end
 		end
 	end)
 end
@@ -1798,7 +1831,7 @@ local function CreateScriptCard(data, renderParent)
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch}, " ")),
-		ExactName = exactName, LastUpdated = data.LastUpdated, TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
+		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = #RegisteredScripts + 1
 	}
 
 	local innerActionTime = 0
@@ -1881,10 +1914,40 @@ local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
 
-local function LoadDynamicCatalog()
-	if dbRefreshing or isDestroying then return end
+local function BuildCatalogFingerprint(entries)
+	local parts = {}
+	for index, entry in ipairs(entries) do
+		if type(entry) == "table" then
+			parts[#parts + 1] = table.concat({
+				tostring(entry.Name or ""),
+				tostring(entry.Description or ""),
+				tostring(entry.RawUrl or ""),
+				tostring(entry.ImageAssetId or ""),
+				tostring(entry.TagType or ""),
+				tostring(entry.LastUpdated or ""),
+				tostring(entry.PlaceId or ""),
+				tostring(index)
+			}, "\31")
+		end
+	end
+	return table.concat(parts, "\30")
+end
 
+local function LoadDynamicCatalog(force)
+	if isDestroying then return false end
+	if dbRefreshing then
+		CatalogRefreshQueued = true
+		return false
+	end
+	local now = os.clock()
+	if not force and now - LastCatalogRefreshAt < CatalogRefreshCooldown then
+		CatalogRefreshQueued = true
+		return false
+	end
+
+	LastCatalogRefreshAt = now
 	dbRefreshing = true
+	CatalogRefreshQueued = false
 	CatalogGeneration = CatalogGeneration + 1
 	local generation = CatalogGeneration
 
@@ -1898,7 +1961,7 @@ local function LoadDynamicCatalog()
 
 	TrackTask(function()
 		local raw = FetchWithRetry(CATALOG_URL, 3, true)
-		if isDestroying or generation ~= CatalogGeneration then return end
+		if not IsTaskCurrent(generation) then return end
 
 		if raw then
 			local success, parsed = pcall(function()
@@ -1906,22 +1969,14 @@ local function LoadDynamicCatalog()
 			end)
 
 			if success and type(parsed) == "table" then
-
-				local fingerprintParts = {}
-				for index, entry in ipairs(parsed) do
-					if type(entry) == "table" then
-						fingerprintParts[#fingerprintParts + 1] = table.concat({
-							tostring(entry.Name or ""),
-							tostring(entry.Description or ""),
-							tostring(entry.RawUrl or ""),
-							tostring(entry.ImageAssetId or ""),
-							tostring(entry.TagType or ""),
-							tostring(entry.LastUpdated or ""),
-							tostring(entry.PlaceId or ""),
-						}, "\31")
+				local validEntries = {}
+				for _, entry in ipairs(parsed) do
+					if type(entry) == "table" and type(entry.Name) == "string" and entry.Name ~= "" then
+						validEntries[#validEntries + 1] = entry
 					end
 				end
-				local fingerprint = table.concat(fingerprintParts, "\30")
+
+				local fingerprint = BuildCatalogFingerprint(validEntries)
 				if fingerprint == LastCatalogFingerprint then
 					UpdateFilter()
 					StatusDot.BackgroundColor3 = Theme.Success
@@ -1930,6 +1985,10 @@ local function LoadDynamicCatalog()
 					ShowNotification("Catalog is already up to date.", "Info")
 					if generation == CatalogGeneration then
 						dbRefreshing = false
+						if CatalogRefreshQueued and not isDestroying then
+							CatalogRefreshQueued = false
+							task.defer(function() LoadDynamicCatalog(true) end)
+						end
 					end
 					return
 				end
@@ -1958,8 +2017,8 @@ local function LoadDynamicCatalog()
 				local detachedFolder = Instance.new("Folder")
 				local vMap = {}
 
-				for index, scriptData in ipairs(parsed) do
-					if isDestroying or generation ~= CatalogGeneration then
+				for index, scriptData in ipairs(validEntries) do
+					if not IsTaskCurrent(generation) then
 						detachedFolder:Destroy()
 						return
 					end
@@ -1994,20 +2053,17 @@ local function LoadDynamicCatalog()
 					AutoExecuteRanThisSession = true
 
 					local autoQueue = {}
-					for _, scriptData in ipairs(parsed) do
-						if type(scriptData) == "table" and type(scriptData.Name) == "string" and scriptData.Name ~= "" then
-							local auto = SavedData.AutoExecutes[scriptData.Name]
-							if auto and type(auto) == "table" then
-								local isValid = false
-								if auto.GameId and auto.GameId ~= 0 then
-									isValid = (auto.GameId == game.GameId)
-								else
-									isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
-								end
-
-								if isValid then
-									table.insert(autoQueue, scriptData)
-								end
+					for _, scriptData in ipairs(validEntries) do
+						local auto = SavedData.AutoExecutes[scriptData.Name]
+						if auto and type(auto) == "table" then
+							local isValid = false
+							if auto.GameId and auto.GameId ~= 0 then
+								isValid = (auto.GameId == game.GameId)
+							else
+								isValid = (auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId)
+							end
+							if isValid then
+								autoQueue[#autoQueue + 1] = scriptData
 							end
 						end
 					end
@@ -2025,10 +2081,10 @@ local function LoadDynamicCatalog()
 							ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 
 							for _, scriptData in ipairs(autoQueue) do
-								if isDestroying or generation ~= CatalogGeneration then return end
+								if not IsTaskCurrent(generation) then return end
 
 								local scrRaw = FetchWithRetry(type(scriptData.RawUrl) == "string" and scriptData.RawUrl or "", 2)
-								if isDestroying or generation ~= CatalogGeneration then return end
+								if not IsTaskCurrent(generation) then return end
 
 								if scrRaw and not string.find(scrRaw, "404: Not Found") then
 									local exSuccess = ExecuteSandboxed(scrRaw, scriptData.Name)
@@ -2089,7 +2145,7 @@ local function LoadDynamicCatalog()
 			dbRefreshing = false
 			if CatalogRefreshQueued and not isDestroying then
 				CatalogRefreshQueued = false
-				task.defer(LoadDynamicCatalog)
+				task.defer(function() LoadDynamicCatalog(true) end)
 			end
 		end
 	end)
@@ -2403,7 +2459,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			ShowNotification("Catalog refresh queued.", "Info")
 			return
 		end
-		LoadDynamicCatalog()
+		LoadDynamicCatalog(true)
 	end)
 end)
 
