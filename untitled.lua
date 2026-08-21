@@ -1,20 +1,20 @@
-local VeloxProtection = {
-    Version = "2.0.1",
-    Build = "ef039d336d69",
-    BuildDate = "2026-08-21",
-    IntegrityAlgorithm = "SHA-256"
-}
-
-local function GetProtectionInfo()
-    return {
-        Version = VeloxProtection.Version,
-        Build = VeloxProtection.Build,
-        BuildDate = VeloxProtection.BuildDate,
-        IntegrityAlgorithm = VeloxProtection.IntegrityAlgorithm
-    }
+local GlobalEnv = _G
+if type(getgenv) == "function" then
+	local ok, env = pcall(getgenv)
+	if ok and type(env) == "table" then
+		GlobalEnv = env
+	end
 end
 
-local GlobalEnv = _G
+-- [ANTI-ANALYSIS] Protect critical tables from being easily indexed or dumped by Spy/Dex tools
+local function ProtectTable(tbl)
+	return setmetatable({}, {
+		__index = tbl,
+		__newindex = function(_, k, v) tbl[k] = v end,
+		__metatable = "Velox_Secure_Env",
+		__tostring = function() return "Velox Hub (Protected)" end
+	})
+end
 
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -26,15 +26,16 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
-local MainGuiName = "Velox_" .. GenerateRandomString(12)
-local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
+local _G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
+local MainGuiName = "Velox_" .. GenerateRandomString(16)
+local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
 
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
 
-local Services = setmetatable({}, {
+-- [ANTI-ANALYSIS] Wrap Services in a protected metatable
+local Services = ProtectTable(setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
@@ -44,7 +45,7 @@ local Services = setmetatable({}, {
 		end
 		return nil
 	end
-})
+}))
 
 local Players = Services.Players
 local UserInputService = Services.UserInputService
@@ -66,9 +67,30 @@ end
 
 local PlaceId = game.PlaceId
 
+-- [EXECUTOR FINGERPRINTING] Advanced Identification
+local function GetAdvancedExecutor()
+	local name, version = "Unknown Executor", ""
+	if type(identifyexecutor) == "function" then
+		local extName, extVer = identifyexecutor()
+		name = extName or name
+		version = extVer or version
+	elseif type(getexecutorname) == "function" then
+		name = getexecutorname()
+	else
+		if syn then name = "Synapse X" 
+		elseif krnl then name = "Krnl" 
+		elseif fluxus then name = "Fluxus" 
+		elseif is_sirhurt_closure then name = "SirHurt"
+		elseif pebc_execute then name = "ProtoSmasher"
+		end
+	end
+	return name .. (version ~= "" and (" (" .. tostring(version) .. ")") or "")
+end
+
 local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+local getexecutor = GetAdvancedExecutor
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
@@ -567,6 +589,7 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
+-- [ANTI-DETECTION] Make GUI parenting safer and less noticeable 
 local function GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -577,6 +600,7 @@ local function GetSecureParent()
 	if coreSuccess and coreTarget then
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
+			t.Name = GenerateRandomString(12)
 			t.Parent = coreTarget
 			t:Destroy()
 		end)
@@ -1277,7 +1301,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA"
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -2601,3 +2625,4 @@ if IsMobile then
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
+
