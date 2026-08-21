@@ -16,7 +16,7 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
+local _G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
@@ -288,7 +288,7 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 
-local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local DATA_FILE = ".VeloxHub_Data_V4.json"
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
