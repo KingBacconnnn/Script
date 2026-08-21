@@ -7,7 +7,6 @@ if type(getgenv) == "function" then
 	end
 end
 
-
 function State.ProtectTable(tbl)
 	local secure_func = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local proxy = setmetatable({}, {
@@ -21,7 +20,6 @@ function State.ProtectTable(tbl)
 		__tostring = secure_func(function() return " " end),
 		__mode = "v"
 	})
-
 
 	if type(setreadonly) == "function" then pcall(setreadonly, proxy, true) end
 	if type(table.freeze) == "function" then pcall(table.freeze, proxy) end
@@ -44,15 +42,13 @@ function State.GenerateRandomString(len)
 	return str
 end
 
-
-State._G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
-State.MainGuiName = "Velox_" .. GenerateRandomString(16)
-State.FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
+State._G_Identifier = "VeloxHub_Core_Cleanup_" .. State.GenerateRandomString(8)
+State.MainGuiName = "Velox_" .. State.GenerateRandomString(16)
+State.FloatBtnName = "VeloxFloat_" .. State.GenerateRandomString(16)
 
 if State.GlobalEnv[State._G_Identifier] then
 	pcall(function() State.GlobalEnv[State._G_Identifier]() end)
 end
-
 
 State.Services = State.ProtectTable(setmetatable({}, {
 	__index = function(self, key)
@@ -86,7 +82,6 @@ end
 
 State.PlaceId = game.PlaceId
 
-
 function State.GetAdvancedExecutor()
 	local name, version = "Unknown Executor", ""
 
@@ -111,7 +106,6 @@ function State.GetAdvancedExecutor()
 		elseif is_sirhurt_closure then name = "SirHurt"
 		end
 	end
-
 
 	version = string.gsub(tostring(version), "\n", "")
 	return name .. (version ~= "" and (" (" .. version .. ")") or "")
@@ -716,7 +710,6 @@ function State.GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
-
 function State.GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return State.gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -748,7 +741,6 @@ function State.GetSecureParent()
 
 	return nil
 end
-
 
 State.TargetParent = State.GetSecureParent()
 if not State.TargetParent then return end
@@ -982,7 +974,7 @@ function State.StandaloneBannerNotification(msg, notifType)
 
 	local success = pcall(function()
 		local bannerGui = Instance.new("ScreenGui")
-		bannerGui.Name = "VeloxBanner_" .. GenerateRandomString(8)
+		bannerGui.Name = "VeloxBanner_" .. State.GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
 		bannerGui.Parent = parent
@@ -1107,7 +1099,7 @@ function State.AttemptActionWithCooldown(actionFunc)
 			if not parent then return end
 
 			local bannerGui = Instance.new("ScreenGui")
-			bannerGui.Name = "VeloxCooldown_" .. GenerateRandomString(8)
+			bannerGui.Name = "VeloxCooldown_" .. State.GenerateRandomString(8)
 			bannerGui.DisplayOrder = 10000
 			bannerGui.ResetOnSpawn = false
 			bannerGui.Parent = parent
