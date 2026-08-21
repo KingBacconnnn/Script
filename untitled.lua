@@ -1745,6 +1745,80 @@ local function RefreshAllCardStates()
 	end
 end
 
+local LocalCatalogFolder = Services.ReplicatedStorage:FindFirstChild("VeloxScripts")
+
+local function GetLocalScriptModule(name)
+    if not LocalCatalogFolder then
+        return nil
+    end
+    local module = LocalCatalogFolder:FindFirstChild(name, true)
+    if module and module:IsA("ModuleScript") then
+        return module
+    end
+    return nil
+end
+
+local function ExecuteLocalModule(module, scriptName)
+    if not module or not module:IsA("ModuleScript") then
+        ShowNotification("Local catalog module not found: " .. tostring(scriptName), "Error")
+        return false
+    end
+
+    local ok, result = pcall(require, module)
+    if not ok then
+        ShowNotification("Failed to run [" .. tostring(scriptName) .. "]: " .. tostring(result), "Error")
+        return false
+    end
+
+    if type(result) == "function" then
+        local ran, err = pcall(result)
+        if not ran then
+            ShowNotification("Failed to run [" .. tostring(scriptName) .. "]: " .. tostring(err), "Error")
+            return false
+        end
+    end
+
+    return true
+end
+
+local function ReadCatalogAttribute(instance, name, default)
+    local value = instance:GetAttribute(name)
+    if value == nil then
+        return default
+    end
+    return value
+end
+
+local function BuildLocalCatalogEntries()
+    local entries = {}
+    if not LocalCatalogFolder then
+        return entries
+    end
+
+    for _, module in ipairs(LocalCatalogFolder:GetDescendants()) do
+        if module:IsA("ModuleScript") then
+            entries[#entries + 1] = {
+                Name = module:GetAttribute("Name") or module.Name,
+                Description = ReadCatalogAttribute(module, "Description", "No description provided."),
+                RawUrl = "",
+                ImageAssetId = ReadCatalogAttribute(module, "ImageAssetId", "rbxassetid://99657752206675"),
+                TagType = NormalizeTagType(ReadCatalogAttribute(module, "TagType", "NONE")),
+                LastUpdated = ReadCatalogAttribute(module, "LastUpdated", ""),
+                PlaceId = tonumber(ReadCatalogAttribute(module, "PlaceId", 0)) or 0,
+                Category = ReadCatalogAttribute(module, "Category", ""),
+                Author = ReadCatalogAttribute(module, "Author", ""),
+                ModuleName = module:GetFullName()
+            }
+        end
+    end
+
+    table.sort(entries, function(a, b)
+        return tostring(a.Name):lower() < tostring(b.Name):lower()
+    end)
+
+    return entries
+end
+
 local function ExecuteSandboxed(code, scriptName)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
@@ -1919,25 +1993,17 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		if tick() - innerActionTime < 0.2 then return end
 
 		local function executeScript()
-			if type(CompileFunction) ~= "function" then
-				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
+			local module = GetLocalScriptModule(exactName)
+			if not module then
+				ShowNotification("Local catalog module not found: " .. exactName, "Error")
 				return
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
-				if isDestroying then return end
-				if not raw then
-					ShowNotification("Failed to download script. Please check your connection.", "Error")
-				elseif string.find(raw, "404: Not Found") then
-					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
-				else
-					local success = ExecuteSandboxed(raw, exactName)
-					if success then
-						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
-					end
+				local success = ExecuteLocalModule(module, exactName)
+				if success then
+					ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 				end
-
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
@@ -2025,49 +2091,20 @@ PendingTasks.__LoadCatalog = function(force)
 
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
-			local raw = FetchWithRetry(CATALOG_URL, 3, true)
+			local validEntries = BuildLocalCatalogEntries()
 			if not IsTaskCurrent(generation) then return end
-			if not raw then
-				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
-				StatusDot.BackgroundColor3 = Theme.Error
-				StatusText.Text = "Offline"
-				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Could not connect to the script catalog server.", "Error")
-				FinishRefresh()
-				return
-			end
 
-			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
-			if not success or type(parsed) ~= "table" then
-				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
-				StatusDot.BackgroundColor3 = Theme.Error
-				StatusText.Text = "Data Error"
-				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Catalog data format error.", "Error")
-				FinishRefresh()
-				return
-			end
-
-			local validEntries = {}
-			local seenNames = {}
-			for _, entry in ipairs(parsed) do
-				if type(entry) == "table" and type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") ~= "" then
-					local normalized = {
-						Name = entry.Name,
-						Description = type(entry.Description) == "string" and entry.Description or "No description provided.",
-						RawUrl = type(entry.RawUrl) == "string" and entry.RawUrl or "",
-						ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
-						TagType = NormalizeTagType(entry.TagType),
-						LastUpdated = GetSafeTimestamp(entry.LastUpdated),
-						PlaceId = tonumber(entry.PlaceId) or 0,
-						Category = type(entry.Category) == "string" and entry.Category or "",
-						Author = type(entry.Author) == "string" and entry.Author or ""
-					}
-					if not seenNames[normalized.Name] then
-						seenNames[normalized.Name] = true
-						validEntries[#validEntries + 1] = normalized
-					end
+			if #validEntries == 0 then
+				if #RegisteredScripts == 0 then
+					EmptyStateMessage.Visible = true
+					EmptyStateMessage.Text = "Add ModuleScripts to ReplicatedStorage.VeloxScripts."
 				end
+				StatusDot.BackgroundColor3 = Theme.Warning
+				StatusText.Text = "Empty"
+				StatusText.TextColor3 = Theme.Warning
+				ShowNotification("Local script catalog is empty.", "Warning")
+				FinishRefresh()
+				return
 			end
 
 			local fingerprint = BuildCatalogFingerprint(validEntries)
@@ -2076,7 +2113,6 @@ PendingTasks.__LoadCatalog = function(force)
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
-				ShowNotification("Catalog is already up to date.", "Info")
 				FinishRefresh()
 				return
 			end
@@ -2092,7 +2128,17 @@ PendingTasks.__LoadCatalog = function(force)
 			activeBuildFolder.Parent = ScriptsView
 
 			local function BuildEntryFingerprint(data)
-				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+				return table.concat({
+					tostring(data.Name or ""),
+					tostring(data.Description or ""),
+					tostring(data.ModuleName or ""),
+					tostring(data.ImageAssetId or ""),
+					tostring(NormalizeTagType(data.TagType)),
+					tostring(GetSafeTimestamp(data.LastUpdated)),
+					tostring(tonumber(data.PlaceId) or 0),
+					tostring(data.Category or ""),
+					tostring(data.Author or "")
+				}, "\31")
 			end
 
 			local function DestroyEntry(entry)
@@ -2114,6 +2160,7 @@ PendingTasks.__LoadCatalog = function(force)
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
 				local entry
+
 				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
 					entry = existing
 					entry.OriginalIndex = index
@@ -2124,20 +2171,25 @@ PendingTasks.__LoadCatalog = function(force)
 					entry.OriginalIndex = index
 					activeNewEntries[#activeNewEntries + 1] = entry
 				end
+
 				nextEntries[#nextEntries + 1] = entry
 				nextByKey[key] = entry
 				nextKeys[key] = true
 			end
 
 			if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
+
 			for key, oldEntry in pairs(previousByKey) do
 				if not nextKeys[key] then DestroyEntry(oldEntry) end
 			end
 			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
 			for _, entry in ipairs(nextEntries) do
-				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
+				if entry.Instance and entry.Instance.Parent ~= ScriptsView then
+					entry.Instance.Parent = ScriptsView
+				end
 				entry.Instance.LayoutOrder = entry.OriginalIndex
 			end
+
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
@@ -2149,15 +2201,21 @@ PendingTasks.__LoadCatalog = function(force)
 			LastCatalogFingerprint = fingerprint
 			RefreshAllCardStates()
 			UpdateFilter()
+
 			task.defer(function()
-				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
+				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then
+					ScriptsView.CanvasPosition = savedScroll
+				end
 			end)
 
 			local validMap = {}
 			for _, scriptData in ipairs(validEntries) do validMap[scriptData.Name] = true end
 			local cleaned = false
 			for key in pairs(SavedData.AutoExecutes) do
-				if not validMap[key] then SavedData.AutoExecutes[key] = nil; cleaned = true end
+				if not validMap[key] then
+					SavedData.AutoExecutes[key] = nil
+					cleaned = true
+				end
 			end
 			if cleaned then SaveConfiguration() end
 
@@ -2168,21 +2226,21 @@ PendingTasks.__LoadCatalog = function(force)
 					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						if not validPlace then
+							validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId
+						end
 						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
+
 				if #autoQueue > 0 then
 					TrackTask(function()
-						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
 						local successList, failList = {}, {}
-						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not IsTaskCurrent(generation) then return end
-							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
-							if not IsTaskCurrent(generation) then return end
-							if scrRaw and not string.find(scrRaw, "404: Not Found") then
-								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+							local module = GetLocalScriptModule(scriptData.Name)
+							if module and ExecuteLocalModule(module, scriptData.Name) then
+								successList[#successList + 1] = scriptData.Name
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
@@ -2195,9 +2253,9 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 
 			StatusDot.BackgroundColor3 = Theme.Success
-			StatusText.Text = "Online"
+			StatusText.Text = "Local"
 			StatusText.TextColor3 = Theme.Success
-			ShowNotification("Script catalog loaded successfully!", "Success")
+			ShowNotification("Local script catalog loaded successfully!", "Success")
 		end, function(err) return tostring(err) end)
 
 		if not taskOk then
