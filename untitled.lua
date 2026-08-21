@@ -1,10 +1,12 @@
-local GlobalEnv = _G
+local State = {}
+State.GlobalEnv = _G
 if type(getgenv) == "function" then
 	local ok, env = pcall(getgenv)
 	if ok and type(env) == "table" then
-		GlobalEnv = env
+		State.GlobalEnv = env
 	end
 end
+
 
 local function ProtectTable(tbl)
 	local secure_func = type(newcclosure) == "function" and newcclosure or function(f) return f end
@@ -19,6 +21,7 @@ local function ProtectTable(tbl)
 		__tostring = secure_func(function() return " " end),
 		__mode = "v"
 	})
+
 
 	if type(setreadonly) == "function" then pcall(setreadonly, proxy, true) end
 	if type(table.freeze) == "function" then pcall(table.freeze, proxy) end
@@ -41,13 +44,15 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
-local MainGuiName = "Velox_" .. GenerateRandomString(16)
-local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
 
-if GlobalEnv[_G_Identifier] then
-	pcall(function() GlobalEnv[_G_Identifier]() end)
+State._G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
+State.MainGuiName = "Velox_" .. GenerateRandomString(16)
+State.FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
+
+if State.GlobalEnv[State._G_Identifier] then
+	pcall(function() State.GlobalEnv[State._G_Identifier]() end)
 end
+
 
 local Services = ProtectTable(setmetatable({}, {
 	__index = function(self, key)
@@ -79,7 +84,8 @@ while not LocalPlayer do
 	LocalPlayer = Players.LocalPlayer
 end
 
-local PlaceId = game.PlaceId
+State.PlaceId = game.State.PlaceId
+
 
 local function GetAdvancedExecutor()
 	local name, version = "Unknown Executor", ""
@@ -105,6 +111,7 @@ local function GetAdvancedExecutor()
 		elseif is_sirhurt_closure then name = "SirHurt"
 		end
 	end
+
 
 	version = string.gsub(tostring(version), "\n", "")
 	return name .. (version ~= "" and (" (" .. version .. ")") or "")
@@ -163,63 +170,27 @@ local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 
-local CompileFunction = nil
-
-local compilerNames = {"loadstring", "load", "luau_load"}
-local compilerEnvs = {RuntimeEnv, _G}
-
-for _, env in ipairs(compilerEnvs) do
-	if type(env) == "table" then
-		for _, name in ipairs(compilerNames) do
-			local candidate = env[name]
-			if type(candidate) == "function" then
-				CompileFunction = candidate
-				break
-			end
-		end
-	end
-	if CompileFunction then break end
-end
-
-if not CompileFunction then
-	for _, name in ipairs(compilerNames) do
-		local ok, candidate = pcall(function() return _ENV and _ENV[name] end)
-		if ok and type(candidate) == "function" then
-			CompileFunction = candidate
-			break
-		end
-	end
-end
+local CompileFunction = ResolveFunction(
+	{"loadstring", "load", "luau_load"},
+	{RuntimeEnv, _G}
+)
 
 local function CompileChunk(source, chunkName)
-	if type(source) ~= "string" or source == "" then
-		return nil, "empty source"
-	end
-
 	if type(CompileFunction) ~= "function" then
 		return nil, "no compatible Lua compiler"
 	end
 
-	local attempts = {
-		function() return CompileFunction(source, chunkName) end,
-		function() return CompileFunction(source) end
-	}
-
-	local lastError = nil
-
-	for _, attempt in ipairs(attempts) do
-		local ok, chunk, err = pcall(attempt)
-		if ok and type(chunk) == "function" then
-			return chunk
-		end
-		if type(err) == "string" and err ~= "" then
-			lastError = err
-		elseif type(chunk) == "string" and chunk ~= "" then
-			lastError = chunk
-		end
+	local ok, chunk, err = pcall(CompileFunction, source, chunkName)
+	if ok and type(chunk) == "function" then
+		return chunk
 	end
 
-	return nil, lastError or "compiler rejected the source without returning an error"
+	local okOneArg, chunkOneArg, errOneArg = pcall(CompileFunction, source)
+	if okOneArg and type(chunkOneArg) == "function" then
+		return chunkOneArg
+	end
+
+	return nil, tostring(errOneArg or err or chunk or chunkOneArg or "compiler error")
 end
 
 local Theme = {
@@ -247,15 +218,15 @@ local AfkConnections = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
-local CatalogRefreshCooldown = 5
-local LastCatalogRefreshAt = 0
-local AutoExecuteRanThisSession = false
+State.CatalogRefreshCooldown = 5
+State.LastCatalogRefreshAt = 0
+State.AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
-local isDestroying = false
-local isMinimized = false
-local isTransitioning = false
-local IsBindingKey = false
+State.isDestroying = false
+State.isMinimized = false
+State.isTransitioning = false
+State.IsBindingKey = false
 local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
@@ -341,7 +312,7 @@ local function TrackTask(fn)
 end
 
 local function IsTaskCurrent(generation)
-	return not isDestroying and generation == CatalogGeneration
+	return not State.isDestroying and generation == CatalogGeneration
 end
 
 local function CancelTrackedTasks()
@@ -354,8 +325,8 @@ end
 local typingTask = nil
 
 local function CleanUpMemory()
-	isDestroying = true
-	GlobalEnv[_G_Identifier] = nil
+	State.isDestroying = true
+	State.GlobalEnv[State._G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
 	CancelTrackedTasks()
@@ -446,8 +417,8 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 
-local DATA_FILE = ".VeloxHub_Data_V3.1.json"
-local TEMP_FILE = ".VeloxHub_Data_Temp.json"
+State.DATA_FILE = ".VeloxHub_Data_V3.1.json"
+State.TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -455,7 +426,7 @@ local SavedData = {
 	Settings = { AntiAFK = false }
 }
 
-local isSaving = false
+State.isSaving = false
 local saveQueued = false
 
 local function SanitizeForJSON(data)
@@ -478,11 +449,11 @@ end
 
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
-	if isSaving then
+	if State.isSaving then
 		saveQueued = true
 		return
 	end
-	isSaving = true
+	State.isSaving = true
 	task.spawn(function()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
@@ -493,7 +464,7 @@ local function SaveConfiguration()
 		for k, v in pairs(SavedData.AutoExecutes) do
 			if type(v) == "table" then
 				cleanData.AutoExecutes[tostring(k)] = {
-					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+					State.PlaceId = tonumber(v.State.PlaceId) or game.State.PlaceId,
 					GameId = tonumber(v.GameId) or game.GameId
 				}
 			end
@@ -502,21 +473,21 @@ local function SaveConfiguration()
 		local safeData = SanitizeForJSON(cleanData)
 		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
 		if success then
-			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
+			local writeSuccess = pcall(function() write_file(State.TEMP_FILE, result) end)
 			if writeSuccess then
 				local verifySuccess = pcall(function()
-					local check = read_file(TEMP_FILE)
+					local check = read_file(State.TEMP_FILE)
 					return HttpService:JSONDecode(check)
 				end)
 				if verifySuccess then
-					pcall(function() write_file(DATA_FILE, result) end)
+					pcall(function() write_file(State.DATA_FILE, result) end)
 				end
 			end
 			if del_file then
-				pcall(function() del_file(TEMP_FILE) end)
+				pcall(function() del_file(State.TEMP_FILE) end)
 			end
 		end
-		isSaving = false
+		State.isSaving = false
 		if saveQueued then
 			saveQueued = false
 			SaveConfiguration()
@@ -525,8 +496,8 @@ local function SaveConfiguration()
 end
 
 local function LoadConfiguration()
-	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+	if type(is_file) == "function" and type(read_file) == "function" and is_file(State.DATA_FILE) then
+		local success, result = pcall(function() return HttpService:JSONDecode(read_file(State.DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
 				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
@@ -535,7 +506,7 @@ local function LoadConfiguration()
 				for k, v in pairs(result.AutoExecutes) do
 					if type(k) == "string" and type(v) == "table" then
 						SavedData.AutoExecutes[tostring(k)] = {
-							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
+							State.PlaceId = type(v.State.PlaceId) == "number" and v.State.PlaceId or game.State.PlaceId,
 							GameId = type(v.GameId) == "number" and v.GameId or nil
 						}
 					end
@@ -745,6 +716,7 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
+
 local function GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -777,14 +749,15 @@ local function GetSecureParent()
 	return nil
 end
 
+
 local TargetParent = GetSecureParent()
 if not TargetParent then return end
 
-local existingGui = TargetParent:FindFirstChild(MainGuiName)
+local existingGui = TargetParent:FindFirstChild(State.MainGuiName)
 if existingGui then pcall(function() existingGui:Destroy() end) end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = MainGuiName
+ScreenGui.Name = State.MainGuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
@@ -792,7 +765,7 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-GlobalEnv[_G_Identifier] = function()
+State.GlobalEnv[State._G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
@@ -812,23 +785,23 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end
 
 	RegInteractive(gui.MouseEnter:Connect(function()
-		if isDestroying or isTransitioning or IsMobile then return end
+		if State.isDestroying or State.isTransitioning or IsMobile then return end
 		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
 		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
 	end))
 	RegInteractive(gui.MouseLeave:Connect(function()
-		if isDestroying or isTransitioning or IsMobile then return end
+		if State.isDestroying or State.isTransitioning or IsMobile then return end
 		if originalColor then gui.BackgroundColor3 = originalColor end
 		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
 	end))
 	RegInteractive(gui.InputBegan:Connect(function(input)
-		if isDestroying or isTransitioning then return end
+		if State.isDestroying or State.isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if clickColor then gui.BackgroundColor3 = clickColor end
 		end
 	end))
 	RegInteractive(gui.InputEnded:Connect(function(input)
-		if isDestroying or isTransitioning then return end
+		if State.isDestroying or State.isTransitioning then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if not IsMobile and hoverColor then
 				gui.BackgroundColor3 = hoverColor
@@ -840,7 +813,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 end
 
 RegConn(UserInputService.WindowFocusReleased:Connect(function()
-	if isDestroying then return end
+	if State.isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
 			if data.BaseColor then pcall(function() element.BackgroundColor3 = data.BaseColor end) end
@@ -850,7 +823,7 @@ RegConn(UserInputService.WindowFocusReleased:Connect(function()
 end))
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = FloatBtnName
+FloatingBtn.Name = State.FloatBtnName
 FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
@@ -878,7 +851,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 
 		if floatDragConnection then floatDragConnection:Disconnect() end
 		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
-			if isDestroying then return end
+			if State.isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - floatStart
 				local camera = workspace.CurrentCamera
@@ -947,15 +920,15 @@ local function RestoreCachedProperties()
 end
 
 local function ToggleUI()
-	if isDestroying or isTransitioning then return end
-	isTransitioning = true
+	if State.isDestroying or State.isTransitioning then return end
+	State.isTransitioning = true
 
 	if DropdownContainer and DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	end
 
-	if not isMinimized then
-		isMinimized = true
+	if not State.isMinimized then
+		State.isMinimized = true
 		if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 
 		MainPanel.Visible = false
@@ -965,13 +938,13 @@ local function ToggleUI()
 		FloatingBtn.ImageTransparency = 0
 		FloatStroke.Transparency = 0
 	else
-		isMinimized = false
+		State.isMinimized = false
 		FloatingBtn.Visible = false
 		MainPanel.Visible = true
 		RestoreCachedProperties()
 	end
 
-	isTransitioning = false
+	State.isTransitioning = false
 end
 
 ToastContainer = Instance.new("Frame", ScreenGui)
@@ -1057,7 +1030,7 @@ local function StandaloneBannerNotification(msg, notifType)
 end
 
 local function ShowNotification(msg, notifType)
-	if isDestroying then return end
+	if State.isDestroying then return end
 
 	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
 	local indicatorColor = Theme[nType] or Theme.Info
@@ -1292,7 +1265,7 @@ local isConfirming = false
 local pendingExecuteCallback = nil
 
 local function OpenConfirmDialog(scriptName, onExecute)
-	if isConfirming or isTransitioning then return end
+	if isConfirming or State.isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
 	ConfirmScriptName.Text = scriptName
@@ -1344,7 +1317,7 @@ local function BindToggleKey(keyCode)
 	end
 
 	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
+		if gameProcessed or isConfirming or State.IsBindingKey or State.isTransitioning or State.isDestroying then return end
 
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
 			if SearchInput and SearchInput:IsFocused() then
@@ -1367,10 +1340,10 @@ RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end))
 
 local function CloseUI()
-	if isDestroying then return end
+	if State.isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
-	isDestroying = true
-	GlobalEnv[_G_Identifier]()
+	State.isDestroying = true
+	State.GlobalEnv[State._G_Identifier]()
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1389,7 +1362,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 
 		if mainDragConnection then mainDragConnection:Disconnect() end
 		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
-			if isDestroying then return end
+			if State.isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - mainDragStart
 				local camera = workspace.CurrentCamera
@@ -1407,7 +1380,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 end))
 
 RegConn(UserInputService.InputEnded:Connect(function(input)
-	if isDestroying then return end
+	if State.isDestroying then return end
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
 		if mainDragConnection then
@@ -1502,11 +1475,11 @@ local AvatarStroke = Instance.new("UIStroke", AvatarFrame); AvatarStroke.Color =
 
 task.spawn(function()
 	local attempts = 0
-	while attempts < 3 and not isDestroying do
+	while attempts < 3 and not State.isDestroying do
 		attempts = attempts + 1
 		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
-			if isDestroying then return end
+			if State.isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
 			break
 		else
@@ -1526,8 +1499,8 @@ ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, n
 local fpsCount = 0
 local diagnosticsElapsed = 0
 RegConn(RunService.Heartbeat:Connect(function(deltaTime)
-	if isDestroying then return end
-	if isMinimized or isTransitioning then
+	if State.isDestroying then return end
+	if State.isMinimized or State.isTransitioning then
 		fpsCount = 0
 		diagnosticsElapsed = 0
 		return
@@ -1683,11 +1656,11 @@ local SortOptions = {
 }
 
 local function UpdateFilter()
-	if isDestroying then return end
+	if State.isDestroying then return end
 	filterVersion = filterVersion + 1
 	local currentVersion = filterVersion
 	task.defer(function()
-		if isDestroying or currentVersion ~= filterVersion then return end
+		if State.isDestroying or currentVersion ~= filterVersion then return end
 		local queryText = SearchInput.Text or ""
 		local query = string.lower(string.gsub(queryText, "^%s*(.-)%s*$", "%1"))
 		local words = {}
@@ -1805,7 +1778,7 @@ RegConn(ClearSearchBtn.Activated:Connect(function()
 end))
 
 RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
-	if isDestroying then return end
+	if State.isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
 		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
@@ -1889,7 +1862,7 @@ local function CreateTab(name, index)
 	end
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 	RegConn(btn.Activated:Connect(function()
-		if isDestroying or currentTab == name then return end
+		if State.isDestroying or currentTab == name then return end
 		currentTab = name; DropdownContainer.Visible = false
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
@@ -1958,7 +1931,7 @@ local function ExecuteSandboxed(code, scriptName)
 
 	TrackTask(function()
 		local success, runtimeErr = pcall(chunk)
-		if not success and not isDestroying then
+		if not success and not State.isDestroying then
 			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		end
 	end)
@@ -2077,7 +2050,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch}, " ")),
-		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.State.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 
 	local innerActionTime = 0
@@ -2092,7 +2065,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	scriptEntry.UpdateUI()
 
 	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.Favorites[exactName] then
 			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
@@ -2103,18 +2076,18 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	end)))
 
 	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.AutoExecutes[exactName] then
 			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
 		else
-			SavedData.AutoExecutes[exactName] = {PlaceId = game.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
+			SavedData.AutoExecutes[exactName] = {State.PlaceId = game.State.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 
 	RegCardConn(card.Activated:Connect(function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		if tick() - innerActionTime < 0.2 then return end
 
 		local function executeScript()
@@ -2125,7 +2098,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
 				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
-				if isDestroying then return end
+				if State.isDestroying then return end
 				if not raw then
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
 				elseif string.find(raw, "404: Not Found") then
@@ -2169,7 +2142,7 @@ local function BuildCatalogFingerprint(entries)
 			parts[#parts + 1] = table.concat({
 				tostring(entry.Name or ""), tostring(entry.Description or ""), tostring(entry.RawUrl or ""),
 				tostring(entry.ImageAssetId or ""), tostring(NormalizeTagType(entry.TagType)),
-				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.PlaceId) or 0),
+				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.State.PlaceId) or 0),
 				tostring(entry.Category or ""), tostring(entry.Author or ""), tostring(index)
 			}, "\31")
 		end
@@ -2178,19 +2151,19 @@ local function BuildCatalogFingerprint(entries)
 end
 
 PendingTasks.__LoadCatalog = function(force)
-	if isDestroying then return false end
+	if State.isDestroying then return false end
 	if dbRefreshing then
 		CatalogRefreshQueued = true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		return false
 	end
 	local now = os.clock()
-	if not force and now - LastCatalogRefreshAt < CatalogRefreshCooldown then
+	if not force and now - State.LastCatalogRefreshAt < State.CatalogRefreshCooldown then
 		CatalogRefreshQueued = true
 		return false
 	end
 
-	LastCatalogRefreshAt = now
+	State.LastCatalogRefreshAt = now
 	dbRefreshing = true
 	CatalogGeneration = CatalogGeneration + 1
 	local generation = CatalogGeneration
@@ -2203,12 +2176,12 @@ PendingTasks.__LoadCatalog = function(force)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-		if CatalogRefreshQueued and not isDestroying then
+		if CatalogRefreshQueued and not State.isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
 			CatalogRefreshQueued = false
 			PendingTasks.__CatalogRefreshForce = false
 			task.defer(function()
-				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
+				if not State.isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
 			end)
 		end
 	end
@@ -2258,7 +2231,7 @@ PendingTasks.__LoadCatalog = function(force)
 						ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
 						TagType = NormalizeTagType(entry.TagType),
 						LastUpdated = GetSafeTimestamp(entry.LastUpdated),
-						PlaceId = tonumber(entry.PlaceId) or 0,
+						State.PlaceId = tonumber(entry.State.PlaceId) or 0,
 						Category = type(entry.Category) == "string" and entry.Category or "",
 						Author = type(entry.Author) == "string" and entry.Author or ""
 					}
@@ -2291,7 +2264,7 @@ PendingTasks.__LoadCatalog = function(force)
 			activeBuildFolder.Parent = ScriptsView
 
 			local function BuildEntryFingerprint(data)
-				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.State.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
 
 			local function DestroyEntry(entry)
@@ -2360,14 +2333,14 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 			if cleaned then SaveConfiguration() end
 
-			if not AutoExecuteRanThisSession then
-				AutoExecuteRanThisSession = true
+			if not State.AutoExecuteRanThisSession then
+				State.AutoExecuteRanThisSession = true
 				local autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
 					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						if not validPlace then validPlace = auto.State.PlaceId == State.PlaceId or auto.State.PlaceId == 0 or not auto.State.PlaceId end
 						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
@@ -2405,7 +2378,7 @@ PendingTasks.__LoadCatalog = function(force)
 			table.clear(activeNewEntries)
 			DisconnectEntryConnections()
 		end
-		if not taskOk and not isDestroying and generation == CatalogGeneration then
+		if not taskOk and not State.isDestroying and generation == CatalogGeneration then
 			StatusDot.BackgroundColor3 = Theme.Error
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
@@ -2419,17 +2392,17 @@ end
 PendingTasks.__LoadCatalog()
 
 TrackTask(function()
-	while not isDestroying do
+	while not State.isDestroying do
 		task.wait(CATALOG_REFRESH_INTERVAL)
-		if isDestroying then break end
+		if State.isDestroying then break end
 		PendingTasks.__LoadCatalog(false)
 	end
 end)
 
 TrackTask(function()
-	while not isDestroying do
+	while not State.isDestroying do
 		task.wait(60)
-		if isDestroying then break end
+		if State.isDestroying then break end
 		for _, scrData in ipairs(RegisteredScripts) do
 			if scrData.TimeLabel and scrData.TimeLabel.Parent then
 				scrData.TimeLabel.Text = GetRelativeTime(scrData.LastUpdatedNumber)
@@ -2558,7 +2531,7 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 	local state = defaultValue
 	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		state = not state
 		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
@@ -2593,7 +2566,7 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
 	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
 	end)))
 	return btn
@@ -2619,8 +2592,8 @@ KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
 
 RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
-	if isDestroying or IsBindingKey then return end
-	IsBindingKey = true
+	if State.isDestroying or State.IsBindingKey then return end
+	State.IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
 	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
 
@@ -2630,10 +2603,10 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end
 
 	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
-		if isDestroying then return end
+		if State.isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
-				IsBindingKey = false
+				State.IsBindingKey = false
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
 				if KeybindCaptureConnection then
@@ -2644,7 +2617,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 			end
 			if input.KeyCode.Name ~= "Unknown" then
 				ToggleKeybind = input.KeyCode
-				IsBindingKey = false
+				State.IsBindingKey = false
 				SavedData.ToggleKeybind = ToggleKeybind.Name
 				SaveConfiguration()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
@@ -2658,7 +2631,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				end
 			end
 		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			IsBindingKey = false
+			State.IsBindingKey = false
 			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 			ShowNotification("Keybind mapping canceled.", "Warning")
 			if KeybindCaptureConnection then
@@ -2777,7 +2750,7 @@ ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
 	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
-		if isDestroying then return end
+		if State.isDestroying then return end
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
