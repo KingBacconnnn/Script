@@ -1,6 +1,17 @@
+-- Add this at the top of your script
+local function FetchGlobal(name)
+    local success, env = pcall(getfenv, 0)
+    if success and env and type(env) == "table" then
+        return env[name]
+    end
+    return nil
+end
+
 local GlobalEnv = _G
-if type(getgenv) == "function" then
-	local ok, env = pcall(getgenv)
+local _getgenv = FetchGlobal("\103\101\116\103\101\110\118") -- "getgenv"
+
+if type(_getgenv) == "function" then
+	local ok, env = pcall(_getgenv)
 	if ok and type(env) == "table" then
 		GlobalEnv = env
 	end
@@ -28,13 +39,7 @@ local Services = setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			local final = service
-			if type(cloneref) == "function" then
-				local cloneOk, cloned = pcall(cloneref, service)
-				if cloneOk and cloned then
-					final = cloned
-				end
-			end
+			local final = (type(cloneref) == "function") and cloneref(service) or service
 			self[key] = final
 			return final
 		end
@@ -62,38 +67,43 @@ end
 
 local PlaceId = game.PlaceId
 
-local gethui = type(gethui) == "function" and gethui or nil
-local protectgui = nil
-if type(protect_gui) == "function" then
-	protectgui = protect_gui
-elseif type(syn) == "table" and type(syn.protect_gui) == "function" then
-	protectgui = syn.protect_gui
-end
-local exec_request = nil
-for _, candidate in ipairs({request, http_request, type(syn) == "table" and syn.request or nil, type(fluxus) == "table" and fluxus.request or nil, type(krnl) == "table" and krnl.request or nil}) do
-	if type(candidate) == "function" then
-		exec_request = candidate
-		break
-	end
-end
-local getexecutor = nil
-if type(identifyexecutor) == "function" then
-	getexecutor = identifyexecutor
-elseif type(getexecutorname) == "function" then
-	getexecutor = getexecutorname
-else
-	getexecutor = function() return "Unknown Executor" end
-end
-local write_file = type(writefile) == "function" and writefile or nil
-local read_file = type(readfile) == "function" and readfile or nil
-local is_file = type(isfile) == "function" and isfile or nil
-local del_file = type(delfile) == "function" and delfile or nil
+-- Fetch executor tables safely
+local _syn = FetchGlobal("\115\121\110")       -- "syn"
+local _fluxus = FetchGlobal("\102\108\117\120\117\115") -- "fluxus"
+local _krnl = FetchGlobal("\107\114\110\108")     -- "krnl"
+
+-- Base functions
+local _gethui = FetchGlobal("\103\101\116\104\117\105") -- "gethui"
+local _protectgui = FetchGlobal("\112\114\111\116\101\99\116\103\117\105") -- "protectgui"
+local _request = FetchGlobal("\114\101\113\117\101\115\116") -- "request"
+local _http_req = FetchGlobal("\104\116\116\112\95\114\101\113\117\101\115\116") -- "http_request"
+local _ident = FetchGlobal("\105\100\101\110\116\105\102\121\101\120\101\99\117\116\111\114") -- "identifyexecutor"
+local _getexecname = FetchGlobal("\103\101\116\101\120\101\99\117\116\111\114\110\97\109\101") -- "getexecutorname"
+
+-- Apply Logic
+local gethui = _gethui or function() return nil end
+local protectgui = _protectgui or (_syn and _syn["\112\114\111\116\101\99\116\95\103\117\105"]) or function(...) return ... end
+local exec_request = _request or _http_req or (_syn and _syn["\114\101\113\117\101\115\116"]) or (_fluxus and _fluxus["\114\101\113\117\101\115\116"]) or (_krnl and _krnl["\114\101\113\117\101\115\116"])
+local getexecutor = _ident or _getexecname or function() return "Unknown Executor" end
+
+-- Filesystem and Compilation
+local _writefile = FetchGlobal("\119\114\105\116\101\102\105\108\101") -- "writefile"
+local _readfile = FetchGlobal("\114\101\97\100\102\105\108\101") -- "readfile"
+local _isfile = FetchGlobal("\105\115\102\105\108\101") -- "isfile"
+local _delfile = FetchGlobal("\100\101\108\102\105\108\101") -- "delfile"
+local _loadstring = FetchGlobal("\108\111\97\100\115\116\114\105\110\103") -- "loadstring"
+local _load = FetchGlobal("\108\111\97\100") -- "load"
+
+local write_file = type(_writefile) == "function" and _writefile or nil
+local read_file = type(_readfile) == "function" and _readfile or nil
+local is_file = type(_isfile) == "function" and _isfile or nil
+local del_file = type(_delfile) == "function" and _delfile or nil
 
 local CompileFunction
-if type(loadstring) == "function" then
-	CompileFunction = loadstring
-elseif type(load) == "function" then
-	CompileFunction = load
+if type(_loadstring) == "function" then
+	CompileFunction = _loadstring
+elseif type(_load) == "function" then
+	CompileFunction = _load
 end
 
 local Theme = {
@@ -583,11 +593,9 @@ local function GetRelativeTime(timestamp)
 end
 
 local function GetSecureParent()
-	if gethui then
-		local huiSuccess, huiTarget = pcall(gethui)
-		if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
-			return huiTarget
-		end
+	local huiSuccess, huiTarget = pcall(function() return gethui() end)
+	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
+		return huiTarget
 	end
 
 	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
@@ -621,9 +629,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
-if protectgui then
-	pcall(protectgui, ScreenGui)
-end
+pcall(function() protectgui(ScreenGui) end)
 
 GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
@@ -2505,23 +2511,17 @@ end)))
 
 local function TriggerAntiAFKAction()
 	if VirtualUser then
-		local ok = pcall(function()
+		pcall(function()
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
-		if ok then return true end
-	end
-
-	if VirtualInputManager then
-		local ok = pcall(function()
+	elseif VirtualInputManager then
+		pcall(function()
 			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
 			task.wait(0.1)
 			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
 		end)
-		if ok then return true end
 	end
-
-	return false
 end
 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
