@@ -1244,7 +1244,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. (identifyexecutor or getexecutorname or function() return "Unknown Executor" end)()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1423,7 +1423,7 @@ DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownCont
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
-(Instance.new("UIListLayout", DropdownContainer)).SortOrder = Enum.SortOrder.LayoutOrder
+local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 local viewportConn
 local function BindCamera()
@@ -1457,6 +1457,12 @@ BindCamera()
 local FilterFavoritesActive = false
 local filterVersion = 0
 local SortMode = "Most Relevant"
+local SortOptions = {
+	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
+	"Updated Today", "Updated This Week", "Updated This Month",
+	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
+}
+
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -1592,11 +1598,7 @@ RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	UpdateFilter()
 end)))
 
-for _, opt in ipairs({
-	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
-	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
-}) do
+for _, opt in ipairs(SortOptions) do
 	local btn = Instance.new("TextButton", DropdownContainer)
 	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
 	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
@@ -1936,10 +1938,8 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	return scriptEntry
 end
 
-local dbRefreshing = false
-local CatalogRefreshQueued = false
-local LastCatalogFingerprint = nil
-local CatalogRefreshVisual = nil
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+local CatalogState = { Refreshing = false, Queued = false, Fingerprint = nil, Visual = nil }
 local AntiAFKConnection = nil
 
 local function DestroyCatalogCards()
@@ -1961,8 +1961,8 @@ end
 
 local function StartCatalogRefreshVisual()
 	if isDestroying or not ScriptsView or not ScriptsView.Parent then return end
-	if CatalogRefreshVisual and CatalogRefreshVisual.Parent then
-		CatalogRefreshVisual.Text = "Refreshing script catalog..."
+	if CatalogState.Visual and CatalogState.Visual.Parent then
+		CatalogState.Visual.Text = "Refreshing script catalog..."
 		return
 	end
 
@@ -1982,16 +1982,16 @@ local function StartCatalogRefreshVisual()
 	label.LayoutOrder = -2
 	label.ZIndex = 3
 	label.Parent = ScriptsView
-	CatalogRefreshVisual = label
+	CatalogState.Visual = label
 
 	label.TextTransparency = 1
 	SafeTween(label, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
 end
 
 local function FinishCatalogRefreshVisual(showEmptyState)
-	if CatalogRefreshVisual then
-		local label = CatalogRefreshVisual
-		CatalogRefreshVisual = nil
+	if CatalogState.Visual then
+		local label = CatalogState.Visual
+		CatalogState.Visual = nil
 		if label.Parent then
 			local tween = SafeTween(label, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
 			if tween then
@@ -2054,19 +2054,19 @@ end
 
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
-	if dbRefreshing then
-		CatalogRefreshQueued = true
+	if CatalogState.Refreshing then
+		CatalogState.Queued = true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		return false
 	end
 	local now = os.clock()
 	if not force and now - LastCatalogRefreshAt < 5 then
-		CatalogRefreshQueued = true
+		CatalogState.Queued = true
 		return false
 	end
 
 	LastCatalogRefreshAt = now
-	dbRefreshing = true
+	CatalogState.Refreshing = true
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local manualRefresh = force == true
@@ -2083,10 +2083,10 @@ PendingTasks.__LoadCatalog = function(force)
 
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
-		dbRefreshing = false
-		if CatalogRefreshQueued and not isDestroying then
+		CatalogState.Refreshing = false
+		if CatalogState.Queued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
-			CatalogRefreshQueued = false
+			CatalogState.Queued = false
 			PendingTasks.__CatalogRefreshForce = false
 			task.defer(function()
 				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
@@ -2105,7 +2105,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
-			local raw = FetchWithRetry("https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json", 3, true)
+			local raw = FetchWithRetry(CATALOG_URL, 3, true)
 			if not IsTaskCurrent(generation) then return end
 			if not raw then
 				if manualRefresh then FinishCatalogRefreshVisual(true) end
@@ -2153,7 +2153,7 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 
 			local fingerprint = BuildCatalogFingerprint(validEntries)
-			if fingerprint == LastCatalogFingerprint and not manualRefresh then
+			if fingerprint == CatalogState.Fingerprint and not manualRefresh then
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2228,7 +2228,7 @@ PendingTasks.__LoadCatalog = function(force)
 			table.clear(RegisteredScripts)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
-			LastCatalogFingerprint = fingerprint
+			CatalogState.Fingerprint = fingerprint
 			RefreshAllCardStates()
 			UpdateFilter()
 			if manualRefresh then
@@ -2577,7 +2577,7 @@ local function ApplyAntiAFK(enabled)
 	if not VirtualUser then return end
 
 	AntiAFKConnection = RegConn(LocalPlayer.Idled:Connect(function()
-		if isDestroying or not SavedData.Settings.AntiAFK then return end
+		if isDestroying or SavedData.Settings.AntiAFK ~= true then return end
 		pcall(function()
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
@@ -2600,8 +2600,8 @@ local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
-		if dbRefreshing then
-			CatalogRefreshQueued = true
+		if CatalogState.Refreshing then
+			CatalogState.Queued = true
 			PendingTasks.__CatalogRefreshForce = true
 			ShowNotification("Catalog refresh queued; it will rebuild when the current refresh finishes.", "Info")
 			return
