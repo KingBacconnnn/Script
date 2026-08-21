@@ -1428,7 +1428,7 @@ State.BLRowLay.FillDirection = Enum.FillDirection.Horizontal; State.BLRowLay.Sor
 
 State.VersionLabel = Instance.new("TextLabel", State.BtmLeftRow)
 State.VersionLabel.AutomaticSize = Enum.AutomaticSize.X; State.VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-State.VersionLabel.BackgroundTransparency = 1; State.VersionLabel.Text = "v2.0.0 BETA | " .. getexecutor()
+State.VersionLabel.BackgroundTransparency = 1; State.VersionLabel.Text = "v2.0.0 BETA | " .. State.getexecutor()
 State.VersionLabel.TextColor3 = State.Theme.Accent; State.VersionLabel.Font = Enum.Font.GothamMedium; State.VersionLabel.TextSize = State.IsMobile and 10 or 12; State.VersionLabel.LayoutOrder = 1
 
 State.DiagnosticsLabel = Instance.new("TextLabel", State.BtmLeftRow)
