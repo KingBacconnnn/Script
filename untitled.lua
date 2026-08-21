@@ -1,17 +1,6 @@
--- Add this at the top of your script
-local function FetchGlobal(name)
-    local success, env = pcall(getfenv, 0)
-    if success and env and type(env) == "table" then
-        return env[name]
-    end
-    return nil
-end
-
 local GlobalEnv = _G
-local _getgenv = FetchGlobal("\103\101\116\103\101\110\118") -- "getgenv"
-
-if type(_getgenv) == "function" then
-	local ok, env = pcall(_getgenv)
+if type(getgenv) == "function" then
+	local ok, env = pcall(getgenv)
 	if ok and type(env) == "table" then
 		GlobalEnv = env
 	end
@@ -67,43 +56,20 @@ end
 
 local PlaceId = game.PlaceId
 
--- Fetch executor tables safely
-local _syn = FetchGlobal("\115\121\110")       -- "syn"
-local _fluxus = FetchGlobal("\102\108\117\120\117\115") -- "fluxus"
-local _krnl = FetchGlobal("\107\114\110\108")     -- "krnl"
-
--- Base functions
-local _gethui = FetchGlobal("\103\101\116\104\117\105") -- "gethui"
-local _protectgui = FetchGlobal("\112\114\111\116\101\99\116\103\117\105") -- "protectgui"
-local _request = FetchGlobal("\114\101\113\117\101\115\116") -- "request"
-local _http_req = FetchGlobal("\104\116\116\112\95\114\101\113\117\101\115\116") -- "http_request"
-local _ident = FetchGlobal("\105\100\101\110\116\105\102\121\101\120\101\99\117\116\111\114") -- "identifyexecutor"
-local _getexecname = FetchGlobal("\103\101\116\101\120\101\99\117\116\111\114\110\97\109\101") -- "getexecutorname"
-
--- Apply Logic
-local gethui = _gethui or function() return nil end
-local protectgui = _protectgui or (_syn and _syn["\112\114\111\116\101\99\116\95\103\117\105"]) or function(...) return ... end
-local exec_request = _request or _http_req or (_syn and _syn["\114\101\113\117\101\115\116"]) or (_fluxus and _fluxus["\114\101\113\117\101\115\116"]) or (_krnl and _krnl["\114\101\113\117\101\115\116"])
-local getexecutor = _ident or _getexecname or function() return "Unknown Executor" end
-
--- Filesystem and Compilation
-local _writefile = FetchGlobal("\119\114\105\116\101\102\105\108\101") -- "writefile"
-local _readfile = FetchGlobal("\114\101\97\100\102\105\108\101") -- "readfile"
-local _isfile = FetchGlobal("\105\115\102\105\108\101") -- "isfile"
-local _delfile = FetchGlobal("\100\101\108\102\105\108\101") -- "delfile"
-local _loadstring = FetchGlobal("\108\111\97\100\115\116\114\105\110\103") -- "loadstring"
-local _load = FetchGlobal("\108\111\97\100") -- "load"
-
-local write_file = type(_writefile) == "function" and _writefile or nil
-local read_file = type(_readfile) == "function" and _readfile or nil
-local is_file = type(_isfile) == "function" and _isfile or nil
-local del_file = type(_delfile) == "function" and _delfile or nil
+local gethui = gethui or function() return nil end
+local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
+local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
+local write_file = type(writefile) == "function" and writefile or nil
+local read_file = type(readfile) == "function" and readfile or nil
+local is_file = type(isfile) == "function" and isfile or nil
+local del_file = type(delfile) == "function" and delfile or nil
 
 local CompileFunction
-if type(_loadstring) == "function" then
-	CompileFunction = _loadstring
-elseif type(_load) == "function" then
-	CompileFunction = _load
+if type(loadstring) == "function" then
+	CompileFunction = loadstring
+elseif type(load) == "function" then
+	CompileFunction = load
 end
 
 local Theme = {
@@ -133,7 +99,7 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
-local AutoExecuteRanThisSession = false
+local AutoExecuteRanThisSession = true
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
@@ -2256,15 +2222,7 @@ PendingTasks.__LoadCatalog = function(force)
 	return true
 end
 
-PendingTasks.__LoadCatalog()
 
-TrackTask(function()
-	while not isDestroying do
-		task.wait(CATALOG_REFRESH_INTERVAL)
-		if isDestroying then break end
-		PendingTasks.__LoadCatalog(false)
-	end
-end)
 
 TrackTask(function()
 	while not isDestroying do
@@ -2524,56 +2482,16 @@ local function TriggerAntiAFKAction()
 	end
 end
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Disabled in UI diagnostic mode.", "rbxassetid://10734898592", 2, false, function(val)
+	SavedData.Settings.AntiAFK = false
 	SaveConfiguration()
-	if val then
-		ShowNotification("Anti-AFK system engaged.", "Success")
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-		end
-		if getconnections then
-			pcall(function()
-				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-					pcall(function()
-						if type(conn) == "table" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						end
-					end)
-				end
-			end)
-		end
-	else
-		ShowNotification("Anti-AFK deactivated.", "Warning")
-		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
-		for _, conn in ipairs(AfkConnections) do
-			pcall(function()
-				if type(conn) == "table" and conn.Enable then
-					conn:Enable()
-				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
-					conn:Enable()
-				end
-			end)
-		end
-		table.clear(AfkConnections)
-	end
+	ShowNotification("Anti-AFK is disabled in UI diagnostic mode.", "Warning")
 end)
 
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
-	AttemptActionWithCooldown(function()
-		if dbRefreshing then
-			CatalogRefreshQueued = true
-			ShowNotification("Catalog refresh queued.", "Info")
-			return
-		end
-		LoadDynamicCatalog(true)
-	end)
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Disabled in UI diagnostic mode.", "rbxassetid://10734976528", "Disabled", 1, true, function()
+	ShowNotification("Catalog is disabled in UI diagnostic mode.", "Warning")
 end)
 
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
@@ -2582,26 +2500,7 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	CloseUI()
 end)
 
-if SavedData.Settings.AntiAFK then
-	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-	end
-	if getconnections then
-		pcall(function()
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				pcall(function()
-					if type(conn) == "table" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					end
-				end)
-			end
-		end)
-	end
-end
+
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
