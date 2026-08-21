@@ -6,32 +6,52 @@ if type(getgenv) == "function" then
 	end
 end
 
+
 local function ProtectTable(tbl)
-	return setmetatable({}, {
-		__index = tbl,
-		__newindex = function(_, k, v) tbl[k] = v end,
-		__metatable = "Velox_Secure_Env",
-		__tostring = function() return "Velox Hub (Protected)" end
+	local secure_func = type(newcclosure) == "function" and newcclosure or function(f) return f end
+	local proxy = setmetatable({}, {
+		__index = secure_func(function(_, key)
+			return tbl[key]
+		end),
+		__newindex = secure_func(function(_, k, v)
+
+		end),
+		__metatable = "Locked_Environment",
+		__tostring = secure_func(function() return " " end),
+		__mode = "v"
 	})
+
+
+	if type(setreadonly) == "function" then pcall(setreadonly, proxy, true) end
+	if type(table.freeze) == "function" then pcall(table.freeze, proxy) end
+
+	return proxy
 end
 
 local function GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local zwc = {"\226\128\139", "\226\128\140", "\226\128\141"}
 	local str = ""
 	for i = 1, len do
 		local r = math.random(1, #chars)
 		str = str .. string.sub(chars, r, r)
+
+		if math.random(1, 3) == 1 then
+			str = str .. zwc[math.random(1, #zwc)]
+		end
 	end
 	return str
 end
+
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
 local MainGuiName = "Velox_" .. GenerateRandomString(16)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
 
-if GlobalEnv and type(GlobalEnv[_G_Identifier]) == "function" then
-	pcall(GlobalEnv[_G_Identifier])
+if GlobalEnv[_G_Identifier] then
+	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
+
 
 local Services = ProtectTable(setmetatable({}, {
 	__index = function(self, key)
@@ -57,8 +77,6 @@ local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
 
-if not Players or not UserInputService or not HttpService or not TweenService then return end
-
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
@@ -67,8 +85,10 @@ end
 
 local PlaceId = game.PlaceId
 
+
 local function GetAdvancedExecutor()
 	local name, version = "Unknown Executor", ""
+
 	if type(identifyexecutor) == "function" then
 		local extName, extVer = identifyexecutor()
 		name = extName or name
@@ -76,14 +96,24 @@ local function GetAdvancedExecutor()
 	elseif type(getexecutorname) == "function" then
 		name = getexecutorname()
 	else
-		if syn then name = "Synapse X"
+		local env = type(getgenv) == "function" and getgenv() or _G
+		if env.Delta then name = "Delta"
+		elseif env.arceus then name = "Arceus X"
+		elseif env.codex then name = "Codex"
+		elseif env.wave then name = "Wave"
+		elseif env.macsploit then name = "Macsploit"
+		elseif env.RoExec then name = "RoExec (Krampus)"
+		elseif syn and type(syn) == "table" and not syn.toast_notification then name = "Synapse Z"
+		elseif syn then name = "Synapse X"
 		elseif krnl then name = "Krnl"
 		elseif fluxus then name = "Fluxus"
 		elseif is_sirhurt_closure then name = "SirHurt"
-		elseif pebc_execute then name = "ProtoSmasher"
 		end
 	end
-	return name .. (version ~= "" and (" (" .. tostring(version) .. ")") or "")
+
+
+	version = string.gsub(tostring(version), "\n", "")
+	return name .. (version ~= "" and (" (" .. version .. ")") or "")
 end
 
 local gethui = gethui or function() return nil end
@@ -136,7 +166,7 @@ local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
 local IsBindingKey = false
-local IsMobile = UserInputService and UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or (GuiService and GuiService:IsTenFootInterface()))
+local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
 local activeMainDragInput, activeFloatDragInput
@@ -588,6 +618,7 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
+
 local function GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -596,13 +627,20 @@ local function GetSecureParent()
 
 	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
-		local testAccess = pcall(function()
-			local t = Instance.new("Folder")
-			t.Name = GenerateRandomString(12)
-			t.Parent = coreTarget
-			t:Destroy()
+
+		local container = Instance.new("Folder")
+		container.Name = GenerateRandomString(16)
+
+		local accessSuccess = pcall(function()
+			local robloxGui = coreTarget:FindFirstChild("RobloxGui")
+			if robloxGui then
+				container.Parent = robloxGui
+			else
+				container.Parent = coreTarget
+			end
 		end)
-		if testAccess then return coreTarget end
+
+		if accessSuccess then return container end
 	end
 
 	if LocalPlayer then
@@ -612,6 +650,7 @@ local function GetSecureParent()
 
 	return nil
 end
+
 
 local TargetParent = GetSecureParent()
 if not TargetParent then return end
@@ -628,11 +667,9 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-if GlobalEnv then
-	GlobalEnv[_G_Identifier] = function()
-		CleanUpMemory()
-		if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
-	end
+GlobalEnv[_G_Identifier] = function()
+	CleanUpMemory()
+	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
@@ -677,7 +714,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-if UserInputService then RegConn(UserInputService.WindowFocusReleased:Connect(function()
+RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
@@ -1208,8 +1245,7 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	local cleanup = GlobalEnv and GlobalEnv[_G_Identifier]
-	if type(cleanup) == "function" then pcall(cleanup) end
+	GlobalEnv[_G_Identifier]()
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1487,7 +1523,7 @@ local viewportConn
 local function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
 	local cam = workspace.CurrentCamera
-	if cam and cam.ViewportSize then
+	if cam then
 		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			if DropdownContainer and DropdownContainer.Visible then
 				DropdownContainer.Visible = false
@@ -1964,8 +2000,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local rawUrl = data and data.RawUrl
-				local raw = FetchWithRetry(type(rawUrl) == "string" and rawUrl or "", 2)
+				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
 				if isDestroying then return end
 				if not raw then
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
@@ -2205,7 +2240,7 @@ PendingTasks.__LoadCatalog = function(force)
 				AutoExecuteRanThisSession = true
 				local autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
-					local auto = SavedData and SavedData.AutoExecutes and SavedData.AutoExecutes[scriptData.Name]
+					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
 						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
