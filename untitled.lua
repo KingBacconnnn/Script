@@ -17,7 +17,6 @@ local function GenerateRandomString(len)
 end
 
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
-local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
 if GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] then
 	pcall(function() GlobalEnv["VeloxHub_Core_Cleanup_V3_5"]() end)
@@ -35,27 +34,17 @@ local Services = setmetatable({}, {
 	end
 })
 
-local Players = Services.Players
-local UserInputService = Services.UserInputService
-local HttpService = Services.HttpService
-local StarterGui = Services.StarterGui
-local RunService = Services.RunService
-local Stats = Services.Stats
-local CoreGui = Services.CoreGui
-local TweenService = Services.TweenService
-local GuiService = Services.GuiService
 
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Services.Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
-	LocalPlayer = Players.LocalPlayer
+	LocalPlayer = Services.Players.LocalPlayer
 end
 
 
 local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
@@ -92,7 +81,6 @@ local RegisteredScripts = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
-local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
 local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
@@ -101,7 +89,7 @@ local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
 local IsBindingKey = false
-local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
+local IsMobile = Services.UserInputService.TouchEnabled and (not Services.UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or Services.GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
 local activeMainDragInput, activeFloatDragInput
@@ -258,7 +246,7 @@ local function SafeTween(instance, tweenInfo, properties)
 			end
 		end
 	end
-	local tween = TweenService:Create(instance, tweenInfo, properties)
+	local tween = Services.TweenService:Create(instance, tweenInfo, properties)
 	local conn
 	conn = tween.Completed:Connect(function()
 		if conn then conn:Disconnect() end
@@ -340,13 +328,13 @@ local function SaveConfiguration()
 		end
 
 		local safeData = SanitizeForJSON(cleanData)
-		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
+		local success, result = pcall(function() return Services.HttpService:JSONEncode(safeData) end)
 		if success then
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
 			if writeSuccess then
 				local verifySuccess = pcall(function()
 					local check = read_file(TEMP_FILE)
-					return HttpService:JSONDecode(check)
+					return Services.HttpService:JSONDecode(check)
 				end)
 				if verifySuccess then
 					pcall(function() write_file(DATA_FILE, result) end)
@@ -366,7 +354,7 @@ end
 
 local function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+		local success, result = pcall(function() return Services.HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
 				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
@@ -554,7 +542,7 @@ local function GetSecureParent()
 		return huiTarget
 	end
 
-	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
+	local coreSuccess, coreTarget = pcall(function() return Services.CoreGui end)
 	if coreSuccess and coreTarget then
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
@@ -633,7 +621,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-RegConn(UserInputService.WindowFocusReleased:Connect(function()
+RegConn(Services.UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
@@ -644,7 +632,7 @@ RegConn(UserInputService.WindowFocusReleased:Connect(function()
 end))
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = FloatBtnName
+FloatingBtn.Name = "VeloxFloat_" .. GenerateRandomString(12)
 FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
@@ -671,7 +659,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatPos = FloatingBtn.Position
 
 		if floatDragConnection then floatDragConnection:Disconnect() end
-		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
+		floatDragConnection = RegConn(Services.UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - floatStart
@@ -783,8 +771,8 @@ ToastLayout.Padding = UDim.new(0, 8)
 
 local function EmergencyFallbackNotification(msg, title)
 	pcall(function()
-		if StarterGui and type(StarterGui.SetCore) == "function" then
-			StarterGui:SetCore("SendNotification", {
+		if Services.StarterGui and type(Services.StarterGui.SetCore) == "function" then
+			Services.StarterGui:SetCore("SendNotification", {
 				Title = title or "Velox Hub Notice",
 				Text = tostring(msg),
 				Duration = NOTIF_DURATION
@@ -829,12 +817,12 @@ local function StandaloneBannerNotification(msg, notifType)
 		txt.TextSize = IsMobile and 11 or 13
 		txt.TextWrapped = true
 
-		TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Services.TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Position = UDim2.new(0.5, 0, 0, 20)
 		}):Play()
 
 		task.delay(NOTIF_DURATION, function()
-			local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			local outro = Services.TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = UDim2.new(0.5, 0, 0, -60)
 			})
 			outro:Play()
@@ -896,12 +884,12 @@ local function ShowNotification(msg, notifType)
 		txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
 		txt.TextWrapped = true; txt.ZIndex = 2003
 
-		local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+		local introTween = Services.TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
 		introTween:Play()
 
 		task.delay(NOTIF_DURATION, function()
 			if not wrapper or not wrapper.Parent then return end
-			local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
+			local outroTween = Services.TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
 			outroTween:Play()
 			local conn
 			conn = outroTween.Completed:Connect(function()
@@ -954,7 +942,7 @@ local function AttemptActionWithCooldown(actionFunc)
 			txt.TextSize = IsMobile and 11 or 13
 			txt.TextWrapped = true
 
-			TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Services.TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 				Position = UDim2.new(0.5, 0, 0, 20)
 			}):Play()
 
@@ -973,7 +961,7 @@ local function AttemptActionWithCooldown(actionFunc)
 						task.wait(1)
 						if currentLoop == GlobalCooldownLoopVersion then
 							if frame and frame.Parent then
-								local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+								local outro = Services.TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 									Position = UDim2.new(0.5, 0, 0, -60)
 								})
 								outro:Play()
@@ -1136,7 +1124,7 @@ local function BindToggleKey(keyCode)
 		ToggleKeybindConnection = nil
 	end
 
-	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	ToggleKeybindConnection = RegConn(Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
 
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
@@ -1150,7 +1138,7 @@ end
 
 BindToggleKey(ToggleKeybind)
 
-RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+RegConn(Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
 			CloseConfirmDialog(false)
@@ -1181,7 +1169,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainStartPos = MainPanel.Position
 
 		if mainDragConnection then mainDragConnection:Disconnect() end
-		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
+		mainDragConnection = RegConn(Services.UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - mainDragStart
@@ -1199,7 +1187,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	end
 end))
 
-RegConn(UserInputService.InputEnded:Connect(function(input)
+RegConn(Services.UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
@@ -1256,7 +1244,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. (identifyexecutor or getexecutorname or function() return "Unknown Executor" end)()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1297,7 +1285,7 @@ task.spawn(function()
 	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		local success, content = pcall(function() return Services.Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
@@ -1318,7 +1306,7 @@ ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, n
 
 local fpsCount = 0
 local diagnosticsElapsed = 0
-RegConn(RunService.Heartbeat:Connect(function(deltaTime)
+RegConn(Services.RunService.Heartbeat:Connect(function(deltaTime)
 	if isDestroying then return end
 	if isMinimized or isTransitioning then
 		fpsCount = 0
@@ -1330,7 +1318,7 @@ RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	if diagnosticsElapsed < 1 then return end
 	diagnosticsElapsed = diagnosticsElapsed - 1
 	local success, ping = pcall(function()
-		return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
 	if DiagnosticsLabel and DiagnosticsLabel.Parent then
 		DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
@@ -1435,7 +1423,7 @@ DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownCont
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
-local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
+(Instance.new("UIListLayout", DropdownContainer)).SortOrder = Enum.SortOrder.LayoutOrder
 
 local viewportConn
 local function BindCamera()
@@ -1469,12 +1457,6 @@ BindCamera()
 local FilterFavoritesActive = false
 local filterVersion = 0
 local SortMode = "Most Relevant"
-local SortOptions = {
-	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
-	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
-}
-
 local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -1610,7 +1592,11 @@ RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
 	UpdateFilter()
 end)))
 
-for _, opt in ipairs(SortOptions) do
+for _, opt in ipairs({
+	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
+	"Updated Today", "Updated This Week", "Updated This Month",
+	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
+}) do
 	local btn = Instance.new("TextButton", DropdownContainer)
 	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
 	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
@@ -1649,7 +1635,7 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 	end
 end))
 
-RegConn(UserInputService.InputBegan:Connect(function(input)
+RegConn(Services.UserInputService.InputBegan:Connect(function(input)
 	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 		local pos = input.Position
 		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
@@ -1950,7 +1936,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	return scriptEntry
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
@@ -2075,7 +2060,7 @@ PendingTasks.__LoadCatalog = function(force)
 		return false
 	end
 	local now = os.clock()
-	if not force and now - LastCatalogRefreshAt < CatalogRefreshCooldown then
+	if not force and now - LastCatalogRefreshAt < 5 then
 		CatalogRefreshQueued = true
 		return false
 	end
@@ -2120,7 +2105,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
-			local raw = FetchWithRetry(CATALOG_URL, 3, true)
+			local raw = FetchWithRetry("https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json", 3, true)
 			if not IsTaskCurrent(generation) then return end
 			if not raw then
 				if manualRefresh then FinishCatalogRefreshVisual(true) end
@@ -2133,7 +2118,7 @@ PendingTasks.__LoadCatalog = function(force)
 				return
 			end
 
-			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			local success, parsed = pcall(function() return Services.HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
 				if manualRefresh then FinishCatalogRefreshVisual(true) end
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
@@ -2325,10 +2310,6 @@ PendingTasks.__LoadCatalog = function(force)
 		FinishRefresh()
 	end)
 	return true
-end
-
-local LoadDynamicCatalog = function(force)
-	return PendingTasks.__LoadCatalog(force == true)
 end
 
 PendingTasks.__LoadCatalog()
@@ -2544,7 +2525,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 		KeybindCaptureConnection = nil
 	end
 
-	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
+	KeybindCaptureConnection = RegConn(Services.UserInputService.InputBegan:Connect(function(input)
 		if isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
@@ -2625,7 +2606,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			ShowNotification("Catalog refresh queued; it will rebuild when the current refresh finishes.", "Info")
 			return
 		end
-		LoadDynamicCatalog(true)
+		PendingTasks.__LoadCatalog(true)
 	end)
 end)
 
