@@ -118,6 +118,10 @@ local GlobalCooldownLoopVersion = 0
 local GlobalActionCooldownEndTime = 0
 
 local OriginalCache = setmetatable({}, { __mode = "k" })
+local AntiAFKConnection = nil
+local pendingExecuteGeneration = nil
+local CatalogRefreshVisualVersion = 0
+local CatalogRefreshingVisual = false
 
 local function CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
@@ -211,6 +215,12 @@ local function CleanUpMemory()
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 	if ToggleKeybindConnection then UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
 	if KeybindCaptureConnection then UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
+	if AntiAFKConnection then
+		pcall(function() AntiAFKConnection:Disconnect() end)
+		AntiAFKConnection = nil
+	end
+	pendingExecuteGeneration = nil
+	CatalogRefreshVisualVersion += 1
 
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -594,7 +604,19 @@ GlobalEnv[_G_Identifier] = function()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
-local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
+local function GetPanelSize()
+	if not IsMobile then
+		return UDim2.new(0, 560, 0, 515)
+	end
+	local camera = workspace.CurrentCamera
+	local width = camera and camera.ViewportSize.X or 480
+	local height = camera and camera.ViewportSize.Y or 720
+	local panelWidth = math.clamp(width - 20, 300, 480)
+	local panelHeight = math.clamp(height - 40, 320, 600)
+	return UDim2.new(0, panelWidth, 0, panelHeight)
+end
+
+local PANEL_SIZE = GetPanelSize()
 
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
@@ -1092,6 +1114,7 @@ local function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
+	pendingExecuteGeneration = CatalogGeneration
 	ConfirmScriptName.Text = scriptName
 	ConfirmExecuteBtn.Active = true
 	ConfirmExecuteBtn.AutoButtonColor = true
@@ -1109,8 +1132,14 @@ local function CloseConfirmDialog(shouldExecute)
 	ConfirmOverlay.Active = false
 	isConfirming = false
 	local cb = pendingExecuteCallback
+	local callbackGeneration = pendingExecuteGeneration
 	pendingExecuteCallback = nil
-	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
+	pendingExecuteGeneration = nil
+	if shouldExecute and callbackGeneration == CatalogGeneration and type(cb) == "function" then
+		task.spawn(cb)
+	elseif shouldExecute and callbackGeneration ~= CatalogGeneration then
+		ShowNotification("Execution canceled because the catalog was refreshed.", "Warning")
+	end
 end
 
 RegConn(ConfirmCancelBtn.Activated:Connect(CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
@@ -1451,6 +1480,7 @@ local function BindCamera()
 				DropdownContainer.Visible = false
 			end
 			if MainPanel and MainPanel.Parent then
+				if IsMobile and not isMinimized then MainPanel.Size = GetPanelSize() end
 				local viewport = cam.ViewportSize
 				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
@@ -1542,10 +1572,6 @@ local function UpdateFilter()
 
 		if currentVersion ~= filterVersion then return end
 		table.sort(matches, function(a, b)
-			if a.TagPriority ~= b.TagPriority then
-				return a.TagPriority > b.TagPriority
-			end
-
 			local aUpdated = a.LastUpdatedNumber
 			local bUpdated = b.LastUpdatedNumber
 			if currentSort == "A-Z" then
@@ -1558,11 +1584,16 @@ local function UpdateFilter()
 				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
 				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
 				if aFav ~= bFav then return aFav > bFav end
+				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif currentSort == "Auto Execute: ON" or currentSort == "Auto Execute: OFF" then
 				local aAuto = SavedData.AutoExecutes[a.ExactName] and 1 or 0
 				local bAuto = SavedData.AutoExecutes[b.ExactName] and 1 or 0
 				if aAuto ~= bAuto then return aAuto > bAuto end
+				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
+			elseif currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
+				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
 			else
+				if a.TagPriority ~= b.TagPriority then return a.TagPriority > b.TagPriority end
 				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
 			end
 			return a.OriginalIndex < b.OriginalIndex
@@ -1742,15 +1773,17 @@ local function RefreshAllCardStates()
 	end
 end
 
-local function ExecuteSandboxed(code, scriptName)
+local function ExecuteSandboxed(code, scriptName, onComplete)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
+		if type(onComplete) == "function" then pcall(onComplete, false, "no compatible Lua compiler") end
 		return false, "no compatible Lua compiler"
 	end
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if not ok or type(chunk) ~= "function" then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		if type(onComplete) == "function" then pcall(onComplete, false, tostring(compileErr or chunk or "unknown compiler error")) end
 		return false, tostring(compileErr or chunk or "unknown compiler error")
 	end
 
@@ -1758,6 +1791,9 @@ local function ExecuteSandboxed(code, scriptName)
 		local success, runtimeErr = pcall(chunk)
 		if not success and not isDestroying then
 			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+		end
+		if type(onComplete) == "function" and not isDestroying then
+			pcall(onComplete, success, runtimeErr)
 		end
 	end)
 
@@ -1929,13 +1965,17 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 				elseif string.find(raw, "404: Not Found") then
 					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
 				else
-					local success = ExecuteSandboxed(raw, exactName)
-					if success then
-						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
-					end
+					ExecuteSandboxed(raw, exactName, function(success)
+						if success then
+							ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
+						end
+						if titleLbl and titleLbl.Parent then
+							titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
+						end
+					end)
 				end
 
-				if titleLbl and titleLbl.Parent then
+				if titleLbl and titleLbl.Parent and (not raw or string.find(raw, "404: Not Found")) then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
 			end)
@@ -1975,6 +2015,105 @@ local function BuildCatalogFingerprint(entries)
 	return table.concat(parts, "\30")
 end
 
+local function SetScriptsTabForRefresh()
+	if isDestroying then return end
+	currentTab = "Scripts"
+	SearchRow.Visible = true
+	SectionHeaderLabel.Text = "Scripts Catalog"
+	DropdownContainer.Visible = false
+	for tName, view in pairs(TabViews) do
+		view.Visible = (tName == "Scripts")
+		if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
+	end
+	for tName, tBtn in pairs(TabButtonCache) do
+		tBtn.TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+	end
+	SafeTween(TabIndicator, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, (IsMobile and 90 or 115) + 4, 1, -2)})
+end
+
+local function BeginCatalogVisualRefresh()
+	if isDestroying then return end
+	SetScriptsTabForRefresh()
+	CatalogRefreshVisualVersion += 1
+	local visualVersion = CatalogRefreshVisualVersion
+	CatalogRefreshingVisual = true
+	if isConfirming then
+		CloseConfirmDialog(false)
+	end
+	EmptyStateMessage.Visible = true
+	EmptyStateMessage.TextColor3 = Theme.Info
+	local step = 0
+	local refreshNames = {"Refreshing catalog.", "Refreshing catalog..", "Refreshing catalog..."}
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry.Instance and entry.Instance.Parent then
+			SafeTween(entry.Instance, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+			local stroke = entry.Instance:FindFirstChild("TagTypeStroke")
+			if stroke and stroke:IsA("UIStroke") then SafeTween(stroke, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1}) end
+			for _, child in ipairs(entry.Instance:GetDescendants()) do
+				if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+					SafeTween(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1})
+				elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
+					SafeTween(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 1})
+				elseif child:IsA("UIStroke") then
+					SafeTween(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1})
+				end
+			end
+		end
+	end
+	task.spawn(function()
+		while visualVersion == CatalogRefreshVisualVersion and not isDestroying and CatalogRefreshingVisual do
+			step = (step % #refreshNames) + 1
+			if EmptyStateMessage and EmptyStateMessage.Parent then EmptyStateMessage.Text = refreshNames[step] end
+			task.wait(0.35)
+		end
+	end)
+end
+
+local function RestoreCatalogVisualState(message, color)
+	CatalogRefreshingVisual = false
+	CatalogRefreshVisualVersion += 1
+	if EmptyStateMessage and EmptyStateMessage.Parent then
+		EmptyStateMessage.Visible = false
+		EmptyStateMessage.TextColor3 = Theme.TextSecondary
+	end
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry.Instance and entry.Instance.Parent then
+			entry.Instance.BackgroundTransparency = 0
+			local stroke = entry.Instance:FindFirstChild("TagTypeStroke")
+			if stroke and stroke:IsA("UIStroke") then stroke.Transparency = 0 end
+			for _, child in ipairs(entry.Instance:GetDescendants()) do
+				if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then child.TextTransparency = 0
+				elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then child.ImageTransparency = 0
+				elseif child:IsA("UIStroke") then child.Transparency = 0 end
+			end
+		end
+	end
+	if message then ShowNotification(message, color or "Info") end
+end
+
+local function AnimateNewCatalogEntries(entries)
+	for index, entry in ipairs(entries) do
+		local card = entry.Instance
+		if card and card.Parent then
+			card.BackgroundTransparency = 1
+			for _, child in ipairs(card:GetDescendants()) do
+				if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then child.TextTransparency = 1
+				elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then child.ImageTransparency = 1
+				elseif child:IsA("UIStroke") then child.Transparency = 1 end
+			end
+			task.delay((index - 1) * 0.025, function()
+				if isDestroying or not card.Parent then return end
+				SafeTween(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
+				for _, child in ipairs(card:GetDescendants()) do
+					if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then SafeTween(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+					elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then SafeTween(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0})
+					elseif child:IsA("UIStroke") then SafeTween(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0}) end
+				end
+			end)
+		end
+	end
+end
+
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
 	if dbRefreshing then
@@ -1993,7 +2132,8 @@ PendingTasks.__LoadCatalog = function(force)
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
-	ShowNotification("Fetching latest script catalog...", "System")
+	BeginCatalogVisualRefresh()
+	ShowNotification("Refreshing script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
@@ -2025,6 +2165,7 @@ PendingTasks.__LoadCatalog = function(force)
 			local raw = FetchWithRetry(CATALOG_URL, 3, true)
 			if not IsTaskCurrent(generation) then return end
 			if not raw then
+				RestoreCatalogVisualState(nil, "Error")
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Offline"
@@ -2036,6 +2177,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
+				RestoreCatalogVisualState(nil, "Error")
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Data Error"
@@ -2048,7 +2190,7 @@ PendingTasks.__LoadCatalog = function(force)
 			local validEntries = {}
 			local seenNames = {}
 			for _, entry in ipairs(parsed) do
-				if type(entry) == "table" and type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") ~= "" then
+				if type(entry) == "table" and type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") ~= "" and type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") ~= "" then
 					local normalized = {
 						Name = entry.Name,
 						Description = type(entry.Description) == "string" and entry.Description or "No description provided.",
@@ -2069,6 +2211,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 			local fingerprint = BuildCatalogFingerprint(validEntries)
 			if fingerprint == LastCatalogFingerprint then
+				RestoreCatalogVisualState(nil, "Info")
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2142,6 +2285,11 @@ PendingTasks.__LoadCatalog = function(force)
 
 			table.clear(RegisteredScripts)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
+			CatalogRefreshingVisual = false
+			CatalogRefreshVisualVersion += 1
+			EmptyStateMessage.Visible = false
+			EmptyStateMessage.TextColor3 = Theme.TextSecondary
+			AnimateNewCatalogEntries(nextEntries)
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
 			RefreshAllCardStates()
@@ -2172,21 +2320,22 @@ PendingTasks.__LoadCatalog = function(force)
 				if #autoQueue > 0 then
 					TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
-						local successList, failList = {}, {}
+						local startedList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not IsTaskCurrent(generation) then return end
 							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
 							if not IsTaskCurrent(generation) then return end
 							if scrRaw and not string.find(scrRaw, "404: Not Found") then
-								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+								local dispatched = ExecuteSandboxed(scrRaw, scriptData.Name)
+								if dispatched then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
 							task.wait(0.3)
 						end
-						if #successList > 0 then ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success") end
-						if #failList > 0 then ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning") end
+						if #startedList > 0 then ShowNotification("Auto-execution started for: " .. table.concat(startedList, ", "), "Execution") end
+						if #failList > 0 then ShowNotification("Auto-execution could not start for: " .. table.concat(failList, ", "), "Warning") end
 					end)
 				end
 			end
@@ -2198,6 +2347,7 @@ PendingTasks.__LoadCatalog = function(force)
 		end, function(err) return tostring(err) end)
 
 		if not taskOk then
+			RestoreCatalogVisualState(nil, "Error")
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
@@ -2471,22 +2621,35 @@ local function ApplyAntiAFK()
 	local Players = game:GetService("Players")
 	local GC = getconnections or get_signal_cons
 
+	if AntiAFKConnection then
+		pcall(function() AntiAFKConnection:Disconnect() end)
+		AntiAFKConnection = nil
+	end
+
 	if GC then
-		for i, v in pairs(GC(Players.LocalPlayer.Idled)) do
-			if v["Disable"] then
-				v["Disable"](v)
-			elseif v["Disconnect"] then
-				v["Disconnect"](v)
+		local ok, connections = pcall(GC, Players.LocalPlayer.Idled)
+		if ok and type(connections) == "table" then
+			for _, v in pairs(connections) do
+				if v["Disable"] then
+					pcall(function() v["Disable"](v) end)
+				elseif v["Disconnect"] then
+					pcall(function() v["Disconnect"](v) end)
+				end
 			end
+			return
 		end
-	else
-		Players.LocalPlayer.Idled:Connect(function()
-			local VirtualUser = game:GetService("VirtualUser")
+	end
+
+	AntiAFKConnection = Players.LocalPlayer.Idled:Connect(function()
+		if isDestroying or not SavedData.Settings.AntiAFK then return end
+		local VirtualUser = game:GetService("VirtualUser")
+		pcall(function()
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
-	end
+	end)
 end
+
 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
@@ -2495,6 +2658,10 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		ApplyAntiAFK()
 		ShowNotification("Anti-AFK system engaged.", "Success")
 	else
+		if AntiAFKConnection then
+			pcall(function() AntiAFKConnection:Disconnect() end)
+			AntiAFKConnection = nil
+		end
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 	end
 end)
@@ -2508,7 +2675,8 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			ShowNotification("Catalog refresh queued.", "Info")
 			return
 		end
-		LoadDynamicCatalog(true)
+		ShowNotification("Starting catalog refresh...", "System")
+		PendingTasks.__LoadCatalog(true)
 	end)
 end)
 
