@@ -1,3 +1,19 @@
+local VeloxProtection = {
+    Version = "2.0.1",
+    Build = "ef039d336d69",
+    BuildDate = "2026-08-21",
+    IntegrityAlgorithm = "SHA-256"
+}
+
+local function GetProtectionInfo()
+    return {
+        Version = VeloxProtection.Version,
+        Build = VeloxProtection.Build,
+        BuildDate = VeloxProtection.BuildDate,
+        IntegrityAlgorithm = VeloxProtection.IntegrityAlgorithm
+    }
+end
+
 local GlobalEnv = _G
 
 local function GenerateRandomString(len)
