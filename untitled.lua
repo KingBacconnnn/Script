@@ -16,12 +16,11 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
-if GlobalEnv[_G_Identifier] then
-	pcall(function() GlobalEnv[_G_Identifier]() end)
+if GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] then
+	pcall(function() GlobalEnv["VeloxHub_Core_Cleanup_V3_5"]() end)
 end
 
 local Services = setmetatable({}, {
@@ -52,7 +51,6 @@ while not LocalPlayer do
 	LocalPlayer = Players.LocalPlayer
 end
 
-local PlaceId = game.PlaceId
 
 local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
@@ -202,7 +200,7 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	GlobalEnv[_G_Identifier] = nil
+	GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
 	CancelTrackedTasks()
@@ -589,12 +587,11 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-GlobalEnv[_G_Identifier] = function()
+GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
-local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
@@ -693,7 +690,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 end))
 
 local MainPanel = Instance.new("Frame", ScreenGui)
-MainPanel.Size = PANEL_SIZE
+MainPanel.Size = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
@@ -783,7 +780,6 @@ ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 ToastLayout.Padding = UDim.new(0, 8)
 
-local NOTIF_DURATION = 3.5
 
 local function EmergencyFallbackNotification(msg, title)
 	pcall(function()
@@ -1167,7 +1163,7 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	GlobalEnv[_G_Identifier]()
+	GlobalEnv["VeloxHub_Core_Cleanup_V3_5"]()
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1955,7 +1951,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 end
 
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
-local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
@@ -2278,7 +2273,7 @@ PendingTasks.__LoadCatalog = function(force)
 					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						if not validPlace then validPlace = auto.PlaceId == game.PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
 						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
