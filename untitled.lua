@@ -1455,7 +1455,7 @@ State.UI_DisplayName.TextXAlignment = Enum.TextXAlignment.Right; State.UI_Displa
 
 State.UI_Username = Instance.new("TextLabel", State.UserInfoFrame)
 State.UI_Username.Size = UDim2.new(1, 0, 0, 0); State.UI_Username.AutomaticSize = Enum.AutomaticSize.Y; State.UI_Username.BackgroundTransparency = 1
-State.UI_Username.Text = "@" .. LocalPlayer.Name; State.UI_Username.TextColor3 = State.Theme.TextSecondary
+State.UI_Username.Text = "@" .. State.LocalPlayer.Name; State.UI_Username.TextColor3 = State.Theme.TextSecondary
 State.UI_Username.Font = Enum.Font.Gotham; State.UI_Username.TextSize = State.IsMobile and 9 or 10
 State.UI_Username.TextXAlignment = Enum.TextXAlignment.Right; State.UI_Username.LayoutOrder = 2
 
