@@ -109,7 +109,7 @@ TrackTask(function()
     end
 end)
 
-local AutoExecuteRanThisSession = false
+local AutoExecuteRanThisSession = true
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
