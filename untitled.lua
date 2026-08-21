@@ -94,7 +94,6 @@ local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
 
-
 local AutoExecuteRanThisSession = true
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
@@ -2218,8 +2217,6 @@ PendingTasks.__LoadCatalog = function(force)
 	return true
 end
 
-
-
 TrackTask(function()
 	while not isDestroying do
 		task.wait(60)
@@ -2495,8 +2492,6 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
-
-
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
