@@ -116,20 +116,80 @@ local function GetAdvancedExecutor()
 	return name .. (version ~= "" and (" (" .. version .. ")") or "")
 end
 
-local gethui = gethui or function() return nil end
-local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
-local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+local RuntimeEnv = type(getgenv) == "function" and getgenv() or _G
+
+local gethui = type(gethui) == "function" and gethui or nil
+
+local protectgui
+if type(syn) == "table" and type(syn.protect_gui) == "function" then
+	protectgui = syn.protect_gui
+elseif type(protectgui) == "function" then
+	protectgui = protectgui
+else
+	protectgui = function(gui)
+		return gui
+	end
+end
+
+local function ResolveFunction(names, containers)
+	for _, container in ipairs(containers) do
+		if type(container) == "table" then
+			for _, name in ipairs(names) do
+				local candidate = rawget(container, name)
+				if type(candidate) == "function" then
+					return candidate
+				end
+			end
+		end
+	end
+	for _, name in ipairs(names) do
+		local candidate = rawget(RuntimeEnv, name) or rawget(_G, name)
+		if type(candidate) == "function" then
+			return candidate
+		end
+	end
+	return nil
+end
+
+local exec_request = ResolveFunction(
+	{"request", "http_request"},
+	{
+		RuntimeEnv,
+		_G,
+		type(syn) == "table" and syn or nil,
+		type(fluxus) == "table" and fluxus or nil,
+		type(krnl) == "table" and krnl or nil,
+		type(http) == "table" and http or nil
+	}
+)
+
 local getexecutor = GetAdvancedExecutor
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 
-local CompileFunction
-if type(loadstring) == "function" then
-	CompileFunction = loadstring
-elseif type(load) == "function" then
-	CompileFunction = load
+local CompileFunction = ResolveFunction(
+	{"loadstring", "load", "luau_load"},
+	{RuntimeEnv, _G}
+)
+
+local function CompileChunk(source, chunkName)
+	if type(CompileFunction) ~= "function" then
+		return nil, "no compatible Lua compiler"
+	end
+
+	local ok, chunk, err = pcall(CompileFunction, source, chunkName)
+	if ok and type(chunk) == "function" then
+		return chunk
+	end
+
+	local okOneArg, chunkOneArg, errOneArg = pcall(CompileFunction, source)
+	if okOneArg and type(chunkOneArg) == "function" then
+		return chunkOneArg
+	end
+
+	return nil, tostring(errOneArg or err or chunk or chunkOneArg or "compiler error")
 end
 
 local Theme = {
@@ -465,18 +525,55 @@ end
 LoadConfiguration()
 
 local function UniversalHttpGet(url)
+	if type(url) ~= "string" or url == "" then
+		return nil
+	end
+
 	if type(exec_request) == "function" then
-		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
-		if reqSuccess and reqResult then
-			local body = reqResult.Body or reqResult.body or reqResult.Response
-			local status = reqResult.StatusCode or reqResult.Status or reqResult.status_code
-			if (status == 200 or status == nil) and body then
+		local ok, result = pcall(function()
+			return exec_request({
+				Url = url,
+				Method = "GET",
+				Headers = {
+					["Cache-Control"] = "no-cache"
+				}
+			})
+		end)
+
+		if ok and type(result) == "table" then
+			local body = result.Body or result.body or result.Response or result.response
+			local status = result.StatusCode or result.Status or result.status_code or result.statusCode
+			if type(body) == "string" and #body > 0 and (status == nil or tonumber(status) == nil or tonumber(status) >= 200 and tonumber(status) < 400) then
 				return body
 			end
 		end
 	end
-	local success, result = pcall(function() return game:HttpGet(url) end)
-	if success and result then return result end
+
+	if game and type(game.HttpGet) == "function" then
+		local ok, result = pcall(function()
+			return game:HttpGet(url)
+		end)
+		if ok and type(result) == "string" and #result > 0 then
+			return result
+		end
+
+		local okDot, resultDot = pcall(function()
+			return game.HttpGet(game, url)
+		end)
+		if okDot and type(resultDot) == "string" and #resultDot > 0 then
+			return resultDot
+		end
+	end
+
+	if HttpService and type(HttpService.GetAsync) == "function" then
+		local ok, result = pcall(function()
+			return HttpService:GetAsync(url, false)
+		end)
+		if ok and type(result) == "string" and #result > 0 then
+			return result
+		end
+	end
+
 	return nil
 end
 
@@ -1821,15 +1918,14 @@ local function RefreshAllCardStates()
 end
 
 local function ExecuteSandboxed(code, scriptName)
-	if type(CompileFunction) ~= "function" then
-		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
-		return false, "no compatible Lua compiler"
+	if type(code) ~= "string" or code == "" then
+		return false, "empty script"
 	end
 
-	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
-	if not ok or type(chunk) ~= "function" then
-		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		return false, tostring(compileErr or chunk or "unknown compiler error")
+	local chunk, compileErr = CompileChunk(code, "=" .. tostring(scriptName))
+	if type(chunk) ~= "function" then
+		ShowNotification("Execution unavailable: this executor does not provide a compatible Lua compiler.", "Error")
+		return false, compileErr or "no compatible Lua compiler"
 	end
 
 	TrackTask(function()
@@ -1995,7 +2091,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 
 		local function executeScript()
 			if type(CompileFunction) ~= "function" then
-				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
+				ShowNotification("Execution disabled: this executor does not provide a compatible Lua compiler.", "Error")
 				return
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
@@ -2249,7 +2345,7 @@ PendingTasks.__LoadCatalog = function(force)
 				end
 				if #autoQueue > 0 then
 					TrackTask(function()
-						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
+						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: this executor does not provide a compatible Lua compiler.", "Error"); return end
 						local successList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
