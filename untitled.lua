@@ -6,7 +6,6 @@ if type(getgenv) == "function" then
 	end
 end
 
-
 local function ProtectTable(tbl)
 	local secure_func = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local proxy = setmetatable({}, {
@@ -20,7 +19,6 @@ local function ProtectTable(tbl)
 		__tostring = secure_func(function() return " " end),
 		__mode = "v"
 	})
-
 
 	if type(setreadonly) == "function" then pcall(setreadonly, proxy, true) end
 	if type(table.freeze) == "function" then pcall(table.freeze, proxy) end
@@ -43,7 +41,6 @@ local function GenerateRandomString(len)
 	return str
 end
 
-
 local _G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
 local MainGuiName = "Velox_" .. GenerateRandomString(16)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
@@ -51,7 +48,6 @@ local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
-
 
 local Services = ProtectTable(setmetatable({}, {
 	__index = function(self, key)
@@ -85,7 +81,6 @@ end
 
 local PlaceId = game.PlaceId
 
-
 local function GetAdvancedExecutor()
 	local name, version = "Unknown Executor", ""
 
@@ -110,7 +105,6 @@ local function GetAdvancedExecutor()
 		elseif is_sirhurt_closure then name = "SirHurt"
 		end
 	end
-
 
 	version = string.gsub(tostring(version), "\n", "")
 	return name .. (version ~= "" and (" (" .. version .. ")") or "")
@@ -169,27 +163,63 @@ local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 
-local CompileFunction = ResolveFunction(
-	{"loadstring", "load", "luau_load"},
-	{RuntimeEnv, _G}
-)
+local CompileFunction = nil
+
+local compilerNames = {"loadstring", "load", "luau_load"}
+local compilerEnvs = {RuntimeEnv, _G}
+
+for _, env in ipairs(compilerEnvs) do
+	if type(env) == "table" then
+		for _, name in ipairs(compilerNames) do
+			local candidate = env[name]
+			if type(candidate) == "function" then
+				CompileFunction = candidate
+				break
+			end
+		end
+	end
+	if CompileFunction then break end
+end
+
+if not CompileFunction then
+	for _, name in ipairs(compilerNames) do
+		local ok, candidate = pcall(function() return _ENV and _ENV[name] end)
+		if ok and type(candidate) == "function" then
+			CompileFunction = candidate
+			break
+		end
+	end
+end
 
 local function CompileChunk(source, chunkName)
+	if type(source) ~= "string" or source == "" then
+		return nil, "empty source"
+	end
+
 	if type(CompileFunction) ~= "function" then
 		return nil, "no compatible Lua compiler"
 	end
 
-	local ok, chunk, err = pcall(CompileFunction, source, chunkName)
-	if ok and type(chunk) == "function" then
-		return chunk
+	local attempts = {
+		function() return CompileFunction(source, chunkName) end,
+		function() return CompileFunction(source) end
+	}
+
+	local lastError = nil
+
+	for _, attempt in ipairs(attempts) do
+		local ok, chunk, err = pcall(attempt)
+		if ok and type(chunk) == "function" then
+			return chunk
+		end
+		if type(err) == "string" and err ~= "" then
+			lastError = err
+		elseif type(chunk) == "string" and chunk ~= "" then
+			lastError = chunk
+		end
 	end
 
-	local okOneArg, chunkOneArg, errOneArg = pcall(CompileFunction, source)
-	if okOneArg and type(chunkOneArg) == "function" then
-		return chunkOneArg
-	end
-
-	return nil, tostring(errOneArg or err or chunk or chunkOneArg or "compiler error")
+	return nil, lastError or "compiler rejected the source without returning an error"
 end
 
 local Theme = {
@@ -715,7 +745,6 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
-
 local function GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -747,7 +776,6 @@ local function GetSecureParent()
 
 	return nil
 end
-
 
 local TargetParent = GetSecureParent()
 if not TargetParent then return end
@@ -2164,7 +2192,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
-	CatalogGeneration += 1
+	CatalogGeneration = CatalogGeneration + 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
 	ShowNotification("Fetching latest script catalog...", "System")
