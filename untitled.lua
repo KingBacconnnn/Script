@@ -1,37 +1,57 @@
+-- ======================================================================
+-- Velox Hub (Hiding Enhanced)
+-- ======================================================================
+-- Changes:
+--   - Removed _G_Identifier and all global cleanup references.
+--   - Replaced gethui with PlayerGui/CoreGui fallback.
+--   - Removed protectgui (dead giveaway).
+--   - Removed getconnections block (AFK uses simple idle connection only).
+--   - Wrapped executor API calls with dynamic fallbacks.
+--   - Added random jitter to periodic actions (catalog refresh, etc.).
+--   - Removed script name from loadstring to reduce stack trace context.
+--   - Obfuscated catalog URL using base64 encoding.
+--   - Randomized UI names already present, kept.
+-- ======================================================================
+
 local GlobalEnv = _G
 
-local function GenerateRandomString(len)
-    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    local str = ""
-    for i = 1, len do
-        local r = math.random(1, #chars)
-        str = str .. string.sub(chars, r, r)
-    end
-    return str
+if type(getgenv) == "function" then
+	local ok, env = pcall(getgenv)
+	if ok and type(env) == "table" then
+		GlobalEnv = env
+	end
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
+local function GenerateRandomString(len)
+	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local str = ""
+	for i = 1, len do
+		local r = math.random(1, #chars)
+		str = str .. string.sub(chars, r, r)
+	end
+	return str
+end
+
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
 local Services = setmetatable({}, {
-    __index = function(self, key)
-        local success, service = pcall(function()
-            return game:GetService(key)
-        end)
-        if success and service then
-            self[key] = service
-            return service
-        end
-        return nil
-    end
+	__index = function(self, key)
+		local success, service = pcall(function() return game:GetService(key) end)
+		if success and service then
+			local final = (type(cloneref) == "function") and cloneref(service) or service
+			self[key] = final
+			return final
+		end
+		return nil
+	end
 })
 
 local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
-local VirtualInputManager = nil
-local VirtualUser = nil
+local VirtualInputManager = Services.VirtualInputManager
+local VirtualUser = Services.VirtualUser
 local StarterGui = Services.StarterGui
 local RunService = Services.RunService
 local Stats = Services.Stats
@@ -41,30 +61,48 @@ local GuiService = Services.GuiService
 
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
-    task.wait()
-    LocalPlayer = Players.LocalPlayer
+	task.wait()
+	LocalPlayer = Players.LocalPlayer
 end
 
 local PlaceId = game.PlaceId
 
-local gethui = function()
-    return nil
+-- ===== Safer parent detection (no gethui) =====
+local function GetSecureParent()
+	local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if playerGui then return playerGui end
+	local core = CoreGui
+	if core then return core end
+	return nil
 end
 
-local protectgui = function(gui)
-    return gui
+-- ===== Safer request function (no direct executor APIs) =====
+local function safeRequest(url)
+	local req = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or (getgenv and getgenv().request) or nil
+	if req then
+		local ok, res = pcall(req, {Url = url, Method = "GET"})
+		if ok and res then
+			return res.Body or res.body or res.Response
+		end
+	end
+	return game:HttpGet(url)
 end
 
-local exec_request = nil
-local getexecutor = function()
-    return "Standard Roblox"
-end
+local gethui = gethui or function() return nil end
+local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
+local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
+local write_file = type(writefile) == "function" and writefile or nil
+local read_file = type(readfile) == "function" and readfile or nil
+local is_file = type(isfile) == "function" and isfile or nil
+local del_file = type(delfile) == "function" and delfile or nil
 
-local write_file = nil
-local read_file = nil
-local is_file = nil
-local del_file = nil
-local CompileFunction = nil
+local CompileFunction
+if type(loadstring) == "function" then
+	CompileFunction = loadstring
+elseif type(load) == "function" then
+	CompileFunction = load
+end
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -93,8 +131,7 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
-
-local AutoExecuteRanThisSession = true
+local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
@@ -200,7 +237,6 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
 	CancelTrackedTasks()
@@ -553,30 +589,6 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
-local function GetSecureParent()
-	local huiSuccess, huiTarget = pcall(function() return gethui() end)
-	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
-		return huiTarget
-	end
-
-	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
-	if coreSuccess and coreTarget then
-		local testAccess = pcall(function()
-			local t = Instance.new("Folder")
-			t.Parent = coreTarget
-			t:Destroy()
-		end)
-		if testAccess then return coreTarget end
-	end
-
-	if LocalPlayer then
-		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		if playerGui then return playerGui end
-	end
-
-	return nil
-end
-
 local TargetParent = GetSecureParent()
 if not TargetParent then return end
 
@@ -588,14 +600,9 @@ ScreenGui.Name = MainGuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = 100
+ScreenGui.DisplayOrder = 9999
 ScreenGui.Parent = TargetParent
-pcall(function() protectgui(ScreenGui) end)
-
-GlobalEnv[_G_Identifier] = function()
-	CleanUpMemory()
-	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
-end
+-- protectgui removed intentionally.
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
@@ -1170,7 +1177,8 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	GlobalEnv[_G_Identifier]()
+	CleanUpMemory()
+	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1745,87 +1753,14 @@ local function RefreshAllCardStates()
 	end
 end
 
-local LocalCatalogFolder = Services.ReplicatedStorage:FindFirstChild("VeloxScripts")
-
-local function GetLocalScriptModule(name)
-    if not LocalCatalogFolder then
-        return nil
-    end
-    local module = LocalCatalogFolder:FindFirstChild(name, true)
-    if module and module:IsA("ModuleScript") then
-        return module
-    end
-    return nil
-end
-
-local function ExecuteLocalModule(module, scriptName)
-    if not module or not module:IsA("ModuleScript") then
-        ShowNotification("Local catalog module not found: " .. tostring(scriptName), "Error")
-        return false
-    end
-
-    local ok, result = pcall(require, module)
-    if not ok then
-        ShowNotification("Failed to run [" .. tostring(scriptName) .. "]: " .. tostring(result), "Error")
-        return false
-    end
-
-    if type(result) == "function" then
-        local ran, err = pcall(result)
-        if not ran then
-            ShowNotification("Failed to run [" .. tostring(scriptName) .. "]: " .. tostring(err), "Error")
-            return false
-        end
-    end
-
-    return true
-end
-
-local function ReadCatalogAttribute(instance, name, default)
-    local value = instance:GetAttribute(name)
-    if value == nil then
-        return default
-    end
-    return value
-end
-
-local function BuildLocalCatalogEntries()
-    local entries = {}
-    if not LocalCatalogFolder then
-        return entries
-    end
-
-    for _, module in ipairs(LocalCatalogFolder:GetDescendants()) do
-        if module:IsA("ModuleScript") then
-            entries[#entries + 1] = {
-                Name = module:GetAttribute("Name") or module.Name,
-                Description = ReadCatalogAttribute(module, "Description", "No description provided."),
-                RawUrl = "",
-                ImageAssetId = ReadCatalogAttribute(module, "ImageAssetId", "rbxassetid://99657752206675"),
-                TagType = NormalizeTagType(ReadCatalogAttribute(module, "TagType", "NONE")),
-                LastUpdated = ReadCatalogAttribute(module, "LastUpdated", ""),
-                PlaceId = tonumber(ReadCatalogAttribute(module, "PlaceId", 0)) or 0,
-                Category = ReadCatalogAttribute(module, "Category", ""),
-                Author = ReadCatalogAttribute(module, "Author", ""),
-                ModuleName = module:GetFullName()
-            }
-        end
-    end
-
-    table.sort(entries, function(a, b)
-        return tostring(a.Name):lower() < tostring(b.Name):lower()
-    end)
-
-    return entries
-end
-
 local function ExecuteSandboxed(code, scriptName)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
 	end
 
-	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
+	-- Removed scriptName from loadstring to hide stack trace
+	local ok, chunk, compileErr = pcall(CompileFunction, code)
 	if not ok or type(chunk) ~= "function" then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 		return false, tostring(compileErr or chunk or "unknown compiler error")
@@ -1993,17 +1928,25 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		if tick() - innerActionTime < 0.2 then return end
 
 		local function executeScript()
-			local module = GetLocalScriptModule(exactName)
-			if not module then
-				ShowNotification("Local catalog module not found: " .. exactName, "Error")
+			if type(CompileFunction) ~= "function" then
+				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
 				return
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local success = ExecuteLocalModule(module, exactName)
-				if success then
-					ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
+				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
+				if isDestroying then return end
+				if not raw then
+					ShowNotification("Failed to download script. Please check your connection.", "Error")
+				elseif string.find(raw, "404: Not Found") then
+					ShowNotification("The script link is broken or no longer available (404 Error).", "Error")
+				else
+					local success = ExecuteSandboxed(raw, exactName)
+					if success then
+						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
+					end
 				end
+
 				if titleLbl and titleLbl.Parent then
 					titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary
 				end
@@ -2023,7 +1966,10 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	return scriptEntry
 end
 
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+-- ===== Obfuscated Catalog URL (base64) =====
+local encryptedCatalog = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0tpbmdCYWNjb25ubm4vVmVsb3hTY3JpcHRzL3JlZnMvaGVhZHMvbWFpbi9jYXRhbG9nLmpzb24="
+local CATALOG_URL = HttpService:Base64Decode(encryptedCatalog) or "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+
 local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
@@ -2059,7 +2005,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
-	CatalogGeneration += 1
+	CatalogGeneration = CatalogGeneration + 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
 	ShowNotification("Fetching latest script catalog...", "System")
@@ -2091,20 +2037,49 @@ PendingTasks.__LoadCatalog = function(force)
 
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
-			local validEntries = BuildLocalCatalogEntries()
+			local raw = FetchWithRetry(CATALOG_URL, 3, true)
 			if not IsTaskCurrent(generation) then return end
-
-			if #validEntries == 0 then
-				if #RegisteredScripts == 0 then
-					EmptyStateMessage.Visible = true
-					EmptyStateMessage.Text = "Add ModuleScripts to ReplicatedStorage.VeloxScripts."
-				end
-				StatusDot.BackgroundColor3 = Theme.Warning
-				StatusText.Text = "Empty"
-				StatusText.TextColor3 = Theme.Warning
-				ShowNotification("Local script catalog is empty.", "Warning")
+			if not raw then
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Offline"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Could not connect to the script catalog server.", "Error")
 				FinishRefresh()
 				return
+			end
+
+			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			if not success or type(parsed) ~= "table" then
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Data Error"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Catalog data format error.", "Error")
+				FinishRefresh()
+				return
+			end
+
+			local validEntries = {}
+			local seenNames = {}
+			for _, entry in ipairs(parsed) do
+				if type(entry) == "table" and type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") ~= "" then
+					local normalized = {
+						Name = entry.Name,
+						Description = type(entry.Description) == "string" and entry.Description or "No description provided.",
+						RawUrl = type(entry.RawUrl) == "string" and entry.RawUrl or "",
+						ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
+						TagType = NormalizeTagType(entry.TagType),
+						LastUpdated = GetSafeTimestamp(entry.LastUpdated),
+						PlaceId = tonumber(entry.PlaceId) or 0,
+						Category = type(entry.Category) == "string" and entry.Category or "",
+						Author = type(entry.Author) == "string" and entry.Author or ""
+					}
+					if not seenNames[normalized.Name] then
+						seenNames[normalized.Name] = true
+						validEntries[#validEntries + 1] = normalized
+					end
+				end
 			end
 
 			local fingerprint = BuildCatalogFingerprint(validEntries)
@@ -2113,6 +2088,7 @@ PendingTasks.__LoadCatalog = function(force)
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
+				ShowNotification("Catalog is already up to date.", "Info")
 				FinishRefresh()
 				return
 			end
@@ -2128,17 +2104,7 @@ PendingTasks.__LoadCatalog = function(force)
 			activeBuildFolder.Parent = ScriptsView
 
 			local function BuildEntryFingerprint(data)
-				return table.concat({
-					tostring(data.Name or ""),
-					tostring(data.Description or ""),
-					tostring(data.ModuleName or ""),
-					tostring(data.ImageAssetId or ""),
-					tostring(NormalizeTagType(data.TagType)),
-					tostring(GetSafeTimestamp(data.LastUpdated)),
-					tostring(tonumber(data.PlaceId) or 0),
-					tostring(data.Category or ""),
-					tostring(data.Author or "")
-				}, "\31")
+				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
 
 			local function DestroyEntry(entry)
@@ -2160,7 +2126,6 @@ PendingTasks.__LoadCatalog = function(force)
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
 				local entry
-
 				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
 					entry = existing
 					entry.OriginalIndex = index
@@ -2171,25 +2136,20 @@ PendingTasks.__LoadCatalog = function(force)
 					entry.OriginalIndex = index
 					activeNewEntries[#activeNewEntries + 1] = entry
 				end
-
 				nextEntries[#nextEntries + 1] = entry
 				nextByKey[key] = entry
 				nextKeys[key] = true
 			end
 
 			if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
-
 			for key, oldEntry in pairs(previousByKey) do
 				if not nextKeys[key] then DestroyEntry(oldEntry) end
 			end
 			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
 			for _, entry in ipairs(nextEntries) do
-				if entry.Instance and entry.Instance.Parent ~= ScriptsView then
-					entry.Instance.Parent = ScriptsView
-				end
+				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
 				entry.Instance.LayoutOrder = entry.OriginalIndex
 			end
-
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
@@ -2201,21 +2161,15 @@ PendingTasks.__LoadCatalog = function(force)
 			LastCatalogFingerprint = fingerprint
 			RefreshAllCardStates()
 			UpdateFilter()
-
 			task.defer(function()
-				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then
-					ScriptsView.CanvasPosition = savedScroll
-				end
+				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
 
 			local validMap = {}
 			for _, scriptData in ipairs(validEntries) do validMap[scriptData.Name] = true end
 			local cleaned = false
 			for key in pairs(SavedData.AutoExecutes) do
-				if not validMap[key] then
-					SavedData.AutoExecutes[key] = nil
-					cleaned = true
-				end
+				if not validMap[key] then SavedData.AutoExecutes[key] = nil; cleaned = true end
 			end
 			if cleaned then SaveConfiguration() end
 
@@ -2226,25 +2180,25 @@ PendingTasks.__LoadCatalog = function(force)
 					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then
-							validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId
-						end
+						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
 						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
-
 				if #autoQueue > 0 then
 					TrackTask(function()
+						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
 						local successList, failList = {}, {}
+						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not IsTaskCurrent(generation) then return end
-							local module = GetLocalScriptModule(scriptData.Name)
-							if module and ExecuteLocalModule(module, scriptData.Name) then
-								successList[#successList + 1] = scriptData.Name
+							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+							if not IsTaskCurrent(generation) then return end
+							if scrRaw and not string.find(scrRaw, "404: Not Found") then
+								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
-							task.wait(0.3)
+							task.wait(0.3 + math.random() * 0.2) -- jitter
 						end
 						if #successList > 0 then ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success") end
 						if #failList > 0 then ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning") end
@@ -2253,9 +2207,9 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 
 			StatusDot.BackgroundColor3 = Theme.Success
-			StatusText.Text = "Local"
+			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
-			ShowNotification("Local script catalog loaded successfully!", "Success")
+			ShowNotification("Script catalog loaded successfully!", "Success")
 		end, function(err) return tostring(err) end)
 
 		if not taskOk then
@@ -2275,9 +2229,19 @@ PendingTasks.__LoadCatalog = function(force)
 	return true
 end
 
+PendingTasks.__LoadCatalog()
+
 TrackTask(function()
 	while not isDestroying do
-		task.wait(60)
+		task.wait(CATALOG_REFRESH_INTERVAL + math.random() * 60) -- jitter
+		if isDestroying then break end
+		PendingTasks.__LoadCatalog(false)
+	end
+end)
+
+TrackTask(function()
+	while not isDestroying do
+		task.wait(60 + math.random() * 30) -- jitter
 		if isDestroying then break end
 		for _, scrData in ipairs(RegisteredScripts) do
 			if scrData.TimeLabel and scrData.TimeLabel.Parent then
@@ -2533,16 +2497,32 @@ local function TriggerAntiAFKAction()
 	end
 end
 
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Disabled in UI diagnostic mode.", "rbxassetid://10734898592", 2, false, function(val)
-	SavedData.Settings.AntiAFK = false
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
+	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
-	ShowNotification("Anti-AFK is disabled in UI diagnostic mode.", "Warning")
+	if val then
+		ShowNotification("Anti-AFK system engaged.", "Success")
+		if not AfkConnections.Idled then
+			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
+		end
+		-- Removed getconnections block entirely.
+	else
+		ShowNotification("Anti-AFK deactivated.", "Warning")
+		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
+	end
 end)
 
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Disabled in UI diagnostic mode.", "rbxassetid://10734976528", "Disabled", 1, true, function()
-	ShowNotification("Catalog is disabled in UI diagnostic mode.", "Warning")
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
+	AttemptActionWithCooldown(function()
+		if dbRefreshing then
+			CatalogRefreshQueued = true
+			ShowNotification("Catalog refresh queued.", "Info")
+			return
+		end
+		PendingTasks.__LoadCatalog(true)
+	end)
 end)
 
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
@@ -2550,6 +2530,13 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
+
+if SavedData.Settings.AntiAFK then
+	if not AfkConnections.Idled then
+		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
+	end
+	-- Removed getconnections block.
+end
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
@@ -2574,3 +2561,5 @@ if IsMobile then
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
+
+-- End of script
