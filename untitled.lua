@@ -16,9 +16,9 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
-local MainGuiName = "Velox_" .. GenerateRandomString(12)
-local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
+local _G_Identifier = "Roblox_Core_UI_Manager_V1"
+local MainGuiName = "RobloxPromptGui" -- Disguises as an official Roblox UI
+local FloatBtnName = "TouchControls_Btn" -- Disguises as native mobile controls
 
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
@@ -564,8 +564,12 @@ local function GetSecureParent()
 		return huiTarget
 	end
 
-	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
+		local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
+		-- Attempt to hide inside RobloxGui, which is usually whitelisted by game-level scans
+		local rbxGui = coreTarget:FindFirstChild("RobloxGui")
+		if rbxGui then return rbxGui end
+		
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
 			t.Parent = coreTarget
@@ -594,8 +598,11 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
-ScreenGui.Parent = TargetParent
+
+-- Apply executor UI protection BEFORE parenting it, 
+-- preventing DescendantAdded events from leaking unprotected objects.
 pcall(function() protectgui(ScreenGui) end)
+ScreenGui.Parent = TargetParent 
 
 GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
