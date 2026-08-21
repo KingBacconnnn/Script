@@ -294,6 +294,7 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
+	Settings = {},
 }
 
 local isSaving = false
