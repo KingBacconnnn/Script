@@ -16,10 +16,12 @@ local function GenerateRandomString(len)
 	return str
 end
 
+local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
+local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
-if GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] then
-	pcall(function() GlobalEnv["VeloxHub_Core_Cleanup_V3_5"]() end)
+if GlobalEnv[_G_Identifier] then
+	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
 
 local Services = setmetatable({}, {
@@ -34,17 +36,28 @@ local Services = setmetatable({}, {
 	end
 })
 
+local Players = Services.Players
+local UserInputService = Services.UserInputService
+local HttpService = Services.HttpService
+local StarterGui = Services.StarterGui
+local RunService = Services.RunService
+local Stats = Services.Stats
+local CoreGui = Services.CoreGui
+local TweenService = Services.TweenService
+local GuiService = Services.GuiService
 
-local LocalPlayer = Services.Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
-	LocalPlayer = Services.Players.LocalPlayer
+	LocalPlayer = Players.LocalPlayer
 end
 
+local PlaceId = game.PlaceId
 
 local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
@@ -81,6 +94,7 @@ local RegisteredScripts = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
+local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
 local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
@@ -89,7 +103,7 @@ local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
 local IsBindingKey = false
-local IsMobile = Services.UserInputService.TouchEnabled and (not Services.UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or Services.GuiService:IsTenFootInterface())
+local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
 
 local mainDragConnection, floatDragConnection
 local activeMainDragInput, activeFloatDragInput
@@ -188,7 +202,7 @@ local typingTask = nil
 
 local function CleanUpMemory()
 	isDestroying = true
-	GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] = nil
+	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 
 	CancelTrackedTasks()
@@ -246,7 +260,7 @@ local function SafeTween(instance, tweenInfo, properties)
 			end
 		end
 	end
-	local tween = Services.TweenService:Create(instance, tweenInfo, properties)
+	local tween = TweenService:Create(instance, tweenInfo, properties)
 	local conn
 	conn = tween.Completed:Connect(function()
 		if conn then conn:Disconnect() end
@@ -328,13 +342,13 @@ local function SaveConfiguration()
 		end
 
 		local safeData = SanitizeForJSON(cleanData)
-		local success, result = pcall(function() return Services.HttpService:JSONEncode(safeData) end)
+		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
 		if success then
 			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
 			if writeSuccess then
 				local verifySuccess = pcall(function()
 					local check = read_file(TEMP_FILE)
-					return Services.HttpService:JSONDecode(check)
+					return HttpService:JSONDecode(check)
 				end)
 				if verifySuccess then
 					pcall(function() write_file(DATA_FILE, result) end)
@@ -354,7 +368,7 @@ end
 
 local function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		local success, result = pcall(function() return Services.HttpService:JSONDecode(read_file(DATA_FILE)) end)
+		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
 				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
@@ -542,7 +556,7 @@ local function GetSecureParent()
 		return huiTarget
 	end
 
-	local coreSuccess, coreTarget = pcall(function() return Services.CoreGui end)
+	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
@@ -575,11 +589,12 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-GlobalEnv["VeloxHub_Core_Cleanup_V3_5"] = function()
+GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
+local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
 
 local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
@@ -621,7 +636,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-RegConn(Services.UserInputService.WindowFocusReleased:Connect(function()
+RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
@@ -632,7 +647,7 @@ RegConn(Services.UserInputService.WindowFocusReleased:Connect(function()
 end))
 
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = "VeloxFloat_" .. GenerateRandomString(12)
+FloatingBtn.Name = FloatBtnName
 FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
@@ -659,7 +674,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatPos = FloatingBtn.Position
 
 		if floatDragConnection then floatDragConnection:Disconnect() end
-		floatDragConnection = RegConn(Services.UserInputService.InputChanged:Connect(function(moveInput)
+		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - floatStart
@@ -678,7 +693,7 @@ RegConn(FloatingBtn.InputBegan:Connect(function(input)
 end))
 
 local MainPanel = Instance.new("Frame", ScreenGui)
-MainPanel.Size = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
+MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
@@ -768,11 +783,12 @@ ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 ToastLayout.Padding = UDim.new(0, 8)
 
+local NOTIF_DURATION = 3.5
 
 local function EmergencyFallbackNotification(msg, title)
 	pcall(function()
-		if Services.StarterGui and type(Services.StarterGui.SetCore) == "function" then
-			Services.StarterGui:SetCore("SendNotification", {
+		if StarterGui and type(StarterGui.SetCore) == "function" then
+			StarterGui:SetCore("SendNotification", {
 				Title = title or "Velox Hub Notice",
 				Text = tostring(msg),
 				Duration = NOTIF_DURATION
@@ -817,12 +833,12 @@ local function StandaloneBannerNotification(msg, notifType)
 		txt.TextSize = IsMobile and 11 or 13
 		txt.TextWrapped = true
 
-		Services.TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Position = UDim2.new(0.5, 0, 0, 20)
 		}):Play()
 
 		task.delay(NOTIF_DURATION, function()
-			local outro = Services.TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = UDim2.new(0.5, 0, 0, -60)
 			})
 			outro:Play()
@@ -884,12 +900,12 @@ local function ShowNotification(msg, notifType)
 		txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
 		txt.TextWrapped = true; txt.ZIndex = 2003
 
-		local introTween = Services.TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+		local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
 		introTween:Play()
 
 		task.delay(NOTIF_DURATION, function()
 			if not wrapper or not wrapper.Parent then return end
-			local outroTween = Services.TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
+			local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
 			outroTween:Play()
 			local conn
 			conn = outroTween.Completed:Connect(function()
@@ -942,7 +958,7 @@ local function AttemptActionWithCooldown(actionFunc)
 			txt.TextSize = IsMobile and 11 or 13
 			txt.TextWrapped = true
 
-			Services.TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 				Position = UDim2.new(0.5, 0, 0, 20)
 			}):Play()
 
@@ -961,7 +977,7 @@ local function AttemptActionWithCooldown(actionFunc)
 						task.wait(1)
 						if currentLoop == GlobalCooldownLoopVersion then
 							if frame and frame.Parent then
-								local outro = Services.TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+								local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 									Position = UDim2.new(0.5, 0, 0, -60)
 								})
 								outro:Play()
@@ -1124,7 +1140,7 @@ local function BindToggleKey(keyCode)
 		ToggleKeybindConnection = nil
 	end
 
-	ToggleKeybindConnection = RegConn(Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
 
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
@@ -1138,7 +1154,7 @@ end
 
 BindToggleKey(ToggleKeybind)
 
-RegConn(Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
+RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
 			CloseConfirmDialog(false)
@@ -1151,7 +1167,7 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	GlobalEnv["VeloxHub_Core_Cleanup_V3_5"]()
+	GlobalEnv[_G_Identifier]()
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1169,7 +1185,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainStartPos = MainPanel.Position
 
 		if mainDragConnection then mainDragConnection:Disconnect() end
-		mainDragConnection = RegConn(Services.UserInputService.InputChanged:Connect(function(moveInput)
+		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - mainDragStart
@@ -1187,7 +1203,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	end
 end))
 
-RegConn(Services.UserInputService.InputEnded:Connect(function(input)
+RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
@@ -1244,7 +1260,7 @@ BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enu
 
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. getexecutor()
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
@@ -1285,7 +1301,7 @@ task.spawn(function()
 	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		local success, content = pcall(function() return Services.Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
@@ -1306,7 +1322,7 @@ ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, n
 
 local fpsCount = 0
 local diagnosticsElapsed = 0
-RegConn(Services.RunService.Heartbeat:Connect(function(deltaTime)
+RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	if isDestroying then return end
 	if isMinimized or isTransitioning then
 		fpsCount = 0
@@ -1318,7 +1334,7 @@ RegConn(Services.RunService.Heartbeat:Connect(function(deltaTime)
 	if diagnosticsElapsed < 1 then return end
 	diagnosticsElapsed = diagnosticsElapsed - 1
 	local success, ping = pcall(function()
-		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+		return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
 	if DiagnosticsLabel and DiagnosticsLabel.Parent then
 		DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
@@ -1637,7 +1653,7 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 	end
 end))
 
-RegConn(Services.UserInputService.InputBegan:Connect(function(input)
+RegConn(UserInputService.InputBegan:Connect(function(input)
 	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 		local pos = input.Position
 		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
@@ -1939,103 +1955,10 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 end
 
 local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
-local CatalogState = { Refreshing = false, Queued = false, Fingerprint = nil, Visual = nil }
-local AntiAFKConnection = nil
-
-local function DestroyCatalogCards()
-	for _, scrData in ipairs(RegisteredScripts) do
-		if scrData and scrData.Instance and scrData.Instance.Parent then
-			pcall(function() scrData.Instance:Destroy() end)
-		end
-	end
-	table.clear(RegisteredScripts)
-	if RegisteredScripts.__ByKey then RegisteredScripts.__ByKey = nil end
-	for i = #CardConnections, 1, -1 do
-		local conn = CardConnections[i]
-		if typeof(conn) == "RBXScriptConnection" then
-			pcall(function() conn:Disconnect() end)
-		end
-		CardConnections[i] = nil
-	end
-end
-
-local function StartCatalogRefreshVisual()
-	if isDestroying or not ScriptsView or not ScriptsView.Parent then return end
-	if CatalogState.Visual and CatalogState.Visual.Parent then
-		CatalogState.Visual.Text = "Refreshing script catalog..."
-		return
-	end
-
-	DestroyCatalogCards()
-	EmptyStateMessage.Visible = false
-	EmptyStateMessage.Text = ""
-
-	local label = Instance.new("TextLabel")
-	label.Name = "CatalogRefreshState"
-	label.Size = UDim2.new(1, 0, 0, 44)
-	label.BackgroundTransparency = 1
-	label.Text = "Refreshing script catalog..."
-	label.TextColor3 = Theme.TextSecondary
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = IsMobile and 12 or 13
-	label.TextWrapped = true
-	label.LayoutOrder = -2
-	label.ZIndex = 3
-	label.Parent = ScriptsView
-	CatalogState.Visual = label
-
-	label.TextTransparency = 1
-	SafeTween(label, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
-end
-
-local function FinishCatalogRefreshVisual(showEmptyState)
-	if CatalogState.Visual then
-		local label = CatalogState.Visual
-		CatalogState.Visual = nil
-		if label.Parent then
-			local tween = SafeTween(label, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
-			if tween then
-				task.delay(0.17, function()
-					if label and label.Parent then pcall(function() label:Destroy() end) end
-				end)
-			else
-				pcall(function() label:Destroy() end)
-			end
-		end
-	end
-	if showEmptyState and #RegisteredScripts == 0 and EmptyStateMessage then
-		EmptyStateMessage.Visible = true
-	end
-end
-
-local function AnimateCatalogCardsIn(entries)
-	for index, entry in ipairs(entries or {}) do
-		local card = entry and entry.Instance
-		if card and card.Parent then
-			card.LayoutOrder = entry.OriginalIndex or index
-			card.BackgroundTransparency = 1
-			for _, descendant in ipairs(card:GetDescendants()) do
-				if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
-					descendant.TextTransparency = 1
-				elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
-					descendant.ImageTransparency = 1
-				end
-			end
-			local delayTime = math.min((index - 1) * 0.025, 0.2)
-			task.delay(delayTime, function()
-				if isDestroying or not card or not card.Parent then return end
-				SafeTween(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
-				for _, descendant in ipairs(card:GetDescendants()) do
-					if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
-						SafeTween(descendant, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
-					elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
-						SafeTween(descendant, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0})
-					end
-				end
-			end)
-		end
-	end
-end
+local CATALOG_REFRESH_INTERVAL = 300
+local dbRefreshing = false
+local CatalogRefreshQueued = false
+local LastCatalogFingerprint = nil
 
 local function BuildCatalogFingerprint(entries)
 	local parts = {}
@@ -2054,39 +1977,33 @@ end
 
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
-	if CatalogState.Refreshing then
-		CatalogState.Queued = true
+	if dbRefreshing then
+		CatalogRefreshQueued = true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		return false
 	end
 	local now = os.clock()
-	if not force and now - LastCatalogRefreshAt < 5 then
-		CatalogState.Queued = true
+	if not force and now - LastCatalogRefreshAt < CatalogRefreshCooldown then
+		CatalogRefreshQueued = true
 		return false
 	end
 
 	LastCatalogRefreshAt = now
-	CatalogState.Refreshing = true
+	dbRefreshing = true
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
-	local manualRefresh = force == true
 	local savedScroll = ScriptsView.CanvasPosition
-	if manualRefresh then
-		StartCatalogRefreshVisual()
-		ShowNotification("Refreshing script catalog...", "System")
-	else
-		ShowNotification("Fetching latest script catalog...", "System")
-	end
+	ShowNotification("Fetching latest script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
 
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
-		CatalogState.Refreshing = false
-		if CatalogState.Queued and not isDestroying then
+		dbRefreshing = false
+		if CatalogRefreshQueued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
-			CatalogState.Queued = false
+			CatalogRefreshQueued = false
 			PendingTasks.__CatalogRefreshForce = false
 			task.defer(function()
 				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
@@ -2108,7 +2025,6 @@ PendingTasks.__LoadCatalog = function(force)
 			local raw = FetchWithRetry(CATALOG_URL, 3, true)
 			if not IsTaskCurrent(generation) then return end
 			if not raw then
-				if manualRefresh then FinishCatalogRefreshVisual(true) end
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Offline"
@@ -2118,9 +2034,8 @@ PendingTasks.__LoadCatalog = function(force)
 				return
 			end
 
-			local success, parsed = pcall(function() return Services.HttpService:JSONDecode(raw) end)
+			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
-				if manualRefresh then FinishCatalogRefreshVisual(true) end
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Data Error"
@@ -2153,7 +2068,7 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 
 			local fingerprint = BuildCatalogFingerprint(validEntries)
-			if fingerprint == CatalogState.Fingerprint and not manualRefresh then
+			if fingerprint == LastCatalogFingerprint then
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2196,7 +2111,7 @@ PendingTasks.__LoadCatalog = function(force)
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
 				local entry
-				if not manualRefresh and existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
+				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
 					entry = existing
 					entry.OriginalIndex = index
 				else
@@ -2228,20 +2143,12 @@ PendingTasks.__LoadCatalog = function(force)
 			table.clear(RegisteredScripts)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
-			CatalogState.Fingerprint = fingerprint
+			LastCatalogFingerprint = fingerprint
 			RefreshAllCardStates()
 			UpdateFilter()
-			if manualRefresh then
-				FinishCatalogRefreshVisual(#RegisteredScripts == 0)
-				AnimateCatalogCardsIn(nextEntries)
-				task.defer(function()
-					if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = Vector2.new(0, 0) end
-				end)
-			else
-				task.defer(function()
-					if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
-				end)
-			end
+			task.defer(function()
+				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
+			end)
 
 			local validMap = {}
 			for _, scriptData in ipairs(validEntries) do validMap[scriptData.Name] = true end
@@ -2258,7 +2165,7 @@ PendingTasks.__LoadCatalog = function(force)
 					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == game.PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
 						if validPlace then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
@@ -2297,11 +2204,6 @@ PendingTasks.__LoadCatalog = function(force)
 			DisconnectEntryConnections()
 		end
 		if not taskOk and not isDestroying and generation == CatalogGeneration then
-			if manualRefresh then FinishCatalogRefreshVisual(true) end
-			if #RegisteredScripts == 0 and EmptyStateMessage then
-				EmptyStateMessage.Visible = true
-				EmptyStateMessage.Text = "Catalog refresh failed. Please try again."
-			end
 			StatusDot.BackgroundColor3 = Theme.Error
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
@@ -2525,7 +2427,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 		KeybindCaptureConnection = nil
 	end
 
-	KeybindCaptureConnection = RegConn(Services.UserInputService.InputBegan:Connect(function(input)
+	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
 		if isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
@@ -2565,19 +2467,25 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 
-local function ApplyAntiAFK(enabled)
+local AntiAFKConnection = nil
+
+local function StopAntiAFK()
 	if AntiAFKConnection then
 		UnregConn(AntiAFKConnection)
 		AntiAFKConnection = nil
 	end
+end
 
-	if not enabled or isDestroying or not LocalPlayer then return end
+local function ApplyAntiAFK(enabled)
+	StopAntiAFK()
+	if not enabled or isDestroying then return end
 
-	local VirtualUser = Services.VirtualUser
-	if not VirtualUser then return end
+	local localPlayer = Players.LocalPlayer
+	if not localPlayer then return end
 
-	AntiAFKConnection = RegConn(LocalPlayer.Idled:Connect(function()
-		if isDestroying or SavedData.Settings.AntiAFK ~= true then return end
+	local VirtualUser = game:GetService("VirtualUser")
+	AntiAFKConnection = RegConn(localPlayer.Idled:Connect(function()
+		if isDestroying or not SavedData.Settings.AntiAFK then return end
 		pcall(function()
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
@@ -2588,7 +2496,7 @@ end
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
-	ApplyAntiAFK(val == true)
+	ApplyAntiAFK(val)
 	if val then
 		ShowNotification("Anti-AFK system engaged.", "Success")
 	else
@@ -2600,13 +2508,12 @@ local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
-		if CatalogState.Refreshing then
-			CatalogState.Queued = true
-			PendingTasks.__CatalogRefreshForce = true
-			ShowNotification("Catalog refresh queued; it will rebuild when the current refresh finishes.", "Info")
+		if dbRefreshing then
+			CatalogRefreshQueued = true
+			ShowNotification("Catalog refresh queued.", "Info")
 			return
 		end
-		PendingTasks.__LoadCatalog(true)
+		LoadDynamicCatalog(true)
 	end)
 end)
 
@@ -2616,7 +2523,7 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	CloseUI()
 end)
 
-ApplyAntiAFK(SavedData.Settings.AntiAFK == true)
+ApplyAntiAFK(SavedData.Settings.AntiAFK)
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
@@ -2630,7 +2537,8 @@ FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 
 if IsMobile then
-	CreateButtonSettingInGroup(CreateSettingsGroup("User Data", SettingsView, 3), "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
