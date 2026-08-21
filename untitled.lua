@@ -99,7 +99,17 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
-local AutoExecuteRanThisSession = true
+PendingTasks.__LoadCatalog()
+
+TrackTask(function()
+    while not isDestroying do
+        task.wait(CATALOG_REFRESH_INTERVAL)
+        if isDestroying then break end
+        PendingTasks.__LoadCatalog(false)
+    end
+end)
+
+local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
