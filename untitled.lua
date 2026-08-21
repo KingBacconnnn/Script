@@ -39,8 +39,6 @@ local Services = setmetatable({}, {
 local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
-local VirtualInputManager = Services.VirtualInputManager
-local VirtualUser = Services.VirtualUser
 local StarterGui = Services.StarterGui
 local RunService = Services.RunService
 local Stats = Services.Stats
@@ -93,14 +91,12 @@ local Theme = {
 local VeloxConnections = {}
 local CardConnections = {}
 local RegisteredScripts = {}
-local AfkConnections = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
 local AutoExecuteRanThisSession = false
-local CatalogState = { Cached = false, CachedAt = 0, LastFetchAt = 0, Added = 0, Updated = 0, Removed = 0, Error = nil }
 local InteractiveElements = setmetatable({}, { __mode = "k" })
 
 local isDestroying = false
@@ -116,8 +112,6 @@ local KeybindCaptureConnection = nil
 local DropdownContainer = nil
 local ToastContainer = nil
 local ConfirmOverlay = nil
-local DetailOverlay = nil
-local UpdateDashboard
 
 local GlobalCooldownBanner = nil
 local GlobalCooldownLoopVersion = 0
@@ -230,10 +224,6 @@ local function CleanUpMemory()
 	end
 	table.clear(VeloxConnections)
 	table.clear(CardConnections)
-	for _, conn in pairs(AfkConnections) do
-		if type(conn) == "table" and conn.Enable then pcall(function() conn:Enable() end)
-		elseif typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
-	end
 	for _, tweenData in pairs(ActiveTweens) do
 		if type(tweenData) == "table" then
 			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
@@ -248,11 +238,9 @@ local function CleanUpMemory()
 	if DropdownContainer and DropdownContainer.Parent then pcall(function() DropdownContainer:Destroy() end) end
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
-	if DetailOverlay and DetailOverlay.Parent then pcall(function() DetailOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
 
 	table.clear(RegisteredScripts)
-	table.clear(AfkConnections)
 	table.clear(ActiveTweens)
 	table.clear(InteractiveElements)
 	table.clear(OriginalCache)
@@ -300,27 +288,12 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 
-local DATA_FILE = ".VeloxHub_Data_V4.json"
+local DATA_FILE = ".VeloxHub_Data_V3.1.json"
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
-local CATALOG_CACHE_FILE = ".VeloxHub_Catalog_V4.json"
-local CATALOG_CACHE_TEMP_FILE = ".VeloxHub_Catalog_Temp.json"
-local DATA_SCHEMA_VERSION = 4
 local SavedData = {
-    SchemaVersion = DATA_SCHEMA_VERSION,
-    Favorites = {},
-    AutoExecutes = {},
-    Usage = {},
-    ToggleKeybind = "RightControl",
-    Settings = {
-        AntiAFK = false,
-        UIScale = 1,
-        SortMode = "Most Relevant",
-        FilterCategory = "All",
-        CompatibilityOnly = false,
-        FilterFavorites = false,
-        LastTab = "Home",
-        MainPosition = nil
-    }
+	Favorites = {},
+	AutoExecutes = {},
+	ToggleKeybind = "RightControl",
 }
 
 local isSaving = false
@@ -345,78 +318,80 @@ local function SanitizeForJSON(data)
 end
 
 local function SaveConfiguration()
-    if type(write_file) ~= "function" then return end
-    if isSaving then saveQueued = true; return end
-    isSaving = true
-    task.spawn(function()
-        local cleanData = {
-            SchemaVersion = DATA_SCHEMA_VERSION,
-            Favorites = {}, AutoExecutes = {}, Usage = {},
-            ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-            Settings = {
-                AntiAFK = SavedData.Settings.AntiAFK == true,
-                UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
-                SortMode = tostring(SavedData.Settings.SortMode or "Most Relevant"),
-                FilterCategory = tostring(SavedData.Settings.FilterCategory or "All"),
-                CompatibilityOnly = SavedData.Settings.CompatibilityOnly == true,
-                FilterFavorites = SavedData.Settings.FilterFavorites == true,
-                LastTab = tostring(SavedData.Settings.LastTab or "Home")
-            }
-        }
-        if type(SavedData.Settings.MainPosition) == "table" then
-            cleanData.Settings.MainPosition = { X = tonumber(SavedData.Settings.MainPosition.X) or 0, Y = tonumber(SavedData.Settings.MainPosition.Y) or 0 }
-        end
-        for k,v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
-        for k,v in pairs(SavedData.AutoExecutes) do
-            if type(v) == "table" then cleanData.AutoExecutes[tostring(k)] = { PlaceId = tonumber(v.PlaceId) or game.PlaceId, GameId = tonumber(v.GameId) or game.GameId } end
-        end
-        for k,v in pairs(SavedData.Usage) do
-            if type(v) == "table" then cleanData.Usage[tostring(k)] = { LastUsed = tonumber(v.LastUsed) or 0, UseCount = tonumber(v.UseCount) or 0 } end
-        end
-        local ok, encoded = pcall(function() return HttpService:JSONEncode(SanitizeForJSON(cleanData)) end)
-        if ok then
-            local wrote = pcall(function() write_file(TEMP_FILE, encoded) end)
-            if wrote then
-                local verified = pcall(function() return HttpService:JSONDecode(read_file(TEMP_FILE)) end)
-                if verified then pcall(function() write_file(DATA_FILE, encoded) end) end
-            end
-            if del_file then pcall(function() del_file(TEMP_FILE) end) end
-        end
-        isSaving = false
-        if saveQueued then saveQueued = false; SaveConfiguration() end
-    end)
+	if type(write_file) ~= "function" then return end
+	if isSaving then
+		saveQueued = true
+		return
+	end
+	isSaving = true
+	task.spawn(function()
+		local cleanData = {
+			Favorites = {}, AutoExecutes = {},
+			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+			Settings = {}
+		}
+		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
+		for k, v in pairs(SavedData.AutoExecutes) do
+			if type(v) == "table" then
+				cleanData.AutoExecutes[tostring(k)] = {
+					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+					GameId = tonumber(v.GameId) or game.GameId
+				}
+			end
+		end
+
+		local safeData = SanitizeForJSON(cleanData)
+		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
+		if success then
+			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
+			if writeSuccess then
+				local verifySuccess = pcall(function()
+					local check = read_file(TEMP_FILE)
+					return HttpService:JSONDecode(check)
+				end)
+				if verifySuccess then
+					pcall(function() write_file(DATA_FILE, result) end)
+				end
+			end
+			if del_file then
+				pcall(function() del_file(TEMP_FILE) end)
+			end
+		end
+		isSaving = false
+		if saveQueued then
+			saveQueued = false
+			SaveConfiguration()
+		end
+	end)
 end
 
 local function LoadConfiguration()
-    if type(is_file) ~= "function" or type(read_file) ~= "function" then return end
-    local source = DATA_FILE
-    if not is_file(source) and is_file(".VeloxHub_Data_V3.1.json") then source = ".VeloxHub_Data_V3.1.json" end
-    if not is_file(source) then return end
-    local ok, result = pcall(function() return HttpService:JSONDecode(read_file(source)) end)
-    if not ok or type(result) ~= "table" then SaveConfiguration(); return end
-    local oldVersion = tonumber(result.SchemaVersion) or 1
-    if type(result.Favorites) == "table" then for k,_ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end end
-    if type(result.AutoExecutes) == "table" then
-        for k,v in pairs(result.AutoExecutes) do if type(k)=="string" and type(v)=="table" then SavedData.AutoExecutes[k] = { PlaceId=tonumber(v.PlaceId) or game.PlaceId, GameId=tonumber(v.GameId) or nil } end end
-    end
-    if type(result.Usage) == "table" then
-        for k,v in pairs(result.Usage) do if type(k)=="string" and type(v)=="table" then SavedData.Usage[k] = { LastUsed=tonumber(v.LastUsed) or 0, UseCount=tonumber(v.UseCount) or 0 } end end
-    end
-    if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
-    if type(result.Settings) == "table" then for k,v in pairs(result.Settings) do if SavedData.Settings[k] ~= nil or k == "MainPosition" then SavedData.Settings[k] = v end end end
-    SavedData.SchemaVersion = DATA_SCHEMA_VERSION
-    SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-    SavedData.Settings.SortMode = type(SavedData.Settings.SortMode)=="string" and SavedData.Settings.SortMode or "Most Relevant"
-    SavedData.Settings.FilterCategory = type(SavedData.Settings.FilterCategory)=="string" and SavedData.Settings.FilterCategory or "All"
-    SavedData.Settings.CompatibilityOnly = SavedData.Settings.CompatibilityOnly == true
-    SavedData.Settings.FilterFavorites = SavedData.Settings.FilterFavorites == true
-    SavedData.Settings.LastTab = type(SavedData.Settings.LastTab)=="string" and SavedData.Settings.LastTab or "Home"
-    local validTabs = {Home=true, Changelogs=true, Scripts=true, Settings=true}
-    if not validTabs[SavedData.Settings.LastTab] then SavedData.Settings.LastTab = "Home" end
-    local validSorts = { ["Most Relevant"]=true, ["A-Z"]=true, ["Z-A"]=true, Newest=true, Oldest=true, ["Updated Today"]=true, ["Updated This Week"]=true, ["Updated This Month"]=true, Favorites=true, ["Auto Execute: ON"]=true, ["Auto Execute: OFF"]=true, ["Recently Used"]=true, ["Most Used"]=true }
-    if not validSorts[SavedData.Settings.SortMode] then SavedData.Settings.SortMode = "Most Relevant" end
-    if type(SavedData.Settings.MainPosition) ~= "table" then SavedData.Settings.MainPosition = nil end
-    if oldVersion < DATA_SCHEMA_VERSION then SaveConfiguration() end
+	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
+		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+		if success and type(result) == "table" then
+			if type(result.Favorites) == "table" then
+				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
+			end
+			if type(result.AutoExecutes) == "table" then
+				for k, v in pairs(result.AutoExecutes) do
+					if type(k) == "string" and type(v) == "table" then
+						SavedData.AutoExecutes[tostring(k)] = {
+							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
+							GameId = type(v.GameId) == "number" and v.GameId or nil
+						}
+					end
+				end
+			end
+			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
+			if type(result.Settings) == "table" then
+				for k, _ in pairs(result.Settings) do
+					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
+				end
+			end
+		else
+			SaveConfiguration()
+		end
+	end
 end
 LoadConfiguration()
 
@@ -461,26 +436,6 @@ local function FetchWithRetry(url, retries, cacheBust)
 		end
 	end
 	return nil
-end
-
-local function WriteCatalogCache(raw)
-    if type(write_file) ~= "function" or type(raw) ~= "string" or raw == "" then return false end
-    local payload = { SchemaVersion = DATA_SCHEMA_VERSION, SavedAt = os.time(), Body = raw }
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
-    if not ok then return false end
-    local wrote = pcall(function() write_file(CATALOG_CACHE_TEMP_FILE, encoded) end)
-    if not wrote then return false end
-    local verified = pcall(function() return HttpService:JSONDecode(read_file(CATALOG_CACHE_TEMP_FILE)) end)
-    if verified then pcall(function() write_file(CATALOG_CACHE_FILE, encoded) end) end
-    if del_file then pcall(function() del_file(CATALOG_CACHE_TEMP_FILE) end) end
-    return verified
-end
-
-local function ReadCatalogCache()
-    if type(is_file) ~= "function" or type(read_file) ~= "function" or not is_file(CATALOG_CACHE_FILE) then return nil,0 end
-    local ok, payload = pcall(function() return HttpService:JSONDecode(read_file(CATALOG_CACHE_FILE)) end)
-    if ok and type(payload)=="table" and type(payload.Body)=="string" and payload.Body ~= "" then return payload.Body, tonumber(payload.SavedAt) or 0 end
-    return nil,0
 end
 
 local TagTypeConfig = {
@@ -738,13 +693,7 @@ end))
 
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
-local MainUIScale = Instance.new("UIScale", MainPanel)
-MainUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-if type(SavedData.Settings.MainPosition)=="table" and tonumber(SavedData.Settings.MainPosition.X) and tonumber(SavedData.Settings.MainPosition.Y) then
-    MainPanel.Position = UDim2.new(0, tonumber(SavedData.Settings.MainPosition.X), 0, tonumber(SavedData.Settings.MainPosition.Y))
-else
-    MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-end
+MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
 MainPanel.BorderSizePixel = 0
@@ -1180,36 +1129,6 @@ RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	end
 end))
 
-DetailOverlay = Instance.new("Frame", ScreenGui)
-DetailOverlay.Size = UDim2.new(1,0,1,0); DetailOverlay.BackgroundColor3=Color3.fromRGB(0,0,0); DetailOverlay.BackgroundTransparency=0.5; DetailOverlay.Visible=false; DetailOverlay.Active=true; DetailOverlay.ZIndex=350
-local DetailBox = Instance.new("Frame", DetailOverlay)
-DetailBox.Size=IsMobile and UDim2.new(0,310,0,360) or UDim2.new(0,430,0,390); DetailBox.Position=UDim2.new(0.5,0,0.5,0); DetailBox.AnchorPoint=Vector2.new(0.5,0.5); DetailBox.BackgroundColor3=Theme.BackgroundSecondary; DetailBox.BorderSizePixel=0; DetailBox.ZIndex=351
-Instance.new("UICorner",DetailBox).CornerRadius=UDim.new(0,12)
-local DetailStroke=Instance.new("UIStroke",DetailBox); DetailStroke.Color=Theme.Stroke
-local DetailPad=Instance.new("UIPadding",DetailBox); DetailPad.PaddingLeft=UDim.new(0,16); DetailPad.PaddingRight=UDim.new(0,16); DetailPad.PaddingTop=UDim.new(0,14); DetailPad.PaddingBottom=UDim.new(0,14)
-local DetailLayout=Instance.new("UIListLayout",DetailBox); DetailLayout.SortOrder=Enum.SortOrder.LayoutOrder; DetailLayout.Padding=UDim.new(0,8)
-local DetailTitle=Instance.new("TextLabel",DetailBox); DetailTitle.Size=UDim2.new(1,-34,0,26); DetailTitle.BackgroundTransparency=1; DetailTitle.TextColor3=Theme.TextPrimary; DetailTitle.Font=Enum.Font.GothamBold; DetailTitle.TextSize=IsMobile and 15 or 17; DetailTitle.TextXAlignment=Enum.TextXAlignment.Left; DetailTitle.LayoutOrder=1; DetailTitle.ZIndex=352
-local DetailClose=Instance.new("TextButton",DetailBox); DetailClose.Size=UDim2.new(0,26,0,26); DetailClose.Position=UDim2.new(1,-26,0,0); DetailClose.BackgroundTransparency=1; DetailClose.Text="×"; DetailClose.TextColor3=Theme.TextSecondary; DetailClose.Font=Enum.Font.GothamBold; DetailClose.TextSize=20; DetailClose.ZIndex=352
-local DetailMeta=Instance.new("TextLabel",DetailBox); DetailMeta.Size=UDim2.new(1,0,0,0); DetailMeta.AutomaticSize=Enum.AutomaticSize.Y; DetailMeta.BackgroundTransparency=1; DetailMeta.TextColor3=Theme.Accent; DetailMeta.Font=Enum.Font.GothamMedium; DetailMeta.TextSize=11; DetailMeta.TextXAlignment=Enum.TextXAlignment.Left; DetailMeta.TextWrapped=true; DetailMeta.LayoutOrder=2; DetailMeta.ZIndex=352
-local DetailDesc=Instance.new("TextLabel",DetailBox); DetailDesc.Size=UDim2.new(1,0,0,0); DetailDesc.AutomaticSize=Enum.AutomaticSize.Y; DetailDesc.BackgroundTransparency=1; DetailDesc.TextColor3=Theme.TextSecondary; DetailDesc.Font=Enum.Font.Gotham; DetailDesc.TextSize=12; DetailDesc.TextXAlignment=Enum.TextXAlignment.Left; DetailDesc.TextWrapped=true; DetailDesc.LayoutOrder=3; DetailDesc.ZIndex=352
-local DetailStatus=Instance.new("TextLabel",DetailBox); DetailStatus.Size=UDim2.new(1,0,0,0); DetailStatus.AutomaticSize=Enum.AutomaticSize.Y; DetailStatus.BackgroundTransparency=1; DetailStatus.TextColor3=Theme.TextSecondary; DetailStatus.Font=Enum.Font.GothamMedium; DetailStatus.TextSize=11; DetailStatus.TextXAlignment=Enum.TextXAlignment.Left; DetailStatus.TextWrapped=true; DetailStatus.LayoutOrder=4; DetailStatus.ZIndex=352
-local DetailButtonRow=Instance.new("Frame",DetailBox); DetailButtonRow.Size=UDim2.new(1,0,0,34); DetailButtonRow.BackgroundTransparency=1; DetailButtonRow.LayoutOrder=5; DetailButtonRow.ZIndex=352
-local DetailRowLayout=Instance.new("UIListLayout",DetailButtonRow); DetailRowLayout.FillDirection=Enum.FillDirection.Horizontal; DetailRowLayout.HorizontalAlignment=Enum.HorizontalAlignment.Right; DetailRowLayout.Padding=UDim.new(0,8)
-local DetailCloseBtn=Instance.new("TextButton",DetailButtonRow); DetailCloseBtn.Size=UDim2.new(0,92,1,0); DetailCloseBtn.BackgroundColor3=Theme.CardHover; DetailCloseBtn.Text="Close"; DetailCloseBtn.TextColor3=Theme.TextPrimary; DetailCloseBtn.Font=Enum.Font.GothamBold; DetailCloseBtn.TextSize=11; DetailCloseBtn.AutoButtonColor=false; DetailCloseBtn.ZIndex=353; Instance.new("UICorner",DetailCloseBtn).CornerRadius=UDim.new(0,6)
-local DetailExecuteBtn=Instance.new("TextButton",DetailButtonRow); DetailExecuteBtn.Size=UDim2.new(0,110,1,0); DetailExecuteBtn.BackgroundColor3=Theme.Accent; DetailExecuteBtn.Text="Execute"; DetailExecuteBtn.TextColor3=Color3.fromRGB(255,255,255); DetailExecuteBtn.Font=Enum.Font.GothamBold; DetailExecuteBtn.TextSize=11; DetailExecuteBtn.AutoButtonColor=false; DetailExecuteBtn.ZIndex=353; Instance.new("UICorner",DetailExecuteBtn).CornerRadius=UDim.new(0,6)
-ApplyInteractiveAnimations(DetailCloseBtn,Theme.CardHover,Theme.BackgroundSecondary,Theme.BackgroundMain)
-ApplyInteractiveAnimations(DetailExecuteBtn,Theme.Accent,Color3.fromRGB(120,123,245),Color3.fromRGB(79,82,221))
-local ActiveDetailEntry=nil
-local function CloseScriptDetails() ActiveDetailEntry=nil; DetailOverlay.Visible=false end
-DetailClose.Activated:Connect(CloseScriptDetails); DetailCloseBtn.Activated:Connect(CloseScriptDetails)
-DetailOverlay.InputBegan:Connect(function(input)
-    if not DetailOverlay.Visible then return end
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-        local pos=input.Position; local p,z=DetailBox.AbsolutePosition,DetailBox.AbsoluteSize
-        if not(pos.X>=p.X and pos.X<=p.X+z.X and pos.Y>=p.Y and pos.Y<=p.Y+z.Y) then CloseScriptDetails() end
-    elseif input.UserInputType==Enum.UserInputType.Keyboard and input.KeyCode==Enum.KeyCode.Escape then CloseScriptDetails() end
-end)
-
 local ToggleKeybind = Enum.KeyCode.RightControl
 pcall(function() if SavedData.ToggleKeybind then ToggleKeybind = Enum.KeyCode[SavedData.ToggleKeybind] end end)
 local KeybindButtonRef = nil
@@ -1235,12 +1154,6 @@ end
 BindToggleKey(ToggleKeybind)
 
 RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not isConfirming and currentTab=="Scripts" and input.UserInputType==Enum.UserInputType.Keyboard then
-        if input.KeyCode==Enum.KeyCode.Slash or (input.KeyCode==Enum.KeyCode.F and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)) then
-            if SearchInput then SearchInput:CaptureFocus() end
-            return
-        end
-    end
 	if isConfirming then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
 			CloseConfirmDialog(false)
@@ -1298,25 +1211,6 @@ RegConn(UserInputService.InputEnded:Connect(function(input)
 			mainDragConnection = nil
 		end
 		if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
-        local cam = workspace.CurrentCamera
-        if cam then
-            local vp = cam.ViewportSize
-            local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-            local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-            local x = MainPanel.Position.X.Scale * vp.X + MainPanel.Position.X.Offset
-            local y = MainPanel.Position.Y.Scale * vp.Y + MainPanel.Position.Y.Offset
-            local left = halfX
-            local right = vp.X - (MainPanel.AbsoluteSize.X - halfX)
-            local top = halfY
-            local bottom = vp.Y - (MainPanel.AbsoluteSize.Y - halfY)
-            local snap = 18
-            if math.abs(x-left) <= snap then x=left elseif math.abs(x-right) <= snap then x=right end
-            if math.abs(y-top) <= snap then y=top elseif math.abs(y-bottom) <= snap then y=bottom end
-            MainPanel.Position = UDim2.new(0,x,0,y)
-            if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
-            SavedData.Settings.MainPosition = { X = x, Y = y }
-            SaveConfiguration()
-        end
 	end
 	if activeFloatDragInput and (input == activeFloatDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeFloatDragInput = nil
@@ -1456,7 +1350,7 @@ SectionHeaderLabel.Text = "Updates"; SectionHeaderLabel.TextColor3 = Theme.TextP
 SectionHeaderLabel.Font = Enum.Font.GothamBold; SectionHeaderLabel.TextSize = IsMobile and 13 or 16; SectionHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local TabViews = {}
-local currentTab = SavedData.Settings.LastTab or "Home"
+local currentTab = "Changelogs"
 
 local function CreateCanvas(name)
 	local scroll = Instance.new("ScrollingFrame", PanelGroup)
@@ -1474,15 +1368,12 @@ local function CreateCanvas(name)
 	return scroll
 end
 
-local HomeView = CreateCanvas("Home")
 local ChangelogsView = CreateCanvas("Changelogs")
 local ScriptsView = CreateCanvas("Scripts")
 local SettingsView = CreateCanvas("Settings")
 
-HomeView.Position = IsMobile and UDim2.new(0,16,0,108) or UDim2.new(0,16,0,128)
-HomeView.Size = IsMobile and UDim2.new(1,-32,1,-116) or UDim2.new(1,-32,1,-138)
-ScriptsView.Position = IsMobile and UDim2.new(0,16,0,174) or UDim2.new(0,16,0,198)
-ScriptsView.Size = IsMobile and UDim2.new(1,-32,1,-182) or UDim2.new(1,-32,1,-208)
+ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
+ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
 
 local EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
@@ -1541,56 +1432,16 @@ Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
 local SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
-local FilterRow = Instance.new("Frame", PanelGroup)
-FilterRow.Size = UDim2.new(1,-32,0,IsMobile and 26 or 28)
-FilterRow.Position = IsMobile and UDim2.new(0,16,0,146) or UDim2.new(0,16,0,168)
-FilterRow.BackgroundTransparency = 1
-FilterRow.ZIndex = 51
-local FilterLayout = Instance.new("UIListLayout", FilterRow)
-FilterLayout.FillDirection = Enum.FillDirection.Horizontal
-FilterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-FilterLayout.Padding = UDim.new(0,6)
-
-local function MakeFilterButton(text,width)
-    local btn = Instance.new("TextButton", FilterRow)
-    btn.Size = UDim2.new(0,width,1,0)
-    btn.BackgroundColor3 = Theme.BackgroundMain
-    btn.BackgroundTransparency = 0.15
-    btn.Text = text
-    btn.TextColor3 = Theme.TextSecondary
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextSize = IsMobile and 9 or 10
-    btn.AutoButtonColor = false
-    btn.ZIndex = 52
-    Instance.new("UICorner",btn).CornerRadius = UDim.new(0,6)
-    local stroke = Instance.new("UIStroke",btn); stroke.Color = Theme.Stroke
-    ApplyInteractiveAnimations(btn,Theme.BackgroundMain,Theme.CardHover,Theme.BackgroundSecondary,stroke,Theme.Stroke,Theme.Accent)
-    return btn,stroke
-end
-CategoryFilterBtn, CategoryFilterStroke = MakeFilterButton("Category: All", IsMobile and 94 or 112)
-CompatibilityFilterBtn, CompatibilityFilterStroke = MakeFilterButton("Compatible: All", IsMobile and 102 or 120)
-ClearFiltersBtn, ClearFiltersStroke = MakeFilterButton("Reset Filters", IsMobile and 82 or 100)
-ResultCountLabel = Instance.new("TextLabel", FilterRow)
-ResultCountLabel.Size = UDim2.new(1, -(IsMobile and 290 or 344), 1, 0)
-ResultCountLabel.BackgroundTransparency = 1
-ResultCountLabel.Text = "0 / 0 scripts"
-ResultCountLabel.TextColor3 = Theme.TextSecondary
-ResultCountLabel.Font = Enum.Font.GothamMedium
-ResultCountLabel.TextSize = IsMobile and 9 or 10
-ResultCountLabel.TextXAlignment = Enum.TextXAlignment.Right
-ResultCountLabel.LayoutOrder = 4
-ResultCountLabel.ZIndex = 52
-
 DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
 DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownContainer.BorderSizePixel = 0
 DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
-DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-viewportConn = nil
-function BindCamera()
+local viewportConn
+local function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
 	local cam = workspace.CurrentCamera
 	if cam then
@@ -1618,92 +1469,16 @@ end
 RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
 BindCamera()
 
-FilterFavoritesActive = SavedData.Settings.FilterFavorites == true
-filterVersion = 0
-SortMode = SavedData.Settings.SortMode or "Most Relevant"
-FilterCategory = SavedData.Settings.FilterCategory or "All"
-CompatibilityOnly = SavedData.Settings.CompatibilityOnly == true
-SortOptions = {
+local FilterFavoritesActive = false
+local filterVersion = 0
+local SortMode = "Most Relevant"
+local SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Auto Execute: ON", "Auto Execute: OFF", "Recently Used", "Most Used"
+	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 
-function GetStableScriptId(data)
-    local supplied = type(data)=="table" and (data.Id or data.ScriptId or data.Key) or nil
-    if type(supplied)=="string" and supplied~="" then return supplied end
-    local seed = table.concat({ tostring(data and data.Name or ""), tostring(data and data.RawUrl or ""), tostring(data and data.PlaceId or 0), tostring(data and data.GameId or 0), tostring(data and data.Category or "") }, "|")
-    -- Keep the stable-ID hash compatible with older Lua/Luau parsers.
-    -- The previous implementation used the bitwise XOR operator (~), which
-    -- some executor runtimes reject at compile time.
-    local h = 2166136261 % 2147483647
-    for i=1,#seed do
-        h = (h * 131 + string.byte(seed,i)) % 2147483647
-    end
-    return string.format("script_%08x", h)
-end
-
-function GetCompatibilityState(data)
-    local gameId = tonumber(data and data.GameId) or 0
-    local placeId = tonumber(data and data.PlaceId) or 0
-    if gameId==0 and placeId==0 then return "Universal", Theme.Info end
-    if gameId~=0 and gameId==game.GameId then return "Compatible", Theme.Success end
-    if placeId~=0 and placeId==PlaceId then return "Compatible", Theme.Success end
-    return "Other Game", Theme.Warning
-end
-
-function GetUsageData(storageKey)
-    local usage = SavedData.Usage[storageKey]
-    if type(usage) ~= "table" then
-        return {LastUsed = 0, UseCount = 0}
-    end
-    return usage
-end
-
-function RecordScriptUse(entry)
-    if not entry then return end
-    local key = entry.StableId or entry.ExactName
-    local usage = SavedData.Usage[key]
-    if type(usage) ~= "table" then usage = {LastUsed = 0, UseCount = 0} end
-    usage.LastUsed = os.time()
-    usage.UseCount = (tonumber(usage.UseCount) or 0) + 1
-    SavedData.Usage[key] = usage
-    SaveConfiguration()
-    if type(UpdateDashboard) == "function" then
-        task.defer(UpdateDashboard)
-    end
-end
-
-function GetCategoryOptions()
-    local seen={All=true}; local list={"All"}
-    for _,entry in ipairs(RegisteredScripts) do
-        local cat=type(entry.Category)=="string" and string.gsub(entry.Category,"^%s*(.-)%s*$","%1") or ""
-        if cat~="" and not seen[cat] then seen[cat]=true; list[#list+1]=cat end
-    end
-    table.sort(list,function(a,b) if a=="All" then return true elseif b=="All" then return false end return a:lower()<b:lower() end)
-    return list
-end
-
-function MigrateSavedKeys(entries)
-    for _,entry in ipairs(entries) do
-        local id=entry.StableId; local name=entry.Name
-        if SavedData.Favorites[name] and not SavedData.Favorites[id] then SavedData.Favorites[id]=true end
-        if SavedData.AutoExecutes[name] and not SavedData.AutoExecutes[id] then SavedData.AutoExecutes[id]=SavedData.AutoExecutes[name] end
-        if SavedData.Usage[name] and not SavedData.Usage[id] then SavedData.Usage[id]=SavedData.Usage[name] end
-        if name~=id then SavedData.Favorites[name]=nil; SavedData.AutoExecutes[name]=nil; SavedData.Usage[name]=nil end
-    end
-end
-
-function UpdateFilterButtonText()
-    CategoryFilterBtn.Text="Category: "..tostring(FilterCategory)
-    CompatibilityFilterBtn.Text=CompatibilityOnly and "Compatible: On" or "Compatible: All"
-    if FilterFavoritesActive then FavFilterBtn.Text="★"; FavFilterBtn.TextColor3=Color3.fromRGB(250,204,21); FavFilterStroke.Color=Color3.fromRGB(250,204,21)
-    else FavFilterBtn.Text="☆"; FavFilterBtn.TextColor3=Theme.TextSecondary; FavFilterStroke.Color=Theme.Stroke end
-end
-
-OpenScriptDetails = nil
-
-function UpdateFilter()
+local function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
 	local currentVersion = filterVersion
@@ -1718,9 +1493,7 @@ function UpdateFilter()
 		local matches = {}
 		local now = os.time()
 		local activeFavorites = FilterFavoritesActive
-        local currentSort = SortMode
-        local categoryFilter = FilterCategory
-        local compatibilityFilter = CompatibilityOnly
+		local currentSort = SortMode
 
 		for _, scr in ipairs(RegisteredScripts) do
 			if currentVersion ~= filterVersion then return end
@@ -1739,10 +1512,8 @@ function UpdateFilter()
 			local filterPass = true
 			local age = scr.LastUpdatedNumber and (now - scr.LastUpdatedNumber) or math.huge
 			if activeFavorites then
-                filterPass = SavedData.Favorites[scr.StableId or scr.ExactName] == true
-            end
-            if filterPass and categoryFilter ~= "All" then filterPass = tostring(scr.Category or "") == categoryFilter end
-            if filterPass and compatibilityFilter then filterPass = scr.CompatibilityState == "Compatible" or scr.CompatibilityState == "Universal" end
+				filterPass = SavedData.Favorites[scr.ExactName] == true
+			end
 			if filterPass then
 				if currentSort == "Updated Today" then
 					filterPass = age <= 86400
@@ -1751,11 +1522,11 @@ function UpdateFilter()
 				elseif currentSort == "Updated This Month" then
 					filterPass = age <= 2592000
 				elseif currentSort == "Favorites" then
-					filterPass = SavedData.Favorites[scr.StableId or scr.ExactName] == true
+					filterPass = SavedData.Favorites[scr.ExactName] == true
 				elseif currentSort == "Auto Execute: ON" then
-					filterPass = SavedData.AutoExecutes[scr.StableId or scr.ExactName] ~= nil
+					filterPass = SavedData.AutoExecutes[scr.ExactName] ~= nil
 				elseif currentSort == "Auto Execute: OFF" then
-					filterPass = SavedData.AutoExecutes[scr.StableId or scr.ExactName] == nil
+					filterPass = SavedData.AutoExecutes[scr.ExactName] == nil
 				end
 			end
 
@@ -1769,8 +1540,7 @@ function UpdateFilter()
 		end
 
 		if currentVersion ~= filterVersion then return end
-        if ResultCountLabel and ResultCountLabel.Parent then ResultCountLabel.Text=tostring(#matches).." / "..tostring(#RegisteredScripts).." scripts" end
-        table.sort(matches, function(a, b)
+		table.sort(matches, function(a, b)
 			if a.TagPriority ~= b.TagPriority then
 				return a.TagPriority > b.TagPriority
 			end
@@ -1784,22 +1554,14 @@ function UpdateFilter()
 			elseif currentSort == "Oldest" then
 				if aUpdated ~= bUpdated then return aUpdated < bUpdated end
 			elseif currentSort == "Favorites" then
-				local aFav = SavedData.Favorites[a.StableId or a.ExactName] and 1 or 0
-				local bFav = SavedData.Favorites[b.StableId or b.ExactName] and 1 or 0
+				local aFav = SavedData.Favorites[a.ExactName] and 1 or 0
+				local bFav = SavedData.Favorites[b.ExactName] and 1 or 0
 				if aFav ~= bFav then return aFav > bFav end
 			elseif currentSort == "Auto Execute: ON" or currentSort == "Auto Execute: OFF" then
-                local aAuto = SavedData.AutoExecutes[a.StableId or a.ExactName] and 1 or 0
-                local bAuto = SavedData.AutoExecutes[b.StableId or b.ExactName] and 1 or 0
-                if aAuto ~= bAuto then return aAuto > bAuto end
-            elseif currentSort == "Recently Used" then
-                local aUsed=GetUsageData(a.StableId or a.ExactName).LastUsed or 0
-                local bUsed=GetUsageData(b.StableId or b.ExactName).LastUsed or 0
-                if aUsed ~= bUsed then return aUsed > bUsed end
-            elseif currentSort == "Most Used" then
-                local aUsed=GetUsageData(a.StableId or a.ExactName).UseCount or 0
-                local bUsed=GetUsageData(b.StableId or b.ExactName).UseCount or 0
-                if aUsed ~= bUsed then return aUsed > bUsed end
-            else
+				local aAuto = SavedData.AutoExecutes[a.ExactName] and 1 or 0
+				local bAuto = SavedData.AutoExecutes[b.ExactName] and 1 or 0
+				if aAuto ~= bAuto then return aAuto > bAuto end
+			else
 				if aUpdated ~= bUpdated then return aUpdated > bUpdated end
 			end
 			return a.OriginalIndex < b.OriginalIndex
@@ -1838,52 +1600,77 @@ RegConn(ClearSearchBtn.Activated:Connect(function()
 	if SearchInput:IsFocused() then SearchInput:ReleaseFocus() end
 end))
 
-RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1,function()
-    FilterFavoritesActive=not FilterFavoritesActive; SavedData.Settings.FilterFavorites=FilterFavoritesActive; SaveConfiguration(); UpdateFilterButtonText(); UpdateFilter()
+RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
+	if isDestroying then return end
+	FilterFavoritesActive = not FilterFavoritesActive
+	if FilterFavoritesActive then
+		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
+		ShowNotification("Showing your favorite scripts only.", "Info")
+	else
+		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+		ShowNotification("Showing all scripts.", "Info")
+	end
+	UpdateFilter()
 end)))
 
-function OpenFilterDropdown(anchorButton, options, selectedValue, onSelect, width)
-    if DropdownContainer.Visible then DropdownContainer.Visible=false; return end
-    for _,child in ipairs(DropdownContainer:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    for i,opt in ipairs(options) do
-        local btn=Instance.new("TextButton",DropdownContainer); btn.Size=UDim2.new(1,0,0,28); btn.BackgroundTransparency=1; btn.Text="  "..tostring(opt); btn.TextXAlignment=Enum.TextXAlignment.Left; btn.TextColor3=(opt==selectedValue) and Theme.Accent or Theme.TextPrimary; btn.Font=Enum.Font.GothamMedium; btn.TextSize=11; btn.ZIndex=1001; btn.LayoutOrder=i
-        RegConn(btn.Activated:Connect(function() if onSelect then onSelect(opt) end; DropdownContainer.Visible=false end))
-    end
-    local pos,size=anchorButton.AbsolutePosition,anchorButton.AbsoluteSize; local cam=workspace.CurrentCamera; local vp=cam and cam.ViewportSize or Vector2.new(1920,1080); local w=width or 190; local h=math.clamp(#options*28,28,250)
-    local x=math.clamp(pos.X+size.X-w,10,vp.X-w-10); local y=pos.Y+size.Y+4; if y+h>vp.Y-10 then y=pos.Y-h-4 end; if y<10 then y=10 end
-    DropdownContainer.Size=UDim2.new(0,w,0,h); DropdownContainer.Position=UDim2.new(0,x,0,y); DropdownContainer.CanvasPosition=Vector2.new(0,0); DropdownContainer.Visible=true
+for _, opt in ipairs(SortOptions) do
+	local btn = Instance.new("TextButton", DropdownContainer)
+	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
+	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
+	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
+	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 1001
+
+	RegConn(btn.Activated:Connect(function()
+		SortMode = opt
+		DropdownContainer.Visible = false
+		for _, child in ipairs(DropdownContainer:GetChildren()) do
+			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
+		end
+		btn.TextColor3 = Theme.Accent
+		ShowNotification("Sorted by: " .. opt, "Info")
+		UpdateFilter()
+	end))
 end
 
 RegConn(SortDropdownBtn.Activated:Connect(function()
-    OpenFilterDropdown(SortDropdownBtn,SortOptions,SortMode,function(opt) SortMode=opt; SavedData.Settings.SortMode=opt; SaveConfiguration(); UpdateFilter() end,190)
+	if DropdownContainer.Visible then
+		DropdownContainer.Visible = false
+	else
+		local absPos = SortDropdownBtn.AbsolutePosition
+		local absSize = SortDropdownBtn.AbsoluteSize
+		local camera = workspace.CurrentCamera
+		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+		local dropWidth, dropHeight = 190, 210
+		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
+		local posY = absPos.Y + absSize.Y + 4
+		if posY + dropHeight > viewportSize.Y - 10 then
+			posY = absPos.Y - dropHeight - 4
+		end
+		if posY < 10 then posY = 10 end
+		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
+		DropdownContainer.Visible = true
+	end
 end))
-RegConn(CategoryFilterBtn.Activated:Connect(function()
-    OpenFilterDropdown(CategoryFilterBtn,GetCategoryOptions(),FilterCategory,function(opt) FilterCategory=opt; SavedData.Settings.FilterCategory=opt; SaveConfiguration(); UpdateFilterButtonText(); UpdateFilter() end,200)
-end))
-RegConn(CompatibilityFilterBtn.Activated:Connect(function()
-    CompatibilityOnly=not CompatibilityOnly; SavedData.Settings.CompatibilityOnly=CompatibilityOnly; SaveConfiguration(); UpdateFilterButtonText(); UpdateFilter()
-end))
-RegConn(ClearFiltersBtn.Activated:Connect(CreateDebounce(0.1,function()
-    SearchInput.Text=""; FilterFavoritesActive=false; FilterCategory="All"; CompatibilityOnly=false; SortMode="Most Relevant"
-    SavedData.Settings.FilterFavorites=false; SavedData.Settings.FilterCategory="All"; SavedData.Settings.CompatibilityOnly=false; SavedData.Settings.SortMode=SortMode; SaveConfiguration(); UpdateFilterButtonText(); UpdateFilter()
-end)))
-RegConn(UserInputService.InputBegan:Connect(function(input)
-    if DropdownContainer.Visible and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) then
-        local pos=input.Position; local dPos,dSize=DropdownContainer.AbsolutePosition,DropdownContainer.AbsoluteSize
-        local inside=pos.X>=dPos.X and pos.X<=dPos.X+dSize.X and pos.Y>=dPos.Y and pos.Y<=dPos.Y+dSize.Y
-        if not inside then DropdownContainer.Visible=false end
-    end
-end))
-UpdateFilterButtonText()
 
-TabIndicator = Instance.new("Frame", TabContainer)
+RegConn(UserInputService.InputBegan:Connect(function(input)
+	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+		local pos = input.Position
+		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
+		local sPos, sSize = SortDropdownBtn.AbsolutePosition, SortDropdownBtn.AbsoluteSize
+		local insideDrop = pos.X >= dPos.X and pos.X <= dPos.X + dSize.X and pos.Y >= dPos.Y and pos.Y <= dPos.Y + dSize.Y
+		local insideBtn = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
+		if not insideDrop and not insideBtn then DropdownContainer.Visible = false end
+	end
+end))
+
+local TabIndicator = Instance.new("Frame", TabContainer)
 TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 TabIndicator.Position = UDim2.new(0, 4, 1, -2)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 
-TabButtonCache = {}
-function CreateTab(name, index)
+local TabButtonCache = {}
+local function CreateTab(name, index)
 	local xOffset = (index - 1) * (IsMobile and 90 or 115)
 	local btn = Instance.new("TextButton", TabContainer)
 	btn.Size = UDim2.new(0, IsMobile and 85 or 105, 1, 0)
@@ -1899,13 +1686,12 @@ function CreateTab(name, index)
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 	RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
-		currentTab = name; DropdownContainer.Visible = false; SavedData.Settings.LastTab=name; SaveConfiguration()
+		currentTab = name; DropdownContainer.Visible = false
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
 		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
-		SectionHeaderLabel.Text = (name == "Home") and "Dashboard" or (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
+		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
-        FilterRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
 			UpdateFilter()
 		elseif SearchInput and SearchInput.Parent then
@@ -1920,9 +1706,9 @@ function CreateTab(name, index)
 		end
 	end))
 end
-CreateTab("Home", 1); CreateTab("Changelogs", 2); CreateTab("Scripts", 3); CreateTab("Settings", 4)
+CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 
-function CreateParagraph(title, desc, parentView)
+local function CreateParagraph(title, desc, parentView)
 	local block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover
@@ -1943,70 +1729,10 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 
-DashboardLabels={}
-DashboardRecentContainer = nil
-function CreateDashboardStat(parent,title,accent)
-    local card=Instance.new("Frame",parent); card.Size=UDim2.new(1,0,0,54); card.BackgroundColor3=Theme.CardHover; card.BorderSizePixel=0; Instance.new("UICorner",card).CornerRadius=UDim.new(0,8); local st=Instance.new("UIStroke",card); st.Color=Theme.Stroke
-    local t=Instance.new("TextLabel",card); t.Size=UDim2.new(0.62,0,1,0); t.Position=UDim2.new(0,12,0,0); t.BackgroundTransparency=1; t.Text=title; t.TextColor3=Theme.TextSecondary; t.Font=Enum.Font.GothamMedium; t.TextSize=11; t.TextXAlignment=Enum.TextXAlignment.Left
-    local v=Instance.new("TextLabel",card); v.Size=UDim2.new(0.32,-12,1,0); v.Position=UDim2.new(0.68,0,0,0); v.BackgroundTransparency=1; v.Text="--"; v.TextColor3=accent or Theme.Accent; v.Font=Enum.Font.GothamBold; v.TextSize=15; v.TextXAlignment=Enum.TextXAlignment.Right
-    return v
-end
-UpdateDashboard = function()
-    local total=#RegisteredScripts; local favorites=0; local autoCount=0; local compatible=0
-    for _,entry in ipairs(RegisteredScripts) do
-        if SavedData.Favorites[entry.StableId] then favorites=favorites+1 end
-        if SavedData.AutoExecutes[entry.StableId] then autoCount=autoCount+1 end
-        if entry.CompatibilityState=="Compatible" or entry.CompatibilityState=="Universal" then compatible=compatible+1 end
-    end
-    if DashboardLabels.Total then DashboardLabels.Total.Text=tostring(total) end
-    if DashboardLabels.Favorites then DashboardLabels.Favorites.Text=tostring(favorites) end
-    if DashboardLabels.Auto then DashboardLabels.Auto.Text=tostring(autoCount) end
-    if DashboardLabels.Compatible then DashboardLabels.Compatible.Text=tostring(compatible) end
-    if DashboardLabels.Status then
-        local stamp=CatalogState.Cached and CatalogState.CachedAt or CatalogState.LastFetchAt
-        local age=(stamp and stamp>0) and GetRelativeTime(stamp) or "never"
-        DashboardLabels.Status.Text=(CatalogState.Cached and "Cached • " or (total>0 and "Online • " or "-- • "))..age
-    end
-    if DashboardLabels.Changes then DashboardLabels.Changes.Text=string.format("+%d / ~%d / -%d",CatalogState.Added,CatalogState.Updated,CatalogState.Removed) end
-    if DashboardRecentContainer and DashboardRecentContainer.Parent then
-        for _,child in ipairs(DashboardRecentContainer:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-        local recent={}
-        for _,entry in ipairs(RegisteredScripts) do local u=GetUsageData(entry.StableId); if (u.LastUsed or 0)>0 then recent[#recent+1]={Entry=entry,Used=u} end end
-        table.sort(recent,function(a,b) return (a.Used.LastUsed or 0)>(b.Used.LastUsed or 0) end)
-        for i=1,math.min(5,#recent) do
-            local item=recent[i]; local row=Instance.new("TextButton",DashboardRecentContainer); row.Size=UDim2.new(1,0,0,30); row.BackgroundColor3=Theme.BackgroundMain; row.Text="  "..item.Entry.ExactName; row.TextColor3=Theme.TextPrimary; row.Font=Enum.Font.GothamMedium; row.TextSize=11; row.TextXAlignment=Enum.TextXAlignment.Left; row.AutoButtonColor=false
-            Instance.new("UICorner",row).CornerRadius=UDim.new(0,6); local rs=Instance.new("UIStroke",row); rs.Color=Theme.Stroke
-            row.Activated:Connect(function() if type(OpenScriptDetails) == "function" then OpenScriptDetails(item.Entry) end end)
-        end
-    end
-end
-
-homeIntro=CreateParagraph("Welcome back","Your hub dashboard shows catalog health, compatibility, and the scripts you use most.",HomeView)
-dashboardActions=Instance.new("Frame",HomeView); dashboardActions.Size=UDim2.new(1,0,0,32); dashboardActions.BackgroundTransparency=1; dashboardActions.LayoutOrder=10
-dashboardActionLayout=Instance.new("UIListLayout",dashboardActions); dashboardActionLayout.FillDirection=Enum.FillDirection.Horizontal; dashboardActionLayout.Padding=UDim.new(0,6); dashboardActionLayout.VerticalAlignment=Enum.VerticalAlignment.Center
-dashRefresh=Instance.new("TextButton",dashboardActions); dashRefresh.Size=UDim2.new(0.5,-3,1,0); dashRefresh.BackgroundColor3=Theme.Accent; dashRefresh.Text="↻  Refresh Catalog"; dashRefresh.TextColor3=Color3.fromRGB(255,255,255); dashRefresh.Font=Enum.Font.GothamBold; dashRefresh.TextSize=11; dashRefresh.AutoButtonColor=false; Instance.new("UICorner",dashRefresh).CornerRadius=UDim.new(0,7)
-dashScripts=Instance.new("TextButton",dashboardActions); dashScripts.Size=UDim2.new(0.5,-3,1,0); dashScripts.BackgroundColor3=Theme.CardHover; dashScripts.Text="Browse Scripts"; dashScripts.TextColor3=Theme.TextPrimary; dashScripts.Font=Enum.Font.GothamBold; dashScripts.TextSize=11; dashScripts.AutoButtonColor=false; local dashScriptsStroke=Instance.new("UIStroke",dashScripts); dashScriptsStroke.Color=Theme.Stroke; Instance.new("UICorner",dashScripts).CornerRadius=UDim.new(0,7)
-ApplyInteractiveAnimations(dashRefresh,Theme.Accent,Color3.fromRGB(120,123,245),Color3.fromRGB(79,82,221))
-ApplyInteractiveAnimations(dashScripts,Theme.CardHover,Color3.fromRGB(40,53,75),Color3.fromRGB(20,29,45),dashScriptsStroke,Theme.Stroke,Theme.Accent)
-RegConn(dashRefresh.Activated:Connect(CreateDebounce(0.15,function() AttemptActionWithCooldown(function() PendingTasks.__LoadCatalog(true) end) end)))
-RegConn(dashScripts.Activated:Connect(function() if isDestroying then return end; currentTab="Scripts"; SavedData.Settings.LastTab="Scripts"; SaveConfiguration(); for tabName,view in pairs(TabViews) do view.Visible=(tabName==currentTab) end; for tabName,button in pairs(TabButtonCache) do button.TextColor3=(tabName==currentTab) and Theme.TextPrimary or Theme.TextSecondary end; SearchRow.Visible=true; FilterRow.Visible=true; SectionHeaderLabel.Text="Scripts Catalog"; UpdateFilter() end))
-DashboardLabels.Total=CreateDashboardStat(HomeView,"Catalog scripts",Theme.Accent)
-DashboardLabels.Favorites=CreateDashboardStat(HomeView,"Favorites",Color3.fromRGB(250,204,21))
-DashboardLabels.Auto=CreateDashboardStat(HomeView,"Auto-execute",Theme.Success)
-DashboardLabels.Compatible=CreateDashboardStat(HomeView,"Compatible / universal",Theme.Info)
-DashboardLabels.Status=CreateDashboardStat(HomeView,"Catalog status",Theme.Warning)
-DashboardLabels.Changes=CreateDashboardStat(HomeView,"Last refresh changes",Theme.System)
-recentBlock=Instance.new("Frame",HomeView); recentBlock.Size=UDim2.new(1,0,0,0); recentBlock.AutomaticSize=Enum.AutomaticSize.Y; recentBlock.BackgroundColor3=Theme.CardHover; recentBlock.LayoutOrder=99; Instance.new("UICorner",recentBlock).CornerRadius=UDim.new(0,8)
-recentPad=Instance.new("UIPadding",recentBlock); recentPad.PaddingLeft=UDim.new(0,12); recentPad.PaddingRight=UDim.new(0,12); recentPad.PaddingTop=UDim.new(0,10); recentPad.PaddingBottom=UDim.new(0,10)
-recentLayout=Instance.new("UIListLayout",recentBlock); recentLayout.SortOrder=Enum.SortOrder.LayoutOrder; recentLayout.Padding=UDim.new(0,6)
-recentTitle=Instance.new("TextLabel",recentBlock); recentTitle.Size=UDim2.new(1,0,0,20); recentTitle.BackgroundTransparency=1; recentTitle.Text="Recently used"; recentTitle.TextColor3=Theme.TextPrimary; recentTitle.Font=Enum.Font.GothamBold; recentTitle.TextSize=13; recentTitle.TextXAlignment=Enum.TextXAlignment.Left; recentTitle.LayoutOrder=1
-DashboardRecentContainer=Instance.new("Frame",recentBlock); DashboardRecentContainer.Size=UDim2.new(1,0,0,0); DashboardRecentContainer.AutomaticSize=Enum.AutomaticSize.Y; DashboardRecentContainer.BackgroundTransparency=1; DashboardRecentContainer.LayoutOrder=2
-recentList=Instance.new("UIListLayout",DashboardRecentContainer); recentList.SortOrder=Enum.SortOrder.LayoutOrder; recentList.Padding=UDim.new(0,4)
-
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.1.0 - Dashboard, Cached Catalog & Discovery", "• Improved executor compatibility with safer environment detection and fallback handling.\n• Added safer getgenv handling with a standard global-environment fallback.\n• Improved dynamic script compilation with loadstring/load compatibility detection.\n• Improved handling of missing or unsupported executor APIs to prevent startup failures.\n• Removed unnecessary executor-specific hierarchy and metamethod interception that could cause compatibility issues.\n• Improved startup stability by reducing dependencies on executor-specific functionality.\n• Improved HTTP and request compatibility through safer API detection and fallback handling.\n• Improved GUI compatibility with safer GUI-parent and protection API handling.\n• Improved error handling for unsupported execution and compilation environments.\n• Removed unused variables and redundant cleanup operations.\n• Removed empty error-handling branches and other dead code without affecting callbacks or fallback systems.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, fallback systems, configuration, Anti-AFK, catalog, and UI functionality.\n• Improved script execution reliability across different supported execution environments.\n• Reduced unnecessary dependencies and simplified compatibility-sensitive code paths.\n• Improved overall stability, reliability, compatibility, maintainability, and user experience across VeloxHub.", ChangelogsView)
+CreateParagraph("v2.0.1 - Executor Compatibility, Stability & Code Cleanup", "• Improved executor compatibility with safer environment detection and fallback handling.\n• Added safer getgenv handling with a standard global-environment fallback.\n• Improved dynamic script compilation with loadstring/load compatibility detection.\n• Improved handling of missing or unsupported executor APIs to prevent startup failures.\n• Removed unnecessary executor-specific hierarchy and metamethod interception that could cause compatibility issues.\n• Improved startup stability by reducing dependencies on executor-specific functionality.\n• Improved HTTP and request compatibility through safer API detection and fallback handling.\n• Improved GUI compatibility with safer GUI-parent and protection API handling.\n• Improved error handling for unsupported execution and compilation environments.\n• Removed unused variables and redundant cleanup operations.\n• Removed empty error-handling branches and other dead code without affecting callbacks or fallback systems.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, fallback systems, configuration, catalog, and UI functionality.\n• Improved script execution reliability across different supported execution environments.\n• Reduced unnecessary dependencies and simplified compatibility-sensitive code paths.\n• Improved overall stability, reliability, compatibility, maintainability, and user experience across VeloxHub.", ChangelogsView)
 
-function RefreshAllCardStates()
+local function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
 		if type(scrData.UpdateUI) == "function" then scrData.UpdateUI() end
 		if scrData.TimeLabel and scrData.TimeLabel.Parent then
@@ -2015,7 +1741,7 @@ function RefreshAllCardStates()
 	end
 end
 
-function ExecuteSandboxed(code, scriptName)
+local function ExecuteSandboxed(code, scriptName)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
@@ -2037,13 +1763,11 @@ function ExecuteSandboxed(code, scriptName)
 	return true, "Script dispatched successfully"
 end
 
-function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
+local function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
 	local tagConfig = TagTypeConfig[tagType]
 	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
 	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
-	local stableId = data.StableId or GetStableScriptId(data)
-	local compatibilityState, compatibilityColor = GetCompatibilityState(data)
 	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
@@ -2119,10 +1843,8 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
-    local infoRow=Instance.new("Frame",content); infoRow.Size=UDim2.new(1,0,0,18); infoRow.BackgroundTransparency=1; infoRow.LayoutOrder=3
-    local infoLabel=Instance.new("TextLabel",infoRow); infoLabel.Size=UDim2.new(1,0,1,0); infoLabel.BackgroundTransparency=1; infoLabel.TextColor3=compatibilityColor; infoLabel.Font=Enum.Font.GothamMedium; infoLabel.TextSize=9; infoLabel.TextXAlignment=Enum.TextXAlignment.Left; infoLabel.TextTruncate=Enum.TextTruncate.AtEnd
-    local btmRow = Instance.new("Frame", content)
-    btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 4
+	local btmRow = Instance.new("Frame", content)
+	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
 	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
@@ -2139,9 +1861,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
-    local starBtn = Instance.new("TextButton", btmRow)
-    starBtn.Size=UDim2.new(0,22,0,22); starBtn.BackgroundTransparency=1; starBtn.Font=Enum.Font.GothamBold; starBtn.TextSize=15; starBtn.LayoutOrder=2; starBtn.ZIndex=2
-    local detailsBtn=Instance.new("TextButton",btmRow); detailsBtn.Size=UDim2.new(0,22,0,22); detailsBtn.BackgroundTransparency=1; detailsBtn.Text="i"; detailsBtn.TextColor3=Theme.TextSecondary; detailsBtn.Font=Enum.Font.GothamBold; detailsBtn.TextSize=13; detailsBtn.LayoutOrder=3; detailsBtn.ZIndex=2
+	local starBtn = Instance.new("TextButton", btmRow)
+	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
+	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, CardConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, CardConnections)
@@ -2149,31 +1871,30 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
-	local scriptEntry={
-        Instance=card, SearchTitle=string.lower(exactName), SearchDesc=string.lower(description),
-        SearchMeta=string.lower(table.concat({type(data.Category)=="string" and data.Category or "",type(data.Author)=="string" and data.Author or "",tagSearch,compatibilityState}," ")),
-        ExactName=exactName, Name=exactName, StableId=stableId, Category=type(data.Category)=="string" and data.Category or "", Author=type(data.Author)=="string" and data.Author or "", RawUrl=data.RawUrl or "", PlaceId=tonumber(data.PlaceId) or 0, GameId=tonumber(data.GameId) or 0,
-        Description=description, LastUpdated=data.LastUpdated, LastUpdatedNumber=GetSafeTimestamp(data.LastUpdated), TagType=tagType, TagPriority=tagConfig.Priority, CompatibilityState=compatibilityState, CompatibilityColor=compatibilityColor,
-        OriginalIndex=originalIndex or (#RegisteredScripts+1), EntryFingerprint=table.concat({stableId,tostring(data.Name or ""),tostring(data.Description or ""),tostring(data.RawUrl or ""),tostring(data.ImageAssetId or ""),tostring(NormalizeTagType(data.TagType)),tostring(GetSafeTimestamp(data.LastUpdated)),tostring(tonumber(data.PlaceId) or 0),tostring(tonumber(data.GameId) or 0),tostring(data.Category or ""),tostring(data.Author or "")},"\31"), TimeLabel=dateLbl, Data=data
-    }
-    scriptEntry.UpdateUI = function()
+	local scriptEntry = {
+		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
+		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch}, " ")),
+		ExactName = exactName, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+	}
+
+	local innerActionTime = 0
+
+	scriptEntry.UpdateUI = function()
 		ApplyTagBorder(card, tagType, cardStroke)
-		local isFav = SavedData.Favorites[stableId]
+		local isFav = SavedData.Favorites[exactName]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
-		local isON = (SavedData.AutoExecutes[stableId] ~= nil)
+		local isON = (SavedData.AutoExecutes[exactName] ~= nil)
 		aeStateTxt.Text = isON and "ON" or "OFF"; aeState.BackgroundColor3 = isON and Theme.Success or Theme.Error
-        infoLabel.Text=string.format("%s  •  %s%s",scriptEntry.Category~="" and scriptEntry.Category or "Uncategorized",compatibilityState,scriptEntry.Author~="" and ("  •  by "..scriptEntry.Author) or "")
-        infoLabel.TextColor3=compatibilityColor
 	end
 	scriptEntry.UpdateUI()
 
 	RegCardConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
-		if SavedData.Favorites[stableId] then
-			SavedData.Favorites[stableId] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
+		if SavedData.Favorites[exactName] then
+			SavedData.Favorites[exactName] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
 		else
-			SavedData.Favorites[stableId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
+			SavedData.Favorites[exactName] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
@@ -2181,26 +1902,19 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	RegCardConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
-		if SavedData.AutoExecutes[stableId] then
-			SavedData.AutoExecutes[stableId] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
+		if SavedData.AutoExecutes[exactName] then
+			SavedData.AutoExecutes[exactName] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
 		else
-			SavedData.AutoExecutes[stableId] = {PlaceId = game.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
+			SavedData.AutoExecutes[exactName] = {PlaceId = game.PlaceId, GameId = game.GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
-
-    RegCardConn(detailsBtn.Activated:Connect(CreateDebounce(0.1,function()
-        if isDestroying then return end
-        innerActionTime=tick()
-        if type(OpenScriptDetails)=="function" then OpenScriptDetails(scriptEntry) end
-    end)))
 
 	RegCardConn(card.Activated:Connect(function()
 		if isDestroying then return end
 		if tick() - innerActionTime < 0.2 then return end
 
-        local function executeScript()
-            RecordScriptUse(scriptEntry)
+		local function executeScript()
 			if type(CompileFunction) ~= "function" then
 				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
 				return
@@ -2216,7 +1930,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
-						ShowNotification("Started [" .. exactName .. "].", "Execution")
+						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
 
@@ -2226,7 +1940,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			end)
 		end
 
-		if SavedData.AutoExecutes[stableId] ~= nil then
+		if SavedData.AutoExecutes[exactName] ~= nil then
 			AttemptActionWithCooldown(executeScript)
 		else
 			OpenConfirmDialog(exactName, executeScript)
@@ -2239,39 +1953,13 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	return scriptEntry
 end
 
-OpenScriptDetails = function(entry)
-    if not entry then return end
-    ActiveDetailEntry=entry
-    local usage=GetUsageData(entry.StableId or entry.ExactName)
-    DetailTitle.Text=entry.ExactName or "Script"
-    DetailMeta.Text=string.format("%s  •  %s  •  %s\n%s  •  Uses: %d",entry.Category~="" and entry.Category or "Uncategorized",entry.CompatibilityState or "Unknown",entry.Author~="" and entry.Author or "Unknown author",GetRelativeTime(entry.LastUpdatedNumber or entry.LastUpdated),tonumber(usage.UseCount) or 0)
-    DetailDesc.Text=entry.Description~="" and entry.Description or "No description provided."
-    DetailStatus.Text=string.format("PlaceId: %s  •  GameId: %s\nStable ID: %s",tostring(entry.PlaceId),tostring(entry.GameId),tostring(entry.StableId))
-    DetailOverlay.Visible=true
-end
-DetailExecuteBtn.Activated:Connect(function()
-    local entry=ActiveDetailEntry
-    if not entry or isDestroying then return end
-    CloseScriptDetails()
-    local function run()
-        RecordScriptUse(entry)
-        local raw=FetchWithRetry(type(entry.RawUrl)=="string" and entry.RawUrl or "",2)
-        if not raw then ShowNotification("Failed to download script. Please check your connection.","Error")
-        elseif string.find(raw,"404: Not Found") then ShowNotification("The script link is broken or no longer available (404 Error).","Error")
-        else ExecuteSandboxed(raw,entry.ExactName); ShowNotification("Started ["..entry.ExactName.."].","Execution") end
-        UpdateFilter()
-        if type(UpdateDashboard) == "function" then task.defer(UpdateDashboard) end
-    end
-    if SavedData.AutoExecutes[entry.StableId] ~= nil then AttemptActionWithCooldown(run) else OpenConfirmDialog(entry.ExactName,run) end
-end)
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+local CATALOG_REFRESH_INTERVAL = 300
+local dbRefreshing = false
+local CatalogRefreshQueued = false
+local LastCatalogFingerprint = nil
 
-CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
-CATALOG_REFRESH_INTERVAL = 300
-dbRefreshing = false
-CatalogRefreshQueued = false
-LastCatalogFingerprint = nil
-
-function BuildCatalogFingerprint(entries)
+local function BuildCatalogFingerprint(entries)
 	local parts = {}
 	for index, entry in ipairs(entries) do
 		if type(entry) == "table" then
@@ -2333,32 +2021,17 @@ PendingTasks.__LoadCatalog = function(force)
 
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
-            local raw = FetchWithRetry(CATALOG_URL, 3, true)
-            local usingCache = false
-            local cacheSavedAt = 0
-            if not IsTaskCurrent(generation) then return end
-            if not raw then
-                raw, cacheSavedAt = ReadCatalogCache()
-                if raw then
-                    usingCache = true
-                    ShowNotification("Loaded the last cached catalog. Refresh when you're back online.", "Warning")
-                else
-                    if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach catalog server and no cached catalog is available." end
-                    StatusDot.BackgroundColor3 = Theme.Error
-                    StatusText.Text = "Offline"
-                    StatusText.TextColor3 = Theme.Error
-                    ShowNotification("Could not connect to the script catalog server.", "Error")
-                    CatalogState.Error = "No network or cached catalog"
-                    FinishRefresh()
-                    return
-                end
-            else
-                WriteCatalogCache(raw)
-            end
-            CatalogState.Cached = usingCache
-            CatalogState.CachedAt = cacheSavedAt
-            CatalogState.LastFetchAt = os.time()
-            CatalogState.Error = nil
+			local raw = FetchWithRetry(CATALOG_URL, 3, true)
+			if not IsTaskCurrent(generation) then return end
+			if not raw then
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Offline"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Could not connect to the script catalog server.", "Error")
+				FinishRefresh()
+				return
+			end
 
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
@@ -2381,24 +2054,19 @@ PendingTasks.__LoadCatalog = function(force)
 						RawUrl = type(entry.RawUrl) == "string" and entry.RawUrl or "",
 						ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
 						TagType = NormalizeTagType(entry.TagType),
-                    LastUpdated = GetSafeTimestamp(entry.LastUpdated),
-                    PlaceId = tonumber(entry.PlaceId) or 0,
-                    GameId = tonumber(entry.GameId) or 0,
-                    Category = type(entry.Category) == "string" and entry.Category or "",
-                    Author = type(entry.Author) == "string" and entry.Author or "",
-                    Id = type(entry.Id) == "string" and entry.Id or (type(entry.ScriptId) == "string" and entry.ScriptId or nil)
-                }
-                normalized.StableId = GetStableScriptId(normalized)
-                    if not seenNames[normalized.StableId] then
-                        seenNames[normalized.StableId] = true
+						LastUpdated = GetSafeTimestamp(entry.LastUpdated),
+						PlaceId = tonumber(entry.PlaceId) or 0,
+						Category = type(entry.Category) == "string" and entry.Category or "",
+						Author = type(entry.Author) == "string" and entry.Author or ""
+					}
+					if not seenNames[normalized.Name] then
+						seenNames[normalized.Name] = true
 						validEntries[#validEntries + 1] = normalized
 					end
 				end
 			end
 
-            MigrateSavedKeys(validEntries)
-            SaveConfiguration()
-            local fingerprint = BuildCatalogFingerprint(validEntries)
+			local fingerprint = BuildCatalogFingerprint(validEntries)
 			if fingerprint == LastCatalogFingerprint then
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
@@ -2412,17 +2080,16 @@ PendingTasks.__LoadCatalog = function(force)
 			local previousByKey = RegisteredScripts.__ByKey or {}
 			local nextByKey = {}
 			local nextEntries = {}
-            local nextKeys = {}
-            local replacedEntries = {}
-            local addedCount, updatedCount, removedCount = 0, 0, 0
+			local nextKeys = {}
+			local replacedEntries = {}
 			table.clear(activeNewEntries)
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
 
-            local function BuildEntryFingerprint(data)
-                return table.concat({ tostring(data.StableId or GetStableScriptId(data)), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
-            end
+			local function BuildEntryFingerprint(data)
+				return table.concat({ tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+			end
 
 			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
@@ -2439,7 +2106,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 			for index, scriptData in ipairs(validEntries) do
 				if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
-				local key = tostring(scriptData.StableId or GetStableScriptId(scriptData))
+				local key = tostring(scriptData.Name or "")
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
 				local entry
@@ -2447,7 +2114,7 @@ PendingTasks.__LoadCatalog = function(force)
 					entry = existing
 					entry.OriginalIndex = index
 				else
-					if existing then replacedEntries[#replacedEntries + 1] = existing; updatedCount = updatedCount + 1 else addedCount = addedCount + 1 end
+					if existing then replacedEntries[#replacedEntries + 1] = existing end
 					entry = CreateScriptCard(scriptData, activeBuildFolder, false, index)
 					entry.EntryFingerprint = entryFingerprint
 					entry.OriginalIndex = index
@@ -2460,7 +2127,7 @@ PendingTasks.__LoadCatalog = function(force)
 
 			if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 			for key, oldEntry in pairs(previousByKey) do
-				if not nextKeys[key] then DestroyEntry(oldEntry); removedCount = removedCount + 1 end
+				if not nextKeys[key] then DestroyEntry(oldEntry) end
 			end
 			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
 			for _, entry in ipairs(nextEntries) do
@@ -2475,19 +2142,15 @@ PendingTasks.__LoadCatalog = function(force)
 			table.clear(RegisteredScripts)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
-            LastCatalogFingerprint = fingerprint
-            CatalogState.Added = addedCount
-            CatalogState.Updated = updatedCount
-            CatalogState.Removed = removedCount
-            CatalogState.Cached = usingCache
-            RefreshAllCardStates()
+			LastCatalogFingerprint = fingerprint
+			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
 				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
 
-            local validMap = {}
-            for _, scriptData in ipairs(validEntries) do validMap[scriptData.StableId] = true end
+			local validMap = {}
+			for _, scriptData in ipairs(validEntries) do validMap[scriptData.Name] = true end
 			local cleaned = false
 			for key in pairs(SavedData.AutoExecutes) do
 				if not validMap[key] then SavedData.AutoExecutes[key] = nil; cleaned = true end
@@ -2498,7 +2161,7 @@ PendingTasks.__LoadCatalog = function(force)
 				AutoExecuteRanThisSession = true
 				local autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
-					local auto = SavedData.AutoExecutes[scriptData.StableId]
+					local auto = SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
 						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
@@ -2527,10 +2190,10 @@ PendingTasks.__LoadCatalog = function(force)
 				end
 			end
 
-            StatusDot.BackgroundColor3 = usingCache and Theme.Warning or Theme.Success
-            StatusText.Text = usingCache and "Cached" or "Online"
-            StatusText.TextColor3 = usingCache and Theme.Warning or Theme.Success
-            ShowNotification(string.format("%s catalog loaded: +%d  ~%d  -%d", usingCache and "Cached" or "Script", CatalogState.Added, CatalogState.Updated, CatalogState.Removed), usingCache and "Warning" or "Success")
+			StatusDot.BackgroundColor3 = Theme.Success
+			StatusText.Text = "Online"
+			StatusText.TextColor3 = Theme.Success
+			ShowNotification("Script catalog loaded successfully!", "Success")
 		end, function(err) return tostring(err) end)
 
 		if not taskOk then
@@ -2572,7 +2235,7 @@ TrackTask(function()
 	end
 end)
 
-function CreateSettingsGroup(titleText, parentView, order)
+local function CreateSettingsGroup(titleText, parentView, order)
 	local container = Instance.new("Frame", parentView)
 	container.Size = UDim2.new(1, 0, 0, 0)
 	container.AutomaticSize = Enum.AutomaticSize.Y
@@ -2608,7 +2271,7 @@ function CreateSettingsGroup(titleText, parentView, order)
 	return card
 end
 
-function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+local function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	if order > 1 then
 		local divider = Instance.new("Frame", groupCard)
 		divider.Size = UDim2.new(1, -24, 0, 1)
@@ -2673,7 +2336,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	return row, rightContainer
 end
 
-function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	local toggleBtn = Instance.new("TextButton", rightContainer)
 	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
@@ -2707,7 +2370,7 @@ function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, de
 	end)))
 end
 
-function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
+local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	local btn = Instance.new("TextButton", rightContainer)
 	btn.Size = UDim2.new(0, 95, 0, 26)
@@ -2733,10 +2396,10 @@ function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, 
 	return btn
 end
 
-prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
+local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 
-_, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
-KeybindButton = Instance.new("TextButton", kbRightContainer)
+local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
+local KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 95, 0, 26)
 KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
 KeybindButton.BackgroundColor3 = Theme.BackgroundMain
@@ -2747,7 +2410,7 @@ KeybindButton.Font = Enum.Font.GothamMedium
 KeybindButton.TextSize = 11
 KeybindButton.AutoButtonColor = false
 Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
-kbBtnStroke = Instance.new("UIStroke", KeybindButton)
+local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
 kbBtnStroke.Color = Theme.Stroke
 KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
@@ -2803,73 +2466,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 
-function TriggerAntiAFKAction()
-	if VirtualUser then
-		pcall(function()
-			VirtualUser:CaptureController()
-			VirtualUser:ClickButton2(Vector2.new())
-		end)
-	elseif VirtualInputManager then
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
-			task.wait(0.1)
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
-		end)
-	end
-end
-
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
-	SaveConfiguration()
-	if val then
-		ShowNotification("Anti-AFK system engaged.", "Success")
-		if not AfkConnections.Idled then
-			AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-		end
-		if getconnections then
-			pcall(function()
-				for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-					pcall(function()
-						if type(conn) == "table" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-							conn:Disable()
-							table.insert(AfkConnections, conn)
-						end
-					end)
-				end
-			end)
-		end
-	else
-		ShowNotification("Anti-AFK deactivated.", "Warning")
-		if AfkConnections.Idled then AfkConnections.Idled:Disconnect(); AfkConnections.Idled = nil end
-		for _, conn in ipairs(AfkConnections) do
-			pcall(function()
-				if type(conn) == "table" and conn.Enable then
-					conn:Enable()
-				elseif typeof(conn) == "RBXScriptConnection" and conn.Enable then
-					conn:Enable()
-				end
-			end)
-		end
-		table.clear(AfkConnections)
-	end
-end)
-
-function SetUIScale(value)
-    value=math.clamp(tonumber(value) or 1,0.8,1.2); SavedData.Settings.UIScale=value; if MainUIScale then MainUIScale.Scale=value end; SaveConfiguration()
-end
-uiScaleGroup=CreateSettingsGroup("Interface",SettingsView,2)
-uiScaleButton = nil
-uiScaleButton=CreateButtonSettingInGroup(uiScaleGroup,"UI Scale","Cycle between 80% and 120% UI size.","rbxassetid://10734976528",string.format("%d%%",math.floor((SavedData.Settings.UIScale or 1)*100+0.5)),1,false,function()
-    local steps={0.8,0.9,1,1.1,1.2}; local current=SavedData.Settings.UIScale or 1; local nextValue=0.8
-    for _,step in ipairs(steps) do if step>current+0.001 then nextValue=step; break end end
-    if current>=1.199 then nextValue=0.8 end
-    SetUIScale(nextValue); if uiScaleButton then uiScaleButton.Text=string.format("%d%%",math.floor(nextValue*100+0.5)) end
-end)
-
-actionGroup = CreateSettingsGroup("System Actions", SettingsView, 3)
+local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
@@ -2878,7 +2475,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			ShowNotification("Catalog refresh queued.", "Info")
 			return
 		end
-		PendingTasks.__LoadCatalog(true)
+		LoadDynamicCatalog(true)
 	end)
 end)
 
@@ -2888,49 +2485,23 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	CloseUI()
 end)
 
-if SavedData.Settings.AntiAFK then
-	if not AfkConnections.Idled then
-		AfkConnections.Idled = RegConn(LocalPlayer.Idled:Connect(TriggerAntiAFKAction))
-	end
-	if getconnections then
-		pcall(function()
-			for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
-				pcall(function()
-					if type(conn) == "table" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					elseif typeof(conn) == "RBXScriptConnection" and conn.Disable then
-						conn:Disable()
-						table.insert(AfkConnections, conn)
-					end
-				end)
-			end
-		end)
-	end
-end
+TabViews["Changelogs"].Visible = true
+TabViews["Scripts"].Visible = false
+TabViews["Settings"].Visible = false
+TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+SectionHeaderLabel.Text = "Updates"
+MainPanel.Visible = true
+SearchRow.Visible = false
+FloatingBtn.Visible = false
 
-for tabName,view in pairs(TabViews) do view.Visible=(tabName==currentTab) end
-tabIndexMap={Home=1,Changelogs=2,Scripts=3,Settings=4}
-initialIndex=tabIndexMap[currentTab] or 1
-initialOffset=(initialIndex-1)*(IsMobile and 90 or 115)
-TabIndicator.Position=UDim2.new(0,initialOffset+4,1,-2)
-SectionHeaderLabel.Text=(currentTab=="Home") and "Dashboard" or (currentTab=="Changelogs") and "Updates" or (currentTab=="Scripts") and "Scripts Catalog" or "Settings Hub"
-MainPanel.Visible=true
-SearchRow.Visible=(currentTab=="Scripts")
-FilterRow.Visible=(currentTab=="Scripts")
-FloatingBtn.Visible=false
-
-UpdateDashboard()
 ShowNotification("Velox Hub is ready for use!", "Success")
 
 if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 4)
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
-        SavedData.Settings.MainPosition=nil
-        SaveConfiguration()
 		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 		CacheInstanceAndDescendants(MainPanel)
 		CacheInstanceAndDescendants(FloatingBtn)
