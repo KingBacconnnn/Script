@@ -2467,39 +2467,73 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 
-local AntiAFKConnection = nil
+local AntiAFKState = {
+	Enabled = false,
+	FallbackConnection = nil,
+	DisabledConnections = {}
+}
 
-local function StopAntiAFK()
-	if AntiAFKConnection then
-		UnregConn(AntiAFKConnection)
-		AntiAFKConnection = nil
+local function ApplyAntiAFK()
+	local Players = game:GetService("Players")
+	local GC = getconnections or get_signal_cons
+
+	AntiAFKState.Enabled = true
+
+	if GC then
+		AntiAFKState.DisabledConnections = {}
+		for i, v in pairs(GC(Players.LocalPlayer.Idled)) do
+			if v["Disable"] then
+				local ok = pcall(function()
+					v["Disable"](v)
+				end)
+				if ok then
+					table.insert(AntiAFKState.DisabledConnections, v)
+				end
+			elseif v["Disconnect"] then
+				pcall(function()
+					v["Disconnect"](v)
+				end)
+			end
+		end
+	else
+		if not AntiAFKState.FallbackConnection then
+			AntiAFKState.FallbackConnection = Players.LocalPlayer.Idled:Connect(function()
+				local VirtualUser = game:GetService("VirtualUser")
+				VirtualUser:CaptureController()
+				VirtualUser:ClickButton2(Vector2.new())
+			end)
+		end
 	end
 end
 
-local function ApplyAntiAFK(enabled)
-	StopAntiAFK()
-	if not enabled or isDestroying then return end
+local function DisableAntiAFK()
+	AntiAFKState.Enabled = false
 
-	local localPlayer = Players.LocalPlayer
-	if not localPlayer then return end
-
-	local VirtualUser = game:GetService("VirtualUser")
-	AntiAFKConnection = RegConn(localPlayer.Idled:Connect(function()
-		if isDestroying or not SavedData.Settings.AntiAFK then return end
+	if AntiAFKState.FallbackConnection then
 		pcall(function()
-			VirtualUser:CaptureController()
-			VirtualUser:ClickButton2(Vector2.new())
+			AntiAFKState.FallbackConnection:Disconnect()
 		end)
-	end))
+		AntiAFKState.FallbackConnection = nil
+	end
+
+	for i, v in ipairs(AntiAFKState.DisabledConnections) do
+		if v and v["Enable"] then
+			pcall(function()
+				v["Enable"](v)
+			end)
+		end
+	end
+	AntiAFKState.DisabledConnections = {}
 end
 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
-	ApplyAntiAFK(val)
 	if val then
+		ApplyAntiAFK()
 		ShowNotification("Anti-AFK system engaged.", "Success")
 	else
+		DisableAntiAFK()
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 	end
 end)
@@ -2523,7 +2557,9 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	CloseUI()
 end)
 
-ApplyAntiAFK(SavedData.Settings.AntiAFK)
+if SavedData.Settings.AntiAFK then
+	ApplyAntiAFK()
+end
 
 TabViews["Changelogs"].Visible = true
 TabViews["Scripts"].Visible = false
