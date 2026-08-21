@@ -1,46 +1,37 @@
 local GlobalEnv = _G
-if type(getgenv) == "function" then
-	local ok, env = pcall(getgenv)
-	if ok and type(env) == "table" then
-		GlobalEnv = env
-	end
-end
 
 local function GenerateRandomString(len)
-	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local str = ""
-	for i = 1, len do
-		local r = math.random(1, #chars)
-		str = str .. string.sub(chars, r, r)
-	end
-	return str
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local str = ""
+    for i = 1, len do
+        local r = math.random(1, #chars)
+        str = str .. string.sub(chars, r, r)
+    end
+    return str
 end
 
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
 local MainGuiName = "Velox_" .. GenerateRandomString(12)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
-if GlobalEnv[_G_Identifier] then
-	pcall(function() GlobalEnv[_G_Identifier]() end)
-end
-
 local Services = setmetatable({}, {
-	__index = function(self, key)
-		local success, service = pcall(function() return game:GetService(key) end)
-		if success and service then
-			local final = (type(cloneref) == "function") and cloneref(service) or service
-			self[key] = final
-			return final
-		end
-		return nil
-	end
+    __index = function(self, key)
+        local success, service = pcall(function()
+            return game:GetService(key)
+        end)
+        if success and service then
+            self[key] = service
+            return service
+        end
+        return nil
+    end
 })
 
 local Players = Services.Players
 local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
-local VirtualInputManager = Services.VirtualInputManager
-local VirtualUser = Services.VirtualUser
+local VirtualInputManager = nil
+local VirtualUser = nil
 local StarterGui = Services.StarterGui
 local RunService = Services.RunService
 local Stats = Services.Stats
@@ -50,27 +41,30 @@ local GuiService = Services.GuiService
 
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
-	task.wait()
-	LocalPlayer = Players.LocalPlayer
+    task.wait()
+    LocalPlayer = Players.LocalPlayer
 end
 
 local PlaceId = game.PlaceId
 
-local gethui = gethui or function() return nil end
-local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
-local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
-local write_file = type(writefile) == "function" and writefile or nil
-local read_file = type(readfile) == "function" and readfile or nil
-local is_file = type(isfile) == "function" and isfile or nil
-local del_file = type(delfile) == "function" and delfile or nil
-
-local CompileFunction
-if type(loadstring) == "function" then
-	CompileFunction = loadstring
-elseif type(load) == "function" then
-	CompileFunction = load
+local gethui = function()
+    return nil
 end
+
+local protectgui = function(gui)
+    return gui
+end
+
+local exec_request = nil
+local getexecutor = function()
+    return "Standard Roblox"
+end
+
+local write_file = nil
+local read_file = nil
+local is_file = nil
+local del_file = nil
+local CompileFunction = nil
 
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -99,15 +93,7 @@ local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
-PendingTasks.__LoadCatalog()
 
-TrackTask(function()
-    while not isDestroying do
-        task.wait(CATALOG_REFRESH_INTERVAL)
-        if isDestroying then break end
-        PendingTasks.__LoadCatalog(false)
-    end
-end)
 
 local AutoExecuteRanThisSession = true
 local InteractiveElements = setmetatable({}, { __mode = "k" })
