@@ -6,7 +6,6 @@ if type(getgenv) == "function" then
 	end
 end
 
--- [ANTI-ANALYSIS] Protect critical tables from being easily indexed or dumped by Spy/Dex tools
 local function ProtectTable(tbl)
 	return setmetatable({}, {
 		__index = tbl,
@@ -30,11 +29,10 @@ local _G_Identifier = "VeloxHub_Core_Cleanup_" .. GenerateRandomString(8)
 local MainGuiName = "Velox_" .. GenerateRandomString(16)
 local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(16)
 
-if GlobalEnv[_G_Identifier] then
-	pcall(function() GlobalEnv[_G_Identifier]() end)
+if GlobalEnv and type(GlobalEnv[_G_Identifier]) == "function" then
+	pcall(GlobalEnv[_G_Identifier])
 end
 
--- [ANTI-ANALYSIS] Wrap Services in a protected metatable
 local Services = ProtectTable(setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
@@ -59,6 +57,8 @@ local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
 
+if not Players or not UserInputService or not HttpService or not TweenService then return end
+
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
@@ -67,7 +67,6 @@ end
 
 local PlaceId = game.PlaceId
 
--- [EXECUTOR FINGERPRINTING] Advanced Identification
 local function GetAdvancedExecutor()
 	local name, version = "Unknown Executor", ""
 	if type(identifyexecutor) == "function" then
@@ -77,9 +76,9 @@ local function GetAdvancedExecutor()
 	elseif type(getexecutorname) == "function" then
 		name = getexecutorname()
 	else
-		if syn then name = "Synapse X" 
-		elseif krnl then name = "Krnl" 
-		elseif fluxus then name = "Fluxus" 
+		if syn then name = "Synapse X"
+		elseif krnl then name = "Krnl"
+		elseif fluxus then name = "Fluxus"
 		elseif is_sirhurt_closure then name = "SirHurt"
 		elseif pebc_execute then name = "ProtoSmasher"
 		end
@@ -137,7 +136,7 @@ local isDestroying = false
 local isMinimized = false
 local isTransitioning = false
 local IsBindingKey = false
-local IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
+local IsMobile = UserInputService and UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or (GuiService and GuiService:IsTenFootInterface()))
 
 local mainDragConnection, floatDragConnection
 local activeMainDragInput, activeFloatDragInput
@@ -589,7 +588,6 @@ local function GetRelativeTime(timestamp)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
 
--- [ANTI-DETECTION] Make GUI parenting safer and less noticeable 
 local function GetSecureParent()
 	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -630,9 +628,11 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 
-GlobalEnv[_G_Identifier] = function()
-	CleanUpMemory()
-	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+if GlobalEnv then
+	GlobalEnv[_G_Identifier] = function()
+		CleanUpMemory()
+		if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+	end
 end
 
 local PANEL_SIZE = IsMobile and UDim2.new(0, 480, 0, 360) or UDim2.new(0, 560, 0, 515)
@@ -677,7 +677,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 	end))
 end
 
-RegConn(UserInputService.WindowFocusReleased:Connect(function()
+if UserInputService then RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
@@ -1208,7 +1208,8 @@ local function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
-	GlobalEnv[_G_Identifier]()
+	local cleanup = GlobalEnv and GlobalEnv[_G_Identifier]
+	if type(cleanup) == "function" then pcall(cleanup) end
 end
 
 local HeaderContainer = Instance.new("Frame", PanelGroup)
@@ -1486,7 +1487,7 @@ local viewportConn
 local function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
 	local cam = workspace.CurrentCamera
-	if cam then
+	if cam and cam.ViewportSize then
 		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			if DropdownContainer and DropdownContainer.Visible then
 				DropdownContainer.Visible = false
@@ -1963,7 +1964,8 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
+				local rawUrl = data and data.RawUrl
+				local raw = FetchWithRetry(type(rawUrl) == "string" and rawUrl or "", 2)
 				if isDestroying then return end
 				if not raw then
 					ShowNotification("Failed to download script. Please check your connection.", "Error")
@@ -2203,7 +2205,7 @@ PendingTasks.__LoadCatalog = function(force)
 				AutoExecuteRanThisSession = true
 				local autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
-					local auto = SavedData.AutoExecutes[scriptData.Name]
+					local auto = SavedData and SavedData.AutoExecutes and SavedData.AutoExecutes[scriptData.Name]
 					if type(auto) == "table" then
 						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
 						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
@@ -2625,4 +2627,3 @@ if IsMobile then
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
-
