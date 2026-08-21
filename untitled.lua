@@ -2649,8 +2649,7 @@ FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 
 if IsMobile then
-	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+	CreateButtonSettingInGroup(CreateSettingsGroup("User Data", SettingsView, 3), "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
