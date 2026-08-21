@@ -16,10 +16,9 @@ local function GenerateRandomString(len)
 	return str
 end
 
--- Randomizes the identifiers on every injection to avoid static string detection
-local _G_Identifier = GenerateRandomString(12) .. "_Core"
-local MainGuiName = GenerateRandomString(16)
-local FloatBtnName = GenerateRandomString(14)
+local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
+local MainGuiName = "Velox_" .. GenerateRandomString(12)
+local FloatBtnName = "VeloxFloat_" .. GenerateRandomString(12)
 
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
@@ -29,7 +28,13 @@ local Services = setmetatable({}, {
 	__index = function(self, key)
 		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			local final = (type(cloneref) == "function") and cloneref(service) or service
+			local final = service
+			if type(cloneref) == "function" then
+				local cloneOk, cloned = pcall(cloneref, service)
+				if cloneOk and cloned then
+					final = cloned
+				end
+			end
 			self[key] = final
 			return final
 		end
@@ -57,10 +62,28 @@ end
 
 local PlaceId = game.PlaceId
 
-local gethui = gethui or function() return nil end
-local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
-local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
+local gethui = type(gethui) == "function" and gethui or nil
+local protectgui = nil
+if type(protect_gui) == "function" then
+	protectgui = protect_gui
+elseif type(syn) == "table" and type(syn.protect_gui) == "function" then
+	protectgui = syn.protect_gui
+end
+local exec_request = nil
+for _, candidate in ipairs({request, http_request, type(syn) == "table" and syn.request or nil, type(fluxus) == "table" and fluxus.request or nil, type(krnl) == "table" and krnl.request or nil}) do
+	if type(candidate) == "function" then
+		exec_request = candidate
+		break
+	end
+end
+local getexecutor = nil
+if type(identifyexecutor) == "function" then
+	getexecutor = identifyexecutor
+elseif type(getexecutorname) == "function" then
+	getexecutor = getexecutorname
+else
+	getexecutor = function() return "Unknown Executor" end
+end
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
@@ -297,9 +320,8 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 
--- Uses the PlaceId to create a unique config file name per game, avoiding static file detection
-local DATA_FILE = "sys_config_" .. tostring(game.PlaceId) .. ".json"
-local TEMP_FILE = "sys_temp_" .. tostring(game.PlaceId) .. ".json"
+local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -561,18 +583,15 @@ local function GetRelativeTime(timestamp)
 end
 
 local function GetSecureParent()
-	local safe_cloneref = type(cloneref) == "function" and cloneref or function(obj) return obj end
-
-	local huiSuccess, huiTarget = pcall(function() return safe_cloneref(gethui()) end)
-	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
-		return huiTarget
+	if gethui then
+		local huiSuccess, huiTarget = pcall(gethui)
+		if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
+			return huiTarget
+		end
 	end
 
-	local coreSuccess, coreTarget = pcall(function() return safe_cloneref(CoreGui) end)
+	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
-		local rbxGui = coreTarget:FindFirstChild("RobloxGui")
-		if rbxGui then return safe_cloneref(rbxGui) end
-		
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
 			t.Parent = coreTarget
@@ -583,7 +602,7 @@ local function GetSecureParent()
 
 	if LocalPlayer then
 		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		if playerGui then return safe_cloneref(playerGui) end
+		if playerGui then return playerGui end
 	end
 
 	return nil
@@ -600,13 +619,11 @@ ScreenGui.Name = MainGuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = math.random(90, 115) -- Randomizes layer to prevent static profiling
-
-local safe_cloneref = type(cloneref) == "function" and cloneref or function(obj) return obj end
-local safe_protect = type(protectgui) == "function" and protectgui or (syn and syn.protect_gui) or function(...) return ... end
-
-pcall(function() safe_protect(ScreenGui) end)
-ScreenGui.Parent = safe_cloneref(TargetParent) 
+ScreenGui.DisplayOrder = 100
+ScreenGui.Parent = TargetParent
+if protectgui then
+	pcall(protectgui, ScreenGui)
+end
 
 GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
@@ -2488,17 +2505,23 @@ end)))
 
 local function TriggerAntiAFKAction()
 	if VirtualUser then
-		pcall(function()
+		local ok = pcall(function()
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
-	elseif VirtualInputManager then
-		pcall(function()
+		if ok then return true end
+	end
+
+	if VirtualInputManager then
+		local ok = pcall(function()
 			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightShift, false, game)
 			task.wait(0.1)
 			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightShift, false, game)
 		end)
+		if ok then return true end
 	end
+
+	return false
 end
 
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
