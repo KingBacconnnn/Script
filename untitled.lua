@@ -16,9 +16,10 @@ local function GenerateRandomString(len)
 	return str
 end
 
-local _G_Identifier = "Roblox_Core_UI_Manager_V1"
-local MainGuiName = "RobloxPromptGui" -- Disguises as an official Roblox UI
-local FloatBtnName = "TouchControls_Btn" -- Disguises as native mobile controls
+-- Randomizes the identifiers on every injection to avoid static string detection
+local _G_Identifier = GenerateRandomString(12) .. "_Core"
+local MainGuiName = GenerateRandomString(16)
+local FloatBtnName = GenerateRandomString(14)
 
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
@@ -296,8 +297,9 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 
-local DATA_FILE = ".VeloxHub_Data_V3.1.json"
-local TEMP_FILE = ".VeloxHub_Data_Temp.json"
+-- Uses the PlaceId to create a unique config file name per game, avoiding static file detection
+local DATA_FILE = "sys_config_" .. tostring(game.PlaceId) .. ".json"
+local TEMP_FILE = "sys_temp_" .. tostring(game.PlaceId) .. ".json"
 local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -559,16 +561,17 @@ local function GetRelativeTime(timestamp)
 end
 
 local function GetSecureParent()
-	local huiSuccess, huiTarget = pcall(function() return gethui() end)
+	local safe_cloneref = type(cloneref) == "function" and cloneref or function(obj) return obj end
+
+	local huiSuccess, huiTarget = pcall(function() return safe_cloneref(gethui()) end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
 		return huiTarget
 	end
 
-		local coreSuccess, coreTarget = pcall(function() return CoreGui end)
+	local coreSuccess, coreTarget = pcall(function() return safe_cloneref(CoreGui) end)
 	if coreSuccess and coreTarget then
-		-- Attempt to hide inside RobloxGui, which is usually whitelisted by game-level scans
 		local rbxGui = coreTarget:FindFirstChild("RobloxGui")
-		if rbxGui then return rbxGui end
+		if rbxGui then return safe_cloneref(rbxGui) end
 		
 		local testAccess = pcall(function()
 			local t = Instance.new("Folder")
@@ -580,7 +583,7 @@ local function GetSecureParent()
 
 	if LocalPlayer then
 		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		if playerGui then return playerGui end
+		if playerGui then return safe_cloneref(playerGui) end
 	end
 
 	return nil
@@ -597,12 +600,13 @@ ScreenGui.Name = MainGuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = 100
+ScreenGui.DisplayOrder = math.random(90, 115) -- Randomizes layer to prevent static profiling
 
--- Apply executor UI protection BEFORE parenting it, 
--- preventing DescendantAdded events from leaking unprotected objects.
-pcall(function() protectgui(ScreenGui) end)
-ScreenGui.Parent = TargetParent 
+local safe_cloneref = type(cloneref) == "function" and cloneref or function(obj) return obj end
+local safe_protect = type(protectgui) == "function" and protectgui or (syn and syn.protect_gui) or function(...) return ... end
+
+pcall(function() safe_protect(ScreenGui) end)
+ScreenGui.Parent = safe_cloneref(TargetParent) 
 
 GlobalEnv[_G_Identifier] = function()
 	CleanUpMemory()
