@@ -1633,12 +1633,14 @@ local function GetStableScriptId(data)
     local supplied = type(data)=="table" and (data.Id or data.ScriptId or data.Key) or nil
     if type(supplied)=="string" and supplied~="" then return supplied end
     local seed = table.concat({ tostring(data and data.Name or ""), tostring(data and data.RawUrl or ""), tostring(data and data.PlaceId or 0), tostring(data and data.GameId or 0), tostring(data and data.Category or "") }, "|")
-    local h = 2166136261
+    -- Keep the stable-ID hash compatible with older Lua/Luau parsers.
+    -- The previous implementation used the bitwise XOR operator (~), which
+    -- some executor runtimes reject at compile time.
+    local h = 2166136261 % 2147483647
     for i=1,#seed do
-        h = (h ~ string.byte(seed,i)) % 4294967296
-        h = (h * 16777619) % 4294967296
+        h = (h * 131 + string.byte(seed,i)) % 2147483647
     end
-    return string.format("script_%08x",h)
+    return string.format("script_%08x", h)
 end
 
 local function GetCompatibilityState(data)
