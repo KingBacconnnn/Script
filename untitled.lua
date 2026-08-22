@@ -15,8 +15,6 @@ local function GenerateRandomString(len)
 	return str
 end
 local _G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
-local MainGuiName = "VeloxHub_Main"
-local FloatBtnName = "VeloxHub_Float"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
@@ -36,7 +34,6 @@ local UserInputService = Services.UserInputService
 local HttpService = Services.HttpService
 local StarterGui = Services.StarterGui
 local RunService = Services.RunService
-local Stats = Services.Stats
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
@@ -50,7 +47,6 @@ local GameId = game.GameId
 local gethui = gethui or function() return nil end
 local protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 local exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-local getexecutor = identifyexecutor or getexecutorname or function() return "Unknown Executor" end
 local write_file = type(writefile) == "function" and writefile or nil
 local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
@@ -83,7 +79,6 @@ local RegisteredScripts = {}
 local PendingTasks = {}
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
-local CatalogRefreshCooldown = 5
 local LastCatalogRefreshAt = 0
 local AutoExecuteRanThisSession = false
 local InteractiveElements = setmetatable({}, { __mode = "k" })
@@ -513,12 +508,12 @@ end
 local TargetParent = GetSecureParent()
 if not TargetParent then return end
 for _, child in ipairs(TargetParent:GetChildren()) do
-	if child:IsA("ScreenGui") and (child.Name == MainGuiName or child:GetAttribute("VeloxHubManaged") == true) then
+	if child:IsA("ScreenGui") and (child.Name == "VeloxHub_Main" or child:GetAttribute("VeloxHubManaged") == true) then
 		pcall(function() child:Destroy() end)
 	end
 end
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = MainGuiName
+ScreenGui.Name = "VeloxHub_Main"
 ScreenGui:SetAttribute("VeloxHubManaged", true)
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -586,7 +581,7 @@ RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	end
 end))
 local FloatingBtn = Instance.new("ImageButton", ScreenGui)
-FloatingBtn.Name = FloatBtnName
+FloatingBtn.Name = "VeloxHub_Float"
 FloatingBtn.AnchorPoint = Vector2.new(0.5, 0.5)
 FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 FloatingBtn.Size = UDim2.new(0, 45, 0, 45)
@@ -1116,7 +1111,7 @@ local BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. getexecutor()
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.0 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -1181,7 +1176,7 @@ RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	if diagnosticsElapsed < 1 then return end
 	diagnosticsElapsed = diagnosticsElapsed - 1
 	local success, ping = pcall(function()
-		return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
 	if DiagnosticsLabel and DiagnosticsLabel.Parent then
 		DiagnosticsLabel.Text = string.format("FPS: %d | Ping: %dms", fpsCount, success and ping or 0)
@@ -1824,7 +1819,7 @@ PendingTasks.__LoadCatalog = function(force)
 		return false
 	end
 	local now = os.clock()
-	if not force and now - LastCatalogRefreshAt < CatalogRefreshCooldown then
+	if not force and now - LastCatalogRefreshAt < 5 then
 		CatalogRefreshQueued = true
 		return false
 	end
@@ -2222,6 +2217,7 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	end)))
 	return btn
 end
+local function BuildSettings()
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
 local KeybindButton = Instance.new("TextButton", kbRightContainer)
@@ -2376,3 +2372,5 @@ if IsMobile then
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
+end
+BuildSettings()
