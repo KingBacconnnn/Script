@@ -81,6 +81,7 @@ local VeloxConnections = {}
 local CardConnections = {}
 local RegisteredScripts = {}
 local PendingTasks = {}
+local LastTaskError = nil
 local ActiveTweens = setmetatable({}, { __mode = "k" })
 local CatalogGeneration = 0
 local CatalogRefreshCooldown = 5
@@ -96,6 +97,9 @@ local mainDragConnection, floatDragConnection
 local activeMainDragInput, activeFloatDragInput
 local ToggleKeybindConnection = nil
 local KeybindCaptureConnection = nil
+local AntiAFKFallbackConnection = nil
+local AntiAFKApplied = false
+local SaveGeneration = 0
 local DropdownContainer = nil
 local ToastContainer = nil
 local ConfirmOverlay = nil
@@ -157,11 +161,18 @@ local function RegCardConn(connection)
 	end
 	return connection
 end
-local function TrackTask(fn)
+local function TrackTask(fn, onError)
+	if type(fn) ~= "function" or isDestroying then return nil end
 	local thread
 	thread = task.spawn(function()
-		pcall(fn)
+		local ok, err = xpcall(fn, debug.traceback)
 		PendingTasks[thread] = nil
+		if not ok then
+			LastTaskError = err
+			if not isDestroying and type(onError) == "function" then
+				pcall(onError, err)
+			end
+		end
 	end)
 	PendingTasks[thread] = true
 	return thread
@@ -178,6 +189,7 @@ end
 local typingTask = nil
 local function CleanUpMemory()
 	isDestroying = true
+	CatalogGeneration += 1
 	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
 	CancelTrackedTasks()
@@ -185,6 +197,11 @@ local function CleanUpMemory()
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 	if ToggleKeybindConnection then UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
 	if KeybindCaptureConnection then UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
+	if AntiAFKFallbackConnection then
+		pcall(function() AntiAFKFallbackConnection:Disconnect() end)
+		AntiAFKFallbackConnection = nil
+	end
+	AntiAFKApplied = false
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 			conn:Disconnect()
@@ -285,50 +302,60 @@ local function SanitizeForJSON(data)
 	return nil
 end
 local function SaveConfiguration()
-	if type(write_file) ~= "function" then return end
+	if type(write_file) ~= "function" then return false end
 	if isSaving then
 		saveQueued = true
-		return
+		return true
 	end
 	isSaving = true
-	task.spawn(function()
-		local cleanData = {
-			Favorites = {}, AutoExecutes = {},
-			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
-		}
-		for k, v in pairs(SavedData.Favorites) do if v then cleanData.Favorites[tostring(k)] = true end end
-		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" then
-				cleanData.AutoExecutes[tostring(k)] = {
-					PlaceId = tonumber(v.PlaceId) or game.PlaceId,
-					GameId = tonumber(v.GameId) or game.GameId
-				}
-			end
+	SaveGeneration += 1
+	local generation = SaveGeneration
+	local cleanData = {
+		Favorites = {},
+		AutoExecutes = {},
+		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+		Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
+	}
+	for k, v in pairs(SavedData.Favorites) do
+		if v then cleanData.Favorites[tostring(k)] = true end
+	end
+	for k, v in pairs(SavedData.AutoExecutes) do
+		if type(v) == "table" then
+			cleanData.AutoExecutes[tostring(k)] = {
+				PlaceId = tonumber(v.PlaceId) or game.PlaceId,
+				GameId = tonumber(v.GameId) or game.GameId
+			}
 		end
-		local safeData = SanitizeForJSON(cleanData)
-		local success, result = pcall(function() return HttpService:JSONEncode(safeData) end)
-		if success then
-			local writeSuccess = pcall(function() write_file(TEMP_FILE, result) end)
-			if writeSuccess then
-				local verifySuccess = pcall(function()
-					local check = read_file(TEMP_FILE)
-					return HttpService:JSONDecode(check)
-				end)
-				if verifySuccess then
+	end
+	local safeData = SanitizeForJSON(cleanData)
+	TrackTask(function()
+		local ok, result = pcall(function() return HttpService:JSONEncode(safeData) end)
+		if ok and (not isDestroying or generation == SaveGeneration) then
+			local wrote = pcall(function() write_file(TEMP_FILE, result) end)
+			if wrote then
+				local verified = type(read_file) ~= "function"
+				if type(read_file) == "function" then
+					verified = pcall(function()
+						local check = read_file(TEMP_FILE)
+						HttpService:JSONDecode(check)
+					end)
+				end
+				if verified and generation == SaveGeneration then
 					pcall(function() write_file(DATA_FILE, result) end)
 				end
-			end
-			if del_file then
-				pcall(function() del_file(TEMP_FILE) end)
+				if del_file then pcall(function() del_file(TEMP_FILE) end) end
 			end
 		end
+	end, function() end)
 		isSaving = false
-		if saveQueued then
+		if saveQueued and not isDestroying then
 			saveQueued = false
 			SaveConfiguration()
+		else
+			saveQueued = false
 		end
 	end)
+	return true
 end
 local function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
@@ -2110,21 +2137,23 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 	circle.Position = defaultValue and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-	local state = defaultValue
+	local state = defaultValue == true
+	local function SetState(value, fireCallback)
+		state = value == true
+		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain })
+		SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Color = state and Theme.Accent or Theme.Stroke })
+		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) })
+		if fireCallback and type(callback) == "function" and not isDestroying then
+			local ok, err = xpcall(callback, debug.traceback, state)
+			if not ok and not isDestroying then ShowNotification("Setting update failed safely.", "Error") end
+		end
+	end
+	SetState(state, false)
 	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
 		if isDestroying then return end
-		state = not state
-		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
-		})
-		SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Color = state and Theme.Accent or Theme.Stroke
-		})
-		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-		})
-		if type(callback) == "function" then task.spawn(callback, state) end
+		SetState(not state, true)
 	end)))
+	return { Button = toggleBtn, GetState = function() return state end, SetState = SetState }
 end
 local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
@@ -2215,6 +2244,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 	end))
 end)))
 local function ApplyAntiAFK()
+	if isDestroying or AntiAFKApplied then return end
 	local Players = game:GetService("Players")
 	local GC = getconnections or get_signal_cons
 	if GC then
@@ -2226,26 +2256,30 @@ local function ApplyAntiAFK()
 			end
 		end
 	else
-		Players.LocalPlayer.Idled:Connect(function()
+		AntiAFKFallbackConnection = Players.LocalPlayer.Idled:Connect(function()
+			if isDestroying or not SavedData.Settings.AntiAFK then return end
 			local VirtualUser = game:GetService("VirtualUser")
 			VirtualUser:CaptureController()
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
 	end
+	AntiAFKApplied = true
 end
 local function DisableAntiAFK()
 	local Players = game:GetService("Players")
-	local GC = getconnections or get_signal_cons
-	if not GC then
-		return
+	if AntiAFKFallbackConnection then
+		pcall(function() AntiAFKFallbackConnection:Disconnect() end)
+		AntiAFKFallbackConnection = nil
 	end
-	for _, v in pairs(GC(Players.LocalPlayer.Idled)) do
-		if v["Enable"] then
-			pcall(function()
-			v["Enable"](v)
-			end)
+	local GC = getconnections or get_signal_cons
+	if GC then
+		for _, v in pairs(GC(Players.LocalPlayer.Idled)) do
+			if v["Enable"] then
+				pcall(function() v["Enable"](v) end)
+			end
 		end
 	end
+	AntiAFKApplied = false
 end
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
@@ -2263,10 +2297,11 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
 			CatalogRefreshQueued = true
+			PendingTasks.__CatalogRefreshForce = true
 			ShowNotification("Catalog refresh queued.", "Info")
 			return
 		end
-		LoadDynamicCatalog(true)
+		PendingTasks.__LoadCatalog(true)
 	end)
 end)
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
@@ -2274,6 +2309,7 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
+SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
 if SavedData.Settings.AntiAFK then
 	ApplyAntiAFK()
 end
