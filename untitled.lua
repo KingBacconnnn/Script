@@ -303,6 +303,7 @@ local function SanitizeForJSON(data)
 end
 local function SaveConfiguration()
 	if type(write_file) ~= "function" then return false end
+	if isDestroying then return false end
 	if isSaving then
 		saveQueued = true
 		return true
@@ -317,7 +318,9 @@ local function SaveConfiguration()
 		Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
 	}
 	for k, v in pairs(SavedData.Favorites) do
-		if v then cleanData.Favorites[tostring(k)] = true end
+		if v then
+			cleanData.Favorites[tostring(k)] = true
+		end
 	end
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(v) == "table" then
@@ -329,30 +332,42 @@ local function SaveConfiguration()
 	end
 	local safeData = SanitizeForJSON(cleanData)
 	TrackTask(function()
-		local ok, result = pcall(function() return HttpService:JSONEncode(safeData) end)
-		if ok and (not isDestroying or generation == SaveGeneration) then
-			local wrote = pcall(function() write_file(TEMP_FILE, result) end)
-			if wrote then
-				local verified = type(read_file) ~= "function"
-				if type(read_file) == "function" then
-					verified = pcall(function()
-						local check = read_file(TEMP_FILE)
-						HttpService:JSONDecode(check)
-					end)
-				end
-				if verified and generation == SaveGeneration then
-					pcall(function() write_file(DATA_FILE, result) end)
-				end
-				if del_file then pcall(function() del_file(TEMP_FILE) end) end
+		local ok, err = xpcall(function()
+			if isDestroying or generation ~= SaveGeneration then return end
+			local encodedOk, result = pcall(function()
+				return HttpService:JSONEncode(safeData)
+			end)
+			if not encodedOk or type(result) ~= "string" then return end
+			local wrote = pcall(function()
+				write_file(TEMP_FILE, result)
+			end)
+			if not wrote then return end
+			local verified = true
+			if type(read_file) == "function" and type(HttpService.JSONDecode) == "function" then
+				verified = pcall(function()
+					local check = read_file(TEMP_FILE)
+					HttpService:JSONDecode(check)
+				end)
 			end
-		end
-	end, function() end)
+			if verified and not isDestroying and generation == SaveGeneration then
+				pcall(function()
+					write_file(DATA_FILE, result)
+				end)
+			end
+			if del_file then
+				pcall(function()
+					del_file(TEMP_FILE)
+				end)
+			end
+		end, debug.traceback)
 		isSaving = false
-		if saveQueued and not isDestroying then
-			saveQueued = false
-			SaveConfiguration()
-		else
-			saveQueued = false
+		local queued = saveQueued
+		saveQueued = false
+		if not ok then
+			LastTaskError = err
+		end
+		if queued and not isDestroying then
+			task.defer(SaveConfiguration)
 		end
 	end)
 	return true
