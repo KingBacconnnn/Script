@@ -1722,7 +1722,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local compatible = IsScriptCompatible(data)
 		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
-		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "N/A"
+		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
 	end
 	scriptEntry.UpdateUI()
