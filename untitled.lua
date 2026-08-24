@@ -247,6 +247,17 @@ local function CreateDebounce(cooldown, func)
 	end
 end
 local DATA_FILE = ".VeloxHub_Data_V3.1.json"
+local CATALOG_CACHE_FILE = ".VeloxHub_Catalog_V2.json"
+local CATALOG_CACHE_MAX_AGE = 7 * 86400
+local MAX_CATALOG_SIZE = 2 * 1024 * 1024
+local MAX_SCRIPT_SIZE = 4 * 1024 * 1024
+local MAX_NAME_LENGTH = 140
+local MAX_DESCRIPTION_LENGTH = 700
+local MAX_CATEGORY_LENGTH = 80
+local MAX_AUTHOR_LENGTH = 80
+local MAX_ID_LENGTH = 120
+local MAX_VERSION_LENGTH = 40
+local SUPPORTED_CATALOG_SCHEMA = 2
 local TEMP_FILE = ".VeloxHub_Data_Temp.json"
 local SavedData = {
 	Favorites = {},
@@ -387,6 +398,51 @@ local function FetchWithRetry(url, retries, cacheBust)
 	end
 	return nil, lastStatus, lastError
 end
+local function IsAllowedScriptUrl(url)
+	if type(url) ~= "string" then return false end
+	local clean = string.gsub(url, "^%s*(.-)%s*$", "%1")
+	return clean:match("^https://raw%.githubusercontent%.com/KingBacconnnn/VeloxScripts/") ~= nil or clean:match("^https://raw%.githubusercontent%.com/KingBacconnnn/Script/") ~= nil
+end
+local function NormalizeSha256(value)
+	if type(value) ~= "string" then return "" end
+	local hash = string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	if not hash:match("^[0-9a-f]+$") or #hash ~= 64 then return "" end
+	return hash
+end
+local function GetSha256(value)
+	local hashers = {}
+	if type(crypt) == "table" and type(crypt.hash) == "function" then hashers[#hashers + 1] = crypt.hash end
+	if type(syn) == "table" and type(syn.crypt) == "table" and type(syn.crypt.hash) == "function" then hashers[#hashers + 1] = syn.crypt.hash end
+	for _, hasher in ipairs(hashers) do
+		local ok, result = pcall(hasher, value, "sha256")
+		local normalized = NormalizeSha256(ok and result or "")
+		if normalized ~= "" then return normalized end
+	end
+	return nil
+end
+local function VerifySha256(value, expected)
+	local target = NormalizeSha256(expected)
+	if target == "" then return true, nil end
+	local actual = GetSha256(value)
+	if not actual then return false, "sha256 unavailable" end
+	return actual == target, actual
+end
+local function SaveCatalogCache(raw, catalogVersion, schemaVersion)
+	if type(write_file) ~= "function" or type(raw) ~= "string" or #raw == 0 or #raw > MAX_CATALOG_SIZE then return false end
+	local payload = { FetchedAt = os.time(), CatalogVersion = tonumber(catalogVersion) or 0, SchemaVersion = tonumber(schemaVersion) or 1, Raw = raw }
+	local ok, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
+	if not ok then return false end
+	return pcall(function() write_file(CATALOG_CACHE_FILE, encoded) end)
+end
+local function LoadCachedCatalog()
+	if type(is_file) ~= "function" or type(read_file) ~= "function" or not is_file(CATALOG_CACHE_FILE) then return nil end
+	local ok, payload = pcall(function() return HttpService:JSONDecode(read_file(CATALOG_CACHE_FILE)) end)
+	if not ok or type(payload) ~= "table" or type(payload.Raw) ~= "string" then return nil end
+	local fetchedAt = tonumber(payload.FetchedAt)
+	if not fetchedAt or os.time() - fetchedAt > CATALOG_CACHE_MAX_AGE then return nil end
+	if #payload.Raw == 0 or #payload.Raw > MAX_CATALOG_SIZE then return nil end
+	return payload.Raw
+end
 local TagTypeConfig = {
 	UPDATED = {
 		Priority = 5,
@@ -452,7 +508,8 @@ local function ApplyTagBorder(card, tagType, stroke)
 end
 local function GetSafeTimestamp(value)
 	local timestamp = tonumber(value)
-	if type(timestamp) ~= "number" or timestamp ~= timestamp then return 0 end
+	if type(timestamp) ~= "number" or timestamp ~= timestamp or timestamp < 0 then return 0 end
+	if timestamp > os.time() + 86400 then return 0 end
 	return timestamp
 end
 local function GetRelativeTime(timestamp)
@@ -1521,17 +1578,28 @@ CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything t
 CreateParagraph("v2.0.1 - Executor Compatibility, Stability & Code Cleanup", "• Improved executor compatibility with safer environment detection and fallback handling.\n• Added safer getgenv handling with a standard global-environment fallback.\n• Improved dynamic script compilation with loadstring/load compatibility detection.\n• Improved handling of missing or unsupported executor APIs to prevent startup failures.\n• Removed unnecessary executor-specific hierarchy and metamethod interception that could cause compatibility issues.\n• Improved startup stability by reducing dependencies on executor-specific functionality.\n• Improved HTTP and request compatibility through safer API detection and fallback handling.\n• Improved GUI compatibility with safer GUI-parent and protection API handling.\n• Improved error handling for unsupported execution and compilation environments.\n• Removed unused variables and redundant cleanup operations.\n• Removed empty error-handling branches and other dead code without affecting callbacks or fallback systems.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, fallback systems, configuration, Anti-AFK, catalog, and UI functionality.\n• Improved script execution reliability across different supported execution environments.\n• Reduced unnecessary dependencies and simplified compatibility-sensitive code paths.\n• Improved overall stability, reliability, compatibility, maintainability, and user experience across VeloxHub.", ChangelogsView)
 local function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
-	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
-		return string.gsub(data.Id, "^%s*(.-)%s*$", "%1")
+	if type(data.Id) == "string" then
+		local id = string.gsub(data.Id, "^%s*(.-)%s*$", "%1")
+		if id ~= "" and #id <= MAX_ID_LENGTH then return id end
 	end
-	local source = type(data.RawUrl) == "string" and string.gsub(data.RawUrl, "^%s*(.-)%s*$", "%1") or ""
-	if source ~= "" then return "url:" .. source end
 	local name = type(data.Name) == "string" and string.gsub(data.Name, "^%s*(.-)%s*$", "%1") or "Unnamed Script"
-	return "name:" .. string.lower(name) .. ":" .. tostring(tonumber(data.PlaceId) or 0)
+	local placeId = tonumber(data.PlaceId) or 0
+	local gameId = tonumber(data.GameId) or 0
+	return "name:" .. string.lower(name) .. ":" .. tostring(placeId) .. ":" .. tostring(gameId)
+end
+local function NormalizePositiveInteger(value, allowZero)
+	local number = tonumber(value)
+	if not number or number ~= number or number < 0 or number % 1 ~= 0 then return nil end
+	if not allowZero and number == 0 then return nil end
+	return number
 end
 local function IsScriptCompatible(data)
-	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
-	return allowedPlaceId == 0 or allowedPlaceId == PlaceId
+	if type(data) ~= "table" then return false end
+	local allowedPlaceId = NormalizePositiveInteger(data.PlaceId, true) or 0
+	local allowedGameId = NormalizePositiveInteger(data.GameId, true) or 0
+	if allowedPlaceId ~= 0 and allowedPlaceId ~= PlaceId then return false end
+	if allowedGameId ~= 0 and allowedGameId ~= GameId then return false end
+	return true
 end
 local function IsCalendarDay(timestamp)
 	local value = tonumber(timestamp)
@@ -1561,8 +1629,11 @@ local function MigrateSavedEntries(entries)
 		local id = data.Id
 		local name = data.Name
 		if id and name then
+			local legacyUrlId = type(data.RawUrl) == "string" and "url:" .. string.gsub(data.RawUrl, "^%s*(.-)%s*$", "%1") or nil
 			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then SavedData.Favorites[id] = SavedData.Favorites[name] end
+			if SavedData.Favorites[id] == nil and legacyUrlId and SavedData.Favorites[legacyUrlId] ~= nil then SavedData.Favorites[id] = SavedData.Favorites[legacyUrlId] end
 			if SavedData.AutoExecutes[id] == nil and SavedData.AutoExecutes[name] ~= nil then SavedData.AutoExecutes[id] = SavedData.AutoExecutes[name] end
+			if SavedData.AutoExecutes[id] == nil and legacyUrlId and SavedData.AutoExecutes[legacyUrlId] ~= nil then SavedData.AutoExecutes[id] = SavedData.AutoExecutes[legacyUrlId] end
 		end
 	end
 end
@@ -1575,6 +1646,10 @@ local function RefreshAllCardStates()
 	end
 end
 local function ExecuteSandboxed(code, scriptName)
+	if type(code) ~= "string" or #code == 0 or #code > MAX_SCRIPT_SIZE then
+		ShowNotification("Execution blocked: invalid or oversized script payload.", "Error")
+		return false, "invalid script payload"
+	end
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
@@ -1705,7 +1780,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, IsScriptCompatible(data) and "compatible" or "game-only"}, " ")),
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, GameId = tonumber(data.GameId) or 0, Version = tostring(data.Version or ""), Sha256 = tostring(data.Sha256 or ""), Compatible = IsScriptCompatible(data), LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(data.Version or ""), tostring(data.Sha256 or ""), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -1722,7 +1797,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local compatible = IsScriptCompatible(data)
 		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
-		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
+		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "N/A"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
 	end
 	scriptEntry.UpdateUI()
@@ -1764,13 +1839,27 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
+				local scriptUrl = type(data.RawUrl) == "string" and data.RawUrl or ""
+				if not IsAllowedScriptUrl(scriptUrl) then
+					ShowNotification("Execution blocked: script source is not approved.", "Error")
+					if titleLbl and titleLbl.Parent then titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary end
+					return
+				end
+				local raw, status = FetchWithRetry(scriptUrl, 2)
 				if isDestroying then return end
 				if not raw then
 					ShowNotification("Failed to download script" .. (status and " (HTTP " .. tostring(status) .. ")" or "") .. ".", "Error")
+				elseif #raw > MAX_SCRIPT_SIZE then
+					ShowNotification("Execution blocked: script payload is too large.", "Error")
 				elseif #string.gsub(raw, "%s+", "") == 0 then
 					ShowNotification("The script returned an empty response.", "Error")
 				else
+					local verified, hashError = VerifySha256(raw, data.Sha256)
+					if not verified then
+						ShowNotification(hashError == "sha256 unavailable" and "Execution blocked: SHA-256 verification is unavailable." or "Execution blocked: script integrity check failed.", "Error")
+						if titleLbl and titleLbl.Parent then titleLbl.Text = exactName; titleLbl.TextColor3 = Theme.TextPrimary end
+						return
+					end
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
@@ -1804,7 +1893,7 @@ local function BuildCatalogFingerprint(entries)
 			parts[#parts + 1] = table.concat({
 				tostring(entry.Id or StableScriptId(entry) or ""), tostring(entry.Name or ""), tostring(entry.Description or ""), tostring(entry.RawUrl or ""),
 				tostring(entry.ImageAssetId or ""), tostring(NormalizeTagType(entry.TagType)),
-				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.PlaceId) or 0),
+				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.PlaceId) or 0), tostring(tonumber(entry.GameId) or 0), tostring(entry.Version or ""), tostring(entry.Sha256 or ""),
 				tostring(entry.Category or ""), tostring(entry.Author or ""), tostring(index)
 			}, "\31")
 		end
@@ -1849,13 +1938,26 @@ PendingTasks.__LoadCatalog = function(force)
 	TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
 			local raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
+			local usingCachedCatalog = false
 			if not IsTaskCurrent(generation) then return end
+			if not raw then
+				raw = LoadCachedCatalog()
+				usingCachedCatalog = raw ~= nil
+			end
 			if not raw then
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
 				StatusText.TextColor3 = Theme.Error
 				ShowNotification("Could not connect to the script catalog server.", "Error")
+				FinishRefresh()
+				return
+			end
+			if #raw > MAX_CATALOG_SIZE then
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Catalog Too Large"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Catalog exceeds the maximum allowed size.", "Error")
 				FinishRefresh()
 				return
 			end
@@ -1870,52 +1972,70 @@ PendingTasks.__LoadCatalog = function(force)
 				return
 			end
 			local catalogVersion = 0
+			local schemaVersion = 1
 			local catalogEntries = parsed
 			if type(parsed.Scripts) == "table" then
 				catalogEntries = parsed.Scripts
 				catalogVersion = tonumber(parsed.CatalogVersion) or 0
+				schemaVersion = tonumber(parsed.SchemaVersion) or 1
+			end
+			if schemaVersion > SUPPORTED_CATALOG_SCHEMA then
+				StatusDot.BackgroundColor3 = Theme.Error
+				StatusText.Text = "Update Required"
+				StatusText.TextColor3 = Theme.Error
+				ShowNotification("Catalog schema is newer than this hub version.", "Error")
+				FinishRefresh()
+				return
 			end
 			local validEntries = {}
 			local seenIds = {}
 			local validationIssueCount = 0
+			if #raw > MAX_CATALOG_SIZE then validationIssueCount = validationIssueCount + 1 end
 			for index, entry in ipairs(catalogEntries) do
 				if type(entry) ~= "table" then
 					validationIssueCount = validationIssueCount + 1
 				else
 					local name = type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") or ""
+					local description = type(entry.Description) == "string" and string.gsub(entry.Description, "^%s*(.-)%s*$", "%1") or "No description provided."
 					local rawUrl = type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") or ""
 					local id = StableScriptId(entry)
-					local placeId = tonumber(entry.PlaceId) or 0
-					local validUrl = rawUrl:match("^https?://") ~= nil
-					if name == "" then validationIssueCount = validationIssueCount + 1 end
-					if rawUrl == "" or not validUrl then validationIssueCount = validationIssueCount + 1 end
-					if type(id) ~= "string" or id == "" then validationIssueCount = validationIssueCount + 1 end
-					if tonumber(entry.PlaceId) == nil and entry.PlaceId ~= nil then validationIssueCount = validationIssueCount + 1 end
-					if id and not seenIds[id] and name ~= "" and validUrl then
+					local placeId = NormalizePositiveInteger(entry.PlaceId, true)
+					local gameId = NormalizePositiveInteger(entry.GameId, true)
+					local version = type(entry.Version) == "string" and string.gsub(entry.Version, "^%s*(.-)%s*$", "%1") or ""
+					local sha256 = NormalizeSha256(entry.Sha256)
+					local category = type(entry.Category) == "string" and string.gsub(entry.Category, "^%s*(.-)%s*$", "%1") or ""
+					local author = type(entry.Author) == "string" and string.gsub(entry.Author, "^%s*(.-)%s*$", "%1") or ""
+					local validUrl = IsAllowedScriptUrl(rawUrl)
+					local validPlace = placeId ~= nil
+					local validGame = entry.GameId == nil or gameId ~= nil
+					local validHash = entry.Sha256 == nil or sha256 ~= ""
+					if name == "" or #name > MAX_NAME_LENGTH then validationIssueCount = validationIssueCount + 1 end
+					if description == "" or #description > MAX_DESCRIPTION_LENGTH then validationIssueCount = validationIssueCount + 1 end
+					if not validUrl then validationIssueCount = validationIssueCount + 1 end
+					if type(id) ~= "string" or id == "" or #id > MAX_ID_LENGTH then validationIssueCount = validationIssueCount + 1 end
+					if not validPlace or not validGame then validationIssueCount = validationIssueCount + 1 end
+					if not validHash then validationIssueCount = validationIssueCount + 1 end
+					if #category > MAX_CATEGORY_LENGTH or #author > MAX_AUTHOR_LENGTH or #version > MAX_VERSION_LENGTH then validationIssueCount = validationIssueCount + 1 end
+					if id and not seenIds[id] and name ~= "" and description ~= "" and validUrl and validPlace and validGame and validHash then
 						seenIds[id] = true
 						validEntries[#validEntries + 1] = {
-							Id = id,
-							Name = name,
-							Description = type(entry.Description) == "string" and entry.Description or "No description provided.",
-							RawUrl = rawUrl,
+							Id = id, Name = name, Description = description, RawUrl = rawUrl,
 							ImageAssetId = type(entry.ImageAssetId) == "string" and entry.ImageAssetId or "rbxassetid://99657752206675",
-							TagType = NormalizeTagType(entry.TagType),
-							LastUpdated = GetSafeTimestamp(entry.LastUpdated),
-							PlaceId = placeId,
-							Category = type(entry.Category) == "string" and entry.Category or "",
-							Author = type(entry.Author) == "string" and entry.Author or "",
-							Source = rawUrl:match("^https?://([^/]+)") or ""
+							TagType = NormalizeTagType(entry.TagType), LastUpdated = GetSafeTimestamp(entry.LastUpdated),
+							PlaceId = placeId or 0, GameId = gameId or 0, Version = version, Sha256 = sha256,
+							Category = category, Author = author, Source = rawUrl:match("^https://([^/]+)") or ""
 						}
 					elseif id and seenIds[id] then
 						validationIssueCount = validationIssueCount + 1
 					end
 				end
 			end
+			if #validEntries > 0 and not usingCachedCatalog then SaveCatalogCache(raw, catalogVersion, schemaVersion) end
 			MigrateSavedEntries(validEntries)
 			if validationIssueCount > 0 and #validEntries == 0 then
 				ShowNotification("Catalog validation failed: no usable scripts were found.", "Error")
 			end
-			local fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
+			local fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion) .. "\30" .. tostring(schemaVersion)
 			if fingerprint == LastCatalogFingerprint then
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
@@ -1935,7 +2055,7 @@ PendingTasks.__LoadCatalog = function(force)
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
 			local function BuildEntryFingerprint(data)
-				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(data.Version or ""), tostring(data.Sha256 or ""), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
 			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
@@ -1995,8 +2115,8 @@ PendingTasks.__LoadCatalog = function(force)
 				for _, scriptData in ipairs(validEntries) do
 					local auto = SavedData.AutoExecutes[scriptData.Id]
 					if type(auto) == "table" then
-						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						local validPlace = (tonumber(auto.GameId) or 0) == 0 or tonumber(auto.GameId) == GameId
+						if validPlace then validPlace = (tonumber(auto.PlaceId) or 0) == 0 or tonumber(auto.PlaceId) == PlaceId end
 						if validPlace and IsScriptCompatible(scriptData) then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
@@ -2009,8 +2129,13 @@ PendingTasks.__LoadCatalog = function(force)
 							if not IsTaskCurrent(generation) then return end
 							local scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not IsTaskCurrent(generation) then return end
-							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
-								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+							if scrRaw and #scrRaw <= MAX_SCRIPT_SIZE and #string.gsub(scrRaw, "%s+", "") > 0 then
+								local verified = VerifySha256(scrRaw, scriptData.Sha256)
+								if verified and IsAllowedScriptUrl(scriptData.RawUrl) then
+									if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+								else
+									failList[#failList + 1] = scriptData.Name
+								end
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
@@ -2021,10 +2146,10 @@ PendingTasks.__LoadCatalog = function(force)
 					end)
 				end
 			end
-			StatusDot.BackgroundColor3 = Theme.Success
-			StatusText.Text = "Online"
-			StatusText.TextColor3 = Theme.Success
-			ShowNotification("Script catalog loaded successfully!", "Success")
+			StatusDot.BackgroundColor3 = usingCachedCatalog and Theme.Warning or Theme.Success
+			StatusText.Text = usingCachedCatalog and "Cached" or "Online"
+			StatusText.TextColor3 = usingCachedCatalog and Theme.Warning or Theme.Success
+			ShowNotification(usingCachedCatalog and "Loaded last known-good script catalog." or "Script catalog loaded successfully!", usingCachedCatalog and "Info" or "Success")
 		end, function(err) return tostring(err) end)
 		if not taskOk then
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
