@@ -1744,8 +1744,131 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
+
+	-- ============================================================
+	-- Catalog information shown directly on the script card.
+	-- This turns internal catalog metadata into readable UI text:
+	--   Status       = ACTIVE / BETA / BROKEN / etc.
+	--   Scope        = UNIVERSAL / GAME / PLACE.
+	--   Target       = GameId/PlaceId when supplied.
+	--   Requirements = declared dependencies/capabilities.
+	--   Intended For  = human-readable purpose/scope from the catalog.
+	-- ============================================================
+	local function MakeCardMetaLabel(parent, text, color, size)
+		local label = Instance.new("TextLabel", parent)
+		label.Size = UDim2.new(0, size or 120, 1, 0)
+		label.BackgroundTransparency = 1
+		label.Text = text
+		label.TextColor3 = color or Theme.TextSecondary
+		label.Font = Enum.Font.GothamMedium
+		label.TextSize = 9
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextYAlignment = Enum.TextYAlignment.Center
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		return label
+	end
+
+	local function FormatRequirements(requirements)
+		if type(requirements) ~= "table" then
+			return "None declared"
+		end
+		local parts = {}
+		for key, value in pairs(requirements) do
+			if type(key) == "number" then
+				if tostring(value) ~= "" then parts[#parts + 1] = tostring(value) end
+			elseif value == true then
+				parts[#parts + 1] = tostring(key)
+			elseif value ~= nil and tostring(value) ~= "" then
+				parts[#parts + 1] = tostring(key) .. "=" .. tostring(value)
+			end
+		end
+		table.sort(parts)
+		return #parts > 0 and table.concat(parts, ", ") or "None declared"
+	end
+
+	local statusText = string.upper(type(data.Status) == "string" and string.gsub(data.Status, "^%s*(.-)%s*$", "%1") or "ACTIVE")
+	local statusColor = (statusText == "ACTIVE" and Theme.Success) or (statusText == "BETA" or statusText == "TESTING") and Theme.Warning or (statusText == "BROKEN" or statusText == "ABANDONED") and Theme.Error or Theme.TextSecondary
+	local scopeText = string.upper(tostring(inferredScope or "UNIVERSAL"))
+	local scopeLabel = scopeText == "PLACE" and "Place-specific" or scopeText == "GAME" and "Game-wide" or "Universal"
+	local targetParts = {}
+	if inferredGameId ~= 0 then targetParts[#targetParts + 1] = "Game " .. tostring(inferredGameId) end
+	if inferredPlaceId ~= 0 then targetParts[#targetParts + 1] = "Place " .. tostring(inferredPlaceId) end
+	local targetText = #targetParts > 0 and table.concat(targetParts, " • ") or "No specific game/place recorded"
+	local requirementsText = FormatRequirements(data.Requirements)
+	local intendedText = type(data.IntendedFor) == "string" and string.gsub(data.IntendedFor, "^%s*(.-)%s*$", "%1") or "No intended-use note provided."
+
+	local infoRow = Instance.new("Frame", content)
+	infoRow.Size = UDim2.new(1, 0, 0, 18); infoRow.BackgroundTransparency = 1; infoRow.LayoutOrder = 3
+	local infoLay = Instance.new("UIListLayout", infoRow)
+	infoLay.FillDirection = Enum.FillDirection.Horizontal; infoLay.SortOrder = Enum.SortOrder.LayoutOrder
+	infoLay.VerticalAlignment = Enum.VerticalAlignment.Center; infoLay.Padding = UDim.new(0, 8)
+	local statusLbl = MakeCardMetaLabel(infoRow, "● " .. statusText, statusColor, 72)
+	statusLbl.LayoutOrder = 1
+	local scopeLbl = MakeCardMetaLabel(infoRow, "▸ " .. scopeLabel, Theme.TextPrimary, 96)
+	scopeLbl.LayoutOrder = 2
+	local targetLbl = MakeCardMetaLabel(infoRow, "", Theme.TextSecondary, 0)
+	targetLbl.Size = UDim2.new(1, -184, 1, 0)
+	targetLbl.LayoutOrder = 3
+
+	local infoRow2 = Instance.new("Frame", content)
+	infoRow2.Size = UDim2.new(1, 0, 0, 18); infoRow2.BackgroundTransparency = 1; infoRow2.LayoutOrder = 4
+	local infoLay2 = Instance.new("UIListLayout", infoRow2)
+	infoLay2.FillDirection = Enum.FillDirection.Horizontal
+	infoLay2.SortOrder = Enum.SortOrder.LayoutOrder; infoLay2.VerticalAlignment = Enum.VerticalAlignment.Center
+	local reqLbl = MakeCardMetaLabel(infoRow2, "Requirements: " .. requirementsText, Theme.TextSecondary, 0)
+	reqLbl.Size = UDim2.new(1, 0, 1, 0)
+	reqLbl.LayoutOrder = 1
+
+	local intendedLbl = Instance.new("TextLabel", content)
+	intendedLbl.Size = UDim2.new(1, 0, 0, 0); intendedLbl.AutomaticSize = Enum.AutomaticSize.Y
+	intendedLbl.BackgroundTransparency = 1
+	intendedLbl.Text = "Intended for: " .. intendedText
+	intendedLbl.TextColor3 = Theme.TextSecondary; intendedLbl.Font = Enum.Font.Gotham
+	intendedLbl.TextSize = 9; intendedLbl.TextWrapped = true
+	intendedLbl.TextXAlignment = Enum.TextXAlignment.Left; intendedLbl.LayoutOrder = 5
+
+	-- Metadata summary: Scope / Status
+	local scopeText = "Scope: " .. (inferredScope or "UNKNOWN")
+	local statusText = "Status: " .. (tostring(data.Status) ~= "nil" and tostring(data.Status) or "UNKNOWN")
+	local metaLbl = MakeCardMetaLabel(content, scopeText .. " • " .. statusText, Theme.TextSecondary, 0)
+	-- Fixed row height keeps the catalog metadata inside the card's AutoSize calculation.
+	metaLbl.Size = UDim2.new(1, 0, 0, 16)
+	metaLbl.AutomaticSize = Enum.AutomaticSize.None
+	metaLbl.TextWrapped = false
+	metaLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	metaLbl.LayoutOrder = 6
+
+	-- IDs (show only if present)
+	local idParts = {}
+	if inferredGameId and inferredGameId ~= 0 then table.insert(idParts, "GameId: " .. tostring(inferredGameId)) end
+	if inferredPlaceId and inferredPlaceId ~= 0 then table.insert(idParts, "PlaceId: " .. tostring(inferredPlaceId)) end
+	local idsText = #idParts > 0 and table.concat(idParts, " • ") or "PlaceId: - • GameId: -"
+	local idsLbl = MakeCardMetaLabel(content, idsText, Theme.TextSecondary, 0)
+	idsLbl.Size = UDim2.new(1, 0, 0, 16)
+	idsLbl.AutomaticSize = Enum.AutomaticSize.None
+	idsLbl.TextWrapped = false
+	idsLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	idsLbl.LayoutOrder = 7
+
+	-- expose for update
+	scriptEntry.MetaLabel = metaLbl
+	scriptEntry.IdsLabel = idsLbl
+
+
+	if versionText ~= "" then
+		local versionLbl = Instance.new("TextLabel", infoRow2)
+		versionLbl.Size = UDim2.new(0, 70, 1, 0)
+		versionLbl.BackgroundTransparency = 1; versionLbl.Text = "v" .. versionText
+		versionLbl.TextColor3 = Theme.TextSecondary; versionLbl.Font = Enum.Font.GothamMedium
+		versionLbl.TextSize = 9; versionLbl.TextXAlignment = Enum.TextXAlignment.Right; versionLbl.LayoutOrder = 2
+		reqLbl.Size = UDim2.new(1, -78, 1, 0)
+	end
+
+	targetLbl.Text = targetText
+
 	local btmRow = Instance.new("Frame", content)
-	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
+	-- Metadata uses LayoutOrder 6-7, so action buttons must come after it.
+	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 8
 	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
@@ -1773,12 +1896,13 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local compatible, compatibilityKind, compatibilityLabel = GetCompatibilityInfo(data)
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
-		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, compatibilityKind, compatibilityLabel}, " ")),
+		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", type(data.IntendedFor) == "string" and data.IntendedFor or "", FormatRequirements(data.Requirements), tagSearch, compatibilityKind, compatibilityLabel}, " ")),
 		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, GameId = tonumber(data.GameId) or 0,
 		Compatible = compatible, CompatibilityKind = compatibilityKind, CompatibilityLabel = compatibilityLabel, Scope = inferredScope,
 		LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority,
 		OriginalIndex = originalIndex or (#RegisteredScripts + 1), Version = versionText, Status = type(data.Status) == "string" and data.Status or "ACTIVE",
-		EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(inferredScope), tostring(data.Version or ""), tostring(data.Status or "ACTIVE"), tostring(HttpService:JSONEncode(type(data.Requirements) == "table" and data.Requirements or {})), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+		IntendedFor = type(data.IntendedFor) == "string" and data.IntendedFor or "", Requirements = type(data.Requirements) == "table" and data.Requirements or {},
+		EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(inferredScope), tostring(data.Version or ""), tostring(data.Status or "ACTIVE"), tostring(HttpService:JSONEncode(type(data.Requirements) == "table" and data.Requirements or {})), tostring(data.IntendedFor or ""), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -1797,7 +1921,28 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		aeLbl.Text = compatible and ("Auto Execute" .. (versionText ~= "" and (" • v" .. versionText) or "")) or compatibilityLabel
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "N/A"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
-		scriptEntry.Compatible, scriptEntry.CompatibilityKind, scriptEntry.CompatibilityLabel = compatible, compatibilityKind, compatibilityLabel
+		scriptEntry.Compatible, scriptEntry.CompatibilityKind, scriptEntry.CompatibilityLabel = compatible, compatibilityKind, compatibil
+
+		-- Refresh the metadata labels if present
+		if scriptEntry.MetaLabel then
+			local curScope = NormalizeScope(data.Scope)
+			local curGameId = tonumber(data.GameId) or 0
+			local curPlaceId = tonumber(data.PlaceId) or 0
+			-- infer if missing
+			if data.Scope == nil then
+				if curGameId ~= 0 and curPlaceId == 0 then curScope = "GAME"
+				elseif curGameId == 0 and curPlaceId == 0 then curScope = "UNIVERSAL"
+				else curScope = "PLACE" end
+			end
+			scriptEntry.MetaLabel.Text = "Scope: " .. tostring(curScope) .. " • Status: " .. tostring(data.Status or "UNKNOWN")
+			scriptEntry.MetaLabel.Size = UDim2.new(1, 0, 0, 16)
+			local idParts2 = {}
+			if curGameId ~= 0 then table.insert(idParts2, "GameId: " .. tostring(curGameId)) end
+			if curPlaceId ~= 0 then table.insert(idParts2, "PlaceId: " .. tostring(curPlaceId)) end
+			scriptEntry.IdsLabel.Text = (#idParts2 > 0 and table.concat(idParts2, " • ") or "PlaceId: - • GameId: -")
+			scriptEntry.IdsLabel.Size = UDim2.new(1, 0, 0, 16)
+		end
+ityLabel
 	end
 	scriptEntry.UpdateUI()
 	RegEntryConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
@@ -1868,7 +2013,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
 end
-local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
+local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
@@ -2005,6 +2150,7 @@ PendingTasks.__LoadCatalog = function(force)
 							Version = version,
 							Status = status,
 							Requirements = requirements,
+							IntendedFor = type(entry.IntendedFor) == "string" and entry.IntendedFor or "",
 							Category = type(entry.Category) == "string" and entry.Category or "",
 							Author = type(entry.Author) == "string" and entry.Author or "",
 							Source = rawUrl:match("^https?://([^/]+)") or ""
@@ -2038,7 +2184,7 @@ PendingTasks.__LoadCatalog = function(force)
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
 			local function BuildEntryFingerprint(data)
-				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(NormalizeScope(data.Scope)), tostring(data.Version or ""), tostring(data.Status or "ACTIVE"), tostring(HttpService:JSONEncode(type(data.Requirements) == "table" and data.Requirements or {})), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(tonumber(data.GameId) or 0), tostring(NormalizeScope(data.Scope)), tostring(data.Version or ""), tostring(data.Status or "ACTIVE"), tostring(HttpService:JSONEncode(type(data.Requirements) == "table" and data.Requirements or {})), tostring(data.IntendedFor or ""), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
 			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
