@@ -52,10 +52,33 @@ local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 local CompileFunction
+local CompileFunctionName = nil
+local function TryCompiler(fn, source, chunkName)
+	if type(fn) ~= "function" then return false, nil end
+	local ok, chunk, err = pcall(fn, source, chunkName)
+	if ok and type(chunk) == "function" then
+		return true, chunk, nil
+	end
+	local okSingle, chunkSingle, errSingle = pcall(fn, source)
+	if okSingle and type(chunkSingle) == "function" then
+		return true, chunkSingle, nil
+	end
+	return false, nil, tostring(err or errSingle or chunk or chunkSingle or "compiler rejected source")
+end
 if type(loadstring) == "function" then
-	CompileFunction = loadstring
+	CompileFunction = function(source, chunkName)
+		local ok, chunk, err = TryCompiler(loadstring, source, chunkName)
+		if ok then return chunk end
+		return nil, err
+	end
+	CompileFunctionName = "loadstring"
 elseif type(load) == "function" then
-	CompileFunction = load
+	CompileFunction = function(source, chunkName)
+		local ok, chunk, err = TryCompiler(load, source, chunkName)
+		if ok then return chunk end
+		return nil, err
+	end
+	CompileFunctionName = "load"
 end
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -1518,7 +1541,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.2 - Executor Compatibility, Stability & Code Cleanup", "• Improved executor compatibility with safer environment detection and fallback handling.\n• Added safer getgenv handling with a standard global-environment fallback.\n• Improved dynamic script compilation with loadstring/load compatibility detection.\n• Improved handling of missing or unsupported executor APIs to prevent startup failures.\n• Removed unnecessary executor-specific hierarchy and metamethod interception that could cause compatibility issues.\n• Improved startup stability by reducing dependencies on executor-specific functionality.\n• Improved HTTP and request compatibility through safer API detection and fallback handling.\n• Improved GUI compatibility with safer GUI-parent and protection API handling.\n• Improved error handling for unsupported execution and compilation environments.\n• Removed unused variables and redundant cleanup operations.\n• Removed empty error-handling branches and other dead code without affecting callbacks or fallback systems.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, fallback systems, configuration, Anti-AFK, catalog, and UI functionality.\n• Improved script execution reliability across different supported execution environments.\n• Reduced unnecessary dependencies and simplified compatibility-sensitive code paths.\n• Improved overall stability, reliability, compatibility, maintainability, and user experience across VeloxHub.", ChangelogsView)
+CreateParagraph("v2.0.2 - Executor Compatibility, Stability & Code Cleanup", "• Improved overall executor compatibility with safer API detection and graceful fallbacks.\n• Added compiler signature fallbacks for executors that accept loadstring/load with different argument support.\n• Improved compiler diagnostics and clearer handling for executor-side local-register limits.\n• Improved getgenv, GUI-parent, and protection API fallback handling to reduce startup failures.\n• Improved HTTP/request compatibility by normalizing common response-body and status-code fields.\n• Improved handling of missing or unsupported executor APIs without breaking the main UI.\n• Reduced compatibility-sensitive dependencies and simplified cleanup paths.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, configuration, Anti-AFK, catalog, and UI behavior.\n• Improved execution error reporting so compiler and runtime failures are easier to diagnose.\n• Improved startup stability, maintainability, and reliability across supported execution environments.", ChangelogsView)
 local function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -1579,18 +1602,33 @@ local function ExecuteSandboxed(code, scriptName)
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
 	end
-	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
-	if not ok or type(chunk) ~= "function" then
-		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		return false, tostring(compileErr or chunk or "unknown compiler error")
+	if type(code) ~= "string" or code == "" then
+		ShowNotification("Execution unavailable: empty script source.", "Error")
+		return false, "empty script source"
 	end
-	TrackTask(function()
-		local success, runtimeErr = pcall(chunk)
-		if not success and not isDestroying then
-			ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-		end
-	end)
-	return true, "Script dispatched successfully"
+
+	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
+	if ok and type(chunk) == "function" then
+		TrackTask(function()
+			local success, runtimeErr = pcall(chunk)
+			if not success and not isDestroying then
+				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			end
+		end)
+		return true, "Script dispatched successfully"
+	end
+
+	local detail = tostring(compileErr or chunk or "unknown compiler error")
+	local normalized = string.lower(detail)
+	if string.find(normalized, "out of local", 1, true)
+		or string.find(normalized, "local registers", 1, true)
+		or (string.find(normalized, "register", 1, true) and string.find(normalized, "limit", 1, true)) then
+		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: executor compiler local-register limit was exceeded.", "Error")
+		return false, detail
+	end
+
+	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
+	return false, detail
 end
 local function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
@@ -1722,7 +1760,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local compatible = IsScriptCompatible(data)
 		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
-		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "N/A"
+		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
 	end
 	scriptEntry.UpdateUI()
