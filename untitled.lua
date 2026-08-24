@@ -1518,7 +1518,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.2 - Minor Improvements - Fix The Anti AFK not working perfectly, Inprove The Anti AFK feature.", ChangelogsView)
+CreateParagraph("v2.0.2 - Executor Compatibility, Stability & Code Cleanup", "• Improved executor compatibility with safer environment detection and fallback handling.\n• Added safer getgenv handling with a standard global-environment fallback.\n• Improved dynamic script compilation with loadstring/load compatibility detection.\n• Improved handling of missing or unsupported executor APIs to prevent startup failures.\n• Removed unnecessary executor-specific hierarchy and metamethod interception that could cause compatibility issues.\n• Improved startup stability by reducing dependencies on executor-specific functionality.\n• Improved HTTP and request compatibility through safer API detection and fallback handling.\n• Improved GUI compatibility with safer GUI-parent and protection API handling.\n• Improved error handling for unsupported execution and compilation environments.\n• Removed unused variables and redundant cleanup operations.\n• Removed empty error-handling branches and other dead code without affecting callbacks or fallback systems.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, fallback systems, configuration, Anti-AFK, catalog, and UI functionality.\n• Improved script execution reliability across different supported execution environments.\n• Reduced unnecessary dependencies and simplified compatibility-sensitive code paths.\n• Improved overall stability, reliability, compatibility, maintainability, and user experience across VeloxHub.", ChangelogsView)
 local function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -1722,7 +1722,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local compatible = IsScriptCompatible(data)
 		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
-		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
+		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "N/A"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
 	end
 	scriptEntry.UpdateUI()
