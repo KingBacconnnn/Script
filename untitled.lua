@@ -1741,7 +1741,13 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	UpdateCardMetaLayout()
 	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
-	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
+	descLbl.BackgroundTransparency = 1
+	local catalogScope = (tonumber(data.PlaceId) or 0) ~= 0 and "PLACE" or "UNIVERSAL"
+	local catalogTarget = (tonumber(data.PlaceId) or 0) ~= 0 and ("PlaceId: " .. tostring(data.PlaceId)) or "PlaceId: -"
+	local catalogTag = NormalizeTagType(data.TagType)
+	if catalogTag == "NONE" then catalogTag = "STANDARD" end
+	descLbl.Text = (type(data.Description) == "string" and data.Description or "No description provided.")
+		.. "\nCatalog: " .. catalogScope .. " • " .. catalogTarget .. " • Tag: " .. catalogTag
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
 
@@ -1871,6 +1877,16 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 8
 	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	local catalogBadge = Instance.new("TextLabel", btmRow)
+	catalogBadge.Size = UDim2.new(0, 210, 0, 22)
+	catalogBadge.BackgroundTransparency = 1
+	catalogBadge.Text = "Catalog: " .. catalogScope .. " • " .. catalogTarget
+	catalogBadge.TextColor3 = Theme.TextSecondary
+	catalogBadge.Font = Enum.Font.GothamMedium
+	catalogBadge.TextSize = 8
+	catalogBadge.TextXAlignment = Enum.TextXAlignment.Left
+	catalogBadge.LayoutOrder = 0
+
 	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
