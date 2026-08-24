@@ -5,7 +5,7 @@ if type(getgenv) == "function" then
 		GlobalEnv = env
 	end
 end
-local function GenerateRandomString(len)
+function _VH_GenerateRandomString(len)
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	local str = ""
 	for i = 1, len do
@@ -53,7 +53,7 @@ local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 local CompileFunction
 local CompileFunctionName = nil
-local function TryCompiler(fn, source, chunkName)
+function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
 	local ok, chunk, err = pcall(fn, source, chunkName)
 	if ok and type(chunk) == "function" then
@@ -67,14 +67,14 @@ local function TryCompiler(fn, source, chunkName)
 end
 if type(loadstring) == "function" then
 	CompileFunction = function(source, chunkName)
-		local ok, chunk, err = TryCompiler(loadstring, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(loadstring, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
 	CompileFunctionName = "loadstring"
 elseif type(load) == "function" then
 	CompileFunction = function(source, chunkName)
-		local ok, chunk, err = TryCompiler(load, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
@@ -124,7 +124,7 @@ local OriginalCache = setmetatable({}, { __mode = "k" })
 local AntiAFKConnection = nil
 local AntiAFKDisabledConnections = {}
 local DisableAntiAFK
-local function CacheInstanceAndDescendants(root)
+function _VH_CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
 		local c = {}
@@ -154,13 +154,13 @@ local function CacheInstanceAndDescendants(root)
 		CacheObj(desc)
 	end
 end
-local function RegConn(connection)
+function _VH_RegConn(connection)
 	if connection and typeof(connection) == "RBXScriptConnection" then
 		table.insert(VeloxConnections, connection)
 	end
 	return connection
 end
-local function UnregConn(connection)
+function _VH_UnregConn(connection)
 	if not connection then return end
 	for i = #VeloxConnections, 1, -1 do
 		if VeloxConnections[i] == connection then
@@ -172,7 +172,7 @@ local function UnregConn(connection)
 		pcall(function() connection:Disconnect() end)
 	end
 end
-local function TrackTask(fn)
+function _VH_TrackTask(fn)
 	local thread
 	thread = task.spawn(function()
 		pcall(fn)
@@ -181,25 +181,25 @@ local function TrackTask(fn)
 	PendingTasks[thread] = true
 	return thread
 end
-local function IsTaskCurrent(generation)
+function _VH_IsTaskCurrent(generation)
 	return not isDestroying and generation == CatalogGeneration
 end
-local function CancelTrackedTasks()
+function _VH_CancelTrackedTasks()
 	for thread in pairs(PendingTasks) do
 		if type(thread) == "thread" then pcall(task.cancel, thread) end
 	end
 	table.clear(PendingTasks)
 end
 local typingTask = nil
-local function CleanUpMemory()
+function _VH_CleanUpMemory()
 	isDestroying = true
 	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
-	CancelTrackedTasks()
+	_VH_CancelTrackedTasks()
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
-	if ToggleKeybindConnection then UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
-	if KeybindCaptureConnection then UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
+	if ToggleKeybindConnection then _VH_UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
+	if KeybindCaptureConnection then _VH_UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
 	if DisableAntiAFK then DisableAntiAFK() end
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -227,7 +227,7 @@ local function CleanUpMemory()
 	table.clear(InteractiveElements)
 	table.clear(OriginalCache)
 end
-local function SafeTween(instance, tweenInfo, properties)
+function _VH_SafeTween(instance, tweenInfo, properties)
 	if not instance or not instance.Parent then return nil end
 	if ActiveTweens[instance] then
 		local oldData = ActiveTweens[instance]
@@ -254,7 +254,7 @@ local function SafeTween(instance, tweenInfo, properties)
 	tween:Play()
 	return tween
 end
-local function CreateDebounce(cooldown, func)
+function _VH_CreateDebounce(cooldown, func)
 	local isRunning = false
 	return function(...)
 		if isRunning or isDestroying then return end
@@ -279,12 +279,12 @@ local SavedData = {
 }
 local isSaving = false
 local saveQueued = false
-local function SanitizeForJSON(data)
+function _VH_SanitizeForJSON(data)
 	if type(data) == "table" then
 		local clean = {}
 		for k, v in pairs(data) do
 			if type(k) == "string" or type(k) == "number" then
-				local cleanVal = SanitizeForJSON(v)
+				local cleanVal = _VH_SanitizeForJSON(v)
 				if cleanVal ~= nil then
 					clean[tostring(k)] = cleanVal
 				end
@@ -321,7 +321,7 @@ local function SaveConfiguration()
 			end
 		end
 		local encodedOk, result = pcall(function()
-			return HttpService:JSONEncode(SanitizeForJSON(cleanData))
+			return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
 		end)
 		if encodedOk then
 			local tempOk = pcall(function() write_file(TEMP_FILE, result) end)
@@ -545,7 +545,7 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 pcall(function() protectgui(ScreenGui) end)
 GlobalEnv[_G_Identifier] = function()
-	CleanUpMemory()
+	_VH_CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 local function GetPanelSize()
@@ -565,7 +565,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 			connectionRegistry[#connectionRegistry + 1] = connection
 			return connection
 		end
-		return RegConn(connection)
+		return _VH_RegConn(connection)
 	end
 	RegInteractive(gui.MouseEnter:Connect(function()
 		if isDestroying or isTransitioning or IsMobile then return end
@@ -594,7 +594,7 @@ local function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickC
 		end
 	end))
 end
-RegConn(UserInputService.WindowFocusReleased:Connect(function()
+_VH_RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
 	for element, data in pairs(InteractiveElements) do
 		if element and element.Parent then
@@ -622,13 +622,13 @@ Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 local FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 local floatStart, floatPos
-RegConn(FloatingBtn.InputBegan:Connect(function(input)
+_VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeFloatDragInput then
 		activeFloatDragInput = input
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
 		if floatDragConnection then floatDragConnection:Disconnect() end
-		floatDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
+		floatDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - floatStart
@@ -742,7 +742,7 @@ local function StandaloneBannerNotification(msg, notifType)
 	end
 	local success = pcall(function()
 		local bannerGui = Instance.new("ScreenGui")
-		bannerGui.Name = "VeloxBanner_" .. GenerateRandomString(8)
+		bannerGui.Name = "VeloxBanner_" .. _VH_GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
 		bannerGui.Parent = parent
@@ -847,7 +847,7 @@ local function AttemptActionWithCooldown(actionFunc)
 			local parent = GetSecureParent()
 			if not parent then return end
 			local bannerGui = Instance.new("ScreenGui")
-			bannerGui.Name = "VeloxCooldown_" .. GenerateRandomString(8)
+			bannerGui.Name = "VeloxCooldown_" .. _VH_GenerateRandomString(8)
 			bannerGui.DisplayOrder = 10000
 			bannerGui.ResetOnSpawn = false
 			bannerGui.Parent = parent
@@ -1006,13 +1006,13 @@ local function CloseConfirmDialog(shouldExecute)
 	pendingExecuteCallback = nil
 	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
 end
-RegConn(ConfirmCancelBtn.Activated:Connect(CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
-RegConn(ConfirmExecuteBtn.Activated:Connect(function()
+_VH_RegConn(ConfirmCancelBtn.Activated:Connect(_VH_CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
+_VH_RegConn(ConfirmExecuteBtn.Activated:Connect(function()
 	AttemptActionWithCooldown(function()
 		CloseConfirmDialog(true)
 	end)
 end))
-RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
+_VH_RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	if not isConfirming then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		local pos = input.Position
@@ -1027,10 +1027,10 @@ if savedKeyCode then ToggleKeybind = savedKeyCode else SavedData.ToggleKeybind =
 local KeybindButtonRef = nil
 local function BindToggleKey(keyCode)
 	if ToggleKeybindConnection then
-		UnregConn(ToggleKeybindConnection)
+		_VH_UnregConn(ToggleKeybindConnection)
 		ToggleKeybindConnection = nil
 	end
-	ToggleKeybindConnection = RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	ToggleKeybindConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed or isConfirming or IsBindingKey or isTransitioning or isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == keyCode then
 			if SearchInput and SearchInput:IsFocused() then
@@ -1041,7 +1041,7 @@ local function BindToggleKey(keyCode)
 	end))
 end
 BindToggleKey(ToggleKeybind)
-RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+_VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
 			CloseConfirmDialog(false)
@@ -1061,13 +1061,13 @@ HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true
 local mainDragStart, mainStartPos
-RegConn(HeaderContainer.InputBegan:Connect(function(input)
+_VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeMainDragInput then
 		activeMainDragInput = input
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
 		if mainDragConnection then mainDragConnection:Disconnect() end
-		mainDragConnection = RegConn(UserInputService.InputChanged:Connect(function(moveInput)
+		mainDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = moveInput.Position - mainDragStart
@@ -1084,7 +1084,7 @@ RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		end))
 	end
 end))
-RegConn(UserInputService.InputEnded:Connect(function(input)
+_VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
@@ -1183,11 +1183,11 @@ MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn
 MinBtn.TextColor3 = Theme.TextSecondary; MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = IsMobile and 14 or 18; MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
+_VH_RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
 local fpsCount = 0
 local diagnosticsElapsed = 0
-RegConn(RunService.Heartbeat:Connect(function(deltaTime)
+_VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	if isDestroying then return end
 	if isMinimized or isTransitioning then
 		fpsCount = 0
@@ -1265,8 +1265,8 @@ ClearSearchBtn.TextSize = 18
 ClearSearchBtn.Font = Enum.Font.GothamBold
 ClearSearchBtn.ZIndex = 53
 ClearSearchBtn.Visible = (SearchInput.Text ~= "")
-RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
-RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
+_VH_RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
+_VH_RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
 local FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
 FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "☆"
@@ -1294,7 +1294,7 @@ local function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
 	local cam = workspace.CurrentCamera
 	if cam then
-		viewportConn = RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			if DropdownContainer and DropdownContainer.Visible then
 				DropdownContainer.Visible = false
 			end
@@ -1315,7 +1315,7 @@ local function BindCamera()
 		end))
 	end
 end
-RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
+_VH_RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
 BindCamera()
 local function RefreshViewportLayout()
 	if isDestroying or not MainPanel or not MainPanel.Parent then return end
@@ -1332,7 +1332,7 @@ local function RefreshViewportLayout()
 end
 local function BindViewportSizeChanged(camera)
 	if not camera then return end
-	RegConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(RefreshViewportLayout))
+	_VH_RegConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(RefreshViewportLayout))
 	RefreshViewportLayout()
 end
 BindViewportSizeChanged(workspace.CurrentCamera)
@@ -1410,16 +1410,16 @@ local function UpdateFilter()
 		if query == "" and shouldShowEmpty == false and EmptyStateMessage.Text == "No scripts matched your search or filters." then EmptyStateMessage.Text = "" end
 	end)
 end
-RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+_VH_RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 	if typingTask then task.cancel(typingTask) end
 	typingTask = task.delay(0.2, function() UpdateFilter() end)
 end))
-RegConn(ClearSearchBtn.Activated:Connect(function()
+_VH_RegConn(ClearSearchBtn.Activated:Connect(function()
 	SearchInput.Text = ""
 	if SearchInput:IsFocused() then SearchInput:ReleaseFocus() end
 end))
-RegConn(FavFilterBtn.MouseButton1Click:Connect(CreateDebounce(0.1, function()
+_VH_RegConn(FavFilterBtn.MouseButton1Click:Connect(_VH_CreateDebounce(0.1, function()
 	if isDestroying then return end
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
@@ -1437,7 +1437,7 @@ for _, opt in ipairs(SortOptions) do
 	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
 	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
 	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 1001
-	RegConn(btn.Activated:Connect(function()
+	_VH_RegConn(btn.Activated:Connect(function()
 		SortMode = opt
 		DropdownContainer.Visible = false
 		for _, child in ipairs(DropdownContainer:GetChildren()) do
@@ -1448,7 +1448,7 @@ for _, opt in ipairs(SortOptions) do
 		UpdateFilter()
 	end))
 end
-RegConn(SortDropdownBtn.Activated:Connect(function()
+_VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 	if DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	else
@@ -1467,7 +1467,7 @@ RegConn(SortDropdownBtn.Activated:Connect(function()
 		DropdownContainer.Visible = true
 	end
 end))
-RegConn(UserInputService.InputBegan:Connect(function(input)
+_VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 		local pos = input.Position
 		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
@@ -1497,12 +1497,12 @@ local function CreateTab(name, index)
 		div.BackgroundColor3 = Theme.Stroke; div.BackgroundTransparency = 0.3
 	end
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
-	RegConn(btn.Activated:Connect(function()
+	_VH_RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
 		currentTab = name; DropdownContainer.Visible = false
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
-		SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
+		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
 		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
@@ -1541,7 +1541,7 @@ local function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.2 - Executor Compatibility, Stability & Code Cleanup", "• Improved overall executor compatibility with safer API detection and graceful fallbacks.\n• Added compiler signature fallbacks for executors that accept loadstring/load with different argument support.\n• Improved compiler diagnostics and clearer handling for executor-side local-register limits.\n• Improved getgenv, GUI-parent, and protection API fallback handling to reduce startup failures.\n• Improved HTTP/request compatibility by normalizing common response-body and status-code fields.\n• Improved handling of missing or unsupported executor APIs without breaking the main UI.\n• Reduced compatibility-sensitive dependencies and simplified cleanup paths.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, configuration, Anti-AFK, catalog, and UI behavior.\n• Improved execution error reporting so compiler and runtime failures are easier to diagnose.\n• Improved startup stability, maintainability, and reliability across supported execution environments.", ChangelogsView)
+CreateParagraph("v2.0.2 - Executor Compatibility, Stability & Code Cleanup", "• Improved overall executor compatibility with safer API detection and graceful fallbacks.\n• Added compiler signature fallbacks for executors that accept loadstring/load with different argument support.\n• Reduced top-level local-register pressure by moving internal helpers out of the main local scope, improving compatibility with executors that enforce a 200-register limit.\n• Improved getgenv, GUI-parent, and protection API fallback handling to reduce startup failures.\n• Improved HTTP/request compatibility by normalizing common response-body and status-code fields.\n• Improved handling of missing or unsupported executor APIs without breaking the main UI.\n• Reduced compatibility-sensitive dependencies and simplified cleanup paths.\n• Improved asynchronous task, connection, tween, and resource cleanup.\n• Preserved existing callbacks, configuration, Anti-AFK, catalog, and UI behavior.\n• Improved execution error reporting so compiler and runtime failures are easier to diagnose.\n• Improved startup stability, maintainability, and reliability across supported execution environments.", ChangelogsView)
 local function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -1609,7 +1609,7 @@ local function ExecuteSandboxed(code, scriptName)
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
-		TrackTask(function()
+		_VH_TrackTask(function()
 			local success, runtimeErr = pcall(chunk)
 			if not success and not isDestroying then
 				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
@@ -1764,7 +1764,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
 	end
 	scriptEntry.UpdateUI()
-	RegEntryConn(starBtn.Activated:Connect(CreateDebounce(0.1, function()
+	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.Favorites[scriptId] then
@@ -1774,7 +1774,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
-	RegEntryConn(autoExecBtn.Activated:Connect(CreateDebounce(0.1, function()
+	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
 		if not IsScriptCompatible(data) then
@@ -1826,7 +1826,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		end
 	end))
 	card.Parent = renderParent
-	CacheInstanceAndDescendants(card)
+	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
 end
@@ -1884,10 +1884,10 @@ PendingTasks.__LoadCatalog = function(force)
 	end
 	local activeBuildFolder = nil
 	local activeNewEntries = {}
-	TrackTask(function()
+	_VH_TrackTask(function()
 		local taskOk, taskErr = xpcall(function()
 			local raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
-			if not IsTaskCurrent(generation) then return end
+			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
@@ -1987,7 +1987,7 @@ PendingTasks.__LoadCatalog = function(force)
 				table.clear(activeNewEntries)
 			end
 			for index, scriptData in ipairs(validEntries) do
-				if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
+				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 				local key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
@@ -2006,7 +2006,7 @@ PendingTasks.__LoadCatalog = function(force)
 				nextByKey[key] = entry
 				nextKeys[key] = true
 			end
-			if not IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
+			if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 			for key, oldEntry in pairs(previousByKey) do
 				if not nextKeys[key] then DestroyEntry(oldEntry) end
 			end
@@ -2025,7 +2025,7 @@ PendingTasks.__LoadCatalog = function(force)
 			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
-				if IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
+				if _VH_IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
 			if not AutoExecuteRanThisSession then
 				AutoExecuteRanThisSession = true
@@ -2039,14 +2039,14 @@ PendingTasks.__LoadCatalog = function(force)
 					end
 				end
 				if #autoQueue > 0 then
-					TrackTask(function()
+					_VH_TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
 						local successList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
-							if not IsTaskCurrent(generation) then return end
+							if not _VH_IsTaskCurrent(generation) then return end
 							local scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
-							if not IsTaskCurrent(generation) then return end
+							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
@@ -2080,14 +2080,14 @@ PendingTasks.__LoadCatalog = function(force)
 	return true
 end
 PendingTasks.__LoadCatalog()
-TrackTask(function()
+_VH_TrackTask(function()
 	while not isDestroying do
 		task.wait(CATALOG_REFRESH_INTERVAL)
 		if isDestroying then break end
 		PendingTasks.__LoadCatalog(false)
 	end
 end)
-TrackTask(function()
+_VH_TrackTask(function()
 	while not isDestroying do
 		task.wait(60)
 		if isDestroying then break end
@@ -2215,16 +2215,16 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 	local state = defaultValue
-	RegConn(toggleBtn.Activated:Connect(CreateDebounce(0.1, function()
+	_VH_RegConn(toggleBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		state = not state
-		SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		_VH_SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
 		})
-		SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		_VH_SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Color = state and Theme.Accent or Theme.Stroke
 		})
-		SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		_VH_SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 		})
 		if type(callback) == "function" then task.spawn(callback, state) end
@@ -2249,7 +2249,7 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	local hoverColor = isDestructive and Color3.fromRGB(55, 25, 25) or Theme.CardHover
 	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
-	RegConn(btn.Activated:Connect(CreateDebounce(0.1, function()
+	_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		if type(callback) == "function" then task.spawn(callback, btn) end
 	end)))
@@ -2273,16 +2273,16 @@ local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
 kbBtnStroke.Color = Theme.Stroke
 KeybindButtonRef = KeybindButton
 ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
-RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
+_VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 	if isDestroying or IsBindingKey then return end
 	IsBindingKey = true
 	KeybindButton.Text = "Press Any..."
 	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
 	if KeybindCaptureConnection then
-		UnregConn(KeybindCaptureConnection)
+		_VH_UnregConn(KeybindCaptureConnection)
 		KeybindCaptureConnection = nil
 	end
-	KeybindCaptureConnection = RegConn(UserInputService.InputBegan:Connect(function(input)
+	KeybindCaptureConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 		if isDestroying then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then
@@ -2290,7 +2290,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
 				if KeybindCaptureConnection then
-					UnregConn(KeybindCaptureConnection)
+					_VH_UnregConn(KeybindCaptureConnection)
 					KeybindCaptureConnection = nil
 				end
 				return
@@ -2304,7 +2304,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
 				BindToggleKey(ToggleKeybind)
 				if KeybindCaptureConnection then
-					UnregConn(KeybindCaptureConnection)
+					_VH_UnregConn(KeybindCaptureConnection)
 					KeybindCaptureConnection = nil
 				end
 			end
@@ -2313,7 +2313,7 @@ RegConn(KeybindButton.Activated:Connect(CreateDebounce(0.1, function()
 			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 			ShowNotification("Keybind mapping canceled.", "Warning")
 			if KeybindCaptureConnection then
-				UnregConn(KeybindCaptureConnection)
+				_VH_UnregConn(KeybindCaptureConnection)
 				KeybindCaptureConnection = nil
 			end
 		end
@@ -2405,8 +2405,8 @@ if IsMobile then
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
-		CacheInstanceAndDescendants(MainPanel)
-		CacheInstanceAndDescendants(FloatingBtn)
+		_VH_CacheInstanceAndDescendants(MainPanel)
+		_VH_CacheInstanceAndDescendants(FloatingBtn)
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
