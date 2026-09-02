@@ -275,7 +275,7 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false }
+	Settings = { AntiAFK = false, UIScale = 1.0 }
 }
 local isSaving = false
 local saveQueued = false
@@ -307,7 +307,10 @@ local function SaveConfiguration()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
+			Settings = {
+				AntiAFK = SavedData.Settings.AntiAFK == true,
+				UIScale = tonumber(SavedData.Settings.UIScale) or 1.0
+			}
 		}
 		for k, v in pairs(SavedData.Favorites) do
 			if v then cleanData.Favorites[tostring(k)] = true end
@@ -645,6 +648,25 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		end))
 	end
 end))
+local UIScalePresets = {
+	{ Name = "Small", Percent = 85, Scale = 0.85 },
+	{ Name = "Medium", Percent = 100, Scale = 1.00 },
+	{ Name = "Large", Percent = 115, Scale = 1.15 },
+	{ Name = "Extra Large", Percent = 130, Scale = 1.30 }
+}
+local function GetUIScalePresetIndex(scale)
+	scale = tonumber(scale) or 1.0
+	local bestIndex, bestDistance = 2, math.huge
+	for index, preset in ipairs(UIScalePresets) do
+		local distance = math.abs(preset.Scale - scale)
+		if distance < bestDistance then
+			bestIndex, bestDistance = index, distance
+		end
+	end
+	return bestIndex
+end
+local ActiveUIScaleIndex = GetUIScalePresetIndex(SavedData.Settings.UIScale)
+SavedData.Settings.UIScale = UIScalePresets[ActiveUIScaleIndex].Scale
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -655,6 +677,8 @@ MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
+local MainUIScale = Instance.new("UIScale", MainPanel)
+MainUIScale.Scale = SavedData.Settings.UIScale
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
 MainModalBtn.Visible = true
@@ -2370,6 +2394,45 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 	end
 end)
+
+local _, scaleRightContainer = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjusts the size of the entire hub interface.", "rbxassetid://10734882241", 3)
+local UIScaleButton = Instance.new("TextButton", scaleRightContainer)
+UIScaleButton.Size = UDim2.new(0, 110, 0, 26)
+UIScaleButton.Position = UDim2.new(1, -110, 0.5, -13)
+UIScaleButton.BackgroundColor3 = Theme.BackgroundMain
+UIScaleButton.BackgroundTransparency = 0.4
+UIScaleButton.TextColor3 = Theme.TextPrimary
+UIScaleButton.Font = Enum.Font.GothamMedium
+UIScaleButton.TextSize = 10
+UIScaleButton.AutoButtonColor = false
+Instance.new("UICorner", UIScaleButton).CornerRadius = UDim.new(0, 6)
+local uiScaleStroke = Instance.new("UIStroke", UIScaleButton)
+uiScaleStroke.Color = Theme.Stroke
+
+local function UpdateUIScaleButton()
+	local preset = UIScalePresets[ActiveUIScaleIndex]
+	UIScaleButton.Text = string.format("%s  •  %d%%", preset.Name, preset.Percent)
+end
+
+local function ApplyUIScale(index, showNotice)
+	if isDestroying then return end
+	ActiveUIScaleIndex = math.clamp(tonumber(index) or 2, 1, #UIScalePresets)
+	local preset = UIScalePresets[ActiveUIScaleIndex]
+	SavedData.Settings.UIScale = preset.Scale
+	MainUIScale.Scale = preset.Scale
+	UpdateUIScaleButton()
+	SaveConfiguration()
+	if showNotice then
+		ShowNotification(string.format("UI scale set to %s (%d%%).", preset.Name, preset.Percent), "Success")
+	end
+end
+
+UpdateUIScaleButton()
+ApplyInteractiveAnimations(UIScaleButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), uiScaleStroke, Theme.Stroke, Theme.Accent)
+_VH_RegConn(UIScaleButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
+	ApplyUIScale((ActiveUIScaleIndex % #UIScalePresets) + 1, true)
+end)))
+
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
