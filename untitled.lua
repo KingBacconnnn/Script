@@ -1258,7 +1258,7 @@ SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Activ
 local filterBtnWidth = IsMobile and 28 or 32
 local gap = 8
 local SearchContainer = Instance.new("Frame", SearchRow)
-SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 2 + gap * 2), 1, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 3 + gap * 3), 1, 0); SearchContainer.Position = UDim2.new(0, filterBtnWidth + gap, 0, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
 SearchContainer.ClipsDescendants = true; SearchContainer.ZIndex = 51
 Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 6)
 local SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Color3.fromRGB(51, 65, 85); SearchStroke.Thickness = 1
@@ -1288,6 +1288,15 @@ FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterBtn.TextSize =
 FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
 local FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
+local RefreshCatalogBtn = Instance.new("TextButton", SearchRow)
+RefreshCatalogBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); RefreshCatalogBtn.Position = UDim2.new(1, -(filterBtnWidth * 3 + gap * 2), 0, 0)
+RefreshCatalogBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); RefreshCatalogBtn.Text = "↻"
+RefreshCatalogBtn.TextColor3 = Theme.TextSecondary; RefreshCatalogBtn.TextSize = 15
+RefreshCatalogBtn.Font = Enum.Font.GothamBold; RefreshCatalogBtn.ZIndex = 51; RefreshCatalogBtn.ClipsDescendants = true
+Instance.new("UICorner", RefreshCatalogBtn).CornerRadius = UDim.new(0, 6)
+local RefreshBtnStroke = Instance.new("UIStroke", RefreshCatalogBtn); RefreshBtnStroke.Color = Theme.Stroke
+ApplyInteractiveAnimations(RefreshCatalogBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, RefreshBtnStroke, Theme.Stroke, Theme.Accent)
+
 local SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
 SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
@@ -1887,6 +1896,10 @@ PendingTasks.__LoadCatalog = function(force)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
+		if RefreshCatalogBtn and RefreshCatalogBtn.Parent then
+			RefreshCatalogBtn.Text = "↻"
+			RefreshCatalogBtn.TextColor3 = Theme.TextSecondary
+		end
 		if CatalogRefreshQueued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
 			CatalogRefreshQueued = false
@@ -2093,6 +2106,22 @@ PendingTasks.__LoadCatalog = function(force)
 	end)
 	return true
 end
+_VH_RegConn(RefreshCatalogBtn.Activated:Connect(function()
+	if isDestroying then return end
+	if dbRefreshing then
+		ShowNotification("Catalog refresh is already in progress.", "Info")
+		return
+	end
+	RefreshCatalogBtn.Text = "⟳"
+	RefreshCatalogBtn.TextColor3 = Theme.Accent
+	PendingTasks.__LoadCatalog(true)
+	task.delay(0.35, function()
+		if RefreshCatalogBtn and RefreshCatalogBtn.Parent and not dbRefreshing then
+			RefreshCatalogBtn.Text = "↻"
+			RefreshCatalogBtn.TextColor3 = Theme.TextSecondary
+		end
+	end)
+end))
 PendingTasks.__LoadCatalog()
 _VH_TrackTask(function()
 	while not isDestroying do
