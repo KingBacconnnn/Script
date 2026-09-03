@@ -277,6 +277,28 @@ local SavedData = {
 	ToggleKeybind = "RightControl",
 	Settings = { AntiAFK = false, UIScale = 1 }
 }
+
+local UI_SCALE_PRESETS = {
+	{ Value = 0.9, Label = "90%  Small" },
+	{ Value = 1.0, Label = "100%  Medium" },
+	{ Value = 1.1, Label = "110%  Large" }
+}
+
+local function NormalizeUIScale(value)
+	value = tonumber(value) or 1
+	local nearest = UI_SCALE_PRESETS[1].Value
+	local nearestDistance = math.abs(value - nearest)
+	for i = 2, #UI_SCALE_PRESETS do
+		local presetValue = UI_SCALE_PRESETS[i].Value
+		local distance = math.abs(value - presetValue)
+		if distance < nearestDistance then
+			nearest = presetValue
+			nearestDistance = distance
+		end
+	end
+	return nearest
+end
+
 local isSaving = false
 local saveQueued = false
 function _VH_SanitizeForJSON(data)
@@ -309,7 +331,7 @@ local function SaveConfiguration()
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = {
 				AntiAFK = SavedData.Settings.AntiAFK == true,
-				UIScale = ({[0.9]=0.9, [1]=1, [1.1]=1.1})[tonumber(SavedData.Settings.UIScale)] or 1
+				UIScale = NormalizeUIScale(SavedData.Settings.UIScale)
 			}
 		}
 		for k, v in pairs(SavedData.Favorites) do
@@ -377,6 +399,7 @@ local function LoadConfiguration()
 	end
 end
 LoadConfiguration()
+SavedData.Settings.UIScale = NormalizeUIScale(SavedData.Settings.UIScale)
 local function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
@@ -660,27 +683,10 @@ MainPanel.Active = true
 MainPanel.ZIndex = 1
 
 local MainUIScale = Instance.new("UIScale", MainPanel)
+MainUIScale.Scale = NormalizeUIScale(SavedData.Settings.UIScale)
+
 local FloatingUIScale = Instance.new("UIScale", FloatingBtn)
-
-local UISCALE_OPTIONS = {
-	Small = 0.9,
-	Medium = 1,
-	Large = 1.1
-}
-
-local function NormalizeUIScale(scale)
-	scale = tonumber(scale) or 1
-	local best = UISCALE_OPTIONS.Medium
-	local bestDistance = math.huge
-	for _, option in pairs(UISCALE_OPTIONS) do
-		local distance = math.abs(scale - option)
-		if distance < bestDistance then
-			best = option
-			bestDistance = distance
-		end
-	end
-	return best
-end
+FloatingUIScale.Scale = MainUIScale.Scale
 
 local function ApplyUIScale(scale, persist)
 	scale = NormalizeUIScale(scale)
@@ -691,8 +697,6 @@ local function ApplyUIScale(scale, persist)
 		SaveConfiguration()
 	end
 end
-
-ApplyUIScale(SavedData.Settings.UIScale, false)
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
@@ -2269,71 +2273,69 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
-local function CreateUIScaleChoiceSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+local function CreateScalePresetSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-	rightContainer.Size = UDim2.new(0, 214, 1, 0)
-	rightContainer.Position = UDim2.new(1, -214, 0, 0)
+	rightContainer.Size = UDim2.new(0, 185, 1, 0)
+	rightContainer.Position = UDim2.new(1, -185, 0, 0)
 
-	local options = {
-		{ Name = "Small", Scale = 0.9 },
-		{ Name = "Medium", Scale = 1 },
-		{ Name = "Large", Scale = 1.1 }
-	}
-
-	local buttonHeight = 30
-	local gap = 5
-	local buttonWidth = math.floor((214 - gap * 2) / 3)
 	local selectedScale = NormalizeUIScale(defaultValue)
 	local buttons = {}
 
-	local function renderAllButtons()
-		for _, item in ipairs(buttons) do
-			local active = item.Option.Scale == selectedScale
-			item.Button.BackgroundColor3 = active and Theme.Accent or Theme.BackgroundMain
-			item.Button.TextColor3 = active and Theme.BackgroundMain or Theme.TextSecondary
-			_VH_SafeTween(item.Stroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Color = active and Theme.Accent or Theme.Stroke
-			})
+	local function renderSelection(scale, persist)
+		selectedScale = NormalizeUIScale(scale)
+
+		for _, data in ipairs(buttons) do
+			local isSelected = math.abs(data.Value - selectedScale) < 0.001
+			data.Button.BackgroundColor3 = isSelected and Theme.Accent or Theme.BackgroundMain
+			data.Button.TextColor3 = isSelected and Theme.TextPrimary or Theme.TextSecondary
+			data.Stroke.Color = isSelected and Theme.Accent or Theme.Stroke
+		end
+
+		if type(callback) == "function" then
+			callback(selectedScale, persist == true)
 		end
 	end
 
-	for index, option in ipairs(options) do
-		local button = Instance.new("TextButton", rightContainer)
-		button.Name = "UIScale_" .. option.Name
-		button.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
-		button.Position = UDim2.new(0, (index - 1) * (buttonWidth + gap), 0.5, -buttonHeight / 2)
-		button.BackgroundColor3 = Theme.BackgroundMain
-		button.BorderSizePixel = 0
-		button.AutoButtonColor = false
-		button.Font = Enum.Font.GothamBold
-		button.TextSize = 10
-		button.TextColor3 = Theme.TextSecondary
-		button.Text = string.format("%s\n%d%%", option.Name, math.floor(option.Scale * 100 + 0.5))
-		button.TextWrapped = true
-		button.ClipsDescendants = true
-		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
+	for index, preset in ipairs(UI_SCALE_PRESETS) do
+		local btn = Instance.new("TextButton", rightContainer)
+		btn.Name = "UIScalePreset_" .. tostring(math.floor(preset.Value * 100 + 0.5))
+		btn.Size = UDim2.new(0, 58, 0, 26)
+		btn.Position = UDim2.new(0, (index - 1) * 62, 0.5, -13)
+		btn.BackgroundColor3 = Theme.BackgroundMain
+		btn.BackgroundTransparency = 0.15
+		btn.BorderSizePixel = 0
+		btn.Text = preset.Label
+		btn.TextColor3 = Theme.TextSecondary
+		btn.Font = Enum.Font.GothamMedium
+		btn.TextSize = 9
+		btn.AutoButtonColor = false
+		btn.ClipsDescendants = true
 
-		local stroke = Instance.new("UIStroke", button)
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+		local stroke = Instance.new("UIStroke", btn)
 		stroke.Color = Theme.Stroke
 		stroke.Thickness = 1
 
-		table.insert(buttons, {
-			Button = button,
-			Stroke = stroke,
-			Option = option
-		})
+		buttons[index] = { Button = btn, Stroke = stroke, Value = preset.Value }
 
-		_VH_RegConn(button.MouseButton1Click:Connect(function()
-			selectedScale = option.Scale
-			renderAllButtons()
-			if type(callback) == "function" then
-				callback(selectedScale, true)
-			end
-		end))
+		local baseColor = btn.BackgroundColor3
+		ApplyInteractiveAnimations(
+			btn,
+			baseColor,
+			Theme.CardHover,
+			Color3.fromRGB(10, 15, 30),
+			stroke,
+			Theme.Stroke,
+			Theme.Accent
+		)
+
+		_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
+			if isDestroying then return end
+			renderSelection(preset.Value, true)
+		end)))
 	end
 
-	renderAllButtons()
-
+	renderSelection(selectedScale, false)
 	return row
 end
 local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
@@ -2465,7 +2467,7 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateUIScaleChoiceSettingInGroup(prefGroup, "UI Scale", "Choose Small, Medium, or Large.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
+CreateScalePresetSettingInGroup(prefGroup, "UI Scale", "Choose a fixed hub size.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
 	ApplyUIScale(val, persist)
 end)
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 3, SavedData.Settings.AntiAFK, function(val)
