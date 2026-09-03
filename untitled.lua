@@ -669,34 +669,34 @@ local TargetUIScale = MainUIScale.Scale
 local ScaleRenderConnection
 
 local function ApplyUIScale(scale, persist)
-\tscale = math.clamp(tonumber(scale) or 1, 0.9, 1.1)
-\tTargetUIScale = scale
+	scale = math.clamp(tonumber(scale) or 1, 0.9, 1.1)
+	TargetUIScale = scale
 
-\tif not ScaleRenderConnection then
-\t\tScaleRenderConnection = RunService.RenderStepped:Connect(function(dt)
-\t\t\tlocal current = MainUIScale.Scale
-\t\t\tlocal target = TargetUIScale
-\t\t\tlocal alpha = 1 - math.exp(-18 * dt)
-\t\t\tlocal nextScale = current + (target - current) * alpha
+	if not ScaleRenderConnection then
+		ScaleRenderConnection = RunService.RenderStepped:Connect(function(dt)
+			local current = MainUIScale.Scale
+			local target = TargetUIScale
+			local alpha = 1 - math.exp(-18 * dt)
+			local nextScale = current + (target - current) * alpha
 
-\t\t\tif math.abs(nextScale - target) < 0.0005 then
-\t\t\t\tnextScale = target
-\t\t\tend
+			if math.abs(nextScale - target) < 0.0005 then
+				nextScale = target
+			end
 
-\t\t\tMainUIScale.Scale = nextScale
-\t\t\tFloatingUIScale.Scale = nextScale
+			MainUIScale.Scale = nextScale
+			FloatingUIScale.Scale = nextScale
 
-\t\t\tif nextScale == target then
-\t\t\t\tScaleRenderConnection:Disconnect()
-\t\t\t\tScaleRenderConnection = nil
-\t\t\tend
-\t\tend)
-\tend
+			if nextScale == target then
+				ScaleRenderConnection:Disconnect()
+				ScaleRenderConnection = nil
+			end
+		end)
+	end
 
-\tif persist then
-\t\tSavedData.Settings.UIScale = scale
-\t\tSaveConfiguration()
-\tend
+	if persist then
+		SavedData.Settings.UIScale = scale
+		SaveConfiguration()
+	end
 end
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
@@ -1155,37 +1155,38 @@ _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	end
 end))
 local LeftHeaderFrame = Instance.new("Frame", HeaderContainer)
-LeftHeaderFrame.Size = UDim2.new(0.6, 0, 1, 0); LeftHeaderFrame.BackgroundTransparency = 1; LeftHeaderFrame.Active = false
+LeftHeaderFrame.Size = UDim2.new(0.58, 0, 1, 0); LeftHeaderFrame.BackgroundTransparency = 1; LeftHeaderFrame.Active = false
 local LHLay = Instance.new("UIListLayout", LeftHeaderFrame)
 LHLay.SortOrder = Enum.SortOrder.LayoutOrder; LHLay.Padding = UDim.new(0, 4); LHLay.VerticalAlignment = Enum.VerticalAlignment.Center
 local TopLeftRow = Instance.new("Frame", LeftHeaderFrame)
-TopLeftRow.Size = UDim2.new(1, 0, 0, 24); TopLeftRow.BackgroundTransparency = 1; TopLeftRow.LayoutOrder = 1
+TopLeftRow.Size = UDim2.new(1, 0, 0, 24); TopLeftRow.BackgroundTransparency = 1; TopLeftRow.ClipsDescendants = true; TopLeftRow.LayoutOrder = 1
 local TLRowLay = Instance.new("UIListLayout", TopLeftRow)
 TLRowLay.FillDirection = Enum.FillDirection.Horizontal; TLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; TLRowLay.Padding = UDim.new(0, 8); TLRowLay.VerticalAlignment = Enum.VerticalAlignment.Center
 local Title = Instance.new("TextLabel", TopLeftRow)
-Title.AutomaticSize = Enum.AutomaticSize.X; Title.Size = UDim2.new(0, 0, 1, 0); Title.BackgroundTransparency = 1
+Title.AutomaticSize = Enum.AutomaticSize.None; Title.Size = UDim2.new(0, 112, 1, 0); Title.BackgroundTransparency = 1
 Title.Text = "Velox Hub"; Title.TextColor3 = Theme.TextPrimary
 Title.Font = Enum.Font.GothamBold; Title.TextSize = IsMobile and 16 or 19; Title.LayoutOrder = 1
 local StatusDot = Instance.new("Frame", TopLeftRow)
 StatusDot.Size = UDim2.new(0, 8, 0, 8); StatusDot.LayoutOrder = 2
 Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
 local StatusText = Instance.new("TextLabel", TopLeftRow)
-StatusText.AutomaticSize = Enum.AutomaticSize.X; StatusText.Size = UDim2.new(0, 0, 1, 0); StatusText.BackgroundTransparency = 1
-StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.LayoutOrder = 3
+StatusText.AutomaticSize = Enum.AutomaticSize.None; StatusText.Size = UDim2.new(0, 62, 1, 0); StatusText.BackgroundTransparency = 1
+StatusText.TextTruncate = Enum.TextTruncate.AtEnd
+StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.Text = ""; StatusText.LayoutOrder = 3
 local BtmLeftRow = Instance.new("Frame", LeftHeaderFrame)
 BtmLeftRow.Size = UDim2.new(1, 0, 0, 14); BtmLeftRow.BackgroundTransparency = 1; BtmLeftRow.LayoutOrder = 2
 local BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
-VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
+VersionLabel.AutomaticSize = Enum.AutomaticSize.None; VersionLabel.Size = UDim2.new(0, 180, 1, 0)
 VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.2 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
-DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
+DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.None; DiagnosticsLabel.Size = UDim2.new(0, 130, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
 DiagnosticsLabel.TextColor3 = Theme.TextSecondary; DiagnosticsLabel.Font = Enum.Font.GothamMedium; DiagnosticsLabel.TextSize = IsMobile and 9 or 11
 DiagnosticsLabel.Text = "FPS: -- | Ping: --ms"; DiagnosticsLabel.LayoutOrder = 2
 local RightHeaderFrame = Instance.new("Frame", HeaderContainer)
-RightHeaderFrame.Size = UDim2.new(0.4, 0, 1, 0); RightHeaderFrame.Position = UDim2.new(1, 0, 0, 0); RightHeaderFrame.AnchorPoint = Vector2.new(1, 0)
+RightHeaderFrame.Size = UDim2.new(0.42, 0, 1, 0); RightHeaderFrame.Position = UDim2.new(1, 0, 0, 0); RightHeaderFrame.AnchorPoint = Vector2.new(1, 0)
 RightHeaderFrame.BackgroundTransparency = 1; RightHeaderFrame.Active = false
 local RHLay = Instance.new("UIListLayout", RightHeaderFrame)
 RHLay.FillDirection = Enum.FillDirection.Horizontal; RHLay.SortOrder = Enum.SortOrder.LayoutOrder; RHLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; RHLay.VerticalAlignment = Enum.VerticalAlignment.Center; RHLay.Padding = UDim.new(0, 8)
@@ -2330,7 +2331,7 @@ local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset
 		local width = math.max(track.AbsoluteSize.X, 1)
 		local alpha = math.clamp((x - track.AbsolutePosition.X) / width, 0, 1)
 		local scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * alpha
-		scale = math.floor(scale * 200 + 0.5) / 200
+		scale = math.floor(scale * 100 + 0.5) / 100
 		renderScale(math.clamp(scale, MIN_SCALE, MAX_SCALE))
 	end
 
