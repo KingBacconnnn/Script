@@ -309,7 +309,7 @@ local function SaveConfiguration()
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = {
 				AntiAFK = SavedData.Settings.AntiAFK == true,
-				UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.9, 1.1)
+				UIScale = ({[0.9]=0.9, [1]=1, [1.1]=1.1})[tonumber(SavedData.Settings.UIScale)] or 1
 			}
 		}
 		for k, v in pairs(SavedData.Favorites) do
@@ -660,44 +660,39 @@ MainPanel.Active = true
 MainPanel.ZIndex = 1
 
 local MainUIScale = Instance.new("UIScale", MainPanel)
-MainUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.9, 1.1)
-
 local FloatingUIScale = Instance.new("UIScale", FloatingBtn)
-FloatingUIScale.Scale = MainUIScale.Scale
 
-local TargetUIScale = MainUIScale.Scale
-local ScaleRenderConnection
+local UISCALE_OPTIONS = {
+	Small = 0.9,
+	Medium = 1,
+	Large = 1.1
+}
+
+local function NormalizeUIScale(scale)
+	scale = tonumber(scale) or 1
+	local best = UISCALE_OPTIONS.Medium
+	local bestDistance = math.huge
+	for _, option in pairs(UISCALE_OPTIONS) do
+		local distance = math.abs(scale - option)
+		if distance < bestDistance then
+			best = option
+			bestDistance = distance
+		end
+	end
+	return best
+end
 
 local function ApplyUIScale(scale, persist)
-	scale = math.clamp(tonumber(scale) or 1, 0.9, 1.1)
-	TargetUIScale = scale
-
-	if not ScaleRenderConnection then
-		ScaleRenderConnection = RunService.RenderStepped:Connect(function(dt)
-			local current = MainUIScale.Scale
-			local target = TargetUIScale
-			local alpha = 1 - math.exp(-18 * dt)
-			local nextScale = current + (target - current) * alpha
-
-			if math.abs(nextScale - target) < 0.0005 then
-				nextScale = target
-			end
-
-			MainUIScale.Scale = nextScale
-			FloatingUIScale.Scale = nextScale
-
-			if nextScale == target then
-				ScaleRenderConnection:Disconnect()
-				ScaleRenderConnection = nil
-			end
-		end)
-	end
-
+	scale = NormalizeUIScale(scale)
+	MainUIScale.Scale = scale
+	FloatingUIScale.Scale = scale
 	if persist then
 		SavedData.Settings.UIScale = scale
 		SaveConfiguration()
 	end
 end
+
+ApplyUIScale(SavedData.Settings.UIScale, false)
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
@@ -1155,38 +1150,37 @@ _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	end
 end))
 local LeftHeaderFrame = Instance.new("Frame", HeaderContainer)
-LeftHeaderFrame.Size = UDim2.new(0.58, 0, 1, 0); LeftHeaderFrame.BackgroundTransparency = 1; LeftHeaderFrame.Active = false
+LeftHeaderFrame.Size = UDim2.new(0.6, 0, 1, 0); LeftHeaderFrame.BackgroundTransparency = 1; LeftHeaderFrame.Active = false
 local LHLay = Instance.new("UIListLayout", LeftHeaderFrame)
 LHLay.SortOrder = Enum.SortOrder.LayoutOrder; LHLay.Padding = UDim.new(0, 4); LHLay.VerticalAlignment = Enum.VerticalAlignment.Center
 local TopLeftRow = Instance.new("Frame", LeftHeaderFrame)
-TopLeftRow.Size = UDim2.new(1, 0, 0, 24); TopLeftRow.BackgroundTransparency = 1; TopLeftRow.ClipsDescendants = true; TopLeftRow.LayoutOrder = 1
+TopLeftRow.Size = UDim2.new(1, 0, 0, 24); TopLeftRow.BackgroundTransparency = 1; TopLeftRow.LayoutOrder = 1
 local TLRowLay = Instance.new("UIListLayout", TopLeftRow)
 TLRowLay.FillDirection = Enum.FillDirection.Horizontal; TLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; TLRowLay.Padding = UDim.new(0, 8); TLRowLay.VerticalAlignment = Enum.VerticalAlignment.Center
 local Title = Instance.new("TextLabel", TopLeftRow)
-Title.AutomaticSize = Enum.AutomaticSize.None; Title.Size = UDim2.new(0, 112, 1, 0); Title.BackgroundTransparency = 1
+Title.AutomaticSize = Enum.AutomaticSize.X; Title.Size = UDim2.new(0, 0, 1, 0); Title.BackgroundTransparency = 1
 Title.Text = "Velox Hub"; Title.TextColor3 = Theme.TextPrimary
 Title.Font = Enum.Font.GothamBold; Title.TextSize = IsMobile and 16 or 19; Title.LayoutOrder = 1
 local StatusDot = Instance.new("Frame", TopLeftRow)
 StatusDot.Size = UDim2.new(0, 8, 0, 8); StatusDot.LayoutOrder = 2
 Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
 local StatusText = Instance.new("TextLabel", TopLeftRow)
-StatusText.AutomaticSize = Enum.AutomaticSize.None; StatusText.Size = UDim2.new(0, 62, 1, 0); StatusText.BackgroundTransparency = 1
-StatusText.TextTruncate = Enum.TextTruncate.AtEnd
-StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.Text = ""; StatusText.LayoutOrder = 3
+StatusText.AutomaticSize = Enum.AutomaticSize.X; StatusText.Size = UDim2.new(0, 0, 1, 0); StatusText.BackgroundTransparency = 1
+StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.LayoutOrder = 3
 local BtmLeftRow = Instance.new("Frame", LeftHeaderFrame)
 BtmLeftRow.Size = UDim2.new(1, 0, 0, 14); BtmLeftRow.BackgroundTransparency = 1; BtmLeftRow.LayoutOrder = 2
 local BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 local VersionLabel = Instance.new("TextLabel", BtmLeftRow)
-VersionLabel.AutomaticSize = Enum.AutomaticSize.None; VersionLabel.Size = UDim2.new(0, 180, 1, 0)
+VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
 VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.2 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 local DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
-DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.None; DiagnosticsLabel.Size = UDim2.new(0, 130, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
+DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
 DiagnosticsLabel.TextColor3 = Theme.TextSecondary; DiagnosticsLabel.Font = Enum.Font.GothamMedium; DiagnosticsLabel.TextSize = IsMobile and 9 or 11
 DiagnosticsLabel.Text = "FPS: -- | Ping: --ms"; DiagnosticsLabel.LayoutOrder = 2
 local RightHeaderFrame = Instance.new("Frame", HeaderContainer)
-RightHeaderFrame.Size = UDim2.new(0.42, 0, 1, 0); RightHeaderFrame.Position = UDim2.new(1, 0, 0, 0); RightHeaderFrame.AnchorPoint = Vector2.new(1, 0)
+RightHeaderFrame.Size = UDim2.new(0.4, 0, 1, 0); RightHeaderFrame.Position = UDim2.new(1, 0, 0, 0); RightHeaderFrame.AnchorPoint = Vector2.new(1, 0)
 RightHeaderFrame.BackgroundTransparency = 1; RightHeaderFrame.Active = false
 local RHLay = Instance.new("UIListLayout", RightHeaderFrame)
 RHLay.FillDirection = Enum.FillDirection.Horizontal; RHLay.SortOrder = Enum.SortOrder.LayoutOrder; RHLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; RHLay.VerticalAlignment = Enum.VerticalAlignment.Center; RHLay.Padding = UDim.new(0, 8)
@@ -2275,101 +2269,70 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
-local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+local function CreateUIScaleChoiceSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-	rightContainer.Size = UDim2.new(0, 145, 1, 0)
-	rightContainer.Position = UDim2.new(1, -145, 0, 0)
+	rightContainer.Size = UDim2.new(0, 214, 1, 0)
+	rightContainer.Position = UDim2.new(1, -214, 0, 0)
 
-	local valueLabel = Instance.new("TextLabel", rightContainer)
-	valueLabel.Size = UDim2.new(1, 0, 0, 14)
-	valueLabel.Position = UDim2.new(0, 0, 0, 6)
-	valueLabel.BackgroundTransparency = 1
-	valueLabel.TextColor3 = Theme.TextSecondary
-	valueLabel.Font = Enum.Font.GothamMedium
-	valueLabel.TextSize = 10
-	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	local options = {
+		{ Name = "Small", Scale = 0.9 },
+		{ Name = "Medium", Scale = 1 },
+		{ Name = "Large", Scale = 1.1 }
+	}
 
-	local track = Instance.new("Frame", rightContainer)
-	track.Size = UDim2.new(1, 0, 0, 6)
-	track.Position = UDim2.new(0, 0, 1, -13)
-	track.BackgroundColor3 = Theme.BackgroundMain
-	track.BorderSizePixel = 0
-	Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+	local buttonHeight = 30
+	local gap = 5
+	local buttonWidth = math.floor((214 - gap * 2) / 3)
+	local selectedScale = NormalizeUIScale(defaultValue)
+	local buttons = {}
 
-	local fill = Instance.new("Frame", track)
-	fill.Size = UDim2.new(0.5, 0, 1, 0)
-	fill.BackgroundColor3 = Theme.Accent
-	fill.BorderSizePixel = 0
-	Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-	local knob = Instance.new("TextButton", track)
-	knob.Size = UDim2.new(0, 16, 0, 16)
-	knob.AnchorPoint = Vector2.new(0.5, 0.5)
-	knob.Position = UDim2.new(0.5, 0, 0.5, 0)
-	knob.BackgroundColor3 = Theme.TextPrimary
-	knob.Text = ""
-	knob.AutoButtonColor = false
-	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-	local knobStroke = Instance.new("UIStroke", knob)
-	knobStroke.Color = Theme.Accent
-	knobStroke.Thickness = 1
-
-	local MIN_SCALE, MAX_SCALE = 0.9, 1.1
-	local dragging = false
-	local latestScale = math.clamp(tonumber(defaultValue) or 1, MIN_SCALE, MAX_SCALE)
-
-	local function renderScale(scale)
-		local alpha = (scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)
-		fill.Size = UDim2.new(alpha, 0, 1, 0)
-		knob.Position = UDim2.new(alpha, 0, 0.5, 0)
-		valueLabel.Text = string.format("UI Scale  %.1f%%", scale * 100)
-		latestScale = scale
-		if type(callback) == "function" then callback(scale, false) end
+	local function renderAllButtons()
+		for _, item in ipairs(buttons) do
+			local active = item.Option.Scale == selectedScale
+			item.Button.BackgroundColor3 = active and Theme.Accent or Theme.BackgroundMain
+			item.Button.TextColor3 = active and Theme.BackgroundMain or Theme.TextSecondary
+			_VH_SafeTween(item.Stroke, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Color = active and Theme.Accent or Theme.Stroke
+			})
+		end
 	end
 
-	local function setScaleFromX(x)
-		local width = math.max(track.AbsoluteSize.X, 1)
-		local alpha = math.clamp((x - track.AbsolutePosition.X) / width, 0, 1)
-		local scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * alpha
-		scale = math.floor(scale * 100 + 0.5) / 100
-		renderScale(math.clamp(scale, MIN_SCALE, MAX_SCALE))
-	end
+	for index, option in ipairs(options) do
+		local button = Instance.new("TextButton", rightContainer)
+		button.Name = "UIScale_" .. option.Name
+		button.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
+		button.Position = UDim2.new(0, (index - 1) * (buttonWidth + gap), 0.5, -buttonHeight / 2)
+		button.BackgroundColor3 = Theme.BackgroundMain
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Font = Enum.Font.GothamBold
+		button.TextSize = 10
+		button.TextColor3 = Theme.TextSecondary
+		button.Text = string.format("%s\n%d%%", option.Name, math.floor(option.Scale * 100 + 0.5))
+		button.TextWrapped = true
+		button.ClipsDescendants = true
+		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
 
-	renderScale(latestScale)
+		local stroke = Instance.new("UIStroke", button)
+		stroke.Color = Theme.Stroke
+		stroke.Thickness = 1
 
-	local function updateFromInput(input)
-		setScaleFromX(input.Position.X)
-	end
+		table.insert(buttons, {
+			Button = button,
+			Stroke = stroke,
+			Option = option
+		})
 
-	_VH_RegConn(knob.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			updateFromInput(input)
-		end
-	end))
-
-	_VH_RegConn(track.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			updateFromInput(input)
-		end
-	end))
-
-	_VH_RegConn(UserInputService.InputChanged:Connect(function(input)
-		if not dragging then return end
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			updateFromInput(input)
-		end
-	end))
-
-	_VH_RegConn(UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if dragging then
-				dragging = false
-				if type(callback) == "function" then callback(latestScale, true) end
+		_VH_RegConn(button.MouseButton1Click:Connect(function()
+			selectedScale = option.Scale
+			renderAllButtons()
+			if type(callback) == "function" then
+				callback(selectedScale, true)
 			end
-		end
-	end))
+		end))
+	end
+
+	renderAllButtons()
 
 	return row
 end
@@ -2502,7 +2465,7 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateScaleSliderSettingInGroup(prefGroup, "UI Scale", "Adjusts the hub size without changing names or text.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
+CreateUIScaleChoiceSettingInGroup(prefGroup, "UI Scale", "Choose Small, Medium, or Large.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
 	ApplyUIScale(val, persist)
 end)
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 3, SavedData.Settings.AntiAFK, function(val)
