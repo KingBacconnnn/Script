@@ -275,30 +275,8 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1 }
+	Settings = { AntiAFK = false, UiScale = 1 }
 }
-
-local UI_SCALE_PRESETS = {
-	{ Value = 0.9, Label = "90%  Small" },
-	{ Value = 1.0, Label = "100%  Medium" },
-	{ Value = 1.1, Label = "110%  Large" }
-}
-
-local function NormalizeUIScale(value)
-	value = tonumber(value) or 1
-	local nearest = UI_SCALE_PRESETS[1].Value
-	local nearestDistance = math.abs(value - nearest)
-	for i = 2, #UI_SCALE_PRESETS do
-		local presetValue = UI_SCALE_PRESETS[i].Value
-		local distance = math.abs(value - presetValue)
-		if distance < nearestDistance then
-			nearest = presetValue
-			nearestDistance = distance
-		end
-	end
-	return nearest
-end
-
 local isSaving = false
 local saveQueued = false
 function _VH_SanitizeForJSON(data)
@@ -329,10 +307,7 @@ local function SaveConfiguration()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = {
-				AntiAFK = SavedData.Settings.AntiAFK == true,
-				UIScale = NormalizeUIScale(SavedData.Settings.UIScale)
-			}
+			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UiScale = tonumber(SavedData.Settings.UiScale) or 1 }
 		}
 		for k, v in pairs(SavedData.Favorites) do
 			if v then cleanData.Favorites[tostring(k)] = true end
@@ -399,7 +374,13 @@ local function LoadConfiguration()
 	end
 end
 LoadConfiguration()
-SavedData.Settings.UIScale = NormalizeUIScale(SavedData.Settings.UIScale)
+-- Normalize the persisted UI scale so older/corrupt config values cannot break the UI.
+local function NormalizeUiScale(value)
+	value = tonumber(value)
+	if value == 0.9 or value == 1 or value == 1.1 then return value end
+	return 1
+end
+SavedData.Settings.UiScale = NormalizeUiScale(SavedData.Settings.UiScale)
 local function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
@@ -682,21 +663,11 @@ MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
 
-local MainUIScale = Instance.new("UIScale", MainPanel)
-MainUIScale.Scale = NormalizeUIScale(SavedData.Settings.UIScale)
-
-local FloatingUIScale = Instance.new("UIScale", FloatingBtn)
-FloatingUIScale.Scale = MainUIScale.Scale
-
-local function ApplyUIScale(scale, persist)
-	scale = NormalizeUIScale(scale)
-	MainUIScale.Scale = scale
-	FloatingUIScale.Scale = scale
-	if persist then
-		SavedData.Settings.UIScale = scale
-		SaveConfiguration()
-	end
-end
+-- UIScale applies proportionally to the entire hub. Existing text strings and names are never modified.
+local MainUIScale = Instance.new("UIScale")
+MainUIScale.Name = "VeloxHub_UIScale"
+MainUIScale.Scale = NormalizeUiScale(SavedData.Settings.UiScale)
+MainUIScale.Parent = MainPanel
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
@@ -2273,71 +2244,6 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
-local function CreateScalePresetSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
-	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-	rightContainer.Size = UDim2.new(0, 185, 1, 0)
-	rightContainer.Position = UDim2.new(1, -185, 0, 0)
-
-	local selectedScale = NormalizeUIScale(defaultValue)
-	local buttons = {}
-
-	local function renderSelection(scale, persist)
-		selectedScale = NormalizeUIScale(scale)
-
-		for _, data in ipairs(buttons) do
-			local isSelected = math.abs(data.Value - selectedScale) < 0.001
-			data.Button.BackgroundColor3 = isSelected and Theme.Accent or Theme.BackgroundMain
-			data.Button.TextColor3 = isSelected and Theme.TextPrimary or Theme.TextSecondary
-			data.Stroke.Color = isSelected and Theme.Accent or Theme.Stroke
-		end
-
-		if type(callback) == "function" then
-			callback(selectedScale, persist == true)
-		end
-	end
-
-	for index, preset in ipairs(UI_SCALE_PRESETS) do
-		local btn = Instance.new("TextButton", rightContainer)
-		btn.Name = "UIScalePreset_" .. tostring(math.floor(preset.Value * 100 + 0.5))
-		btn.Size = UDim2.new(0, 58, 0, 26)
-		btn.Position = UDim2.new(0, (index - 1) * 62, 0.5, -13)
-		btn.BackgroundColor3 = Theme.BackgroundMain
-		btn.BackgroundTransparency = 0.15
-		btn.BorderSizePixel = 0
-		btn.Text = preset.Label
-		btn.TextColor3 = Theme.TextSecondary
-		btn.Font = Enum.Font.GothamMedium
-		btn.TextSize = 9
-		btn.AutoButtonColor = false
-		btn.ClipsDescendants = true
-
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-		local stroke = Instance.new("UIStroke", btn)
-		stroke.Color = Theme.Stroke
-		stroke.Thickness = 1
-
-		buttons[index] = { Button = btn, Stroke = stroke, Value = preset.Value }
-
-		local baseColor = btn.BackgroundColor3
-		ApplyInteractiveAnimations(
-			btn,
-			baseColor,
-			Theme.CardHover,
-			Color3.fromRGB(10, 15, 30),
-			stroke,
-			Theme.Stroke,
-			Theme.Accent
-		)
-
-		_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
-			if isDestroying then return end
-			renderSelection(preset.Value, true)
-		end)))
-	end
-
-	renderSelection(selectedScale, false)
-	return row
-end
 local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	local btn = Instance.new("TextButton", rightContainer)
@@ -2363,6 +2269,74 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	end)))
 	return btn
 end
+local function CreateUiScaleSetting(groupCard, order)
+	local row, rightContainer = CreateSettingRowInGroup(
+		groupCard,
+		"UI Scale",
+		"Adjusts the hub size without changing any existing names or text.",
+		"rbxassetid://10734976445",
+		order
+	)
+
+	local options = { 0.9, 1, 1.1 }
+	local labels = { "90%", "100%", "110%" }
+	local buttonWidth = 32
+	local gap = 4
+	local totalWidth = (buttonWidth * #options) + (gap * (#options - 1))
+
+	local optionHolder = Instance.new("Frame", rightContainer)
+	optionHolder.Size = UDim2.new(0, totalWidth, 0, 26)
+	optionHolder.Position = UDim2.new(1, -totalWidth, 0.5, -13)
+	optionHolder.BackgroundTransparency = 1
+
+	local selected = NormalizeUiScale(SavedData.Settings.UiScale)
+	local buttons = {}
+
+	local function RefreshButtons()
+		for i, btn in ipairs(buttons) do
+			local active = options[i] == selected
+			btn.BackgroundColor3 = active and Theme.Accent or Theme.BackgroundMain
+			btn.BackgroundTransparency = active and 0 or 0.35
+			btn.TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary
+			local stroke = btn:FindFirstChild("ScaleStroke")
+			if stroke then stroke.Color = active and Theme.Accent or Theme.Stroke end
+		end
+	end
+
+	for i, scaleValue in ipairs(options) do
+		local btn = Instance.new("TextButton", optionHolder)
+		btn.Size = UDim2.new(0, buttonWidth, 0, 26)
+		btn.Position = UDim2.new(0, (i - 1) * (buttonWidth + gap), 0, 0)
+		btn.BackgroundColor3 = Theme.BackgroundMain
+		btn.BackgroundTransparency = 0.35
+		btn.Text = labels[i]
+		btn.Font = Enum.Font.GothamMedium
+		btn.TextSize = 9
+		btn.TextColor3 = Theme.TextSecondary
+		btn.AutoButtonColor = false
+		btn.ClipsDescendants = true
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+		local stroke = Instance.new("UIStroke", btn)
+		stroke.Name = "ScaleStroke"
+		stroke.Color = Theme.Stroke
+		stroke.Thickness = 1
+		buttons[i] = btn
+
+		ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), stroke, Theme.Stroke, Theme.Accent)
+		_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
+			if isDestroying then return end
+			selected = scaleValue
+			MainUIScale.Scale = scaleValue
+			SavedData.Settings.UiScale = scaleValue
+			SaveConfiguration()
+			RefreshButtons()
+		end)))
+	end
+
+	RefreshButtons()
+	return row
+end
+
 local function BuildSettings()
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
@@ -2427,6 +2401,7 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		end
 	end))
 end)))
+CreateUiScaleSetting(prefGroup, 2)
 local function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
 	local player = Players.LocalPlayer
@@ -2467,9 +2442,6 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateScalePresetSettingInGroup(prefGroup, "UI Scale", "Choose a fixed hub size.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
-	ApplyUIScale(val, persist)
-end)
 CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 3, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
