@@ -309,7 +309,7 @@ local function SaveConfiguration()
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = {
 				AntiAFK = SavedData.Settings.AntiAFK == true,
-				UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.1)
+				UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.9, 1.1)
 			}
 		}
 		for k, v in pairs(SavedData.Favorites) do
@@ -660,19 +660,43 @@ MainPanel.Active = true
 MainPanel.ZIndex = 1
 
 local MainUIScale = Instance.new("UIScale", MainPanel)
-MainUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.1)
+MainUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.9, 1.1)
 
 local FloatingUIScale = Instance.new("UIScale", FloatingBtn)
 FloatingUIScale.Scale = MainUIScale.Scale
 
+local TargetUIScale = MainUIScale.Scale
+local ScaleRenderConnection
+
 local function ApplyUIScale(scale, persist)
-	scale = math.clamp(tonumber(scale) or 1, 0.8, 1.1)
-	MainUIScale.Scale = scale
-	FloatingUIScale.Scale = scale
-	if persist then
-		SavedData.Settings.UIScale = scale
-		SaveConfiguration()
-	end
+\tscale = math.clamp(tonumber(scale) or 1, 0.9, 1.1)
+\tTargetUIScale = scale
+
+\tif not ScaleRenderConnection then
+\t\tScaleRenderConnection = RunService.RenderStepped:Connect(function(dt)
+\t\t\tlocal current = MainUIScale.Scale
+\t\t\tlocal target = TargetUIScale
+\t\t\tlocal alpha = 1 - math.exp(-18 * dt)
+\t\t\tlocal nextScale = current + (target - current) * alpha
+
+\t\t\tif math.abs(nextScale - target) < 0.0005 then
+\t\t\t\tnextScale = target
+\t\t\tend
+
+\t\t\tMainUIScale.Scale = nextScale
+\t\t\tFloatingUIScale.Scale = nextScale
+
+\t\t\tif nextScale == target then
+\t\t\t\tScaleRenderConnection:Disconnect()
+\t\t\t\tScaleRenderConnection = nil
+\t\t\tend
+\t\tend)
+\tend
+
+\tif persist then
+\t\tSavedData.Settings.UIScale = scale
+\t\tSaveConfiguration()
+\tend
 end
 
 local MainModalBtn = Instance.new("TextButton", MainPanel)
@@ -2289,7 +2313,7 @@ local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset
 	knobStroke.Color = Theme.Accent
 	knobStroke.Thickness = 1
 
-	local MIN_SCALE, MAX_SCALE = 0.8, 1.1
+	local MIN_SCALE, MAX_SCALE = 0.9, 1.1
 	local dragging = false
 	local latestScale = math.clamp(tonumber(defaultValue) or 1, MIN_SCALE, MAX_SCALE)
 
@@ -2297,7 +2321,7 @@ local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset
 		local alpha = (scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)
 		fill.Size = UDim2.new(alpha, 0, 1, 0)
 		knob.Position = UDim2.new(alpha, 0, 0.5, 0)
-		valueLabel.Text = string.format("UI Scale  %d%%", math.floor(scale * 100 + 0.5))
+		valueLabel.Text = string.format("UI Scale  %.1f%%", scale * 100)
 		latestScale = scale
 		if type(callback) == "function" then callback(scale, false) end
 	end
@@ -2306,7 +2330,7 @@ local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset
 		local width = math.max(track.AbsoluteSize.X, 1)
 		local alpha = math.clamp((x - track.AbsolutePosition.X) / width, 0, 1)
 		local scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * alpha
-		scale = math.floor(scale * 100 + 0.5) / 100
+		scale = math.floor(scale * 200 + 0.5) / 200
 		renderScale(math.clamp(scale, MIN_SCALE, MAX_SCALE))
 	end
 
