@@ -275,7 +275,7 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1.0 }
+	Settings = { AntiAFK = false, UIScale = 1 }
 }
 local isSaving = false
 local saveQueued = false
@@ -309,7 +309,7 @@ local function SaveConfiguration()
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = {
 				AntiAFK = SavedData.Settings.AntiAFK == true,
-				UIScale = tonumber(SavedData.Settings.UIScale) or 1.0
+				UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.1)
 			}
 		}
 		for k, v in pairs(SavedData.Favorites) do
@@ -648,25 +648,6 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		end))
 	end
 end))
-local UIScalePresets = {
-	{ Name = "Small", Percent = 85, Scale = 0.85 },
-	{ Name = "Medium", Percent = 100, Scale = 1.00 },
-	{ Name = "Large", Percent = 115, Scale = 1.15 },
-	{ Name = "Extra Large", Percent = 130, Scale = 1.30 }
-}
-local function GetUIScalePresetIndex(scale)
-	scale = tonumber(scale) or 1.0
-	local bestIndex, bestDistance = 2, math.huge
-	for index, preset in ipairs(UIScalePresets) do
-		local distance = math.abs(preset.Scale - scale)
-		if distance < bestDistance then
-			bestIndex, bestDistance = index, distance
-		end
-	end
-	return bestIndex
-end
-local ActiveUIScaleIndex = GetUIScalePresetIndex(SavedData.Settings.UIScale)
-SavedData.Settings.UIScale = UIScalePresets[ActiveUIScaleIndex].Scale
 local MainPanel = Instance.new("Frame", ScreenGui)
 MainPanel.Size = PANEL_SIZE
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -677,8 +658,23 @@ MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
+
 local MainUIScale = Instance.new("UIScale", MainPanel)
-MainUIScale.Scale = SavedData.Settings.UIScale
+MainUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.1)
+
+local FloatingUIScale = Instance.new("UIScale", FloatingBtn)
+FloatingUIScale.Scale = MainUIScale.Scale
+
+local function ApplyUIScale(scale, persist)
+	scale = math.clamp(tonumber(scale) or 1, 0.8, 1.1)
+	MainUIScale.Scale = scale
+	FloatingUIScale.Scale = scale
+	if persist then
+		SavedData.Settings.UIScale = scale
+		SaveConfiguration()
+	end
+end
+
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
 MainModalBtn.Visible = true
@@ -2254,6 +2250,104 @@ local function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, ord
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
+local function CreateScaleSliderSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	rightContainer.Size = UDim2.new(0, 145, 1, 0)
+	rightContainer.Position = UDim2.new(1, -145, 0, 0)
+
+	local valueLabel = Instance.new("TextLabel", rightContainer)
+	valueLabel.Size = UDim2.new(1, 0, 0, 14)
+	valueLabel.Position = UDim2.new(0, 0, 0, 6)
+	valueLabel.BackgroundTransparency = 1
+	valueLabel.TextColor3 = Theme.TextSecondary
+	valueLabel.Font = Enum.Font.GothamMedium
+	valueLabel.TextSize = 10
+	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+	local track = Instance.new("Frame", rightContainer)
+	track.Size = UDim2.new(1, 0, 0, 6)
+	track.Position = UDim2.new(0, 0, 1, -13)
+	track.BackgroundColor3 = Theme.BackgroundMain
+	track.BorderSizePixel = 0
+	Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+	local fill = Instance.new("Frame", track)
+	fill.Size = UDim2.new(0.5, 0, 1, 0)
+	fill.BackgroundColor3 = Theme.Accent
+	fill.BorderSizePixel = 0
+	Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+	local knob = Instance.new("TextButton", track)
+	knob.Size = UDim2.new(0, 16, 0, 16)
+	knob.AnchorPoint = Vector2.new(0.5, 0.5)
+	knob.Position = UDim2.new(0.5, 0, 0.5, 0)
+	knob.BackgroundColor3 = Theme.TextPrimary
+	knob.Text = ""
+	knob.AutoButtonColor = false
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+	local knobStroke = Instance.new("UIStroke", knob)
+	knobStroke.Color = Theme.Accent
+	knobStroke.Thickness = 1
+
+	local MIN_SCALE, MAX_SCALE = 0.8, 1.1
+	local dragging = false
+	local latestScale = math.clamp(tonumber(defaultValue) or 1, MIN_SCALE, MAX_SCALE)
+
+	local function renderScale(scale)
+		local alpha = (scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)
+		fill.Size = UDim2.new(alpha, 0, 1, 0)
+		knob.Position = UDim2.new(alpha, 0, 0.5, 0)
+		valueLabel.Text = string.format("UI Scale  %d%%", math.floor(scale * 100 + 0.5))
+		latestScale = scale
+		if type(callback) == "function" then callback(scale, false) end
+	end
+
+	local function setScaleFromX(x)
+		local width = math.max(track.AbsoluteSize.X, 1)
+		local alpha = math.clamp((x - track.AbsolutePosition.X) / width, 0, 1)
+		local scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * alpha
+		scale = math.floor(scale * 100 + 0.5) / 100
+		renderScale(math.clamp(scale, MIN_SCALE, MAX_SCALE))
+	end
+
+	renderScale(latestScale)
+
+	local function updateFromInput(input)
+		setScaleFromX(input.Position.X)
+	end
+
+	_VH_RegConn(knob.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateFromInput(input)
+		end
+	end))
+
+	_VH_RegConn(track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateFromInput(input)
+		end
+	end))
+
+	_VH_RegConn(UserInputService.InputChanged:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			updateFromInput(input)
+		end
+	end))
+
+	_VH_RegConn(UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging then
+				dragging = false
+				if type(callback) == "function" then callback(latestScale, true) end
+			end
+		end
+	end))
+
+	return row
+end
 local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	local btn = Instance.new("TextButton", rightContainer)
@@ -2383,7 +2477,10 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
+CreateScaleSliderSettingInGroup(prefGroup, "UI Scale", "Adjusts the hub size without changing names or text.", "rbxassetid://10734984079", 2, SavedData.Settings.UIScale, function(val, persist)
+	ApplyUIScale(val, persist)
+end)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 3, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -2394,45 +2491,6 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 	end
 end)
-
-local _, scaleRightContainer = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjusts the size of the entire hub interface.", "rbxassetid://10734882241", 3)
-local UIScaleButton = Instance.new("TextButton", scaleRightContainer)
-UIScaleButton.Size = UDim2.new(0, 110, 0, 26)
-UIScaleButton.Position = UDim2.new(1, -110, 0.5, -13)
-UIScaleButton.BackgroundColor3 = Theme.BackgroundMain
-UIScaleButton.BackgroundTransparency = 0.4
-UIScaleButton.TextColor3 = Theme.TextPrimary
-UIScaleButton.Font = Enum.Font.GothamMedium
-UIScaleButton.TextSize = 10
-UIScaleButton.AutoButtonColor = false
-Instance.new("UICorner", UIScaleButton).CornerRadius = UDim.new(0, 6)
-local uiScaleStroke = Instance.new("UIStroke", UIScaleButton)
-uiScaleStroke.Color = Theme.Stroke
-
-local function UpdateUIScaleButton()
-	local preset = UIScalePresets[ActiveUIScaleIndex]
-	UIScaleButton.Text = string.format("%s  •  %d%%", preset.Name, preset.Percent)
-end
-
-local function ApplyUIScale(index, showNotice)
-	if isDestroying then return end
-	ActiveUIScaleIndex = math.clamp(tonumber(index) or 2, 1, #UIScalePresets)
-	local preset = UIScalePresets[ActiveUIScaleIndex]
-	SavedData.Settings.UIScale = preset.Scale
-	MainUIScale.Scale = preset.Scale
-	UpdateUIScaleButton()
-	SaveConfiguration()
-	if showNotice then
-		ShowNotification(string.format("UI scale set to %s (%d%%).", preset.Name, preset.Percent), "Success")
-	end
-end
-
-UpdateUIScaleButton()
-ApplyInteractiveAnimations(UIScaleButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), uiScaleStroke, Theme.Stroke, Theme.Accent)
-_VH_RegConn(UIScaleButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
-	ApplyUIScale((ActiveUIScaleIndex % #UIScalePresets) + 1, true)
-end)))
-
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
 	AttemptActionWithCooldown(function()
