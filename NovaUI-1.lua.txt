@@ -1,0 +1,1079 @@
+--[[
+	NovaUI — a lightweight, single-file UI library for Roblox
+
+	An original implementation (not copied from WindUI or any other
+	library) covering the same general idea: a window with a sidebar
+	of tabs, and a set of common controls you can drop into each tab.
+
+	Elements included:
+		Window, Tab, Section, Divider, Paragraph,
+		Button, Toggle, Slider, Dropdown, Input, Keybind, Colorpicker,
+		plus NovaUI:Notify(...) for toast notifications.
+
+	Basic usage:
+
+		local NovaUI = loadstring(game:HttpGet("RAW_LINK_TO_THIS_FILE"))()
+
+		local Window = NovaUI:CreateWindow({
+			Title = "My Hub",
+			Size  = UDim2.fromOffset(560, 380),
+		})
+
+		local Tab = Window:CreateTab({ Title = "Main" })
+
+		Tab:CreateButton({
+			Title = "Say Hi",
+			Callback = function() print("hi!") end,
+		})
+
+	This is provided as a starting point — reskin the theme table,
+	add elements, or restructure it however fits your project.
+]]
+
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players          = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local NovaUI = {}
+NovaUI.__index = NovaUI
+
+----------------------------------------------------------------
+-- Themes
+----------------------------------------------------------------
+
+NovaUI.Themes = {
+	Dark = {
+		Background = Color3.fromRGB(22, 22, 26),
+		Sidebar    = Color3.fromRGB(17, 17, 20),
+		Element    = Color3.fromRGB(31, 31, 36),
+		Accent     = Color3.fromRGB(99, 102, 241),
+		Text       = Color3.fromRGB(238, 238, 244),
+		SubText    = Color3.fromRGB(148, 148, 160),
+		Stroke     = Color3.fromRGB(46, 46, 52),
+	},
+	Light = {
+		Background = Color3.fromRGB(246, 246, 250),
+		Sidebar    = Color3.fromRGB(235, 235, 241),
+		Element    = Color3.fromRGB(255, 255, 255),
+		Accent     = Color3.fromRGB(79, 70, 229),
+		Text       = Color3.fromRGB(24, 24, 28),
+		SubText    = Color3.fromRGB(105, 105, 115),
+		Stroke     = Color3.fromRGB(218, 218, 224),
+	},
+}
+
+NovaUI.CurrentTheme = NovaUI.Themes.Dark
+
+function NovaUI:SetTheme(name)
+	if self.Themes[name] then
+		self.CurrentTheme = self.Themes[name]
+	end
+end
+
+function NovaUI:AddTheme(name, theme)
+	self.Themes[name] = theme
+end
+
+----------------------------------------------------------------
+-- Utility
+----------------------------------------------------------------
+
+local function create(class, props, parent)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do
+		inst[k] = v
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+local function corner(inst, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 6)
+	c.Parent = inst
+	return c
+end
+
+local function stroke(inst, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(1, 1, 1)
+	s.Thickness = thickness or 1
+	s.Parent = inst
+	return s
+end
+
+local function tween(inst, props, time)
+	local info = TweenInfo.new(time or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local t = TweenService:Create(inst, info, props)
+	t:Play()
+	return t
+end
+
+local function makeDraggable(handle, target)
+	local dragging, dragInput, dragStart, startPos
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = target.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	handle.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			target.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+----------------------------------------------------------------
+-- Notifications
+----------------------------------------------------------------
+
+local NotifHolder
+
+local function ensureNotifHolder()
+	if NotifHolder and NotifHolder.Parent then
+		return NotifHolder
+	end
+
+	local gui = create("ScreenGui", {
+		Name = "NovaUI_Notifications",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+
+	local ok = pcall(function()
+		gui.Parent = game:GetService("CoreGui")
+	end)
+	if not ok then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	NotifHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -16),
+		Size = UDim2.new(0, 280, 1, -32),
+	}, gui)
+
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, NotifHolder)
+
+	return NotifHolder
+end
+
+function NovaUI:Notify(config)
+	config = config or {}
+	local theme = self.CurrentTheme
+	local holder = ensureNotifHolder()
+
+	local frame = create("Frame", {
+		BackgroundColor3 = theme.Element,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ClipsDescendants = true,
+	}, holder)
+	corner(frame, 8)
+	stroke(frame, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
+	}, frame)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "Notification",
+		TextColor3 = theme.Text,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.Gotham,
+		Text = config.Content or "",
+		TextColor3 = theme.SubText,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
+
+	task.delay(config.Duration or 3, function()
+		if frame and frame.Parent then
+			frame:Destroy()
+		end
+	end)
+end
+
+----------------------------------------------------------------
+-- Window
+----------------------------------------------------------------
+
+local WindowMeta = {}
+WindowMeta.__index = WindowMeta
+
+function NovaUI:CreateWindow(config)
+	config = config or {}
+	local theme = (config.Theme and self.Themes[config.Theme]) or self.CurrentTheme
+	self.CurrentTheme = theme
+
+	local sidebarWidth = config.SidebarWidth or 150
+	local windowSize = config.Size or UDim2.fromOffset(560, 380)
+
+	local gui = create("ScreenGui", {
+		Name = config.Folder or "NovaUI",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	local guiOk = pcall(function()
+		gui.Parent = game:GetService("CoreGui")
+	end)
+	if not guiOk then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	local main = create("Frame", {
+		Size = windowSize,
+		Position = UDim2.new(0.5, -windowSize.X.Offset / 2, 0.5, -windowSize.Y.Offset / 2),
+		BackgroundColor3 = theme.Background,
+		ClipsDescendants = true,
+	}, gui)
+	corner(main, 10)
+	stroke(main, theme.Stroke, 1)
+
+	local topBar = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 42),
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+	}, main)
+	corner(topBar, 10)
+	create("Frame", {
+		Size = UDim2.new(1, 0, 0, 12),
+		Position = UDim2.new(0, 0, 1, -12),
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, topBar)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 16, 0, 0),
+		Size = UDim2.new(1, -100, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "NovaUI",
+		TextColor3 = theme.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, topBar)
+
+	local closeBtn = create("TextButton", {
+		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.new(1, -34, 0.5, -13),
+		BackgroundColor3 = theme.Element,
+		Text = "X",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 12,
+		AutoButtonColor = false,
+	}, topBar)
+	corner(closeBtn, 6)
+
+	local minBtn = create("TextButton", {
+		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.new(1, -66, 0.5, -13),
+		BackgroundColor3 = theme.Element,
+		Text = "_",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 12,
+		AutoButtonColor = false,
+	}, topBar)
+	corner(minBtn, 6)
+
+	makeDraggable(topBar, main)
+
+	local sidebar = create("Frame", {
+		Position = UDim2.new(0, 0, 0, 42),
+		Size = UDim2.new(0, sidebarWidth, 1, -42),
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+	}, main)
+
+	local tabList = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	}, sidebar)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, tabList)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
+	}, tabList)
+
+	local content = create("Frame", {
+		Position = UDim2.new(0, sidebarWidth, 0, 42),
+		Size = UDim2.new(1, -sidebarWidth, 1, -42),
+		BackgroundTransparency = 1,
+	}, main)
+
+	closeBtn.MouseButton1Click:Connect(function()
+		gui:Destroy()
+	end)
+
+	local minimized = false
+	local fullSize = main.Size
+	minBtn.MouseButton1Click:Connect(function()
+		minimized = not minimized
+		if minimized then
+			tween(main, { Size = UDim2.new(fullSize.X.Scale, fullSize.X.Offset, 0, 42) }, 0.25)
+		else
+			tween(main, { Size = fullSize }, 0.25)
+		end
+	end)
+
+	if config.ToggleKey then
+		UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed then return end
+			if input.KeyCode == config.ToggleKey then
+				main.Visible = not main.Visible
+			end
+		end)
+	end
+
+	local window = setmetatable({
+		_theme = theme,
+		_gui = gui,
+		_main = main,
+		_tabList = tabList,
+		_content = content,
+		_tabs = {},
+	}, WindowMeta)
+
+	return window
+end
+
+function WindowMeta:Toggle()
+	self._main.Visible = not self._main.Visible
+end
+
+function WindowMeta:Destroy()
+	self._gui:Destroy()
+end
+
+----------------------------------------------------------------
+-- Tabs
+----------------------------------------------------------------
+
+local TabMeta = {}
+TabMeta.__index = TabMeta
+
+function WindowMeta:CreateTab(config)
+	config = config or {}
+	local theme = self._theme
+
+	local tabButton = create("TextButton", {
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundColor3 = theme.Element,
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, self._tabList)
+	corner(tabButton, 6)
+
+	local tabLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -10, 1, 0),
+		Font = Enum.Font.Gotham,
+		Text = config.Title or "Tab",
+		TextColor3 = theme.SubText,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, tabButton)
+
+	local page = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	}, self._content)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, page)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
+	}, page)
+
+	local tab = setmetatable({
+		_window = self,
+		_page = page,
+		_theme = theme,
+		_button = tabButton,
+		_label = tabLabel,
+	}, TabMeta)
+
+	tabButton.MouseButton1Click:Connect(function()
+		tab:Select()
+	end)
+
+	table.insert(self._tabs, tab)
+	if #self._tabs == 1 then
+		tab:Select()
+	end
+
+	return tab
+end
+
+function TabMeta:Select()
+	local window = self._window
+	for _, t in ipairs(window._tabs) do
+		t._page.Visible = false
+		t._button.BackgroundTransparency = 1
+		t._label.TextColor3 = t._theme.SubText
+	end
+	self._page.Visible = true
+	self._button.BackgroundTransparency = 0
+	self._label.TextColor3 = self._theme.Text
+end
+
+----------------------------------------------------------------
+-- Shared row layout for controls
+----------------------------------------------------------------
+
+local function baseRow(parent, theme, titleText, descText, height)
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, height or 44),
+		BackgroundColor3 = theme.Element,
+	}, parent)
+	corner(row, 8)
+
+	local textHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 0),
+		Size = UDim2.new(0.55, -12, 1, 0),
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = descText and UDim2.new(0, 0, 0, 6) or UDim2.new(0, 0, 0, 0),
+		Size = descText and UDim2.new(1, 0, 0, 16) or UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamMedium,
+		Text = titleText or "",
+		TextColor3 = theme.Text,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, textHolder)
+
+	if descText then
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 0, 0, 22),
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.Gotham,
+			Text = descText,
+			TextColor3 = theme.SubText,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, textHolder)
+	end
+
+	local control = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.new(0.4, 0, 0, 28),
+	}, row)
+
+	return row, control
+end
+
+----------------------------------------------------------------
+-- Button
+----------------------------------------------------------------
+
+function TabMeta:CreateButton(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Accent,
+		Text = config.ButtonText or "Run",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 13,
+		AutoButtonColor = false,
+	}, control)
+	corner(btn, 6)
+
+	btn.MouseButton1Click:Connect(function()
+		tween(btn, { BackgroundTransparency = 0.35 }, 0.08)
+		task.delay(0.1, function()
+			if btn and btn.Parent then
+				tween(btn, { BackgroundTransparency = 0 }, 0.12)
+			end
+		end)
+		if config.Callback then
+			local ok, err = pcall(config.Callback)
+			if not ok then
+				warn("[NovaUI] Button callback error: " .. tostring(err))
+			end
+		end
+	end)
+
+	return {
+		Instance = row,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+----------------------------------------------------------------
+-- Toggle
+----------------------------------------------------------------
+
+function TabMeta:CreateToggle(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local state = config.Value or false
+
+	local switch = create("Frame", {
+		Size = UDim2.fromOffset(40, 22),
+		Position = UDim2.new(1, -40, 0.5, -11),
+		BackgroundColor3 = state and theme.Accent or theme.Stroke,
+	}, control)
+	corner(switch, 11)
+
+	local knob = create("Frame", {
+		Size = UDim2.fromOffset(18, 18),
+		Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+	}, switch)
+	corner(knob, 9)
+
+	local hitBox = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+	}, switch)
+
+	hitBox.MouseButton1Click:Connect(function()
+		state = not state
+		tween(switch, { BackgroundColor3 = state and theme.Accent or theme.Stroke }, 0.15)
+		tween(knob, { Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9) }, 0.15)
+		if config.Callback then
+			local ok, err = pcall(config.Callback, state)
+			if not ok then warn("[NovaUI] Toggle callback error: " .. tostring(err)) end
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v)
+			state = v
+			switch.BackgroundColor3 = state and theme.Accent or theme.Stroke
+			knob.Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+		end,
+		Get = function() return state end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+----------------------------------------------------------------
+-- Slider
+----------------------------------------------------------------
+
+function TabMeta:CreateSlider(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc, 52)
+	control.AnchorPoint = Vector2.new(1, 1)
+	control.Position = UDim2.new(1, -12, 1, -14)
+	control.Size = UDim2.new(0.92, 0, 0, 20)
+
+	local min = config.Min or 0
+	local max = config.Max or 100
+	local step = config.Step or 1
+	local value = config.Default or min
+
+	local track = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 6),
+		Position = UDim2.new(0, 0, 0.5, -3),
+		BackgroundColor3 = theme.Stroke,
+	}, control)
+	corner(track, 3)
+
+	local fill = create("Frame", {
+		Size = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = theme.Accent,
+	}, track)
+	corner(fill, 3)
+
+	local valueLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 0, 0, -18),
+		Size = UDim2.new(0, 60, 0, 14),
+		Font = Enum.Font.Gotham,
+		Text = tostring(value),
+		TextColor3 = theme.SubText,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, control)
+
+	local function apply(raw, fire)
+		raw = math.clamp(raw, min, max)
+		raw = math.floor((raw - min) / step + 0.5) * step + min
+		raw = math.clamp(raw, min, max)
+		value = raw
+		fill.Size = UDim2.new((raw - min) / math.max(max - min, 1e-6), 0, 1, 0)
+		valueLabel.Text = tostring(raw)
+		if fire and config.Callback then
+			local ok, err = pcall(config.Callback, raw)
+			if not ok then warn("[NovaUI] Slider callback error: " .. tostring(err)) end
+		end
+	end
+	apply(value, false)
+
+	local dragging = false
+	local function fromInput(input)
+		local ratio = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
+		apply(min + ratio * (max - min), true)
+	end
+
+	track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			fromInput(input)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			fromInput(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) apply(v, true) end,
+		Get = function() return value end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+----------------------------------------------------------------
+-- Dropdown
+----------------------------------------------------------------
+
+function TabMeta:CreateDropdown(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local values = config.Values or {}
+	local selected = config.Value or values[1]
+
+	local dropBtn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = "",
+		AutoButtonColor = false,
+		ZIndex = 2,
+	}, control)
+	corner(dropBtn, 6)
+	stroke(dropBtn, theme.Stroke, 1)
+
+	local selectedLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 8, 0, 0),
+		Size = UDim2.new(1, -16, 1, 0),
+		Font = Enum.Font.Gotham,
+		Text = tostring(selected or "Select..."),
+		TextColor3 = theme.Text,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 2,
+	}, dropBtn)
+
+	local listFrame = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.new(0, 0, 1, 4),
+		BackgroundColor3 = theme.Background,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 6,
+	}, dropBtn)
+	corner(listFrame, 6)
+	stroke(listFrame, theme.Stroke, 1)
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, listFrame)
+
+	local open = false
+
+	local function rebuild(newValues)
+		values = newValues or values
+		for _, c in ipairs(listFrame:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		for _, val in ipairs(values) do
+			local opt = create("TextButton", {
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundColor3 = theme.Element,
+				BackgroundTransparency = 1,
+				Text = tostring(val),
+				Font = Enum.Font.Gotham,
+				TextColor3 = theme.Text,
+				TextSize = 13,
+				ZIndex = 6,
+			}, listFrame)
+			opt.MouseButton1Click:Connect(function()
+				selected = val
+				selectedLabel.Text = tostring(val)
+				open = false
+				tween(listFrame, { Size = UDim2.new(1, 0, 0, 0) }, 0.15)
+				if config.Callback then pcall(config.Callback, val) end
+			end)
+		end
+	end
+	rebuild(values)
+
+	dropBtn.MouseButton1Click:Connect(function()
+		open = not open
+		if open then
+			listFrame.Visible = true
+			tween(listFrame, { Size = UDim2.new(1, 0, 0, math.min(#values, 5) * 26) }, 0.15)
+		else
+			tween(listFrame, { Size = UDim2.new(1, 0, 0, 0) }, 0.15)
+		end
+	end)
+
+	return {
+		Instance = row,
+		Select = function(_, v) selected = v; selectedLabel.Text = tostring(v) end,
+		Refresh = function(_, newValues) rebuild(newValues) end,
+		Get = function() return selected end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+----------------------------------------------------------------
+-- Input
+----------------------------------------------------------------
+
+function TabMeta:CreateInput(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local box = create("TextBox", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = config.Value or "",
+		PlaceholderText = config.Placeholder or "",
+		Font = Enum.Font.Gotham,
+		TextColor3 = theme.Text,
+		PlaceholderColor3 = theme.SubText,
+		TextSize = 13,
+		ClearTextOnFocus = false,
+	}, control)
+	corner(box, 6)
+	stroke(box, theme.Stroke, 1)
+	create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
+
+	box.FocusLost:Connect(function()
+		if config.Callback then
+			local ok, err = pcall(config.Callback, box.Text)
+			if not ok then warn("[NovaUI] Input callback error: " .. tostring(err)) end
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) box.Text = v end,
+		Get = function() return box.Text end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+----------------------------------------------------------------
+-- Keybind
+----------------------------------------------------------------
+
+function TabMeta:CreateKeybind(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local current = config.Value or "None"
+	local listening = false
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = current,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 13,
+		AutoButtonColor = false,
+	}, control)
+	corner(btn, 6)
+	stroke(btn, theme.Stroke, 1)
+
+	btn.MouseButton1Click:Connect(function()
+		listening = true
+		btn.Text = "..."
+	end)
+
+	local connection = UserInputService.InputBegan:Connect(function(input)
+		if not listening then return end
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			current = input.KeyCode.Name
+			btn.Text = current
+			listening = false
+			if config.Callback then pcall(config.Callback, current) end
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) current = v; btn.Text = v end,
+		Get = function() return current end,
+		Destroy = function()
+			connection:Disconnect()
+			row:Destroy()
+		end,
+	}
+end
+
+----------------------------------------------------------------
+-- Paragraph / label
+----------------------------------------------------------------
+
+function TabMeta:CreateParagraph(config)
+	config = config or {}
+	local theme = self._theme
+
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = theme.Element,
+	}, self._page)
+	corner(row, 8)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "",
+		TextColor3 = theme.Text,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.Gotham,
+		Text = config.Content or "",
+		TextColor3 = theme.SubText,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+
+	return { Instance = row, Destroy = function() row:Destroy() end }
+end
+
+----------------------------------------------------------------
+-- Divider & Section
+----------------------------------------------------------------
+
+function TabMeta:CreateDivider()
+	local line = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = self._theme.Stroke,
+		BorderSizePixel = 0,
+	}, self._page)
+	return { Instance = line, Destroy = function() line:Destroy() end }
+end
+
+function TabMeta:CreateSection(title)
+	local label = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 20),
+		Font = Enum.Font.GothamBold,
+		Text = title or "Section",
+		TextColor3 = self._theme.SubText,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, self._page)
+	return { Instance = label, Destroy = function() label:Destroy() end }
+end
+
+----------------------------------------------------------------
+-- Colorpicker (RGB sliders)
+----------------------------------------------------------------
+
+function TabMeta:CreateColorpicker(config)
+	config = config or {}
+	local theme = self._theme
+	local row, control = baseRow(self._page, theme, config.Title, config.Desc)
+
+	local color = config.Default or Color3.fromRGB(255, 255, 255)
+	local rgb = { color.R * 255, color.G * 255, color.B * 255 }
+
+	local preview = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = color,
+		Text = "",
+		AutoButtonColor = false,
+	}, control)
+	corner(preview, 6)
+	stroke(preview, theme.Stroke, 1)
+
+	local popup = create("Frame", {
+		Size = UDim2.new(0, 180, 0, 116),
+		Position = UDim2.new(1, -180, 1, 6),
+		BackgroundColor3 = theme.Background,
+		Visible = false,
+		ZIndex = 10,
+	}, preview)
+	corner(popup, 8)
+	stroke(popup, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
+	}, popup)
+	create("UIListLayout", { Padding = UDim.new(0, 8) }, popup)
+
+	local function updateColor()
+		color = Color3.fromRGB(
+			math.clamp(rgb[1], 0, 255),
+			math.clamp(rgb[2], 0, 255),
+			math.clamp(rgb[3], 0, 255)
+		)
+		preview.BackgroundColor3 = color
+		if config.Callback then pcall(config.Callback, color) end
+	end
+
+	local function makeChannel(name, index)
+		local holder = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 10,
+		}, popup)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, 16, 1, 0),
+			Text = name,
+			Font = Enum.Font.GothamBold,
+			TextColor3 = theme.Text,
+			TextSize = 12,
+			ZIndex = 10,
+		}, holder)
+		local track = create("Frame", {
+			Position = UDim2.new(0, 20, 0.5, -3),
+			Size = UDim2.new(1, -20, 0, 6),
+			BackgroundColor3 = theme.Stroke,
+			ZIndex = 10,
+		}, holder)
+		corner(track, 3)
+		local fill = create("Frame", {
+			Size = UDim2.new(rgb[index] / 255, 0, 1, 0),
+			BackgroundColor3 = theme.Accent,
+			ZIndex = 10,
+		}, track)
+		corner(fill, 3)
+
+		local dragging = false
+		track.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				dragging = true
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+				local ratio = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+				fill.Size = UDim2.new(ratio, 0, 1, 0)
+				rgb[index] = ratio * 255
+				updateColor()
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				dragging = false
+			end
+		end)
+	end
+
+	makeChannel("R", 1)
+	makeChannel("G", 2)
+	makeChannel("B", 3)
+
+	preview.MouseButton1Click:Connect(function()
+		popup.Visible = not popup.Visible
+	end)
+
+	return {
+		Instance = row,
+		Get = function() return color end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+return NovaUI
