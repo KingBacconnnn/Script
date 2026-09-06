@@ -1,908 +1,2112 @@
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+-- VeloxUI Official
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CollectionService = game:GetService("CollectionService")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players          = game:GetService("Players")
+local Workspace        = game:GetService("Workspace")
+
 local LocalPlayer = Players.LocalPlayer
 
-local Knit = require(ReplicatedStorage.Packages.knit)
+local VeloxUI = {}
+VeloxUI.__index = VeloxUI
 
-local AntiCheatController = Knit.GetController("AntiCheatController")
-if AntiCheatController then
-    pcall(function()
-        AntiCheatController.KnitStart = function() end
-        AntiCheatController.KnitInit = function() end
-    end)
-    pcall(function()
-        local AntiCheatService = Knit.GetService("AntiCheatService")
-        if AntiCheatService then
-            AntiCheatService.IncidentWarning = { Connect = function() return { Disconnect = function() end } end }
-            AntiCheatService.GetPendingWarning = function() return { await = function() return false, nil end } end
-            AntiCheatService.SetCheckState = function() return { await = function() return true, { Success = true } end } end
-            AntiCheatService.GetSettings = function() return { await = function() return true, { Authorized = false } end } end
-        end
-    end)
-    pcall(function()
-        local controllers = Knit.Controllers
-        if controllers then
-            controllers["AntiCheatController"] = nil
-        end
-    end)
-end
-
-local DataService = Knit.GetService("DataService")
-local RelicsService = Knit.GetService("RelicsService")
-local AuraService = Knit.GetService("AuraService")
-local CuttersShopService = Knit.GetService("CuttersShopService")
-local UpgradesService = Knit.GetService("UpgradesService")
-local RebirtService = Knit.GetService("RebirtService")
-
-local RelicsConfig = require(ReplicatedStorage.Shared.Configs.Relics)
-local AurasConfig = require(ReplicatedStorage.Shared.Configs.Auras)
-
-local StartCraftRemote = ReplicatedStorage.Packages._Index["acecateer_knit@1.7.2"].knit.Services.RelicsService.RF.StartCraft
-local ClaimCraftResultRemote = ReplicatedStorage.Packages._Index["acecateer_knit@1.7.2"].knit.Services.RelicsService.RF.ClaimCraftResult
-local SellRemote = ReplicatedStorage.Packages._Index["acecateer_knit@1.7.2"].knit.Services.DataService.RF.SellAllBackpackLoot
-local ClickRequestedRemote = ReplicatedStorage.Packages._Index["acecateer_knit@1.7.2"].knit.Services.StrengthService.RE.ClickRequested
-
-local rarityOrder = {
-    "Genesis", "Infinite", "Exalted", "Singularity", "Omniversal", "Empyrean",
-    "Primordial", "Ascendant", "Cosmic", "Transcendent", "Eternal",
-    "Celestial", "Divine", "Godly", "Secret", "Mythic",
-    "Legendary", "Epic", "Rare", "Uncommon", "Common"
-}
-local allRarities = {
-    "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic",
-    "Secret", "Godly", "Divine", "Celestial", "Eternal",
-    "Transcendent", "Cosmic", "Ascendant", "Primordial",
-    "Empyrean", "Omniversal", "Singularity", "Exalted", "Infinite", "Genesis"
+VeloxUI.Themes = {
+	Dark = {
+		Background = Color3.fromRGB(19, 19, 23),
+		Sidebar    = Color3.fromRGB(15, 15, 18),
+		Element    = Color3.fromRGB(28, 28, 34),
+		Accent     = Color3.fromRGB(114, 105, 240),
+		Text       = Color3.fromRGB(240, 240, 246),
+		SubText    = Color3.fromRGB(146, 146, 160),
+		Stroke     = Color3.fromRGB(42, 42, 50),
+	},
+	Light = {
+		Background = Color3.fromRGB(246, 246, 250),
+		Sidebar    = Color3.fromRGB(235, 235, 241),
+		Element    = Color3.fromRGB(255, 255, 255),
+		Accent     = Color3.fromRGB(90, 80, 229),
+		Text       = Color3.fromRGB(24, 24, 28),
+		SubText    = Color3.fromRGB(105, 105, 115),
+		Stroke     = Color3.fromRGB(218, 218, 224),
+	},
 }
 
-local upgradeDisplayNames = {
-    "Mobility",
-    "Capacity",
-    "Agility",
-    "Range",
-    "Luck",
-    "Magnet",
-    "Walk Speed"
-}
-local displayToInternal = {
-    ["Mobility"] = "Speed",
-    ["Capacity"] = "Carry",
-    ["Agility"] = "Attack Speed",
-    ["Range"] = "Attack Range",
-    ["Luck"] = "CraftChance",
-    ["Magnet"] = "LootPickupRadius",
-    ["Walk Speed"] = "WalkSpeed"
-}
+VeloxUI.CurrentTheme = VeloxUI.Themes.Dark
 
-local relicNames = {}
-local relicIdByName = {}
-local relicCostById = {}
-for _, item in ipairs(RelicsConfig.Items) do
-    local name = item.DisplayName
-    table.insert(relicNames, name)
-    relicIdByName[name] = item.Id
-    local recipe = RelicsConfig.RecipesById[item.Id]
-    relicCostById[item.Id] = recipe and tonumber(recipe.EssenceCost) or math.huge
-end
-table.sort(relicNames)
-
-local auraOrder = AurasConfig.Order or {}
-local auraNames = {}
-for _, name in ipairs(auraOrder) do
-    table.insert(auraNames, name)
-end
-if #auraNames == 0 then
-    for name in pairs(AurasConfig.Items) do
-        table.insert(auraNames, name)
-    end
-    table.sort(auraNames)
+function VeloxUI:SetTheme(name)
+	if self.Themes[name] then
+		self.CurrentTheme = self.Themes[name]
+	end
 end
 
-local selectedRecipes = {}
-local autoCraftEnabled = false
-local autoEquipRelicEnabled = false
-local autoCollectCraftedEnabled = false
-local isCrafting = false
-local Essence = 0
-local isEquippingRelic = false
-
-local autoBuyAuraEnabled = false
-local autoEquipAuraEnabled = false
-local auraState = nil
-local isBusyAura = false
-
-local autoBuyCutterEnabled = false
-local autoEquipCutterEnabled = false
-local cuttersData = {}
-local ownedCutters = {}
-local currentCutter = ""
-local isBuyingCutter = false
-
-local selectedUpgrades = { "Mobility" }
-local autoUpgradesEnabled = false
-local upgradePrices = {
-    ["Speed"] = math.huge,
-    ["Carry"] = math.huge,
-    ["Attack Speed"] = math.huge,
-    ["Attack Range"] = math.huge,
-    ["CraftChance"] = math.huge,
-    ["LootPickupRadius"] = math.huge,
-    ["WalkSpeed"] = math.huge
-}
-local upgradeMaxed = {
-    ["Speed"] = false,
-    ["Carry"] = false,
-    ["Attack Speed"] = false,
-    ["Attack Range"] = false,
-    ["CraftChance"] = false,
-    ["LootPickupRadius"] = false,
-    ["WalkSpeed"] = false
-}
-local money = 0
-
-local autoCollectLootEnabled = false
-local selectedLootRarityMap = { ["Common"] = true }
-local savedLootPos = nil
-local backpackFull = false
-
-local autoRebirthEnabled = false
-local rebirthCooldown = 0
-
-local autoClickEnabled = false
-
-local function getHRP()
-    local character = LocalPlayer.Character
-    if not character then return nil end
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then hrp = character:WaitForChild("HumanoidRootPart", 2) end
-    return hrp
+function VeloxUI:AddTheme(name, theme)
+	self.Themes[name] = theme
 end
 
-local function returnToSavedPosition()
-    if savedLootPos then
-        local hrp = getHRP()
-        if hrp then hrp.CFrame = CFrame.new(savedLootPos) end
-    end
+local function create(class, props, parent)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do
+		inst[k] = v
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
 end
 
-local Window = WindUI:CreateWindow({
-    Title = "[X2] +1 Cut Grass Adventure",
-    Icon = "bot",
-    Author = "You",
-    Folder = "AutoFarmHub",
-    Size = UDim2.fromOffset(580, 480),
-    MinSize = Vector2.new(500, 400),
-    Theme = "Dark"
-})
-
-local TabChangelog = Window:Tab({ Title = "Changelog", Icon = "scroll" })
-local TabRebirth = Window:Tab({ Title = "Rebirth", Icon = "refresh-cw" })
-local TabRelics = Window:Tab({ Title = "Relics", Icon = "hammer" })
-local TabAuras = Window:Tab({ Title = "Auras", Icon = "sparkles" })
-local TabCutters = Window:Tab({ Title = "Cutters", Icon = "scissors" })
-local TabUpgrades = Window:Tab({ Title = "Upgrades", Icon = "trending-up" })
-local TabLoot = Window:Tab({ Title = "Loot", Icon = "gem" })
-local TabStrength = Window:Tab({ Title = "Strength", Icon = "zap" })
-
-TabChangelog:Paragraph({
-    Title = "Changelog",
-    Desc = "v1.1 - Added support for all upgrade types (Luck, Magnet, Walk Speed) in Auto Buy.",
-    Color = "Green"
-})
-
-TabRebirth:Toggle({
-    Title = "Auto Rebirth",
-    Desc = "Automatically rebirths when rebirth is available, with a 3-second cooldown.",
-    Value = false,
-    Callback = function(state)
-        autoRebirthEnabled = state
-        rebirthCooldown = 0
-    end
-})
-
-TabRelics:Dropdown({
-    Title = "Relic Recipes",
-    Desc = "Choose which relics to craft.",
-    Values = relicNames,
-    Value = {},
-    Multi = true,
-    AllowNone = true,
-    Callback = function(selected)
-        selectedRecipes = selected
-    end
-})
-TabRelics:Toggle({
-    Title = "Auto Craft",
-    Desc = "Automatically crafts the selected relics every 0.5 seconds when enough Essence is available.",
-    Value = false,
-    Callback = function(state) autoCraftEnabled = state end
-})
-TabRelics:Toggle({
-    Title = "Auto Equip Best Relic",
-    Desc = "Automatically fills all available relic slots with your best owned relics.",
-    Value = false,
-    Callback = function(state) autoEquipRelicEnabled = state; isEquippingRelic = false end
-})
-TabRelics:Toggle({
-    Title = "Auto Collect Crafted Relic",
-    Desc = "Automatically collects completed relics every 1 second.",
-    Value = false,
-    Callback = function(state) autoCollectCraftedEnabled = state end
-})
-
-TabAuras:Toggle({
-    Title = "Auto Buy Aura",
-    Desc = "Automatically buys the cheapest aura you can afford every 0.5 seconds.",
-    Value = false,
-    Callback = function(state) autoBuyAuraEnabled = state end
-})
-TabAuras:Toggle({
-    Title = "Auto Equip Best Aura",
-    Desc = "Automatically equips your strongest owned aura every 0.1 seconds.",
-    Value = false,
-    Callback = function(state) autoEquipAuraEnabled = state end
-})
-
-TabCutters:Toggle({
-    Title = "Auto Buy Cutter",
-    Desc = "Automatically buys the cheapest cutter you can afford every 0.5 seconds.",
-    Value = false,
-    Callback = function(state) autoBuyCutterEnabled = state end
-})
-TabCutters:Toggle({
-    Title = "Auto Equip Best Cutter",
-    Desc = "Automatically equips your strongest owned cutter every 0.1 seconds.",
-    Value = false,
-    Callback = function(state) autoEquipCutterEnabled = state end
-})
-
-TabUpgrades:Dropdown({
-    Title = "Upgrades",
-    Desc = "Choose which upgrades to purchase.",
-    Values = upgradeDisplayNames,
-    Value = { "Mobility" },
-    Multi = true,
-    AllowNone = true,
-    Callback = function(selected) selectedUpgrades = selected end
-})
-TabUpgrades:Toggle({
-    Title = "Auto Buy",
-    Desc = "Automatically purchases the selected upgrades every 0.1 seconds when affordable.",
-    Value = false,
-    Callback = function(state) autoUpgradesEnabled = state end
-})
-
-TabLoot:Dropdown({
-    Title = "Loot Rarities",
-    Desc = "Choose which loot rarities to collect.",
-    Values = allRarities,
-    Value = { "Common" },
-    Multi = true,
-    AllowNone = true,
-    Callback = function(selected)
-        selectedLootRarityMap = {}
-        for _, r in ipairs(selected) do selectedLootRarityMap[r] = true end
-    end
-})
-TabLoot:Toggle({
-    Title = "Auto Collect",
-    Desc = "Automatically collects selected loot and returns to your saved position when disabled.",
-    Value = false,
-    Callback = function(state)
-        autoCollectLootEnabled = state
-        if state then
-            local hrp = getHRP()
-            if hrp then savedLootPos = hrp.Position end
-        else
-            returnToSavedPosition()
-        end
-    end
-})
-TabLoot:Button({
-    Title = "Sell All Now",
-    Desc = "Instantly sells all collected loot.",
-    Callback = function()
-        pcall(function()
-            SellRemote:InvokeServer()
-            WindUI:Notify({ Title = "Loot", Content = "Sold all loot.", Duration = 2, Icon = "check" })
-        end)
-    end
-})
-
-TabStrength:Toggle({
-    Title = "Auto Gain Strength",
-    Desc = "Automatically performs strength clicks every 0.01 seconds to continuously gain Strength.",
-    Value = false,
-    Callback = function(state) autoClickEnabled = state end
-})
-
-local function refreshEssence()
-    pcall(function()
-        DataService:GetData("Essence"):andThen(function(v) if type(v) == "number" then Essence = v end end):catch(function() end)
-    end)
-    pcall(function()
-        DataService:GetData("GrassEssence"):andThen(function(v) if type(v) == "number" then Essence = v end end):catch(function() end)
-    end)
-end
-pcall(function()
-    DataService.UpdateEssence:Connect(function(v) if type(v) == "number" then Essence = v end end)
-end)
-pcall(function()
-    DataService.UpdateGrassEssence:Connect(function(v) if type(v) == "number" then Essence = v end end)
-end)
-refreshEssence()
-
-local function updateAuraState(state) if type(state) == "table" then auraState = state end end
-local function refreshAuraState()
-    pcall(function()
-        local res = AuraService:GetState()
-        if type(res) == "table" and res.andThen then res:andThen(updateAuraState):catch(function() end)
-        elseif type(res) == "table" then updateAuraState(res) end
-    end)
-end
-if AuraService.StateUpdated then AuraService.StateUpdated:Connect(updateAuraState) end
-
-local function updateCuttersState(state)
-    if type(state) == "table" then
-        if type(state.CuttersData) == "table" then cuttersData = state.CuttersData end
-        if type(state.OwnedCutters) == "table" then ownedCutters = state.OwnedCutters end
-        if type(state.CurrentCutter) == "string" then currentCutter = state.CurrentCutter end
-    end
-end
-local function refreshCuttersState()
-    pcall(function()
-        CuttersShopService:GetShopState():andThen(updateCuttersState):catch(function() end)
-    end)
-end
-if CuttersShopService.ShopInited then
-    CuttersShopService.ShopInited:Connect(function(owned, data, equipped, robux)
-        updateCuttersState({ OwnedCutters = owned, CuttersData = data, CurrentCutter = equipped, CutterRobuxPrices = robux })
-    end)
-end
-if CuttersShopService.ShopUpdated then
-    CuttersShopService.ShopUpdated:Connect(function(owned, equipped)
-        if type(owned) == "table" then ownedCutters = owned end
-        if type(equipped) == "string" then currentCutter = equipped end
-    end)
+local function corner(inst, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 8)
+	c.Parent = inst
+	return c
 end
 
-UpgradesService.SpeedUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["Speed"] = tonumber(cost) or math.huge; upgradeMaxed["Speed"] = max == true end)
-UpgradesService.CarryUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["Carry"] = tonumber(cost) or math.huge; upgradeMaxed["Carry"] = max == true end)
-UpgradesService.AttackSpeedUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["Attack Speed"] = tonumber(cost) or math.huge; upgradeMaxed["Attack Speed"] = max == true end)
-UpgradesService.AttackRangeUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["Attack Range"] = tonumber(cost) or math.huge; upgradeMaxed["Attack Range"] = max == true end)
-UpgradesService.CraftChanceUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["CraftChance"] = tonumber(cost) or math.huge; upgradeMaxed["CraftChance"] = max == true end)
-UpgradesService.LootPickupRadiusUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["LootPickupRadius"] = tonumber(cost) or math.huge; upgradeMaxed["LootPickupRadius"] = max == true end)
-UpgradesService.WalkSpeedUpgradeUpdated:Connect(function(_, _, cost, max) upgradePrices["WalkSpeed"] = tonumber(cost) or math.huge; upgradeMaxed["WalkSpeed"] = max == true end)
-pcall(function()
-    UpgradesService:RequestStateSync():catch(function() end)
-end)
-
-local suffixes = {
-    ["K"] = 3, ["M"] = 6, ["B"] = 9, ["T"] = 12,
-    ["QA"] = 15, ["QI"] = 18, ["SX"] = 21, ["SP"] = 24,
-    ["OC"] = 27, ["NO"] = 30, ["DC"] = 33, ["UD"] = 36,
-    ["DD"] = 39, ["TD"] = 42, ["QT"] = 45, ["QN"] = 48,
-    ["QD"] = 51, ["SD"] = 54, ["OD"] = 57, ["ND"] = 60,
-    ["VG"] = 63
-}
-
-local function parseMoneyString(str)
-    if type(str) == "number" then return str end
-    if type(str) ~= "string" then return nil end
-
-    str = str:gsub(",", "")
-    str = str:gsub("%$", "")
-    str = str:gsub("%s+", "")
-
-    local plain = tonumber(str)
-    if plain then return plain end
-
-    local num, suffix = str:match("^([%d%.]+)([%a]+)$")
-    if num and suffix then
-        local base = tonumber(num)
-        if base then
-            local power = suffixes[string.upper(suffix)]
-            if power then
-                return base * (10 ^ power)
-            end
-        end
-    end
-
-    local sciBase, sciExp = str:match("^([%d%.]+)e%+?(%d+)$")
-    if sciBase and sciExp then
-        local base = tonumber(sciBase)
-        local exp = tonumber(sciExp)
-        if base and exp then
-            return base * (10 ^ exp)
-        end
-    end
-
-    return nil
+local function stroke(inst, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(1, 1, 1)
+	s.Thickness = thickness or 1
+	s.Parent = inst
+	return s
 end
 
-local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
-local moneyStat = leaderstats and leaderstats:FindFirstChild("Money")
-if moneyStat then
-    local function updateMoneyFromStat()
-        local parsed = parseMoneyString(moneyStat.Value)
-        if parsed then
-            money = parsed
-        end
-    end
-    updateMoneyFromStat()
-    moneyStat.Changed:Connect(updateMoneyFromStat)
-else
-    DataService:GetData("Money"):andThen(function(v) if type(v) == "number" then money = v end end):catch(function() end)
-    DataService.UpdateMoney:Connect(function(v) if type(v) == "number" then money = v end end)
+local TWEEN_FAST   = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_NORMAL = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_SLOW   = TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function tween(inst, props, time)
+	local info = TWEEN_NORMAL
+	if time then
+		if time <= 0.12 then
+			info = TWEEN_FAST
+		elseif time >= 0.25 then
+			info = TWEEN_SLOW
+		else
+			info = TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		end
+	end
+	local ok, t = pcall(function()
+		local tw = TweenService:Create(inst, info, props)
+		tw:Play()
+		return tw
+	end)
+	if ok then
+		return t
+	end
 end
 
-local function updateBackpackFull(state)
-    if type(state) == "table" then
-        local current = tonumber(state.BackpackLoad) or tonumber(state.Count) or tonumber(state.SlotCount) or 0
-        local capacity = tonumber(state.Capacity) or 0
-        backpackFull = capacity > 0 and current >= capacity
-    end
-end
-local function refreshBackpackFull()
-    pcall(function()
-        DataService:GetBackpackSlotsState():andThen(updateBackpackFull):catch(function() end)
-    end)
-end
-pcall(function()
-    DataService.BackpackSlotsUpdated:Connect(updateBackpackFull)
-end)
-refreshBackpackFull()
-
-task.spawn(function() while true do refreshEssence(); task.wait(2) end end)
-
-local function craftRelic(relicName)
-    if isCrafting then return end
-    local id = relicIdByName[relicName]
-    if not id then return end
-    local cost = relicCostById[id]
-    if Essence < cost then return end
-    isCrafting = true
-    pcall(function() StartCraftRemote:InvokeServer(id) end)
-    task.wait(0.5)
-    isCrafting = false
-    refreshEssence()
-end
-task.spawn(function()
-    while true do
-        if autoCraftEnabled and not isCrafting then
-            for _, name in ipairs(selectedRecipes) do
-                if autoCraftEnabled and not isCrafting then craftRelic(name) end
-            end
-        end
-        task.wait(0.5)
-    end
-end)
-
-local function getRelicScore(relic)
-    local tier = relic.Tier or 0
-    local buffs = relic.Buffs or {}
-    local score = tier * 1000000
-    for _, v in pairs(buffs) do score = score + (tonumber(v) or 0) end
-    return score
+local function shade(color, delta)
+	local h, s, v = color:ToHSV()
+	v = math.clamp(v + delta, 0, 1)
+	return Color3.fromHSV(h, s, v)
 end
 
-local function autoEquipBestRelic()
-    if not autoEquipRelicEnabled or isEquippingRelic then return end
-    isEquippingRelic = true
-    pcall(function()
-        RelicsService:GetState():andThen(function(state)
-            if type(state) ~= "table" then
-                isEquippingRelic = false
-                return
-            end
-
-            local owned = state.OwnedRelics or {}
-            local equipped = {}
-            if type(state.EquippedRelicIds) == "table" then
-                for _, id in ipairs(state.EquippedRelicIds) do
-                    equipped[tonumber(id)] = true
-                end
-            end
-
-            local ownedList = {}
-            for id in pairs(owned) do
-                local nid = tonumber(id)
-                if nid and RelicsConfig.ItemsById[nid] then
-                    table.insert(ownedList, nid)
-                end
-            end
-            table.sort(ownedList, function(a, b)
-                return getRelicScore(RelicsConfig.ItemsById[a]) > getRelicScore(RelicsConfig.ItemsById[b])
-            end)
-
-            local rebirthLevel = tonumber(LocalPlayer:GetAttribute("RebirthLevel")) or 0
-            local maxSlots = 2
-            if rebirthLevel >= 5 then maxSlots = maxSlots + 1 end
-            if rebirthLevel >= 12 then maxSlots = maxSlots + 1 end
-            if state.RobuxSlotUnlocked == true then maxSlots = maxSlots + 1 end
-
-            local equippedCount = 0
-            for _ in pairs(equipped) do equippedCount = equippedCount + 1 end
-
-            local toEquip = {}
-            for _, id in ipairs(ownedList) do
-                if not equipped[id] then
-                    if equippedCount < maxSlots then
-                        table.insert(toEquip, id)
-                        equippedCount = equippedCount + 1
-                    end
-                end
-            end
-
-            local function equipNext(index)
-                if index > #toEquip then
-                    isEquippingRelic = false
-                    return
-                end
-                RelicsService:EquipRelic(toEquip[index]):andThen(function()
-                    equipNext(index + 1)
-                end):catch(function()
-                    equipNext(index + 1)
-                end)
-            end
-
-            equipNext(1)
-        end):catch(function()
-            isEquippingRelic = false
-        end)
-    end)
-end
-task.spawn(function()
-    while true do
-        autoEquipBestRelic()
-        task.wait(1)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if autoCollectCraftedEnabled then
-            pcall(function() ClaimCraftResultRemote:InvokeServer() end)
-        end
-        task.wait(1)
-    end
-end)
-
-local function isAuraWorldLocked(name)
-    local req = AurasConfig.RequiredWorldByAuraId and AurasConfig.RequiredWorldByAuraId[name]
-    if not req then return false end
-    local highest = tonumber(LocalPlayer:GetAttribute("HighestVisitedWorld")) or 1
-    return highest < math.max(1, tonumber(req))
-end
-local function isAuraOwned(name)
-    if not auraState or not auraState.Items then return false end
-    local item = auraState.Items[name]
-    return item and item.Owned == true
-end
-local function isAuraEquipped(name)
-    if not auraState or not auraState.Items then return false end
-    local item = auraState.Items[name]
-    return item and item.Equipped == true
-end
-local function findCheapestAffordableUnownedAura()
-    local bestName, bestPrice = nil, math.huge
-    for _, auraName in ipairs(auraNames) do
-        if not isAuraOwned(auraName) and not isAuraWorldLocked(auraName) then
-            local price = tonumber(AurasConfig.Items[auraName].Price) or 0
-            if price <= money and price < bestPrice then
-                bestName = auraName
-                bestPrice = price
-            end
-        end
-    end
-    return bestName
-end
-local function findBestOwnedAura()
-    local bestName, bestBoost = nil, -math.huge
-    for auraName, data in pairs(AurasConfig.Items) do
-        if isAuraOwned(auraName) then
-            local boost = tonumber(data.StrengthMultiplier) or 0
-            if boost > bestBoost then
-                bestBoost = boost
-                bestName = auraName
-            end
-        end
-    end
-    return bestName
-end
-local function buyOrToggleAura(auraName)
-    if isBusyAura then return end
-    isBusyAura = true
-    pcall(function()
-        local res = AuraService:BuyOrToggleAura(auraName)
-        if type(res) == "table" and res.andThen then
-            res:andThen(function(state)
-                isBusyAura = false
-                if type(state) == "table" and state.State then
-                    updateAuraState(state.State)
-                else
-                    refreshAuraState()
-                end
-            end):catch(function()
-                isBusyAura = false
-                refreshAuraState()
-            end)
-        else
-            isBusyAura = false
-            refreshAuraState()
-        end
-    end)
-end
-task.spawn(function()
-    while true do
-        if autoBuyAuraEnabled then
-            local name = findCheapestAffordableUnownedAura()
-            if name then buyOrToggleAura(name) end
-        end
-        task.wait(0.5)
-    end
-end)
-task.spawn(function()
-    while true do
-        if autoEquipAuraEnabled then
-            local best = findBestOwnedAura()
-            if best and not isAuraEquipped(best) then buyOrToggleAura(best) end
-        end
-        task.wait(0.1)
-    end
-end)
-
-local function isCutterWorldUnlocked(name)
-    local data = cuttersData[name]
-    if not data then return false end
-    local requiredWorld = tonumber(data.RequiredWorld) or 1
-    local highestWorld = tonumber(LocalPlayer:GetAttribute("HighestVisitedWorld")) or 1
-    return highestWorld >= requiredWorld
-end
-local function findCheapestAffordableUnownedCutter()
-    local bestName, bestPrice = nil, math.huge
-    for name, data in pairs(cuttersData) do
-        if not ownedCutters[name] and isCutterWorldUnlocked(name) then
-            local price = tonumber(data.Price) or 0
-            if price <= money and price < bestPrice then
-                bestName = name
-                bestPrice = price
-            end
-        end
-    end
-    return bestName
-end
-local function findBestOwnedCutter()
-    local bestName, bestDamage = nil, -math.huge
-    for name, data in pairs(cuttersData) do
-        if ownedCutters[name] then
-            local dmg = tonumber(data.DamageMult) or 0
-            if dmg > bestDamage then
-                bestDamage = dmg
-                bestName = name
-            end
-        end
-    end
-    return bestName
-end
-local function buyCutter(name)
-    if isBuyingCutter then return end
-    isBuyingCutter = true
-    pcall(function()
-        CuttersShopService:BuyCutter(name):andThen(function()
-            isBuyingCutter = false
-            refreshCuttersState()
-        end):catch(function()
-            isBuyingCutter = false
-        end)
-    end)
-end
-refreshCuttersState()
-task.spawn(function()
-    while true do
-        if autoBuyCutterEnabled then
-            local name = findCheapestAffordableUnownedCutter()
-            if name then buyCutter(name) end
-        end
-        task.wait(0.5)
-    end
-end)
-task.spawn(function()
-    while true do
-        if autoEquipCutterEnabled then
-            local best = findBestOwnedCutter()
-            if best and best ~= currentCutter then buyCutter(best) end
-        end
-        task.wait(0.1)
-    end
-end)
-
-local function fireUpgrade(internalName)
-    if internalName == "Speed" then
-        UpgradesService.SpeedButtonClicked:Fire()
-    elseif internalName == "Carry" then
-        UpgradesService.CarryButtonClicked:Fire()
-    elseif internalName == "Attack Speed" then
-        UpgradesService.AttackSpeedButtonClicked:Fire()
-    elseif internalName == "Attack Range" then
-        UpgradesService.AttackRangeButtonClicked:Fire()
-    elseif internalName == "CraftChance" then
-        UpgradesService.CraftChanceButtonClicked:Fire()
-    elseif internalName == "LootPickupRadius" then
-        UpgradesService.LootPickupRadiusButtonClicked:Fire()
-    elseif internalName == "WalkSpeed" then
-        UpgradesService.WalkSpeedButtonClicked:Fire()
-    end
+local function safeCall(fn, ...)
+	if not fn then return end
+	local ok, err = pcall(fn, ...)
+	if not ok then
+		warn("[VeloxUI] Callback error: " .. tostring(err))
+	end
+	return ok
 end
 
-task.spawn(function()
-    while true do
-        if autoUpgradesEnabled then
-            for _, displayName in ipairs(selectedUpgrades) do
-                local internal = displayToInternal[displayName]
-                if internal and not upgradeMaxed[internal] and money >= upgradePrices[internal] then
-                    if internal == "CraftChance" or internal == "LootPickupRadius" then
-                        local highestWorld = tonumber(LocalPlayer:GetAttribute("HighestVisitedWorld")) or 1
-                        if highestWorld < 2 then
-                            goto continue
-                        end
-                    end
-                    fireUpgrade(internal)
-                    task.wait(0.1)
-                end
-                ::continue::
-            end
-        end
-        task.wait(0.1)
-    end
-end)
+local function wireButtonFeel(btn, getBase)
+	local function reset()
+		tween(btn, { BackgroundColor3 = getBase() }, 0.12)
+	end
+	btn.MouseEnter:Connect(function()
+		tween(btn, { BackgroundColor3 = shade(getBase(), 0.08) }, 0.12)
+	end)
+	btn.MouseLeave:Connect(reset)
+	btn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			tween(btn, { BackgroundColor3 = shade(getBase(), -0.08) }, 0.08)
+		end
+	end)
+	btn.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			reset()
+		end
+	end)
+end
 
-local function getLootPriority(rarity)
-    for i, r in ipairs(rarityOrder) do
-        if r == rarity then return i end
-    end
-    return #rarityOrder + 1
-end
-local function getLootPosition(loot)
-    if loot:IsA("Model") then
-        return loot:GetPivot().Position
-    elseif loot:IsA("BasePart") then
-        return loot.Position
-    else
-        return loot:GetPivot().Position
-    end
-end
-local function findPrompt(loot)
-    local direct = loot:FindFirstChild("PickupPrompt")
-    if direct and direct:IsA("ProximityPrompt") then return direct end
-    for _, child in ipairs(loot:GetDescendants()) do
-        if child.Name == "PickupPrompt" and child:IsA("ProximityPrompt") then return child end
-    end
-    return nil
-end
-local function triggerPrompt(prompt)
-    if fireproximityprompt then
-        fireproximityprompt(prompt)
-    elseif prompt.InputHoldBegin then
-        prompt:InputHoldBegin()
-        task.wait(0.1)
-        prompt:InputHoldEnd()
-    else
-        pcall(function()
-            game:GetService("ProximityPromptService"):Prompt(prompt)
-        end)
-    end
-end
-local function isLootValid(loot)
-    return loot and loot.Parent and CollectionService:HasTag(loot, "SpawnedLoot")
-end
-local function getBestLoot()
-    local lootList = {}
-    for _, loot in ipairs(CollectionService:GetTagged("SpawnedLoot")) do
-        if loot and loot.Parent then
-            local rarity = loot:GetAttribute("LootRarity")
-            if rarity and selectedLootRarityMap[rarity] then
-                table.insert(lootList, loot)
-            end
-        end
-    end
-    if #lootList == 0 then return nil end
-    table.sort(lootList, function(a, b)
-        local pa = getLootPriority(a:GetAttribute("LootRarity"))
-        local pb = getLootPriority(b:GetAttribute("LootRarity"))
-        if pa ~= pb then return pa < pb end
-        local hrp = getHRP()
-        if hrp then
-            return (getLootPosition(a) - hrp.Position).Magnitude < (getLootPosition(b) - hrp.Position).Magnitude
-        end
-        return false
-    end)
-    return lootList[1]
-end
-task.spawn(function()
-    while true do
-        if autoCollectLootEnabled then
-            refreshBackpackFull()
-            if backpackFull then
-                returnToSavedPosition()
-                while autoCollectLootEnabled and backpackFull do
-                    task.wait(1)
-                    refreshBackpackFull()
-                end
-                if not autoCollectLootEnabled then break end
-            end
-            local target = getBestLoot()
-            if target then
-                while target and isLootValid(target) and autoCollectLootEnabled do
-                    local better = getBestLoot()
-                    if better and better ~= target and getLootPriority(better:GetAttribute("LootRarity")) < getLootPriority(target:GetAttribute("LootRarity")) then
-                        target = better
-                    end
-                    if backpackFull then
-                        returnToSavedPosition()
-                        while autoCollectLootEnabled and backpackFull do
-                            task.wait(1)
-                            refreshBackpackFull()
-                        end
-                        if not autoCollectLootEnabled then break end
-                        target = getBestLoot()
-                        if not target then break end
-                    end
-                    local pos = getLootPosition(target)
-                    local hrp = getHRP()
-                    if not hrp then
-                        task.wait(0.2)
-                        break
-                    end
-                    hrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
-                    task.wait(0.2)
-                    local prompt = findPrompt(target)
-                    if prompt then triggerPrompt(prompt) end
-                    task.wait(0.2)
-                    if not isLootValid(target) then break end
-                end
-            else
-                task.wait(0.2)
-            end
-        else
-            task.wait(0.2)
-        end
-    end
-end)
+local Viewport = {}
+do
+	local listeners = {}
 
-task.spawn(function()
-    while true do
-        if autoClickEnabled then
-            pcall(function()
-                ClickRequestedRemote:FireServer()
-            end)
-            task.wait(0.01)
-        else
-            task.wait(0.1)
-        end
-    end
-end)
+	local function getCamera()
+		return Workspace.CurrentCamera
+	end
 
-task.spawn(function()
-    while true do
-        if autoRebirthEnabled then
-            if rebirthCooldown > 0 then
-                rebirthCooldown = rebirthCooldown - 0.1
-                task.wait(0.1)
-                continue
-            end
-            pcall(function()
-                RebirtService:GetState():andThen(function(state)
-                    if type(state) == "table" and state.CanRebirth == true and state.IsMaxRebirth ~= true then
-                        RebirtService.RebirthButtonClicked:Fire()
-                        rebirthCooldown = 3
-                    end
-                end):catch(function() end)
-            end)
-        end
-        task.wait(0.1)
-    end
-end)
+	function Viewport.Get()
+		local cam = getCamera()
+		if cam then
+			return cam.ViewportSize
+		end
+		return Vector2.new(1280, 720)
+	end
+
+	function Viewport.IsCompact()
+		local size = Viewport.Get()
+		local touchOnly = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+		return touchOnly or size.X < 650
+	end
+
+	local function fire()
+		for _, fn in ipairs(listeners) do
+			pcall(fn)
+		end
+	end
+
+	function Viewport.OnChange(fn)
+		table.insert(listeners, fn)
+		return function()
+			local idx = table.find(listeners, fn)
+			if idx then
+				table.remove(listeners, idx)
+			end
+		end
+	end
+
+	local function hook(cam)
+		if cam then
+			cam:GetPropertyChangedSignal("ViewportSize"):Connect(fire)
+		end
+	end
+
+	hook(getCamera())
+	Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		hook(getCamera())
+		fire()
+	end)
+end
+
+local InputBus = {}
+do
+	local captureCallback
+	local toggleBindings = {}
+
+	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return
+		end
+
+		if captureCallback then
+			local cb = captureCallback
+			captureCallback = nil
+			cb(input.KeyCode)
+			return
+		end
+
+		if gameProcessed then
+			return
+		end
+
+		for _, binding in ipairs(toggleBindings) do
+			if binding.keycode == input.KeyCode then
+				safeCall(binding.fn)
+			end
+		end
+	end)
+
+	function InputBus.CaptureNextKey(callback)
+		captureCallback = callback
+	end
+
+	function InputBus.CancelCapture(callback)
+		if captureCallback == callback then
+			captureCallback = nil
+		end
+	end
+
+	function InputBus.RegisterToggleKey(keycode, fn)
+		local entry = { keycode = keycode, fn = fn }
+		table.insert(toggleBindings, entry)
+		return function()
+			local idx = table.find(toggleBindings, entry)
+			if idx then
+				table.remove(toggleBindings, idx)
+			end
+		end
+	end
+end
+
+local DragBus = {}
+do
+	local activeMove, activeEnd
+
+	UserInputService.InputChanged:Connect(function(input)
+		if activeMove and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			activeMove(input)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if activeEnd and (input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			local fn = activeEnd
+			activeMove, activeEnd = nil, nil
+			fn(input)
+		end
+	end)
+
+	function DragBus.Begin(onMove, onEnd)
+		activeMove = onMove
+		activeEnd = onEnd or function() end
+	end
+
+	function DragBus.Cancel()
+		activeMove, activeEnd = nil, nil
+	end
+end
+
+local function makeDraggable(handle, target)
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			local startPos = target.Position
+			local startInput = input.Position
+			DragBus.Begin(function(moveInput)
+				local delta = moveInput.Position - startInput
+				target.Position = UDim2.new(
+					startPos.X.Scale, startPos.X.Offset + delta.X,
+					startPos.Y.Scale, startPos.Y.Offset + delta.Y
+				)
+			end)
+		end
+	end)
+end
+
+local NotifHolder
+
+local function ensureNotifHolder()
+	if NotifHolder and NotifHolder.Parent then
+		return NotifHolder
+	end
+
+	local gui = create("ScreenGui", {
+		Name = "VeloxUI_Notifications",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+
+	local ok = pcall(function()
+		gui.Parent = game:GetService("CoreGui")
+	end)
+	if not ok then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	local function holderSize()
+		local vp = Viewport.Get()
+		return UDim2.new(0, math.min(300, vp.X - 32), 1, -32)
+	end
+
+	NotifHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -16),
+		Size = holderSize(),
+	}, gui)
+
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, NotifHolder)
+
+	Viewport.OnChange(function()
+		if NotifHolder and NotifHolder.Parent then
+			NotifHolder.Size = holderSize()
+		end
+	end)
+
+	return NotifHolder
+end
+
+function VeloxUI:Notify(config)
+	config = config or {}
+	local theme = self.CurrentTheme
+	local holder = ensureNotifHolder()
+
+	local frame = create("Frame", {
+		BackgroundColor3 = theme.Element,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ClipsDescendants = true,
+	}, holder)
+	corner(frame, 10)
+	stroke(frame, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
+	}, frame)
+
+	local accentBar = create("Frame", {
+		Size = UDim2.new(0, 3, 1, -12),
+		Position = UDim2.new(0, 0, 0, 6),
+		BackgroundColor3 = theme.Accent,
+		BackgroundTransparency = 1,
+	}, frame)
+	corner(accentBar, 2)
+
+	local title = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 8, 0, 0),
+		Size = UDim2.new(1, -8, 0, 18),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "Notification",
+		TextColor3 = theme.Text,
+		TextTransparency = 1,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
+
+	local content = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 8, 0, 20),
+		Size = UDim2.new(1, -8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.Gotham,
+		Text = config.Content or "",
+		TextColor3 = theme.SubText,
+		TextTransparency = 1,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
+
+	tween(frame, { BackgroundTransparency = 0 }, 0.18)
+	tween(accentBar, { BackgroundTransparency = 0 }, 0.18)
+	tween(title, { TextTransparency = 0 }, 0.18)
+	tween(content, { TextTransparency = 0 }, 0.18)
+
+	task.delay(config.Duration or 3, function()
+		if not (frame and frame.Parent) then return end
+		tween(frame, { BackgroundTransparency = 1 }, 0.2)
+		tween(accentBar, { BackgroundTransparency = 1 }, 0.2)
+		tween(title, { TextTransparency = 1 }, 0.2)
+		local hideTween = tween(content, { TextTransparency = 1 }, 0.2)
+		if hideTween then
+			hideTween.Completed:Connect(function()
+				if frame and frame.Parent then
+					frame:Destroy()
+				end
+			end)
+		elseif frame and frame.Parent then
+			frame:Destroy()
+		end
+	end)
+end
+
+local function buildMetrics(compact)
+	if compact then
+		return {
+			Compact = true,
+			RowHeight = 54,
+			RowHeightTall = 64,
+			FontTitle = 15,
+			FontDesc = 13,
+			ControlWidth = 0.46,
+			Radius = 10,
+			SwitchSize = Vector2.new(46, 26),
+			TopBarHeight = 58,
+			SidebarWidth = 200,
+		}
+	else
+		return {
+			Compact = false,
+			RowHeight = 44,
+			RowHeightTall = 52,
+			FontTitle = 14,
+			FontDesc = 12,
+			ControlWidth = 0.4,
+			Radius = 8,
+			SwitchSize = Vector2.new(40, 22),
+			TopBarHeight = 54,
+			SidebarWidth = 168,
+		}
+	end
+end
+
+local WindowMeta = {}
+WindowMeta.__index = WindowMeta
+
+local function defaultWindowSize(compact)
+	local vp = Viewport.Get()
+	if compact then
+		local w = math.clamp(vp.X - 24, 220, 460)
+		local h = math.clamp(vp.Y - 80, 200, 640)
+		return UDim2.fromOffset(math.floor(w), math.floor(h))
+	else
+		local w = math.clamp(vp.X * 0.55, 560, 760)
+		local h = math.clamp(vp.Y * 0.68, 420, 640)
+		return UDim2.fromOffset(math.floor(w), math.floor(h))
+	end
+end
+
+function VeloxUI:CreateWindow(config)
+	config = config or {}
+	local theme = (config.Theme and self.Themes[config.Theme]) or self.CurrentTheme
+	self.CurrentTheme = theme
+
+	local compact = Viewport.IsCompact()
+	local metrics = buildMetrics(compact)
+	local usesCustomSize = config.Size ~= nil
+	local sidebarWidth = config.SidebarWidth or metrics.SidebarWidth
+	local topBarHeight = metrics.TopBarHeight
+	local footerHeight = config.Footer and (metrics.Compact and 36 or 30) or 0
+
+	local gui = create("ScreenGui", {
+		Name = config.Folder or "VeloxUI",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	local guiOk = pcall(function()
+		gui.Parent = game:GetService("CoreGui")
+	end)
+	if not guiOk then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	local windowSize = usesCustomSize and config.Size or defaultWindowSize(compact)
+
+	local function centeredPosition(size)
+		local vp = Viewport.Get()
+		local x = math.max(math.floor((vp.X - size.X.Offset) / 2), 0)
+		local y = math.max(math.floor((vp.Y - size.Y.Offset) / 2), 0)
+		return UDim2.fromOffset(x, y)
+	end
+
+	local main = create("Frame", {
+		Size = windowSize,
+		Position = centeredPosition(windowSize),
+		BackgroundColor3 = theme.Background,
+		ClipsDescendants = true,
+	}, gui)
+	corner(main, metrics.Radius + 2)
+	stroke(main, theme.Stroke, 1)
+
+	local topBar = create("Frame", {
+		Size = UDim2.new(1, 0, 0, topBarHeight),
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+	}, main)
+	corner(topBar, metrics.Radius + 2)
+	create("Frame", {
+		Size = UDim2.new(1, 0, 0, metrics.Radius + 2),
+		Position = UDim2.new(0, 0, 1, -(metrics.Radius + 2)),
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+	}, topBar)
+
+	local hamburgerSize = topBarHeight - 24
+	local hamburger = create("TextButton", {
+		Size = UDim2.fromOffset(hamburgerSize, hamburgerSize),
+		Position = UDim2.new(0, 10, 0.5, -hamburgerSize / 2),
+		BackgroundColor3 = theme.Element,
+		Text = "=",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 16,
+		AutoButtonColor = false,
+		Visible = false,
+	}, topBar)
+	corner(hamburger, 8)
+	wireButtonFeel(hamburger, function() return theme.Element end)
+
+	local leftInset = compact and (10 + hamburgerSize + 10) or 16
+
+	local logo = create("Frame", {
+		Position = UDim2.new(0, leftInset, 0.5, -17),
+		Size = UDim2.fromOffset(34, 34),
+		BackgroundColor3 = theme.Accent,
+	}, topBar)
+	corner(logo, 10)
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = config.Icon or "V",
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 18,
+	}, logo)
+
+	local textX = leftInset + 44
+	local rightInset = 116
+
+	local titleRow = create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, textX, 0, config.SubTitle and 9 or (topBarHeight - 20) / 2),
+		Size = UDim2.new(1, -(textX + rightInset), 0, 20),
+	}, topBar)
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, titleRow)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "VeloxUI",
+		TextColor3 = theme.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, titleRow)
+
+	if config.Version then
+		local badge = create("Frame", {
+			Size = UDim2.new(0, 0, 0, 18),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = theme.Background,
+		}, titleRow)
+		corner(badge, 5)
+		create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, badge)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Font = Enum.Font.GothamBold,
+			Text = config.Version,
+			TextColor3 = theme.SubText,
+			TextSize = 10,
+		}, badge)
+	end
+
+	if config.SubTitle then
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, textX, 0, 29),
+			Size = UDim2.new(1, -(textX + rightInset), 0, 16),
+			Font = Enum.Font.Gotham,
+			Text = config.SubTitle,
+			TextColor3 = theme.SubText,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, topBar)
+	end
+
+	local closeBtn = create("TextButton", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -36, 0.5, -14),
+		BackgroundColor3 = theme.Element,
+		Text = "X",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 12,
+		AutoButtonColor = false,
+	}, topBar)
+	corner(closeBtn, 6)
+	wireButtonFeel(closeBtn, function() return theme.Element end)
+
+	local maxBtn = create("TextButton", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -70, 0.5, -14),
+		BackgroundColor3 = theme.Element,
+		Text = "[]",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 10,
+		AutoButtonColor = false,
+	}, topBar)
+	corner(maxBtn, 6)
+	wireButtonFeel(maxBtn, function() return theme.Element end)
+
+	local minBtn = create("TextButton", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -104, 0.5, -14),
+		BackgroundColor3 = theme.Element,
+		Text = "_",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.Text,
+		TextSize = 14,
+		AutoButtonColor = false,
+	}, topBar)
+	corner(minBtn, 6)
+	wireButtonFeel(minBtn, function() return theme.Element end)
+
+	makeDraggable(topBar, main)
+
+	local sidebar = create("Frame", {
+		BackgroundColor3 = theme.Sidebar,
+		BorderSizePixel = 0,
+	}, main)
+
+	local backdrop = create("TextButton", {
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+		Visible = false,
+		ZIndex = 15,
+	}, main)
+
+	local tabList = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, config.SidebarFooter and -78 or 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 20,
+	}, sidebar)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, tabList)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
+	}, tabList)
+
+	if config.SidebarFooter then
+		local sf = config.SidebarFooter
+		local card = create("Frame", {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 8, 1, -8),
+			Size = UDim2.new(1, -16, 0, 66),
+			BackgroundColor3 = theme.Element,
+		}, sidebar)
+		corner(card, metrics.Radius)
+		create("UIPadding", {
+			PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 10),
+		}, card)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 18),
+			Font = Enum.Font.GothamBold,
+			Text = sf.Title or "",
+			TextColor3 = theme.Text,
+			TextSize = metrics.FontDesc + 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, card)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 0, 0, 18),
+			Size = UDim2.new(1, 0, 0, 14),
+			Font = Enum.Font.Gotham,
+			Text = sf.SubTitle or "",
+			TextColor3 = theme.SubText,
+			TextSize = metrics.FontDesc - 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, card)
+		local bar = create("Frame", {
+			Position = UDim2.new(0, 0, 1, -12),
+			Size = UDim2.new(0.4, 0, 0, 3),
+			BackgroundColor3 = theme.Accent,
+		}, card)
+		corner(bar, 2)
+	end
+
+	local content = create("Frame", {
+		BackgroundTransparency = 1,
+	}, main)
+
+	if footerHeight > 0 then
+		local footer = create("Frame", {
+			Size = UDim2.new(1, 0, 0, footerHeight),
+			Position = UDim2.new(0, 0, 1, -footerHeight),
+			BackgroundColor3 = theme.Sidebar,
+			BorderSizePixel = 0,
+		}, main)
+		local leftText = table.concat(config.Footer.Left or {}, "   •   ")
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 14, 0, 0),
+			Size = UDim2.new(0.65, 0, 1, 0),
+			Font = Enum.Font.Gotham,
+			Text = leftText,
+			TextColor3 = theme.SubText,
+			TextSize = metrics.FontDesc - 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, footer)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.new(0.35, 0, 1, 0),
+			Font = Enum.Font.GothamBold,
+			Text = config.Footer.Right or "",
+			TextColor3 = theme.Accent,
+			TextSize = metrics.FontDesc - 1,
+			TextXAlignment = Enum.TextXAlignment.Right,
+		}, footer)
+	end
+
+	local overlay = create("Frame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 50,
+	}, gui)
+
+	local popupCatcher = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+		Visible = false,
+		ZIndex = 52,
+	}, overlay)
+
+	local activePopup = nil
+
+	local function closeActivePopup()
+		if activePopup then
+			activePopup.Visible = false
+			activePopup = nil
+		end
+		popupCatcher.Visible = false
+	end
+
+	local function openPopup(popupFrame, anchor, width, height)
+		if activePopup and activePopup ~= popupFrame then
+			activePopup.Visible = false
+		end
+		local vp = Viewport.Get()
+		local anchorPos = anchor.AbsolutePosition
+		local anchorSize = anchor.AbsoluteSize
+		local x = anchorPos.X
+		local y = anchorPos.Y + anchorSize.Y + 4
+		if x + width > vp.X then
+			x = math.max(vp.X - width - 8, 0)
+		end
+		if y + height > vp.Y then
+			y = anchorPos.Y - height - 4
+			if y < 0 then
+				y = math.max(vp.Y - height - 8, 0)
+			end
+		end
+		popupFrame.Position = UDim2.fromOffset(x, y)
+		popupFrame.Visible = true
+		popupCatcher.Visible = true
+		activePopup = popupFrame
+	end
+
+	popupCatcher.MouseButton1Click:Connect(closeActivePopup)
+
+	local drawerOpen = false
+
+	local function applyLayoutMode()
+		local bottomInset = topBarHeight + footerHeight
+		if compact then
+			local width = math.min(sidebarWidth, Viewport.Get().X - 40)
+			sidebar.Position = UDim2.new(0, drawerOpen and 0 or -sidebarWidth, 0, topBarHeight)
+			sidebar.Size = UDim2.new(0, width, 1, -bottomInset)
+			sidebar.ZIndex = 20
+			content.Position = UDim2.new(0, 0, 0, topBarHeight)
+			content.Size = UDim2.new(1, 0, 1, -bottomInset)
+			backdrop.Position = UDim2.new(0, 0, 0, topBarHeight)
+			backdrop.Size = UDim2.new(1, 0, 1, -bottomInset)
+			hamburger.Visible = true
+		else
+			sidebar.Position = UDim2.new(0, 0, 0, topBarHeight)
+			sidebar.Size = UDim2.new(0, sidebarWidth, 1, -bottomInset)
+			sidebar.ZIndex = 1
+			content.Position = UDim2.new(0, sidebarWidth, 0, topBarHeight)
+			content.Size = UDim2.new(1, -sidebarWidth, 1, -bottomInset)
+			backdrop.Position = UDim2.new(0, 0, 0, topBarHeight)
+			backdrop.Size = UDim2.new(1, 0, 1, -bottomInset)
+			hamburger.Visible = false
+			drawerOpen = false
+			backdrop.Visible = false
+		end
+	end
+
+	local function setDrawerOpen(open)
+		if not compact then return end
+		drawerOpen = open
+		tween(sidebar, {
+			Position = UDim2.new(0, open and 0 or -sidebarWidth, 0, topBarHeight),
+		}, 0.2)
+		if open then
+			backdrop.Visible = true
+			backdrop.BackgroundTransparency = 1
+			tween(backdrop, { BackgroundTransparency = 0.45 }, 0.2)
+		else
+			local hideTween = tween(backdrop, { BackgroundTransparency = 1 }, 0.2)
+			if hideTween then
+				hideTween.Completed:Connect(function()
+					if not drawerOpen then
+						backdrop.Visible = false
+					end
+				end)
+			else
+				backdrop.Visible = false
+			end
+		end
+	end
+
+	hamburger.MouseButton1Click:Connect(function()
+		setDrawerOpen(not drawerOpen)
+	end)
+	backdrop.MouseButton1Click:Connect(function()
+		setDrawerOpen(false)
+	end)
+
+	applyLayoutMode()
+
+	closeBtn.MouseButton1Click:Connect(function()
+		gui:Destroy()
+	end)
+
+	local minimized = false
+	local fullSize = main.Size
+	minBtn.MouseButton1Click:Connect(function()
+		minimized = not minimized
+		if minimized then
+			tween(main, { Size = UDim2.new(fullSize.X.Scale, fullSize.X.Offset, 0, topBarHeight) }, 0.22)
+		else
+			tween(main, { Size = fullSize }, 0.22)
+		end
+	end)
+
+	local isMaximized = false
+	local preMaxSize, preMaxPos
+	maxBtn.MouseButton1Click:Connect(function()
+		if minimized then return end
+		isMaximized = not isMaximized
+		if isMaximized then
+			preMaxSize, preMaxPos = main.Size, main.Position
+			local vp = Viewport.Get()
+			local margin = compact and 6 or 20
+			fullSize = UDim2.fromOffset(vp.X - margin * 2, vp.Y - margin * 2)
+			tween(main, { Size = fullSize, Position = UDim2.fromOffset(margin, margin) }, 0.22)
+		else
+			fullSize = preMaxSize or fullSize
+			tween(main, { Size = fullSize, Position = preMaxPos or main.Position }, 0.22)
+		end
+	end)
+
+	local function clampMainPosition()
+		local vp = Viewport.Get()
+		local size = main.Size
+		local pos = main.Position
+		local maxX = math.max(vp.X - size.X.Offset, 0)
+		local maxY = math.max(vp.Y - size.Y.Offset, 0)
+		local x = math.clamp(pos.X.Offset, 0, maxX)
+		local y = math.clamp(pos.Y.Offset, 0, maxY)
+		if x ~= pos.X.Offset or y ~= pos.Y.Offset then
+			main.Position = UDim2.new(pos.X.Scale, x, pos.Y.Scale, y)
+		end
+	end
+
+	local unregisterToggleKey
+	if config.ToggleKey then
+		unregisterToggleKey = InputBus.RegisterToggleKey(config.ToggleKey, function()
+			main.Visible = not main.Visible
+		end)
+	end
+
+	local unsubscribeViewport = Viewport.OnChange(function()
+		local wasCompact = compact
+		compact = Viewport.IsCompact()
+		if compact ~= wasCompact then
+			applyLayoutMode()
+		end
+		if not usesCustomSize and not minimized and not isMaximized then
+			fullSize = defaultWindowSize(compact)
+			main.Size = fullSize
+		end
+		clampMainPosition()
+	end)
+
+	local window = setmetatable({
+		_theme = theme,
+		_metrics = metrics,
+		_gui = gui,
+		_main = main,
+		_tabList = tabList,
+		_content = content,
+		_tabs = {},
+		_overlay = overlay,
+		_openPopup = openPopup,
+		_closeActivePopup = closeActivePopup,
+		_setDrawerOpen = setDrawerOpen,
+		_unsubscribeViewport = unsubscribeViewport,
+		_unregisterToggleKey = unregisterToggleKey,
+		_destroyed = false,
+	}, WindowMeta)
+
+	return window
+end
+
+function WindowMeta:Toggle()
+	if self._destroyed then return end
+	self._main.Visible = not self._main.Visible
+end
+
+function WindowMeta:Destroy()
+	if self._destroyed then return end
+	self._destroyed = true
+	if self._unsubscribeViewport then
+		self._unsubscribeViewport()
+	end
+	if self._unregisterToggleKey then
+		self._unregisterToggleKey()
+	end
+	self._closeActivePopup()
+	self._gui:Destroy()
+end
+
+local TabMeta = {}
+TabMeta.__index = TabMeta
+
+function WindowMeta:CreateTab(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+
+	local tabButton = create("TextButton", {
+		Size = UDim2.new(1, 0, 0, metrics.Compact and 44 or 38),
+		BackgroundColor3 = theme.Accent,
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, self._tabList)
+	corner(tabButton, metrics.Radius - 2)
+
+	local iconHolder = create("Frame", {
+		Position = UDim2.new(0, 6, 0.5, -13),
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = theme.Element,
+	}, tabButton)
+	corner(iconHolder, 7)
+	local iconLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = config.Icon or "",
+		TextColor3 = theme.SubText,
+		TextSize = 13,
+	}, iconHolder)
+
+	local tabLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 40, 0, 0),
+		Size = UDim2.new(1, -46, 1, 0),
+		Font = Enum.Font.GothamMedium,
+		Text = config.Title or "Tab",
+		TextColor3 = theme.SubText,
+		TextSize = metrics.FontTitle,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, tabButton)
+
+	local page = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	}, self._content)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, page)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14),
+		PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
+	}, page)
+
+	local tab = setmetatable({
+		_window = self,
+		_page = page,
+		_theme = theme,
+		_metrics = metrics,
+		_button = tabButton,
+		_label = tabLabel,
+		_iconHolder = iconHolder,
+		_icon = iconLabel,
+		_selected = false,
+		_openRow = nil,
+	}, TabMeta)
+
+	tabButton.MouseButton1Click:Connect(function()
+		tab:Select()
+	end)
+	tabButton.MouseEnter:Connect(function()
+		if not tab._selected then
+			tween(tabButton, { BackgroundTransparency = 0.92 }, 0.12)
+		end
+	end)
+	tabButton.MouseLeave:Connect(function()
+		if not tab._selected then
+			tween(tabButton, { BackgroundTransparency = 1 }, 0.12)
+		end
+	end)
+
+	table.insert(self._tabs, tab)
+	if #self._tabs == 1 then
+		tab:Select()
+	end
+
+	return tab
+end
+
+function TabMeta:Select()
+	local window = self._window
+	for _, t in ipairs(window._tabs) do
+		t._selected = false
+		t._page.Visible = false
+		tween(t._button, { BackgroundTransparency = 1 }, 0.15)
+		tween(t._label, { TextColor3 = t._theme.SubText }, 0.15)
+		tween(t._iconHolder, { BackgroundColor3 = t._theme.Element }, 0.15)
+		tween(t._icon, { TextColor3 = t._theme.SubText }, 0.15)
+	end
+
+	self._selected = true
+	self._page.Visible = true
+	tween(self._button, { BackgroundTransparency = 0.85 }, 0.15)
+	tween(self._label, { TextColor3 = self._theme.Text }, 0.15)
+	tween(self._iconHolder, { BackgroundColor3 = self._theme.Accent }, 0.15)
+	tween(self._icon, { TextColor3 = Color3.new(1, 1, 1) }, 0.15)
+
+	if window._setDrawerOpen then
+		window._setDrawerOpen(false)
+	end
+end
+
+function TabMeta:Destroy()
+	local window = self._window
+	if not window then return end
+	local idx = table.find(window._tabs, self)
+	if idx then
+		table.remove(window._tabs, idx)
+	end
+	if self._button then self._button:Destroy() end
+	if self._page then self._page:Destroy() end
+	if self._selected and #window._tabs > 0 then
+		window._tabs[1]:Select()
+	end
+end
+
+local function baseRow(parent, theme, metrics, titleText, descText, heightOverride)
+	local height = heightOverride or metrics.RowHeight
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundColor3 = theme.Element,
+	}, parent)
+	corner(row, metrics.Radius)
+
+	local textHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 0),
+		Size = UDim2.new(1 - metrics.ControlWidth, -24, 1, 0),
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = descText and UDim2.new(0, 0, 0, 6) or UDim2.new(0, 0, 0, 0),
+		Size = descText and UDim2.new(1, 0, 0, 16) or UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamMedium,
+		Text = titleText or "",
+		TextColor3 = theme.Text,
+		TextSize = metrics.FontTitle,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, textHolder)
+
+	if descText then
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 0, 0, 22),
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.Gotham,
+			Text = descText,
+			TextColor3 = theme.SubText,
+			TextSize = metrics.FontDesc,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, textHolder)
+	end
+
+	local control = create("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.new(metrics.ControlWidth, 0, 0, 28),
+	}, row)
+
+	return row, control
+end
+
+function TabMeta:CreateHeader(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+
+	local header = create("Frame", {
+		Size = UDim2.new(1, 0, 0, metrics.Compact and 88 or 78),
+		BackgroundColor3 = theme.Element,
+	}, self._page)
+	corner(header, metrics.Radius)
+	stroke(header, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16),
+		PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12),
+	}, header)
+
+	local iconSize = metrics.Compact and 52 or 48
+	local iconHolder = create("Frame", {
+		Size = UDim2.fromOffset(iconSize, iconSize),
+		BackgroundColor3 = theme.Accent,
+		BackgroundTransparency = 0.82,
+	}, header)
+	corner(iconHolder, metrics.Radius - 2)
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = config.Icon or "",
+		TextColor3 = theme.Accent,
+		TextSize = 22,
+	}, iconHolder)
+
+	local textHolder = create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, iconSize + 12, 0, 0),
+		Size = UDim2.new(1, -(iconSize + 12) - 130, 1, 0),
+	}, header)
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 22),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "",
+		TextColor3 = theme.Text,
+		TextSize = metrics.FontTitle + 4,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, textHolder)
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.Gotham,
+		Text = config.Description or "",
+		TextColor3 = theme.SubText,
+		TextSize = metrics.FontDesc,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+	}, textHolder)
+
+	if config.Badge then
+		local badgeColor = config.Badge.Color or theme.Accent
+		local badge = create("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, 0, 0.5, 0),
+			Size = UDim2.new(0, 0, 0, 30),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = badgeColor,
+			BackgroundTransparency = 0.85,
+		}, header)
+		corner(badge, 15)
+		create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, badge)
+		create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, badge)
+		local dot = create("Frame", {
+			Size = UDim2.fromOffset(8, 8),
+			BackgroundColor3 = badgeColor,
+		}, badge)
+		corner(dot, 4)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Font = Enum.Font.GothamBold,
+			Text = config.Badge.Text or "",
+			TextColor3 = badgeColor,
+			TextSize = metrics.FontDesc,
+		}, badge)
+	end
+
+	return { Instance = header, Destroy = function() header:Destroy() end }
+end
+
+function TabMeta:CreateCard(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local half = config.Half and not metrics.Compact
+	local parent = self._page
+
+	local container
+	if half then
+		if self._openRow and self._openRowSlots and self._openRowSlots < 2 then
+			container = self._openRow
+			self._openRowSlots = self._openRowSlots + 1
+			if self._openRowSlots >= 2 then
+				self._openRow = nil
+			end
+		else
+			local row = create("Frame", {
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+			}, parent)
+			create("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				Padding = UDim.new(0, 12),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}, row)
+			self._openRow = row
+			self._openRowSlots = 1
+			container = row
+		end
+	else
+		self._openRow = nil
+		self._openRowSlots = nil
+		container = parent
+	end
+
+	local width = half and UDim2.new(0.5, -6, 0, 0) or UDim2.new(1, 0, 0, 0)
+
+	local card = create("Frame", {
+		Size = width,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = theme.Element,
+	}, container)
+	corner(card, metrics.Radius)
+	stroke(card, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14),
+		PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
+	}, card)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, card)
+
+	if config.Title then
+		local header = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 22),
+			BackgroundTransparency = 1,
+		}, card)
+		local textStart = 0
+		if config.Icon then
+			create("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(0, 20, 1, 0),
+				Font = Enum.Font.GothamBold,
+				Text = config.Icon,
+				TextColor3 = theme.Accent,
+				TextSize = metrics.FontTitle + 2,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}, header)
+			textStart = 24
+		end
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, textStart, 0, 0),
+			Size = UDim2.new(1, -textStart, 1, 0),
+			Font = Enum.Font.GothamBold,
+			Text = config.Title,
+			TextColor3 = theme.Text,
+			TextSize = metrics.FontTitle + 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, header)
+	end
+
+	local cardTab = setmetatable({
+		_window = self._window,
+		_page = card,
+		_theme = theme,
+		_metrics = metrics,
+		_openRow = nil,
+	}, TabMeta)
+
+	return cardTab
+end
+
+function TabMeta:CreateButton(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local variant = config.Variant or "Primary"
+	local bg, textColor, useStroke
+	if variant == "Danger" then
+		bg, textColor = Color3.fromRGB(217, 68, 68), Color3.new(1, 1, 1)
+	elseif variant == "Outline" then
+		bg, textColor, useStroke = theme.Background, theme.Accent, true
+	else
+		bg, textColor = theme.Accent, Color3.new(1, 1, 1)
+	end
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = bg,
+		Text = config.ButtonText or "Run",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = textColor,
+		TextSize = metrics.FontDesc + 1,
+		AutoButtonColor = false,
+	}, control)
+	corner(btn, metrics.Radius - 2)
+	if useStroke then
+		stroke(btn, theme.Accent, 1)
+	end
+	wireButtonFeel(btn, function() return bg end)
+
+	btn.MouseButton1Click:Connect(function()
+		safeCall(config.Callback)
+	end)
+
+	return {
+		Instance = row,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateToggle(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local state = config.Value or false
+	local switchSize = metrics.SwitchSize
+
+	local switch = create("Frame", {
+		Size = UDim2.fromOffset(switchSize.X, switchSize.Y),
+		Position = UDim2.new(1, -switchSize.X, 0.5, -switchSize.Y / 2),
+		BackgroundColor3 = state and theme.Accent or theme.Stroke,
+	}, control)
+	corner(switch, switchSize.Y / 2)
+
+	local knobSize = switchSize.Y - 4
+	local function knobPos(on)
+		return on and UDim2.new(1, -knobSize - 2, 0.5, -knobSize / 2)
+			or UDim2.new(0, 2, 0.5, -knobSize / 2)
+	end
+
+	local knob = create("Frame", {
+		Size = UDim2.fromOffset(knobSize, knobSize),
+		Position = knobPos(state),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+	}, switch)
+	corner(knob, knobSize / 2)
+
+	local hitBox = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+	}, switch)
+
+	local function setState(newState, fire)
+		state = newState
+		tween(switch, { BackgroundColor3 = state and theme.Accent or theme.Stroke }, 0.15)
+		tween(knob, { Position = knobPos(state) }, 0.15)
+		if fire then
+			safeCall(config.Callback, state)
+		end
+	end
+
+	hitBox.MouseButton1Click:Connect(function()
+		setState(not state, true)
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) setState(v, false) end,
+		Get = function() return state end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateSlider(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc, metrics.RowHeightTall)
+	control.AnchorPoint = Vector2.new(1, 1)
+	control.Position = UDim2.new(1, -12, 1, -14)
+	control.Size = UDim2.new(0.92, 0, 0, 24)
+
+	local min = config.Min or 0
+	local max = config.Max or 100
+	local step = config.Step or 1
+	local value = config.Default or min
+
+	local hitArea = create("Frame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+	}, control)
+
+	local track = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 6),
+		Position = UDim2.new(0, 0, 0.5, -3),
+		BackgroundColor3 = theme.Stroke,
+	}, hitArea)
+	corner(track, 3)
+
+	local fill = create("Frame", {
+		Size = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = theme.Accent,
+	}, track)
+	corner(fill, 3)
+
+	local valueLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 0, 0, -18),
+		Size = UDim2.new(0, 60, 0, 14),
+		Font = Enum.Font.Gotham,
+		Text = tostring(value),
+		TextColor3 = theme.SubText,
+		TextSize = metrics.FontDesc,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, control)
+
+	local function apply(raw, fire)
+		raw = math.clamp(raw, min, max)
+		raw = math.floor((raw - min) / step + 0.5) * step + min
+		raw = math.clamp(raw, min, max)
+		value = raw
+		fill.Size = UDim2.new((raw - min) / math.max(max - min, 1e-6), 0, 1, 0)
+		valueLabel.Text = tostring(raw)
+		if fire then
+			safeCall(config.Callback, raw)
+		end
+	end
+	apply(value, false)
+
+	local function ratioFromInput(input)
+		local size = track.AbsoluteSize.X
+		if size <= 0 then return 0 end
+		return math.clamp((input.Position.X - track.AbsolutePosition.X) / size, 0, 1)
+	end
+
+	hitArea.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			apply(min + ratioFromInput(input) * (max - min), true)
+			DragBus.Begin(function(moveInput)
+				apply(min + ratioFromInput(moveInput) * (max - min), true)
+			end)
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) apply(v, true) end,
+		Get = function() return value end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateDropdown(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local window = self._window
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local multi = config.Multi or false
+	local values = config.Values or {}
+	local selected = multi and (config.Value or {}) or config.Value or values[1]
+
+	local dropBtn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = "",
+		AutoButtonColor = false,
+	}, control)
+	corner(dropBtn, metrics.Radius - 2)
+	stroke(dropBtn, theme.Stroke, 1)
+	wireButtonFeel(dropBtn, function() return theme.Background end)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(12, 12),
+		Font = Enum.Font.GothamBold,
+		Text = "v",
+		TextColor3 = theme.SubText,
+		TextSize = 12,
+	}, dropBtn)
+
+	local chipHolder, selectedLabel
+
+	local function refreshChips()
+		if not multi then return end
+		for _, c in ipairs(chipHolder:GetChildren()) do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		local shown = 0
+		for _, val in ipairs(selected) do
+			if shown >= 2 then break end
+			local chip = create("Frame", {
+				BackgroundColor3 = theme.Accent,
+				BackgroundTransparency = 0.8,
+				Size = UDim2.new(0, 0, 0, metrics.Compact and 26 or 20),
+				AutomaticSize = Enum.AutomaticSize.X,
+			}, chipHolder)
+			corner(chip, 6)
+			create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, chip)
+			create("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
+				Font = Enum.Font.Gotham,
+				Text = tostring(val),
+				TextColor3 = theme.Accent,
+				TextSize = metrics.FontDesc - 1,
+			}, chip)
+			shown = shown + 1
+		end
+		local extra = #selected - shown
+		if extra > 0 then
+			local more = create("Frame", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(0, 0, 0, metrics.Compact and 26 or 20),
+				AutomaticSize = Enum.AutomaticSize.X,
+			}, chipHolder)
+			create("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
+				Font = Enum.Font.Gotham,
+				Text = "+" .. extra,
+				TextColor3 = theme.SubText,
+				TextSize = metrics.FontDesc - 1,
+			}, more)
+		end
+		if #selected == 0 then
+			create("TextLabel", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
+				Font = Enum.Font.Gotham,
+				Text = "Select...",
+				TextColor3 = theme.SubText,
+				TextSize = metrics.FontDesc,
+			}, chipHolder)
+		end
+	end
+
+	if multi then
+		chipHolder = create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 8, 0, 0),
+			Size = UDim2.new(1, -26, 1, 0),
+			ClipsDescendants = true,
+		}, dropBtn)
+		create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, chipHolder)
+		refreshChips()
+	else
+		selectedLabel = create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 10, 0, 0),
+			Size = UDim2.new(1, -26, 1, 0),
+			Font = Enum.Font.Gotham,
+			Text = tostring(selected or "Select..."),
+			TextColor3 = theme.Text,
+			TextSize = metrics.FontDesc + 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, dropBtn)
+	end
+
+	local listFrame = create("Frame", {
+		BackgroundColor3 = theme.Background,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 55,
+	}, window._overlay)
+	corner(listFrame, metrics.Radius - 2)
+	stroke(listFrame, theme.Stroke, 1)
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, listFrame)
+
+	local function optionHeight()
+		return metrics.Compact and 34 or 26
+	end
+
+	local function isSelected(val)
+		if not multi then return selected == val end
+		for _, v in ipairs(selected) do
+			if v == val then return true end
+		end
+		return false
+	end
+
+	local function rebuild(newValues)
+		values = newValues or values
+		for _, c in ipairs(listFrame:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		for _, val in ipairs(values) do
+			local opt = create("TextButton", {
+				Size = UDim2.new(1, 0, 0, optionHeight()),
+				BackgroundColor3 = theme.Accent,
+				BackgroundTransparency = isSelected(val) and 0.85 or 1,
+				Text = "",
+				AutoButtonColor = false,
+				ZIndex = 55,
+			}, listFrame)
+			local optLabel = create("TextLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 10, 0, 0),
+				Size = UDim2.new(1, -10, 1, 0),
+				Font = Enum.Font.Gotham,
+				Text = tostring(val),
+				TextColor3 = isSelected(val) and theme.Accent or theme.Text,
+				TextSize = metrics.FontDesc + 1,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 55,
+			}, opt)
+			opt.MouseEnter:Connect(function()
+				if not isSelected(val) then
+					tween(opt, { BackgroundTransparency = 0.9 }, 0.1)
+				end
+			end)
+			opt.MouseLeave:Connect(function()
+				if not isSelected(val) then
+					tween(opt, { BackgroundTransparency = 1 }, 0.1)
+				end
+			end)
+			opt.MouseButton1Click:Connect(function()
+				if multi then
+					if isSelected(val) then
+						for i, v in ipairs(selected) do
+							if v == val then
+								table.remove(selected, i)
+								break
+							end
+						end
+					else
+						table.insert(selected, val)
+					end
+					opt.BackgroundTransparency = isSelected(val) and 0.85 or 1
+					optLabel.TextColor3 = isSelected(val) and theme.Accent or theme.Text
+					refreshChips()
+				else
+					selected = val
+					selectedLabel.Text = tostring(val)
+					window._closeActivePopup()
+				end
+				safeCall(config.Callback, selected)
+			end)
+		end
+	end
+	rebuild(values)
+
+	dropBtn.MouseButton1Click:Connect(function()
+		if listFrame.Visible then
+			window._closeActivePopup()
+		else
+			local height = math.min(#values, 5) * optionHeight()
+			local width = dropBtn.AbsoluteSize.X
+			if width <= 0 then width = 160 end
+			listFrame.Size = UDim2.fromOffset(width, height)
+			window._openPopup(listFrame, dropBtn, width, height)
+		end
+	end)
+
+	return {
+		Instance = row,
+		Select = function(_, v)
+			selected = v
+			if multi then
+				refreshChips()
+			elseif selectedLabel then
+				selectedLabel.Text = tostring(v)
+			end
+		end,
+		Refresh = function(_, newValues) rebuild(newValues) end,
+		Get = function() return selected end,
+		Destroy = function()
+			if listFrame.Parent then
+				listFrame:Destroy()
+			end
+			row:Destroy()
+		end,
+	}
+end
+
+function TabMeta:CreateInput(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local box = create("TextBox", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = config.Value or "",
+		PlaceholderText = config.Placeholder or "",
+		Font = Enum.Font.Gotham,
+		TextColor3 = theme.Text,
+		PlaceholderColor3 = theme.SubText,
+		TextSize = metrics.FontDesc + 1,
+		ClearTextOnFocus = false,
+	}, control)
+	corner(box, metrics.Radius - 2)
+	local boxStroke = stroke(box, theme.Stroke, 1)
+	create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
+
+	box.Focused:Connect(function()
+		tween(boxStroke, { Color = theme.Accent }, 0.12)
+	end)
+	box.FocusLost:Connect(function()
+		tween(boxStroke, { Color = theme.Stroke }, 0.12)
+		safeCall(config.Callback, box.Text)
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) box.Text = v end,
+		Get = function() return box.Text end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateNumber(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local min = config.Min or 0
+	local max = config.Max or math.huge
+	local step = config.Step or 1
+	local value = config.Value or min
+
+	local box = create("TextBox", {
+		Size = UDim2.new(1, -24, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = tostring(value),
+		Font = Enum.Font.Gotham,
+		TextColor3 = theme.Text,
+		TextSize = metrics.FontDesc + 1,
+		ClearTextOnFocus = false,
+	}, control)
+	corner(box, metrics.Radius - 2)
+	local boxStroke = stroke(box, theme.Stroke, 1)
+	create("UIPadding", { PaddingLeft = UDim.new(0, 8) }, box)
+
+	local stepper = create("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.fromOffset(20, 26),
+		BackgroundTransparency = 1,
+	}, control)
+
+	local upBtn = create("TextButton", {
+		Size = UDim2.new(1, 0, 0.5, -1),
+		BackgroundColor3 = theme.Background,
+		Text = "+",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.SubText,
+		TextSize = 12,
+		AutoButtonColor = false,
+	}, stepper)
+	corner(upBtn, 4)
+	local downBtn = create("TextButton", {
+		Position = UDim2.new(0, 0, 0.5, 1),
+		Size = UDim2.new(1, 0, 0.5, -1),
+		BackgroundColor3 = theme.Background,
+		Text = "-",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = theme.SubText,
+		TextSize = 12,
+		AutoButtonColor = false,
+	}, stepper)
+	corner(downBtn, 4)
+	wireButtonFeel(upBtn, function() return theme.Background end)
+	wireButtonFeel(downBtn, function() return theme.Background end)
+
+	local function setValue(v, fire)
+		v = math.clamp(v, min, max)
+		value = v
+		box.Text = tostring(v)
+		if fire then
+			safeCall(config.Callback, v)
+		end
+	end
+
+	upBtn.MouseButton1Click:Connect(function() setValue(value + step, true) end)
+	downBtn.MouseButton1Click:Connect(function() setValue(value - step, true) end)
+
+	box.Focused:Connect(function()
+		tween(boxStroke, { Color = theme.Accent }, 0.12)
+	end)
+	box.FocusLost:Connect(function()
+		tween(boxStroke, { Color = theme.Stroke }, 0.12)
+		local n = tonumber(box.Text)
+		if n then
+			setValue(n, true)
+		else
+			box.Text = tostring(value)
+		end
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) setValue(v, false) end,
+		Get = function() return value end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateKeybind(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local current = config.Value or "None"
+	local myCaptureFn
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		Text = "",
+		AutoButtonColor = false,
+	}, control)
+	corner(btn, metrics.Radius - 2)
+	stroke(btn, theme.Stroke, 1)
+	wireButtonFeel(btn, function() return theme.Background end)
+
+	local label = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -30, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = current,
+		TextColor3 = theme.Text,
+		TextSize = metrics.FontDesc + 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, btn)
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(14, 14),
+		Font = Enum.Font.GothamBold,
+		Text = "K",
+		TextColor3 = theme.SubText,
+		TextSize = 11,
+	}, btn)
+
+	btn.MouseButton1Click:Connect(function()
+		label.Text = "..."
+		myCaptureFn = function(keyCode)
+			current = keyCode.Name
+			label.Text = current
+			safeCall(config.Callback, current)
+		end
+		InputBus.CaptureNextKey(myCaptureFn)
+	end)
+
+	return {
+		Instance = row,
+		Set = function(_, v) current = v; label.Text = v end,
+		Get = function() return current end,
+		Destroy = function()
+			if myCaptureFn then
+				InputBus.CancelCapture(myCaptureFn)
+			end
+			row:Destroy()
+		end,
+	}
+end
+
+function TabMeta:CreateParagraph(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = theme.Element,
+	}, self._page)
+	corner(row, metrics.Radius)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.GothamBold,
+		Text = config.Title or "",
+		TextColor3 = theme.Text,
+		TextSize = metrics.FontTitle,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Font = Enum.Font.Gotham,
+		Text = config.Content or "",
+		TextColor3 = theme.SubText,
+		TextSize = metrics.FontDesc,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+
+	return { Instance = row, Destroy = function() row:Destroy() end }
+end
+
+function TabMeta:CreateDivider()
+	local line = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = self._theme.Stroke,
+		BorderSizePixel = 0,
+	}, self._page)
+	return { Instance = line, Destroy = function() line:Destroy() end }
+end
+
+function TabMeta:CreateSection(title)
+	local label = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 20),
+		Font = Enum.Font.GothamBold,
+		Text = title or "Section",
+		TextColor3 = self._theme.SubText,
+		TextSize = self._metrics.FontDesc,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, self._page)
+	return { Instance = label, Destroy = function() label:Destroy() end }
+end
+
+function TabMeta:CreateColorpicker(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local window = self._window
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+
+	local color = config.Default or Color3.fromRGB(255, 255, 255)
+	local rgb = { color.R * 255, color.G * 255, color.B * 255 }
+
+	local preview = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = color,
+		Text = "",
+		AutoButtonColor = false,
+	}, control)
+	corner(preview, metrics.Radius - 2)
+	stroke(preview, theme.Stroke, 1)
+
+	local popupWidth = 200
+	local popupHeight = 130
+
+	local popup = create("Frame", {
+		BackgroundColor3 = theme.Background,
+		Visible = false,
+		ZIndex = 55,
+	}, window._overlay)
+	corner(popup, metrics.Radius)
+	stroke(popup, theme.Stroke, 1)
+	create("UIPadding", {
+		PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
+	}, popup)
+	create("UIListLayout", { Padding = UDim.new(0, 8) }, popup)
+
+	local function updateColor()
+		color = Color3.fromRGB(
+			math.clamp(rgb[1], 0, 255),
+			math.clamp(rgb[2], 0, 255),
+			math.clamp(rgb[3], 0, 255)
+		)
+		preview.BackgroundColor3 = color
+		safeCall(config.Callback, color)
+	end
+
+	local function makeChannel(name, index)
+		local holder = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, ZIndex = 55,
+		}, popup)
+		create("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, 16, 1, 0),
+			Text = name,
+			Font = Enum.Font.GothamBold,
+			TextColor3 = theme.Text,
+			TextSize = metrics.FontDesc,
+			ZIndex = 55,
+		}, holder)
+		local track = create("Frame", {
+			Position = UDim2.new(0, 20, 0.5, -3),
+			Size = UDim2.new(1, -20, 0, 6),
+			BackgroundColor3 = theme.Stroke,
+			ZIndex = 55,
+		}, holder)
+		corner(track, 3)
+		local fill = create("Frame", {
+			Size = UDim2.new(rgb[index] / 255, 0, 1, 0),
+			BackgroundColor3 = theme.Accent,
+			ZIndex = 55,
+		}, track)
+		corner(fill, 3)
+
+		local function ratioFromInput(input)
+			local size = track.AbsoluteSize.X
+			if size <= 0 then return 0 end
+			return math.clamp((input.Position.X - track.AbsolutePosition.X) / size, 0, 1)
+		end
+
+		local function set(ratio)
+			fill.Size = UDim2.new(ratio, 0, 1, 0)
+			rgb[index] = ratio * 255
+			updateColor()
+		end
+
+		holder.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				set(ratioFromInput(input))
+				DragBus.Begin(function(moveInput)
+					set(ratioFromInput(moveInput))
+				end)
+			end
+		end)
+	end
+
+	makeChannel("R", 1)
+	makeChannel("G", 2)
+	makeChannel("B", 3)
+
+	preview.MouseButton1Click:Connect(function()
+		if popup.Visible then
+			window._closeActivePopup()
+		else
+			local vp = Viewport.Get()
+			local width = math.min(popupWidth, vp.X - 24)
+			popup.Size = UDim2.fromOffset(width, popupHeight)
+			window._openPopup(popup, preview, width, popupHeight)
+		end
+	end)
+
+	return {
+		Instance = row,
+		Get = function() return color end,
+		Destroy = function()
+			if popup.Parent then
+				popup:Destroy()
+			end
+			row:Destroy()
+		end,
+	}
+end
+
+return VeloxUI
