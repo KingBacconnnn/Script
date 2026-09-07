@@ -32,6 +32,35 @@ VeloxUI.Themes = {
 }
 
 VeloxUI.CurrentTheme = VeloxUI.Themes.Dark
+VeloxUI.ReducedMotion = false
+
+VeloxUI.Icons = {
+	ChevronDown = "rbxassetid://10709790948",
+	ChevronUp = "rbxassetid://10709791523",
+	ChevronLeft = "rbxassetid://10709791281",
+	ChevronRight = "rbxassetid://10709791437",
+	ArrowUp = "rbxassetid://10709768939",
+	ArrowDown = "rbxassetid://10709767827",
+	Check = "rbxassetid://10709768759",
+	CheckCircle = "rbxassetid://10709790644",
+	CheckSquare = "rbxassetid://10709790537",
+	Info = "rbxassetid://10709752996",
+	Warning = "rbxassetid://10709753149",
+	Plus = "rbxassetid://7733765224",
+	Bug = "rbxassetid://7733701545",
+	Target = "rbxassetid://10734977012",
+	Tag = "rbxassetid://10734976528",
+	Diamond = "rbxassetid://7733942651",
+	DiamondOutline = "rbxassetid://10709781820",
+	Person = "rbxassetid://10709819385",
+	PersonAdd = "rbxassetid://10747372702",
+	Robot = "rbxassetid://10709782230",
+	Cubes = "rbxassetid://10709782582",
+	Cube = "rbxassetid://10709782497",
+	Pin = "rbxassetid://10709782758",
+	Mouse = "rbxassetid://10734898592",
+	Robux = "rbxassetid://10709782630",
+}
 
 function VeloxUI:SetTheme(name)
 	if self.Themes[name] then
@@ -74,6 +103,14 @@ local TWEEN_NORMAL = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirec
 local TWEEN_SLOW   = TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local function tween(inst, props, time)
+	if VeloxUI.ReducedMotion then
+		pcall(function()
+			for k, v in pairs(props) do
+				inst[k] = v
+			end
+		end)
+		return nil
+	end
 	local info = TWEEN_NORMAL
 	if time then
 		if time <= 0.12 then
@@ -129,6 +166,44 @@ local function wireButtonFeel(btn, getBase)
 			reset()
 		end
 	end)
+end
+
+local function isImageIcon(icon)
+	if type(icon) ~= "string" then return false end
+	return icon:match("^rbxassetid://") ~= nil or icon:match("^%d+$") ~= nil
+end
+
+local function renderIcon(parent, icon, size, color)
+	if icon and isImageIcon(icon) then
+		local assetId = icon:match("^%d+$") and ("rbxassetid://" .. icon) or icon
+		local ok, inst = pcall(create, "ImageLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			Image = assetId,
+			ImageColor3 = color,
+			ScaleType = Enum.ScaleType.Fit,
+		}, parent)
+		if ok then
+			return inst
+		end
+	end
+	return create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = icon or "",
+		TextColor3 = color,
+		TextSize = size or 16,
+	}, parent)
+end
+
+local function tintIcon(inst, color, time)
+	if not inst then return end
+	if inst:IsA("ImageLabel") then
+		tween(inst, { ImageColor3 = color }, time)
+	else
+		tween(inst, { TextColor3 = color }, time)
+	end
 end
 
 local Viewport = {}
@@ -530,14 +605,7 @@ function VeloxUI:CreateWindow(config)
 		BackgroundColor3 = theme.Accent,
 	}, topBar)
 	corner(logo, 10)
-	create("TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Font = Enum.Font.GothamBold,
-		Text = config.Icon or "V",
-		TextColor3 = Color3.new(1, 1, 1),
-		TextSize = 18,
-	}, logo)
+	renderIcon(logo, config.Icon or "V", 18, Color3.new(1, 1, 1))
 
 	local textX = leftInset + 44
 	local rightInset = 116
@@ -554,7 +622,7 @@ function VeloxUI:CreateWindow(config)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, titleRow)
 
-	create("TextLabel", {
+	local titleLabel = create("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -584,8 +652,9 @@ function VeloxUI:CreateWindow(config)
 		}, badge)
 	end
 
+	local subTitleLabel
 	if config.SubTitle then
-		create("TextLabel", {
+		subTitleLabel = create("TextLabel", {
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0, textX, 0, 29),
 			Size = UDim2.new(1, -(textX + rightInset), 0, 16),
@@ -935,6 +1004,8 @@ function VeloxUI:CreateWindow(config)
 		_setDrawerOpen = setDrawerOpen,
 		_unsubscribeViewport = unsubscribeViewport,
 		_unregisterToggleKey = unregisterToggleKey,
+		_titleLabel = titleLabel,
+		_subTitleLabel = subTitleLabel,
 		_destroyed = false,
 	}, WindowMeta)
 
@@ -944,6 +1015,18 @@ end
 function WindowMeta:Toggle()
 	if self._destroyed then return end
 	self._main.Visible = not self._main.Visible
+end
+
+function WindowMeta:SetTitle(text)
+	if self._titleLabel then
+		self._titleLabel.Text = text or ""
+	end
+end
+
+function WindowMeta:SetSubTitle(text)
+	if self._subTitleLabel then
+		self._subTitleLabel.Text = text or ""
+	end
 end
 
 function WindowMeta:Destroy()
@@ -981,14 +1064,7 @@ function WindowMeta:CreateTab(config)
 		BackgroundColor3 = theme.Element,
 	}, tabButton)
 	corner(iconHolder, 7)
-	local iconLabel = create("TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Font = Enum.Font.GothamBold,
-		Text = config.Icon or "",
-		TextColor3 = theme.SubText,
-		TextSize = 13,
-	}, iconHolder)
+	local iconLabel = renderIcon(iconHolder, config.Icon, 13, theme.SubText)
 
 	local tabLabel = create("TextLabel", {
 		BackgroundTransparency = 1,
@@ -1063,7 +1139,7 @@ function TabMeta:Select()
 		tween(t._button, { BackgroundTransparency = 1 }, 0.15)
 		tween(t._label, { TextColor3 = t._theme.SubText }, 0.15)
 		tween(t._iconHolder, { BackgroundColor3 = t._theme.Element }, 0.15)
-		tween(t._icon, { TextColor3 = t._theme.SubText }, 0.15)
+		tintIcon(t._icon, t._theme.SubText, 0.15)
 	end
 
 	self._selected = true
@@ -1071,7 +1147,7 @@ function TabMeta:Select()
 	tween(self._button, { BackgroundTransparency = 0.85 }, 0.15)
 	tween(self._label, { TextColor3 = self._theme.Text }, 0.15)
 	tween(self._iconHolder, { BackgroundColor3 = self._theme.Accent }, 0.15)
-	tween(self._icon, { TextColor3 = Color3.new(1, 1, 1) }, 0.15)
+	tintIcon(self._icon, Color3.new(1, 1, 1), 0.15)
 
 	if window._setDrawerOpen then
 		window._setDrawerOpen(false)
@@ -1164,14 +1240,7 @@ function TabMeta:CreateHeader(config)
 		BackgroundTransparency = 0.82,
 	}, header)
 	corner(iconHolder, metrics.Radius - 2)
-	create("TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Font = Enum.Font.GothamBold,
-		Text = config.Icon or "",
-		TextColor3 = theme.Accent,
-		TextSize = 22,
-	}, iconHolder)
+	renderIcon(iconHolder, config.Icon, 22, theme.Accent)
 
 	local textHolder = create("Frame", {
 		BackgroundTransparency = 1,
@@ -1297,15 +1366,11 @@ function TabMeta:CreateCard(config)
 		}, card)
 		local textStart = 0
 		if config.Icon then
-			create("TextLabel", {
+			local iconWrap = create("Frame", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(0, 20, 1, 0),
-				Font = Enum.Font.GothamBold,
-				Text = config.Icon,
-				TextColor3 = theme.Accent,
-				TextSize = metrics.FontTitle + 2,
-				TextXAlignment = Enum.TextXAlignment.Left,
 			}, header)
+			renderIcon(iconWrap, config.Icon, metrics.FontTitle + 2, theme.Accent)
 			textStart = 24
 		end
 		create("TextLabel", {
@@ -1346,13 +1411,15 @@ function TabMeta:CreateButton(config)
 		bg, textColor = theme.Accent, Color3.new(1, 1, 1)
 	end
 
+	local icon = config.Icon
+	if icon == nil and variant == "Danger" then
+		icon = VeloxUI.Icons.Warning
+	end
+
 	local btn = create("TextButton", {
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = bg,
-		Text = config.ButtonText or "Run",
-		Font = Enum.Font.GothamBold,
-		TextColor3 = textColor,
-		TextSize = metrics.FontDesc + 1,
+		Text = "",
 		AutoButtonColor = false,
 	}, control)
 	corner(btn, metrics.Radius - 2)
@@ -1360,6 +1427,38 @@ function TabMeta:CreateButton(config)
 		stroke(btn, theme.Accent, 1)
 	end
 	wireButtonFeel(btn, function() return bg end)
+
+	local layout = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -12, 1, 0),
+		BackgroundTransparency = 1,
+	}, btn)
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, layout)
+
+	if icon then
+		local iconWrap = create("Frame", {
+			Size = UDim2.fromOffset(14, 14),
+			BackgroundTransparency = 1,
+		}, layout)
+		renderIcon(iconWrap, icon, 14, textColor)
+	end
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Font = Enum.Font.GothamBold,
+		Text = config.ButtonText or "Run",
+		TextColor3 = textColor,
+		TextSize = metrics.FontDesc + 1,
+	}, layout)
 
 	btn.MouseButton1Click:Connect(function()
 		safeCall(config.Callback)
@@ -1526,16 +1625,13 @@ function TabMeta:CreateDropdown(config)
 	stroke(dropBtn, theme.Stroke, 1)
 	wireButtonFeel(dropBtn, function() return theme.Background end)
 
-	create("TextLabel", {
+	local chevronWrap = create("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -8, 0.5, 0),
 		Size = UDim2.fromOffset(12, 12),
-		Font = Enum.Font.GothamBold,
-		Text = "v",
-		TextColor3 = theme.SubText,
-		TextSize = 12,
 	}, dropBtn)
+	renderIcon(chevronWrap, VeloxUI.Icons.ChevronDown, 12, theme.SubText)
 
 	local chipHolder, selectedLabel
 
@@ -1663,7 +1759,7 @@ function TabMeta:CreateDropdown(config)
 			local optLabel = create("TextLabel", {
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0, 10, 0, 0),
-				Size = UDim2.new(1, -10, 1, 0),
+				Size = UDim2.new(1, -28, 1, 0),
 				Font = Enum.Font.Gotham,
 				Text = tostring(val),
 				TextColor3 = isSelected(val) and theme.Accent or theme.Text,
@@ -1671,6 +1767,15 @@ function TabMeta:CreateDropdown(config)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				ZIndex = 55,
 			}, opt)
+			local check = create("Frame", {
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(14, 14),
+				Visible = isSelected(val),
+				ZIndex = 55,
+			}, opt)
+			renderIcon(check, VeloxUI.Icons.Check, 14, theme.Accent)
 			opt.MouseEnter:Connect(function()
 				if not isSelected(val) then
 					tween(opt, { BackgroundTransparency = 0.9 }, 0.1)
@@ -1695,10 +1800,12 @@ function TabMeta:CreateDropdown(config)
 					end
 					opt.BackgroundTransparency = isSelected(val) and 0.85 or 1
 					optLabel.TextColor3 = isSelected(val) and theme.Accent or theme.Text
+					check.Visible = isSelected(val)
 					refreshChips()
 				else
 					selected = val
 					selectedLabel.Text = tostring(val)
+					rebuild(values)
 					window._closeActivePopup()
 				end
 				safeCall(config.Callback, selected)
@@ -1809,24 +1916,20 @@ function TabMeta:CreateNumber(config)
 	local upBtn = create("TextButton", {
 		Size = UDim2.new(1, 0, 0.5, -1),
 		BackgroundColor3 = theme.Background,
-		Text = "+",
-		Font = Enum.Font.GothamBold,
-		TextColor3 = theme.SubText,
-		TextSize = 12,
+		Text = "",
 		AutoButtonColor = false,
 	}, stepper)
 	corner(upBtn, 4)
+	renderIcon(upBtn, VeloxUI.Icons.ChevronUp, 10, theme.SubText)
 	local downBtn = create("TextButton", {
 		Position = UDim2.new(0, 0, 0.5, 1),
 		Size = UDim2.new(1, 0, 0.5, -1),
 		BackgroundColor3 = theme.Background,
-		Text = "-",
-		Font = Enum.Font.GothamBold,
-		TextColor3 = theme.SubText,
-		TextSize = 12,
+		Text = "",
 		AutoButtonColor = false,
 	}, stepper)
 	corner(downBtn, 4)
+	renderIcon(downBtn, VeloxUI.Icons.ChevronDown, 10, theme.SubText)
 	wireButtonFeel(upBtn, function() return theme.Background end)
 	wireButtonFeel(downBtn, function() return theme.Background end)
 
@@ -1858,6 +1961,59 @@ function TabMeta:CreateNumber(config)
 	return {
 		Instance = row,
 		Set = function(_, v) setValue(v, false) end,
+		Get = function() return value end,
+		Destroy = function() row:Destroy() end,
+	}
+end
+
+function TabMeta:CreateProgressBar(config)
+	config = config or {}
+	local theme, metrics = self._theme, self._metrics
+	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	control.AnchorPoint = Vector2.new(1, 0.5)
+	control.Position = UDim2.new(1, -12, 0.5, 0)
+	control.Size = UDim2.new(0.92, 0, 0, 16)
+
+	local min = config.Min or 0
+	local max = config.Max or 100
+	local value = config.Value or min
+
+	local track = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 8),
+		Position = UDim2.new(0, 0, 0.5, -4),
+		BackgroundColor3 = theme.Stroke,
+	}, control)
+	corner(track, 4)
+
+	local fill = create("Frame", {
+		Size = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = theme.Accent,
+	}, track)
+	corner(fill, 4)
+
+	local percentLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 0, 0, -4),
+		Size = UDim2.new(0, 46, 0, 14),
+		Font = Enum.Font.Gotham,
+		TextColor3 = theme.SubText,
+		TextSize = metrics.FontDesc - 1,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, control)
+
+	local function setValue(v)
+		v = math.clamp(v, min, max)
+		value = v
+		local ratio = (v - min) / math.max(max - min, 1e-6)
+		tween(fill, { Size = UDim2.new(ratio, 0, 1, 0) }, 0.2)
+		percentLabel.Text = math.floor(ratio * 100) .. "%"
+	end
+	setValue(value)
+
+	return {
+		Instance = row,
+		Set = function(_, v) setValue(v) end,
 		Get = function() return value end,
 		Destroy = function() row:Destroy() end,
 	}
