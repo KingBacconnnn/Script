@@ -1732,23 +1732,40 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	recommendText.TextXAlignment = Enum.TextXAlignment.Center
 	recommendText.ZIndex = 5
 
+	-- Badge row lives directly under the title, keeping all script badges together.
+	local badgeRow = Instance.new("Frame", titleContainer)
+	badgeRow.Size = UDim2.new(1, 0, 0, 20)
+	badgeRow.BackgroundTransparency = 1
+	badgeRow.LayoutOrder = 2
+	badgeRow.Visible = isRecommended or tagType ~= "NONE"
+	local badgeLay = Instance.new("UIListLayout", badgeRow)
+	badgeLay.FillDirection = Enum.FillDirection.Horizontal
+	badgeLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	badgeLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	badgeLay.SortOrder = Enum.SortOrder.LayoutOrder
+	badgeLay.Padding = UDim.new(0, 5)
+	recommendBadge.Parent = badgeRow
+	recommendBadge.LayoutOrder = 1
+
+	if tagType ~= "NONE" then
+		local tag = Instance.new("Frame", badgeRow)
+		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 20)
+		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 6)
+		local tPad = Instance.new("UIPadding", tag)
+		tPad.PaddingLeft = UDim.new(0, 7); tPad.PaddingRight = UDim.new(0, 7)
+		local tText = Instance.new("TextLabel", tag)
+		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
+		tText.BackgroundTransparency = 1; tText.Text = tagType
+		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = IsMobile and 8 or 9
+		tag.BackgroundColor3 = tagConfig.BadgeColor
+		tag.LayoutOrder = 2
+		tag.ZIndex = 4
+	end
+
 	local metaRightContainer = Instance.new("Frame", topRow)
 	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
-	if tagType ~= "NONE" then
-		local tag = Instance.new("Frame", metaRightContainer)
-		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
-		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 4)
-		local tPad = Instance.new("UIPadding", tag)
-		tPad.PaddingLeft = UDim.new(0, 5); tPad.PaddingRight = UDim.new(0, 5)
-		local tText = Instance.new("TextLabel", tag)
-		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
-		tText.BackgroundTransparency = 1; tText.Text = tagType
-		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = 9
-		tag.BackgroundColor3 = tagConfig.BadgeColor
-		tag.LayoutOrder = 2
-	end
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
 	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
@@ -1764,11 +1781,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
-		-- The recommendation chip lives on its own line so long titles never overlap
-		-- the chip, the UPDATED/HOT badges, or the timestamp.
+		-- Keep FOR YOU + tag type on a dedicated row directly beneath the title.
 		titleLine.Size = UDim2.new(1, 0, 0, 0)
 		titleLbl.Size = UDim2.new(1, 0, 0, 0)
 		recommendBadge.Visible = isRecommended
+		badgeRow.Visible = isRecommended or tagType ~= "NONE"
 	end
 	RegEntryConn(topRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateCardMetaLayout))
 	UpdateCardMetaLayout()
