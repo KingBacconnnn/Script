@@ -33,6 +33,7 @@ VeloxUI.Themes = {
 
 VeloxUI.CurrentTheme = VeloxUI.Themes.Dark
 VeloxUI.ReducedMotion = false
+VeloxUI._windows = {}
 
 VeloxUI.Icons = {
 	ChevronDown = "rbxassetid://10709790948",
@@ -72,10 +73,22 @@ function VeloxUI:AddTheme(name, theme)
 	self.Themes[name] = theme
 end
 
+function VeloxUI:DestroyAll()
+	local windows = self._windows
+	self._windows = {}
+	for _, window in ipairs(windows) do
+		if window and not window._destroyed then
+			window:Destroy()
+		end
+	end
+end
+
 local function create(class, props, parent)
 	local inst = Instance.new(class)
 	for k, v in pairs(props or {}) do
-		inst[k] = v
+		pcall(function()
+			inst[k] = v
+		end)
 	end
 	if parent then
 		inst.Parent = parent
@@ -403,10 +416,24 @@ local function ensureNotifHolder()
 	return NotifHolder
 end
 
+local NOTIFY_STYLES = {
+	success = { Color = Color3.fromRGB(56, 176, 105), Icon = "Check" },
+	warning = { Color = Color3.fromRGB(214, 158, 46), Icon = "Warning" },
+	error = { Color = Color3.fromRGB(217, 68, 68), Icon = "Warning" },
+	info = { Color = nil, Icon = "Info" },
+}
+
 function VeloxUI:Notify(config)
 	config = config or {}
 	local theme = self.CurrentTheme
 	local holder = ensureNotifHolder()
+
+	local style = NOTIFY_STYLES[config.Type] or {}
+	local barColor = style.Color or theme.Accent
+	local icon = config.Icon
+	if icon == nil and style.Icon then
+		icon = VeloxUI.Icons[style.Icon]
+	end
 
 	local frame = create("Frame", {
 		BackgroundColor3 = theme.Element,
@@ -425,15 +452,26 @@ function VeloxUI:Notify(config)
 	local accentBar = create("Frame", {
 		Size = UDim2.new(0, 3, 1, -12),
 		Position = UDim2.new(0, 0, 0, 6),
-		BackgroundColor3 = theme.Accent,
+		BackgroundColor3 = barColor,
 		BackgroundTransparency = 1,
 	}, frame)
 	corner(accentBar, 2)
 
+	local textInset = 8
+	if icon then
+		local iconWrap = create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 8, 0, 1),
+			Size = UDim2.fromOffset(16, 16),
+		}, frame)
+		renderIcon(iconWrap, icon, 16, barColor)
+		textInset = 30
+	end
+
 	local title = create("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 8, 0, 0),
-		Size = UDim2.new(1, -8, 0, 18),
+		Position = UDim2.new(0, textInset, 0, 0),
+		Size = UDim2.new(1, -textInset, 0, 18),
 		Font = Enum.Font.GothamBold,
 		Text = config.Title or "Notification",
 		TextColor3 = theme.Text,
@@ -444,8 +482,8 @@ function VeloxUI:Notify(config)
 
 	local content = create("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 8, 0, 20),
-		Size = UDim2.new(1, -8, 0, 0),
+		Position = UDim2.new(0, textInset, 0, 20),
+		Size = UDim2.new(1, -textInset, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Font = Enum.Font.Gotham,
 		Text = config.Content or "",
@@ -1009,6 +1047,8 @@ function VeloxUI:CreateWindow(config)
 		_destroyed = false,
 	}, WindowMeta)
 
+	table.insert(self._windows, window)
+
 	return window
 end
 
@@ -1032,6 +1072,10 @@ end
 function WindowMeta:Destroy()
 	if self._destroyed then return end
 	self._destroyed = true
+	local idx = table.find(VeloxUI._windows, self)
+	if idx then
+		table.remove(VeloxUI._windows, idx)
+	end
 	if self._unsubscribeViewport then
 		self._unsubscribeViewport()
 	end
@@ -1168,6 +1212,20 @@ function TabMeta:Destroy()
 	end
 end
 
+function TabMeta:SetTitle(text)
+	if self._label then
+		self._label.Text = text or ""
+	end
+end
+
+function TabMeta:SetIcon(icon)
+	if self._icon then
+		self._icon:Destroy()
+	end
+	local color = self._selected and Color3.new(1, 1, 1) or self._theme.SubText
+	self._icon = renderIcon(self._iconHolder, icon, 13, color)
+end
+
 local function baseRow(parent, theme, metrics, titleText, descText, heightOverride)
 	local height = heightOverride or metrics.RowHeight
 	local row = create("Frame", {
@@ -1216,6 +1274,39 @@ local function baseRow(parent, theme, metrics, titleText, descText, heightOverri
 	}, row)
 
 	return row, control
+end
+
+local function addLockOverlay(row, theme)
+	local overlay = create("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = theme.Background,
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+		Visible = false,
+		ZIndex = 30,
+	}, row)
+	corner(overlay, 8)
+	local locked = false
+	local api = {}
+	api.Lock = function()
+		locked = true
+		overlay.Visible = true
+		tween(overlay, { BackgroundTransparency = 0.55 }, 0.15)
+	end
+	api.Unlock = function()
+		locked = false
+		local t = tween(overlay, { BackgroundTransparency = 1 }, 0.15)
+		if t then
+			t.Completed:Connect(function()
+				if not locked then overlay.Visible = false end
+			end)
+		else
+			overlay.Visible = false
+		end
+	end
+	api.IsLocked = function() return locked end
+	return api
 end
 
 function TabMeta:CreateHeader(config)
@@ -1349,7 +1440,7 @@ function TabMeta:CreateCard(config)
 		BackgroundColor3 = theme.Element,
 	}, container)
 	corner(card, metrics.Radius)
-	stroke(card, theme.Stroke, 1)
+	local cardStroke = stroke(card, theme.Stroke, 1)
 	create("UIPadding", {
 		PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14),
 		PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
@@ -1358,6 +1449,13 @@ function TabMeta:CreateCard(config)
 		Padding = UDim.new(0, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, card)
+
+	card.MouseEnter:Connect(function()
+		tween(cardStroke, { Color = theme.Accent, Transparency = 0.4 }, 0.15)
+	end)
+	card.MouseLeave:Connect(function()
+		tween(cardStroke, { Color = theme.Stroke, Transparency = 0 }, 0.15)
+	end)
 
 	if config.Title then
 		local header = create("Frame", {
@@ -1383,6 +1481,11 @@ function TabMeta:CreateCard(config)
 			TextSize = metrics.FontTitle + 1,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}, header)
+		create("Frame", {
+			Size = UDim2.new(1, 0, 0, 1),
+			BackgroundColor3 = theme.Stroke,
+			BorderSizePixel = 0,
+		}, card)
 	end
 
 	local cardTab = setmetatable({
@@ -1400,6 +1503,7 @@ function TabMeta:CreateButton(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local variant = config.Variant or "Primary"
 	local bg, textColor, useStroke
@@ -1464,8 +1568,15 @@ function TabMeta:CreateButton(config)
 		safeCall(config.Callback)
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function() row:Destroy() end,
 	}
 end
@@ -1474,6 +1585,7 @@ function TabMeta:CreateToggle(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local state = config.Value or false
 	local switchSize = metrics.SwitchSize
@@ -1517,10 +1629,17 @@ function TabMeta:CreateToggle(config)
 		setState(not state, true)
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
 		Set = function(_, v) setState(v, false) end,
 		Get = function() return state end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function() row:Destroy() end,
 	}
 end
@@ -1529,6 +1648,7 @@ function TabMeta:CreateSlider(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc, metrics.RowHeightTall)
+	local lock = addLockOverlay(row, theme)
 	control.AnchorPoint = Vector2.new(1, 1)
 	control.Position = UDim2.new(1, -12, 1, -14)
 	control.Size = UDim2.new(0.92, 0, 0, 24)
@@ -1597,10 +1717,17 @@ function TabMeta:CreateSlider(config)
 		end
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
 		Set = function(_, v) apply(v, true) end,
 		Get = function() return value end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function() row:Destroy() end,
 	}
 end
@@ -1610,6 +1737,7 @@ function TabMeta:CreateDropdown(config)
 	local theme, metrics = self._theme, self._metrics
 	local window = self._window
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local multi = config.Multi or false
 	local values = config.Values or {}
@@ -1742,89 +1870,170 @@ function TabMeta:CreateDropdown(config)
 		return false
 	end
 
+	local searchBox
+	if config.Searchable then
+		searchBox = create("TextBox", {
+			Size = UDim2.new(1, -10, 0, optionHeight() - 4),
+			Position = UDim2.new(0, 5, 0, 3),
+			BackgroundColor3 = theme.Element,
+			PlaceholderText = "Search...",
+			Text = "",
+			Font = Enum.Font.Gotham,
+			TextColor3 = theme.Text,
+			PlaceholderColor3 = theme.SubText,
+			TextSize = metrics.FontDesc,
+			ClearTextOnFocus = false,
+			ZIndex = 55,
+		}, listFrame)
+		corner(searchBox, 6)
+		create("UIPadding", { PaddingLeft = UDim.new(0, 6) }, searchBox)
+	end
+
+	local optionPool = {}
+	local refreshSelectionStates
+	local applyFilter
+
+	local function getOrCreateOption(index)
+		local record = optionPool[index]
+		if record then return record end
+
+		local opt = create("TextButton", {
+			Size = UDim2.new(1, 0, 0, optionHeight()),
+			BackgroundColor3 = theme.Accent,
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Visible = false,
+			ZIndex = 55,
+		}, listFrame)
+		local optLabel = create("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 10, 0, 0),
+			Size = UDim2.new(1, -28, 1, 0),
+			Font = Enum.Font.Gotham,
+			Text = "",
+			TextColor3 = theme.Text,
+			TextSize = metrics.FontDesc + 1,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 55,
+		}, opt)
+		local check = create("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -8, 0.5, 0),
+			Size = UDim2.fromOffset(14, 14),
+			Visible = false,
+			ZIndex = 55,
+		}, opt)
+		renderIcon(check, VeloxUI.Icons.Check, 14, theme.Accent)
+
+		local record = { opt = opt, optLabel = optLabel, check = check, val = nil, matches = true }
+
+		opt.MouseEnter:Connect(function()
+			if not isSelected(record.val) then
+				tween(opt, { BackgroundTransparency = 0.9 }, 0.1)
+			end
+		end)
+		opt.MouseLeave:Connect(function()
+			if not isSelected(record.val) then
+				tween(opt, { BackgroundTransparency = 1 }, 0.1)
+			end
+		end)
+		opt.MouseButton1Click:Connect(function()
+			local val = record.val
+			if multi then
+				if isSelected(val) then
+					for i, v in ipairs(selected) do
+						if v == val then
+							table.remove(selected, i)
+							break
+						end
+					end
+				else
+					table.insert(selected, val)
+				end
+				refreshSelectionStates()
+				refreshChips()
+			else
+				selected = val
+				selectedLabel.Text = tostring(val)
+				refreshSelectionStates()
+				window._closeActivePopup()
+			end
+			safeCall(config.Callback, selected)
+		end)
+
+		optionPool[index] = record
+		return record
+	end
+
+	refreshSelectionStates = function()
+		for _, record in ipairs(optionPool) do
+			if record.opt.Visible then
+				local sel = isSelected(record.val)
+				record.opt.BackgroundTransparency = sel and 0.85 or 1
+				record.optLabel.TextColor3 = sel and theme.Accent or theme.Text
+				record.check.Visible = sel
+			end
+		end
+	end
+
+	applyFilter = function()
+		local query = searchBox and searchBox.Text:lower() or ""
+		for _, record in ipairs(optionPool) do
+			if record.val ~= nil then
+				local matches = query == "" or tostring(record.val):lower():find(query, 1, true) ~= nil
+				record.matches = matches
+				record.opt.Visible = matches
+			end
+		end
+	end
+
 	local function rebuild(newValues)
 		values = newValues or values
-		for _, c in ipairs(listFrame:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
+		for i, val in ipairs(values) do
+			local record = getOrCreateOption(i)
+			record.val = val
+			record.optLabel.Text = tostring(val)
+			record.opt.Visible = true
+			local sel = isSelected(val)
+			record.opt.BackgroundTransparency = sel and 0.85 or 1
+			record.optLabel.TextColor3 = sel and theme.Accent or theme.Text
+			record.check.Visible = sel
 		end
-		for _, val in ipairs(values) do
-			local opt = create("TextButton", {
-				Size = UDim2.new(1, 0, 0, optionHeight()),
-				BackgroundColor3 = theme.Accent,
-				BackgroundTransparency = isSelected(val) and 0.85 or 1,
-				Text = "",
-				AutoButtonColor = false,
-				ZIndex = 55,
-			}, listFrame)
-			local optLabel = create("TextLabel", {
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 10, 0, 0),
-				Size = UDim2.new(1, -28, 1, 0),
-				Font = Enum.Font.Gotham,
-				Text = tostring(val),
-				TextColor3 = isSelected(val) and theme.Accent or theme.Text,
-				TextSize = metrics.FontDesc + 1,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				ZIndex = 55,
-			}, opt)
-			local check = create("Frame", {
-				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -8, 0.5, 0),
-				Size = UDim2.fromOffset(14, 14),
-				Visible = isSelected(val),
-				ZIndex = 55,
-			}, opt)
-			renderIcon(check, VeloxUI.Icons.Check, 14, theme.Accent)
-			opt.MouseEnter:Connect(function()
-				if not isSelected(val) then
-					tween(opt, { BackgroundTransparency = 0.9 }, 0.1)
-				end
-			end)
-			opt.MouseLeave:Connect(function()
-				if not isSelected(val) then
-					tween(opt, { BackgroundTransparency = 1 }, 0.1)
-				end
-			end)
-			opt.MouseButton1Click:Connect(function()
-				if multi then
-					if isSelected(val) then
-						for i, v in ipairs(selected) do
-							if v == val then
-								table.remove(selected, i)
-								break
-							end
-						end
-					else
-						table.insert(selected, val)
-					end
-					opt.BackgroundTransparency = isSelected(val) and 0.85 or 1
-					optLabel.TextColor3 = isSelected(val) and theme.Accent or theme.Text
-					check.Visible = isSelected(val)
-					refreshChips()
-				else
-					selected = val
-					selectedLabel.Text = tostring(val)
-					rebuild(values)
-					window._closeActivePopup()
-				end
-				safeCall(config.Callback, selected)
-			end)
+		for i = #values + 1, #optionPool do
+			optionPool[i].val = nil
+			optionPool[i].opt.Visible = false
+		end
+		if searchBox then
+			applyFilter()
 		end
 	end
 	rebuild(values)
+
+	if searchBox then
+		searchBox:GetPropertyChangedSignal("Text"):Connect(applyFilter)
+	end
 
 	dropBtn.MouseButton1Click:Connect(function()
 		if listFrame.Visible then
 			window._closeActivePopup()
 		else
-			local height = math.min(#values, 5) * optionHeight()
+			local extra = searchBox and (optionHeight() + 4) or 0
+			local height = math.min(#values, 5) * optionHeight() + extra
 			local width = dropBtn.AbsoluteSize.X
 			if width <= 0 then width = 160 end
 			listFrame.Size = UDim2.fromOffset(width, height)
+			if searchBox then
+				searchBox.Text = ""
+			end
 			window._openPopup(listFrame, dropBtn, width, height)
 		end
 	end)
+
+	if config.Locked then
+		lock.Lock()
+	end
 
 	return {
 		Instance = row,
@@ -1835,9 +2044,13 @@ function TabMeta:CreateDropdown(config)
 			elseif selectedLabel then
 				selectedLabel.Text = tostring(v)
 			end
+			refreshSelectionStates()
 		end,
 		Refresh = function(_, newValues) rebuild(newValues) end,
 		Get = function() return selected end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function()
 			if listFrame.Parent then
 				listFrame:Destroy()
@@ -1851,6 +2064,7 @@ function TabMeta:CreateInput(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local box = create("TextBox", {
 		Size = UDim2.new(1, 0, 1, 0),
@@ -1875,10 +2089,17 @@ function TabMeta:CreateInput(config)
 		safeCall(config.Callback, box.Text)
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
 		Set = function(_, v) box.Text = v end,
 		Get = function() return box.Text end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function() row:Destroy() end,
 	}
 end
@@ -1887,6 +2108,7 @@ function TabMeta:CreateNumber(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local min = config.Min or 0
 	local max = config.Max or math.huge
@@ -1958,10 +2180,17 @@ function TabMeta:CreateNumber(config)
 		end
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
 		Set = function(_, v) setValue(v, false) end,
 		Get = function() return value end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function() row:Destroy() end,
 	}
 end
@@ -2023,9 +2252,11 @@ function TabMeta:CreateKeybind(config)
 	config = config or {}
 	local theme, metrics = self._theme, self._metrics
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local current = config.Value or "None"
 	local myCaptureFn
+	local unregisterPersistent
 
 	local btn = create("TextButton", {
 		Size = UDim2.new(1, 0, 1, 0),
@@ -2059,23 +2290,53 @@ function TabMeta:CreateKeybind(config)
 		TextSize = 11,
 	}, btn)
 
+	local function bindPersistent(keyName)
+		if unregisterPersistent then
+			unregisterPersistent()
+			unregisterPersistent = nil
+		end
+		if config.Persistent then
+			local keyCode = Enum.KeyCode[keyName]
+			if keyCode then
+				unregisterPersistent = InputBus.RegisterToggleKey(keyCode, function()
+					safeCall(config.Callback, current, true)
+				end)
+			end
+		end
+	end
+
+	if config.Persistent and current ~= "None" then
+		bindPersistent(current)
+	end
+
 	btn.MouseButton1Click:Connect(function()
 		label.Text = "..."
 		myCaptureFn = function(keyCode)
 			current = keyCode.Name
 			label.Text = current
-			safeCall(config.Callback, current)
+			bindPersistent(current)
+			safeCall(config.Callback, current, false)
 		end
 		InputBus.CaptureNextKey(myCaptureFn)
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
-		Set = function(_, v) current = v; label.Text = v end,
+		Set = function(_, v) current = v; label.Text = v; bindPersistent(v) end,
 		Get = function() return current end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function()
 			if myCaptureFn then
 				InputBus.CancelCapture(myCaptureFn)
+			end
+			if unregisterPersistent then
+				unregisterPersistent()
 			end
 			row:Destroy()
 		end,
@@ -2150,6 +2411,7 @@ function TabMeta:CreateColorpicker(config)
 	local theme, metrics = self._theme, self._metrics
 	local window = self._window
 	local row, control = baseRow(self._page, theme, metrics, config.Title, config.Desc)
+	local lock = addLockOverlay(row, theme)
 
 	local color = config.Default or Color3.fromRGB(255, 255, 255)
 	local rgb = { color.R * 255, color.G * 255, color.B * 255 }
@@ -2253,9 +2515,16 @@ function TabMeta:CreateColorpicker(config)
 		end
 	end)
 
+	if config.Locked then
+		lock.Lock()
+	end
+
 	return {
 		Instance = row,
 		Get = function() return color end,
+		Lock = lock.Lock,
+		Unlock = lock.Unlock,
+		IsLocked = lock.IsLocked,
 		Destroy = function()
 			if popup.Parent then
 				popup:Destroy()
