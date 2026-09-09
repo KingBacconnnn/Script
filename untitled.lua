@@ -1656,6 +1656,9 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
 	local cardStroke = GetOrCreateCardStroke(card)
 	ApplyTagBorder(card, tagType, cardStroke)
+	if isRecommended then
+		card.BackgroundColor3 = Color3.fromRGB(31, 42, 55)
+	end
 	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
@@ -1678,30 +1681,40 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
-	local titleLay = Instance.new("UIListLayout", titleContainer)
-	titleLay.FillDirection = Enum.FillDirection.Horizontal
-	titleLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	titleLay.VerticalAlignment = Enum.VerticalAlignment.Center
-	titleLay.SortOrder = Enum.SortOrder.LayoutOrder
-	titleLay.Padding = UDim.new(0, 6)
+	local titleContainerLay = Instance.new("UIListLayout", titleContainer)
+	titleContainerLay.FillDirection = Enum.FillDirection.Vertical
+	titleContainerLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	titleContainerLay.VerticalAlignment = Enum.VerticalAlignment.Top
+	titleContainerLay.SortOrder = Enum.SortOrder.LayoutOrder
+	titleContainerLay.Padding = UDim.new(0, 5)
 
-	local titleLbl = Instance.new("TextLabel", titleContainer)
+	local titleLine = Instance.new("Frame", titleContainer)
+	titleLine.Size = UDim2.new(1, 0, 0, 0); titleLine.AutomaticSize = Enum.AutomaticSize.Y
+	titleLine.BackgroundTransparency = 1; titleLine.LayoutOrder = 1
+	local titleLineLay = Instance.new("UIListLayout", titleLine)
+	titleLineLay.FillDirection = Enum.FillDirection.Horizontal
+	titleLineLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	titleLineLay.VerticalAlignment = Enum.VerticalAlignment.Top
+	titleLineLay.SortOrder = Enum.SortOrder.LayoutOrder
+	titleLineLay.Padding = UDim.new(0, 6)
+
+	local titleLbl = Instance.new("TextLabel", titleLine)
 	titleLbl.Size = UDim2.new(1, 0, 0, 0); titleLbl.AutomaticSize = Enum.AutomaticSize.Y
 	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-	titleLbl.LayoutOrder = 1
+	titleLbl.LayoutOrder = 1; titleLbl.ZIndex = 3
 
 	local recommendBadge = Instance.new("Frame", titleContainer)
-	recommendBadge.Size = UDim2.new(0, 62, 0, 17)
+	recommendBadge.Size = UDim2.new(0, 68, 0, 20)
 	recommendBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 	recommendBadge.Visible = isRecommended
 	recommendBadge.LayoutOrder = 2
 	recommendBadge.ZIndex = 4
-	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 6)
+	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 7)
 	local recommendStroke = Instance.new("UIStroke", recommendBadge)
 	recommendStroke.Color = Color3.fromRGB(165, 180, 252)
-	recommendStroke.Transparency = 0.15
+	recommendStroke.Transparency = 0.05
 	recommendStroke.Thickness = 1
 	local recommendGradient = Instance.new("UIGradient", recommendBadge)
 	recommendGradient.Rotation = 0
@@ -1715,7 +1728,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	recommendText.Text = "FOR YOU"
 	recommendText.TextColor3 = Color3.fromRGB(255, 255, 255)
 	recommendText.Font = Enum.Font.GothamBold
-	recommendText.TextSize = 8
+	recommendText.TextSize = IsMobile and 8 or 9
 	recommendText.TextXAlignment = Enum.TextXAlignment.Center
 	recommendText.ZIndex = 5
 
@@ -1746,14 +1759,15 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local available = topRow.AbsoluteSize.X
 		if available <= 0 then return end
 		local target = metaWidth
-		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.48))) end
-		if tagType == "NONE" then target = math.max(130, target - 34) end
+		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.46))) end
+		if tagType == "NONE" then target = math.max(125, target - 34) end
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
-		local badgeWidth = isRecommended and 68 or 0
-		local gap = isRecommended and 6 or 0
-		titleLbl.Size = UDim2.new(1, -(badgeWidth + gap), 0, 0)
+		-- The recommendation chip lives on its own line so long titles never overlap
+		-- the chip, the UPDATED/HOT badges, or the timestamp.
+		titleLine.Size = UDim2.new(1, 0, 0, 0)
+		titleLbl.Size = UDim2.new(1, 0, 0, 0)
 		recommendBadge.Visible = isRecommended
 	end
 	RegEntryConn(topRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateCardMetaLayout))
@@ -1804,6 +1818,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local innerActionTime = 0
 	scriptEntry.UpdateUI = function()
 		ApplyTagBorder(card, tagType, cardStroke)
+		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
 		recommendBadge.Visible = isRecommended
 		if isRecommended then
 			cardStroke.Color = Color3.fromRGB(129, 140, 248)
