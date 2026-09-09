@@ -1678,26 +1678,30 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
+	local titleLay = Instance.new("UIListLayout", titleContainer)
+	titleLay.FillDirection = Enum.FillDirection.Horizontal
+	titleLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	titleLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	titleLay.SortOrder = Enum.SortOrder.LayoutOrder
+	titleLay.Padding = UDim.new(0, 6)
+
 	local titleLbl = Instance.new("TextLabel", titleContainer)
 	titleLbl.Size = UDim2.new(1, 0, 0, 0); titleLbl.AutomaticSize = Enum.AutomaticSize.Y
 	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-	local metaRightContainer = Instance.new("Frame", topRow)
-	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
-	local mrLay = Instance.new("UIListLayout", metaRightContainer)
-	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
-	local recommendBadge = Instance.new("Frame", metaRightContainer)
-	recommendBadge.AutomaticSize = Enum.AutomaticSize.X
-	recommendBadge.Size = UDim2.new(0, 0, 0, 16)
-	recommendBadge.BackgroundColor3 = Theme.Accent
+	titleLbl.LayoutOrder = 1
+
+	local recommendBadge = Instance.new("Frame", titleContainer)
+	recommendBadge.Size = UDim2.new(0, 62, 0, 17)
+	recommendBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 	recommendBadge.Visible = isRecommended
-	recommendBadge.LayoutOrder = 0
-	recommendBadge.ZIndex = 2
-	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 5)
+	recommendBadge.LayoutOrder = 2
+	recommendBadge.ZIndex = 4
+	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 6)
 	local recommendStroke = Instance.new("UIStroke", recommendBadge)
-	recommendStroke.Color = Color3.fromRGB(129, 140, 248)
-	recommendStroke.Transparency = 0.25
+	recommendStroke.Color = Color3.fromRGB(165, 180, 252)
+	recommendStroke.Transparency = 0.15
 	recommendStroke.Thickness = 1
 	local recommendGradient = Instance.new("UIGradient", recommendBadge)
 	recommendGradient.Rotation = 0
@@ -1705,18 +1709,20 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(129, 140, 248)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(79, 70, 229))
 	})
-	local recommendPad = Instance.new("UIPadding", recommendBadge)
-	recommendPad.PaddingLeft = UDim.new(0, 6); recommendPad.PaddingRight = UDim.new(0, 6)
 	local recommendText = Instance.new("TextLabel", recommendBadge)
-	recommendText.AutomaticSize = Enum.AutomaticSize.X
-	recommendText.Size = UDim2.new(0, 0, 1, 0)
+	recommendText.Size = UDim2.new(1, 0, 1, 0)
 	recommendText.BackgroundTransparency = 1
-	recommendText.Text = "✦  FOR YOU"
+	recommendText.Text = "FOR YOU"
 	recommendText.TextColor3 = Color3.fromRGB(255, 255, 255)
 	recommendText.Font = Enum.Font.GothamBold
 	recommendText.TextSize = 8
 	recommendText.TextXAlignment = Enum.TextXAlignment.Center
-	recommendText.ZIndex = 3
+	recommendText.ZIndex = 5
+
+	local metaRightContainer = Instance.new("Frame", topRow)
+	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
+	local mrLay = Instance.new("UIListLayout", metaRightContainer)
+	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
 	if tagType ~= "NONE" then
 		local tag = Instance.new("Frame", metaRightContainer)
 		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
@@ -1740,10 +1746,15 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		local available = topRow.AbsoluteSize.X
 		if available <= 0 then return end
 		local target = metaWidth
-		if available < 440 then target = math.min(target, math.max(165, math.floor(available * 0.52))) end
-		if tagType == "NONE" then target = math.max(145, target - 34) end
+		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.48))) end
+		if tagType == "NONE" then target = math.max(130, target - 34) end
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
+
+		local badgeWidth = isRecommended and 68 or 0
+		local gap = isRecommended and 6 or 0
+		titleLbl.Size = UDim2.new(1, -(badgeWidth + gap), 0, 0)
+		recommendBadge.Visible = isRecommended
 	end
 	RegEntryConn(topRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateCardMetaLayout))
 	UpdateCardMetaLayout()
