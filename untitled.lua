@@ -37,6 +37,7 @@ local RunService = Services.RunService
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
+local TeleportService = Services.TeleportService
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
@@ -275,7 +276,7 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UiScale = 1 }
+	Settings = { AntiAFK = false }
 }
 local isSaving = false
 local saveQueued = false
@@ -307,7 +308,7 @@ local function SaveConfiguration()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UiScale = tonumber(SavedData.Settings.UiScale) or 1 }
+			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
 		}
 		for k, v in pairs(SavedData.Favorites) do
 			if v then cleanData.Favorites[tostring(k)] = true end
@@ -374,13 +375,6 @@ local function LoadConfiguration()
 	end
 end
 LoadConfiguration()
--- Normalize the persisted UI scale so older/corrupt config values cannot break the UI.
-local function NormalizeUiScale(value)
-	value = tonumber(value)
-	if value == 0.9 or value == 1 or value == 1.1 then return value end
-	return 1
-end
-SavedData.Settings.UiScale = NormalizeUiScale(SavedData.Settings.UiScale)
 local function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
@@ -662,13 +656,6 @@ MainPanel.ClipsDescendants = true
 MainPanel.Visible = true
 MainPanel.Active = true
 MainPanel.ZIndex = 1
-
--- UIScale applies proportionally to the entire hub. Existing text strings and names are never modified.
-local MainUIScale = Instance.new("UIScale")
-MainUIScale.Name = "VeloxHub_UIScale"
-MainUIScale.Scale = NormalizeUiScale(SavedData.Settings.UiScale)
-MainUIScale.Parent = MainPanel
-
 local MainModalBtn = Instance.new("TextButton", MainPanel)
 MainModalBtn.Size = UDim2.new(0, 0, 0, 0)
 MainModalBtn.Visible = true
@@ -1258,7 +1245,7 @@ SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Activ
 local filterBtnWidth = IsMobile and 28 or 32
 local gap = 8
 local SearchContainer = Instance.new("Frame", SearchRow)
-SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 3 + gap * 3), 1, 0); SearchContainer.Position = UDim2.new(0, filterBtnWidth + gap, 0, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 2 + gap * 2), 1, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
 SearchContainer.ClipsDescendants = true; SearchContainer.ZIndex = 51
 Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 6)
 local SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Color3.fromRGB(51, 65, 85); SearchStroke.Thickness = 1
@@ -1288,15 +1275,6 @@ FavFilterBtn.TextColor3 = Color3.fromRGB(148, 163, 184); FavFilterBtn.TextSize =
 FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
 local FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
-local RefreshCatalogBtn = Instance.new("TextButton", SearchRow)
-RefreshCatalogBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); RefreshCatalogBtn.Position = UDim2.new(1, -(filterBtnWidth * 3 + gap * 2), 0, 0)
-RefreshCatalogBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); RefreshCatalogBtn.Text = "↻"
-RefreshCatalogBtn.TextColor3 = Theme.TextSecondary; RefreshCatalogBtn.TextSize = 15
-RefreshCatalogBtn.Font = Enum.Font.GothamBold; RefreshCatalogBtn.ZIndex = 51; RefreshCatalogBtn.ClipsDescendants = true
-Instance.new("UICorner", RefreshCatalogBtn).CornerRadius = UDim.new(0, 6)
-local RefreshBtnStroke = Instance.new("UIStroke", RefreshCatalogBtn); RefreshBtnStroke.Color = Theme.Stroke
-ApplyInteractiveAnimations(RefreshCatalogBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, RefreshBtnStroke, Theme.Stroke, Theme.Accent)
-
 local SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
 SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
@@ -1653,6 +1631,30 @@ local function ExecuteSandboxed(code, scriptName)
 	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
 	return false, detail
 end
+local function JoinGameByPlaceId(targetPlaceId)
+	local placeId = tonumber(targetPlaceId)
+	if not placeId or placeId <= 0 then
+		ShowNotification("This entry does not have a valid PlaceId.", "Warning")
+		return false
+	end
+	if placeId == game.PlaceId then
+		ShowNotification("You are already in this game.", "Info")
+		return false
+	end
+	if not TeleportService then
+		ShowNotification("TeleportService is unavailable.", "Error")
+		return false
+	end
+	local ok, err = pcall(function()
+		TeleportService:Teleport(placeId, LocalPlayer)
+	end)
+	if not ok then
+		ShowNotification("Failed to join game: " .. tostring(err), "Error")
+		return false
+	end
+	ShowNotification("Joining game...", "Info")
+	return true
+end
 local function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
 	local tagConfig = TagTypeConfig[tagType]
@@ -1755,11 +1757,18 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
+	local joinBtn = Instance.new("TextButton", btmRow)
+	joinBtn.Size = UDim2.new(0, 78, 0, 22); joinBtn.BackgroundColor3 = Theme.Info
+	joinBtn.Text = "Join Game"; joinBtn.TextColor3 = Theme.TextPrimary
+	joinBtn.Font = Enum.Font.GothamBold; joinBtn.TextSize = 10; joinBtn.AutoButtonColor = false
+	joinBtn.LayoutOrder = 2; joinBtn.ZIndex = 2
+	Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 6)
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
-	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
+	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
+	ApplyInteractiveAnimations(joinBtn, Theme.Info, Theme.System, Color3.fromRGB(20, 30, 50), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
@@ -1785,6 +1794,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
+		local targetPlaceId = tonumber(data.PlaceId) or 0
+		joinBtn.Text = targetPlaceId > 0 and (targetPlaceId == game.PlaceId and "Current Game" or "Join Game") or "No PlaceId"
+		joinBtn.Active = targetPlaceId > 0 and targetPlaceId ~= game.PlaceId
+		joinBtn.TextColor3 = joinBtn.Active and Theme.TextPrimary or Theme.TextSecondary
+		joinBtn.BackgroundColor3 = joinBtn.Active and Theme.Info or Theme.BackgroundMain
 	end
 	scriptEntry.UpdateUI()
 	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
@@ -1796,6 +1810,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+	end)))
+	RegEntryConn(joinBtn.Activated:Connect(_VH_CreateDebounce(0.2, function()
+		if isDestroying then return end
+		innerActionTime = tick()
+		JoinGameByPlaceId(data.PlaceId)
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -1896,10 +1915,6 @@ PendingTasks.__LoadCatalog = function(force)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-		if RefreshCatalogBtn and RefreshCatalogBtn.Parent then
-			RefreshCatalogBtn.Text = "↻"
-			RefreshCatalogBtn.TextColor3 = Theme.TextSecondary
-		end
 		if CatalogRefreshQueued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
 			CatalogRefreshQueued = false
@@ -2106,22 +2121,6 @@ PendingTasks.__LoadCatalog = function(force)
 	end)
 	return true
 end
-_VH_RegConn(RefreshCatalogBtn.Activated:Connect(function()
-	if isDestroying then return end
-	if dbRefreshing then
-		ShowNotification("Catalog refresh is already in progress.", "Info")
-		return
-	end
-	RefreshCatalogBtn.Text = "⟳"
-	RefreshCatalogBtn.TextColor3 = Theme.Accent
-	PendingTasks.__LoadCatalog(true)
-	task.delay(0.35, function()
-		if RefreshCatalogBtn and RefreshCatalogBtn.Parent and not dbRefreshing then
-			RefreshCatalogBtn.Text = "↻"
-			RefreshCatalogBtn.TextColor3 = Theme.TextSecondary
-		end
-	end)
-end))
 PendingTasks.__LoadCatalog()
 _VH_TrackTask(function()
 	while not isDestroying do
@@ -2298,74 +2297,6 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	end)))
 	return btn
 end
-local function CreateUiScaleSetting(groupCard, order)
-	local row, rightContainer = CreateSettingRowInGroup(
-		groupCard,
-		"UI Scale",
-		"Adjusts the hub size without changing any existing names or text.",
-		"rbxassetid://10734976445",
-		order
-	)
-
-	local options = { 0.9, 1, 1.1 }
-	local labels = { "90%", "100%", "110%" }
-	local buttonWidth = 32
-	local gap = 4
-	local totalWidth = (buttonWidth * #options) + (gap * (#options - 1))
-
-	local optionHolder = Instance.new("Frame", rightContainer)
-	optionHolder.Size = UDim2.new(0, totalWidth, 0, 26)
-	optionHolder.Position = UDim2.new(1, -totalWidth, 0.5, -13)
-	optionHolder.BackgroundTransparency = 1
-
-	local selected = NormalizeUiScale(SavedData.Settings.UiScale)
-	local buttons = {}
-
-	local function RefreshButtons()
-		for i, btn in ipairs(buttons) do
-			local active = options[i] == selected
-			btn.BackgroundColor3 = active and Theme.Accent or Theme.BackgroundMain
-			btn.BackgroundTransparency = active and 0 or 0.35
-			btn.TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary
-			local stroke = btn:FindFirstChild("ScaleStroke")
-			if stroke then stroke.Color = active and Theme.Accent or Theme.Stroke end
-		end
-	end
-
-	for i, scaleValue in ipairs(options) do
-		local btn = Instance.new("TextButton", optionHolder)
-		btn.Size = UDim2.new(0, buttonWidth, 0, 26)
-		btn.Position = UDim2.new(0, (i - 1) * (buttonWidth + gap), 0, 0)
-		btn.BackgroundColor3 = Theme.BackgroundMain
-		btn.BackgroundTransparency = 0.35
-		btn.Text = labels[i]
-		btn.Font = Enum.Font.GothamMedium
-		btn.TextSize = 9
-		btn.TextColor3 = Theme.TextSecondary
-		btn.AutoButtonColor = false
-		btn.ClipsDescendants = true
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-		local stroke = Instance.new("UIStroke", btn)
-		stroke.Name = "ScaleStroke"
-		stroke.Color = Theme.Stroke
-		stroke.Thickness = 1
-		buttons[i] = btn
-
-		ApplyInteractiveAnimations(btn, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), stroke, Theme.Stroke, Theme.Accent)
-		_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
-			if isDestroying then return end
-			selected = scaleValue
-			MainUIScale.Scale = scaleValue
-			SavedData.Settings.UiScale = scaleValue
-			SaveConfiguration()
-			RefreshButtons()
-		end)))
-	end
-
-	RefreshButtons()
-	return row
-end
-
 local function BuildSettings()
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
@@ -2430,7 +2361,6 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		end
 	end))
 end)))
-CreateUiScaleSetting(prefGroup, 2)
 local function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
 	local player = Players.LocalPlayer
@@ -2471,7 +2401,7 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 3, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
