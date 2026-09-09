@@ -37,7 +37,6 @@ local RunService = Services.RunService
 local CoreGui = Services.CoreGui
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
-local TeleportService = Services.TeleportService
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do
 	task.wait()
@@ -1389,6 +1388,9 @@ local function UpdateFilter()
 		end
 		if currentVersion ~= filterVersion then return end
 		table.sort(matches, function(a, b)
+			if currentSort == "Most Relevant" and a.Recommended ~= b.Recommended then
+				return a.Recommended == true
+			end
 			if currentSort == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif currentSort == "Z-A" then
@@ -1557,6 +1559,10 @@ local function IsScriptCompatible(data)
 	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
 	return allowedPlaceId == 0 or allowedPlaceId == PlaceId
 end
+local function IsRecommendedForCurrentPlace(data)
+	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
+	return PlaceId ~= 0 and allowedPlaceId == PlaceId
+end
 local function IsCalendarDay(timestamp)
 	local value = tonumber(timestamp)
 	if not value or value <= 0 then return false end
@@ -1631,34 +1637,11 @@ local function ExecuteSandboxed(code, scriptName)
 	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
 	return false, detail
 end
-local function JoinGameByPlaceId(targetPlaceId)
-	local placeId = tonumber(targetPlaceId)
-	if not placeId or placeId <= 0 then
-		ShowNotification("This entry does not have a valid PlaceId.", "Warning")
-		return false
-	end
-	if placeId == game.PlaceId then
-		ShowNotification("You are already in this game.", "Info")
-		return false
-	end
-	if not TeleportService then
-		ShowNotification("TeleportService is unavailable.", "Error")
-		return false
-	end
-	local ok, err = pcall(function()
-		TeleportService:Teleport(placeId, LocalPlayer)
-	end)
-	if not ok then
-		ShowNotification("Failed to join game: " .. tostring(err), "Error")
-		return false
-	end
-	ShowNotification("Joining game...", "Info")
-	return true
-end
 local function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
 	local tagConfig = TagTypeConfig[tagType]
 	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
+	local isRecommended = IsRecommendedForCurrentPlace(data)
 	local scriptId = StableScriptId(data) or ("name:" .. string.lower(exactName))
 	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
 	local entryConnections = {}
@@ -1703,7 +1686,37 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local metaRightContainer = Instance.new("Frame", topRow)
 	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
-	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 2)
+	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
+	local recommendBadge = Instance.new("Frame", metaRightContainer)
+	recommendBadge.AutomaticSize = Enum.AutomaticSize.X
+	recommendBadge.Size = UDim2.new(0, 0, 0, 16)
+	recommendBadge.BackgroundColor3 = Theme.Accent
+	recommendBadge.Visible = isRecommended
+	recommendBadge.LayoutOrder = 0
+	recommendBadge.ZIndex = 2
+	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 5)
+	local recommendStroke = Instance.new("UIStroke", recommendBadge)
+	recommendStroke.Color = Color3.fromRGB(129, 140, 248)
+	recommendStroke.Transparency = 0.25
+	recommendStroke.Thickness = 1
+	local recommendGradient = Instance.new("UIGradient", recommendBadge)
+	recommendGradient.Rotation = 0
+	recommendGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(129, 140, 248)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(79, 70, 229))
+	})
+	local recommendPad = Instance.new("UIPadding", recommendBadge)
+	recommendPad.PaddingLeft = UDim.new(0, 6); recommendPad.PaddingRight = UDim.new(0, 6)
+	local recommendText = Instance.new("TextLabel", recommendBadge)
+	recommendText.AutomaticSize = Enum.AutomaticSize.X
+	recommendText.Size = UDim2.new(0, 0, 1, 0)
+	recommendText.BackgroundTransparency = 1
+	recommendText.Text = "✦  FOR YOU"
+	recommendText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	recommendText.Font = Enum.Font.GothamBold
+	recommendText.TextSize = 8
+	recommendText.TextXAlignment = Enum.TextXAlignment.Center
+	recommendText.ZIndex = 3
 	if tagType ~= "NONE" then
 		local tag = Instance.new("Frame", metaRightContainer)
 		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 14)
@@ -1757,25 +1770,18 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
-	local joinBtn = Instance.new("TextButton", btmRow)
-	joinBtn.Size = UDim2.new(0, 78, 0, 22); joinBtn.BackgroundColor3 = Theme.Info
-	joinBtn.Text = "Join Game"; joinBtn.TextColor3 = Theme.TextPrimary
-	joinBtn.Font = Enum.Font.GothamBold; joinBtn.TextSize = 10; joinBtn.AutoButtonColor = false
-	joinBtn.LayoutOrder = 2; joinBtn.ZIndex = 2
-	Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 6)
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
-	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
+	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(joinBtn, Theme.Info, Theme.System, Color3.fromRGB(20, 30, 50), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
-		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, IsScriptCompatible(data) and "compatible" or "game-only"}, " ")),
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or ""}, " ")),
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -1787,6 +1793,11 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	local innerActionTime = 0
 	scriptEntry.UpdateUI = function()
 		ApplyTagBorder(card, tagType, cardStroke)
+		recommendBadge.Visible = isRecommended
+		if isRecommended then
+			cardStroke.Color = Color3.fromRGB(129, 140, 248)
+			cardStroke.Thickness = 1.5
+		end
 		local isFav = SavedData.Favorites[scriptId]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		local compatible = IsScriptCompatible(data)
@@ -1794,11 +1805,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
-		local targetPlaceId = tonumber(data.PlaceId) or 0
-		joinBtn.Text = targetPlaceId > 0 and (targetPlaceId == game.PlaceId and "Current Game" or "Join Game") or "No PlaceId"
-		joinBtn.Active = targetPlaceId > 0 and targetPlaceId ~= game.PlaceId
-		joinBtn.TextColor3 = joinBtn.Active and Theme.TextPrimary or Theme.TextSecondary
-		joinBtn.BackgroundColor3 = joinBtn.Active and Theme.Info or Theme.BackgroundMain
 	end
 	scriptEntry.UpdateUI()
 	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
@@ -1810,11 +1816,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
 		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	end)))
-	RegEntryConn(joinBtn.Activated:Connect(_VH_CreateDebounce(0.2, function()
-		if isDestroying then return end
-		innerActionTime = tick()
-		JoinGameByPlaceId(data.PlaceId)
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
