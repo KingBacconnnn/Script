@@ -1953,7 +1953,11 @@ local CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScript
 local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
+local PendingCatalogRefreshForce = false
 local LastCatalogFingerprint = nil
+local CatalogRefreshToken = 0
+local CatalogRefreshStartedAt = 0
+local CATALOG_REFRESH_WATCHDOG = 20
 local function BuildCatalogFingerprint(entries)
 	local parts = {}
 	for index, entry in ipairs(entries) do
@@ -1970,37 +1974,74 @@ local function BuildCatalogFingerprint(entries)
 end
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
+	force = force == true
 	if dbRefreshing then
 		CatalogRefreshQueued = true
-		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
+		PendingCatalogRefreshForce = PendingCatalogRefreshForce or force
 		return false
 	end
 	local now = os.clock()
 	if not force and now - LastCatalogRefreshAt < 5 then
-		CatalogRefreshQueued = true
 		return false
 	end
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
+	CatalogRefreshToken += 1
+	local refreshToken = CatalogRefreshToken
+	CatalogRefreshStartedAt = now
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
-	ShowNotification("Fetching latest script catalog...", "System")
-	StatusDot.BackgroundColor3 = Theme.Warning
-	StatusText.Text = "Connecting..."
-	StatusText.TextColor3 = Theme.Warning
-	local function FinishRefresh()
-		if generation ~= CatalogGeneration then return end
+
+	-- Do not allow an error during setup/notification to leave the refresh lock stuck.
+	local setupOk, setupErr = pcall(function()
+		ShowNotification("Fetching latest script catalog...", "System")
+		StatusDot.BackgroundColor3 = Theme.Warning
+		StatusText.Text = "Connecting..."
+		StatusText.TextColor3 = Theme.Warning
+	end)
+	if not setupOk then
 		dbRefreshing = false
-		if CatalogRefreshQueued and not isDestroying then
-			local queuedForce = PendingTasks.__CatalogRefreshForce == true
-			CatalogRefreshQueued = false
-			PendingTasks.__CatalogRefreshForce = false
+		CatalogRefreshQueued = false
+		PendingCatalogRefreshForce = false
+		CatalogRefreshToken += 1
+		if not isDestroying then
+			pcall(function() ShowNotification("Catalog refresh could not start: " .. tostring(setupErr), "Error") end)
+		end
+		return false
+	end
+
+	local function FinishRefresh()
+		if refreshToken ~= CatalogRefreshToken or generation ~= CatalogGeneration then return end
+		dbRefreshing = false
+		CatalogRefreshStartedAt = 0
+		local shouldQueue = CatalogRefreshQueued and not isDestroying
+		local queuedForce = PendingCatalogRefreshForce
+		CatalogRefreshQueued = false
+		PendingCatalogRefreshForce = false
+		if shouldQueue then
 			task.defer(function()
 				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
 			end)
 		end
 	end
+
+	-- Independent watchdog: even if the HTTP layer hangs forever, the UI can recover.
+	task.delay(CATALOG_REFRESH_WATCHDOG, function()
+		if isDestroying then return end
+		if refreshToken ~= CatalogRefreshToken or not dbRefreshing then return end
+		dbRefreshing = false
+		CatalogRefreshStartedAt = 0
+		CatalogRefreshQueued = false
+		PendingCatalogRefreshForce = false
+		CatalogGeneration += 1 -- invalidate any stale worker that returns later
+		pcall(function()
+			StatusDot.BackgroundColor3 = Theme.Warning
+			StatusText.Text = "Refresh Timeout"
+			StatusText.TextColor3 = Theme.Warning
+			ShowNotification("Catalog refresh timed out. The hub recovered and is ready to try again.", "Warning")
+		end)
+	end)
 	local activeBuildFolder = nil
 	local activeNewEntries = {}
 	_VH_TrackTask(function()
@@ -2567,26 +2608,50 @@ local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		AnimateRefreshButton(btn, true)
+		local requestStarted = tick()
+		local completed = false
+		local function RestoreButton()
+			if completed then return end
+			completed = true
+			if btn and btn.Parent then AnimateRefreshButton(btn, false) end
+		end
+
 		if dbRefreshing then
 			CatalogRefreshQueued = true
+			PendingCatalogRefreshForce = true
 			ShowNotification("Catalog is already refreshing — your refresh has been queued.", "Info")
-			task.delay(0.6, function() if btn and btn.Parent then AnimateRefreshButton(btn, false) end end)
+			task.delay(0.5, RestoreButton)
 			return
 		end
-		ShowNotification("Refreshing script catalog...", "System")
-		LoadDynamicCatalog(true)
+
+		local callOk, callResult = pcall(function()
+			return PendingTasks.__LoadCatalog(true)
+		end)
+		if not callOk then
+			dbRefreshing = false
+			CatalogRefreshQueued = false
+			PendingCatalogRefreshForce = false
+			CatalogRefreshToken += 1
+			CatalogGeneration += 1
+			RestoreButton()
+			ShowNotification("Catalog refresh failed to start safely.", "Error")
+			return
+		end
+		if callResult == false and not dbRefreshing then
+			RestoreButton()
+			return
+		end
+
+		-- Button watchdog is independent of the catalog worker, so it can never stay visually stuck.
 		task.spawn(function()
-			local started = tick()
-			while dbRefreshing and not isDestroying and tick() - started < 30 do
-				task.wait(0.15)
+			while not isDestroying and not completed and tick() - requestStarted < (CATALOG_REFRESH_WATCHDOG + 2) do
+				if not dbRefreshing then
+					RestoreButton()
+					return
+				end
+				task.wait(0.1)
 			end
-			if isDestroying or not btn or not btn.Parent then return end
-			if dbRefreshing then
-				AnimateRefreshButton(btn, false)
-				ShowNotification("Catalog refresh is taking longer than expected.", "Warning")
-			else
-				AnimateRefreshButton(btn, false)
-			end
+			RestoreButton()
 		end)
 	end)
 end)
