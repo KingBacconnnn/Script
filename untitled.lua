@@ -1954,7 +1954,6 @@ local CATALOG_REFRESH_INTERVAL = 300
 local dbRefreshing = false
 local CatalogRefreshQueued = false
 local LastCatalogFingerprint = nil
-local CatalogRefreshCallbacks = {}
 local function BuildCatalogFingerprint(entries)
 	local parts = {}
 	for index, entry in ipairs(entries) do
@@ -1987,12 +1986,9 @@ local function ClearCatalogCardsForRefresh()
 	EmptyStateMessage.Text = ""
 	ScriptsView.CanvasPosition = Vector2.new(0, 0)
 end
-PendingTasks.__LoadCatalog = function(force, onComplete)
+PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
 	if dbRefreshing then
-		if type(onComplete) == "function" then
-			CatalogRefreshCallbacks[#CatalogRefreshCallbacks + 1] = onComplete
-		end
 		CatalogRefreshQueued = true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		return false
@@ -2004,10 +2000,6 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 	end
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
-	table.clear(CatalogRefreshCallbacks)
-	if type(onComplete) == "function" then
-		CatalogRefreshCallbacks[#CatalogRefreshCallbacks + 1] = onComplete
-	end
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
@@ -2018,16 +2010,9 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
-	local function FinishRefresh(success, message)
+	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-		local callbacks = table.clone(CatalogRefreshCallbacks)
-		table.clear(CatalogRefreshCallbacks)
-		for _, callback in ipairs(callbacks) do
-			task.spawn(function()
-				pcall(callback, success == true, message)
-			end)
-		end
 		if CatalogRefreshQueued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
 			CatalogRefreshQueued = false
@@ -2049,7 +2034,7 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
 				StatusText.TextColor3 = Theme.Error
 				ShowNotification("Could not connect to the script catalog server.", "Error")
-				FinishRefresh(false, "Unable to reach script catalog server.")
+				FinishRefresh()
 				return
 			end
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
@@ -2059,7 +2044,7 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 				StatusText.Text = "Data Error"
 				StatusText.TextColor3 = Theme.Error
 				ShowNotification("Catalog data format error.", "Error")
-				FinishRefresh(false, "Failed to parse catalog data format.")
+				FinishRefresh()
 				return
 			end
 			local catalogVersion = 0
@@ -2115,7 +2100,7 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
 				ShowNotification("Catalog is already up to date.", "Info")
-				FinishRefresh(true, "Catalog is already up to date.")
+				FinishRefresh()
 				return
 			end
 			local previousByKey = RegisteredScripts.__ByKey or {}
@@ -2126,7 +2111,7 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 			table.clear(activeNewEntries)
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
-			activeBuildFolder.Parent = nil
+			activeBuildFolder.Parent = ScriptsView
 			local function BuildEntryFingerprint(data)
 				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
@@ -2142,7 +2127,7 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 				table.clear(activeNewEntries)
 			end
 			for index, scriptData in ipairs(validEntries) do
-				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(false, "Refresh was interrupted."); return end
+				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 				local key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
 				local entryFingerprint = BuildEntryFingerprint(scriptData)
 				local existing = previousByKey[key]
@@ -2161,18 +2146,16 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 				nextByKey[key] = entry
 				nextKeys[key] = true
 			end
-			if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(false, "Refresh was interrupted."); return end
+			if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 			for key, oldEntry in pairs(previousByKey) do
 				if not nextKeys[key] then DestroyEntry(oldEntry) end
 			end
 			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
-			if activeBuildFolder then
-				activeBuildFolder.Parent = ScriptsView
-			end
 			for _, entry in ipairs(nextEntries) do
-				if entry.Instance then entry.Instance.LayoutOrder = entry.OriginalIndex end
+				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
+				entry.Instance.LayoutOrder = entry.OriginalIndex
 			end
-			if activeBuildFolder and activeBuildFolder.Parent ~= ScriptsView then activeBuildFolder:Destroy() end
+			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
 			table.clear(RegisteredScripts)
@@ -2220,7 +2203,6 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
 			ShowNotification("Script catalog loaded successfully!", "Success")
-			FinishRefresh(true, "Catalog refreshed successfully.")
 		end, function(err) return tostring(err) end)
 		if not taskOk then
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
@@ -2232,10 +2214,8 @@ PendingTasks.__LoadCatalog = function(force, onComplete)
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
 			ShowNotification("Catalog refresh failed safely.", "Error")
-			FinishRefresh(false, "Catalog refresh failed safely.")
-		elseif taskOk and dbRefreshing and generation == CatalogGeneration then
-			-- A handled early-return path should already have finished the refresh.
 		end
+		FinishRefresh()
 	end)
 	return true
 end
@@ -2417,57 +2397,29 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 end
 local function AnimateRefreshButton(button, state)
 	if not button or not button.Parent then return end
-	local spinner = button:FindFirstChild("VeloxRefreshSpinner")
-	if not spinner then
-		spinner = Instance.new("TextLabel")
-		spinner.Name = "VeloxRefreshSpinner"
-		spinner.Size = UDim2.new(0, 18, 0, 18)
-		spinner.Position = UDim2.new(0, 6, 0.5, -9)
-		spinner.BackgroundTransparency = 1
-		spinner.Text = "⟳"
-		spinner.TextColor3 = Theme.TextPrimary
-		spinner.Font = Enum.Font.GothamBold
-		spinner.TextSize = 14
-		spinner.TextXAlignment = Enum.TextXAlignment.Center
-		spinner.Visible = false
-		spinner.Parent = button
+	local scaleObj = button:FindFirstChild("VeloxRefreshScale")
+	if not scaleObj then
+		scaleObj = Instance.new("UIScale")
+		scaleObj.Name = "VeloxRefreshScale"
+		scaleObj.Scale = 1
+		scaleObj.Parent = button
 	end
 	if state == true or state == "refreshing" then
-		button.Text = "Loading"
-		button.AutoButtonColor = false
-		button.Active = false
-		spinner.Visible = true
-		if spinner:GetAttribute("VeloxSpinnerRunning") ~= true then
-			spinner:SetAttribute("VeloxSpinnerRunning", true)
-			_VH_TrackTask(function()
-				while spinner and spinner.Parent and spinner:GetAttribute("VeloxSpinnerRunning") == true and not isDestroying do
-					_VH_SafeTween(spinner, TweenInfo.new(0.45, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Rotation = spinner.Rotation + 360})
-					task.wait(0.45)
-				end
-				if spinner and spinner.Parent then spinner.Visible = false; spinner:SetAttribute("VeloxSpinnerRunning", false) end
-			end)
-		end
+		button.Text = "Refreshing"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.96})
 		_VH_SafeTween(button, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.1})
 	elseif state == "success" then
-		button.Text = "Refresh"
-		button.Active = true
-		button.AutoButtonColor = false
-		spinner.Visible = false
-		spinner:SetAttribute("VeloxSpinnerRunning", false)
-		button.BackgroundTransparency = 0.4
+		button.Text = "Success"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	elseif state == "error" then
-		button.Text = "Retry"
-		button.Active = true
-		button.AutoButtonColor = false
-		spinner.Visible = false
-		spinner:SetAttribute("VeloxSpinnerRunning", false)
-		button.BackgroundTransparency = 0.25
+		button.Text = "Refresh Failed"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25})
 	else
 		button.Text = "Refresh"
-		button.Active = true
-		button.AutoButtonColor = false
-		spinner.Visible = false
-		spinner:SetAttribute("VeloxSpinnerRunning", false)
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	end
 end
 local function BuildSettings()
@@ -2643,28 +2595,37 @@ _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetU
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
-		if dbRefreshing then return end
-		AnimateRefreshButton(btn, "refreshing")
+		if dbRefreshing then
+			ShowNotification("Catalog is already refreshing.", "Info")
+			return
+		end
+		AnimateRefreshButton(btn, true)
 		ShowNotification("Refreshing script catalog...", "System")
 		local started = false
-		local ok, err = pcall(function()
-			started = PendingTasks.__LoadCatalog(true, function(success, message)
-				if not btn or not btn.Parent or isDestroying then return end
-				if success then
-					AnimateRefreshButton(btn, "success")
-					ShowNotification("Catalog refreshed successfully.", "Success")
-				else
-					AnimateRefreshButton(btn, "error")
-					ShowNotification(message or "Catalog refresh failed. Tap Retry.", "Error")
-				end
-			end) == true
+		local ok = pcall(function()
+			started = PendingTasks.__LoadCatalog(true) == true
 		end)
 		if not ok or not started then
 			if btn and btn.Parent and not isDestroying then
 				AnimateRefreshButton(btn, "error")
-				ShowNotification("Could not start catalog refresh. Tap Retry.", "Error")
+				ShowNotification("Could not start catalog refresh.", "Error")
 			end
+			return
 		end
+		_VH_TrackTask(function()
+			while not isDestroying and dbRefreshing do
+				task.wait(0.1)
+			end
+			if btn and btn.Parent and not isDestroying then
+				if StatusText.Text == "Online" then
+					AnimateRefreshButton(btn, "success")
+					ShowNotification("Successfully refreshed latest script.", "Success")
+				else
+					AnimateRefreshButton(btn, "error")
+					ShowNotification("Catalog refresh failed.", "Error")
+				end
+			end
+		end)
 	end)
 end)
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
