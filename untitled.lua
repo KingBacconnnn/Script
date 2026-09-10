@@ -1968,6 +1968,24 @@ local function BuildCatalogFingerprint(entries)
 	end
 	return table.concat(parts, "\30")
 end
+local function ClearCatalogCardsForRefresh()
+	filterVersion = filterVersion + 1
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry and entry.DisconnectConnections then
+			pcall(entry.DisconnectConnections)
+		end
+		if entry and entry.Instance and entry.Instance.Parent then
+			pcall(function() entry.Instance:Destroy() end)
+		end
+	end
+	if RegisteredScripts.__ByKey then
+		RegisteredScripts.__ByKey = nil
+	end
+	table.clear(RegisteredScripts)
+	EmptyStateMessage.Visible = false
+	EmptyStateMessage.Text = ""
+	ScriptsView.CanvasPosition = Vector2.new(0, 0)
+end
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
 	if dbRefreshing then
@@ -1985,6 +2003,9 @@ PendingTasks.__LoadCatalog = function(force)
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
+	if force == true then
+		ClearCatalogCardsForRefresh()
+	end
 	ShowNotification("Fetching latest script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
@@ -2073,7 +2094,7 @@ PendingTasks.__LoadCatalog = function(force)
 				ShowNotification("Catalog validation failed: no usable scripts were found.", "Error")
 			end
 			local fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
-			if fingerprint == LastCatalogFingerprint then
+			if fingerprint == LastCatalogFingerprint and force ~= true then
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2374,7 +2395,7 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	end)))
 	return btn
 end
-local function AnimateRefreshButton(button, active)
+local function AnimateRefreshButton(button, state)
 	if not button or not button.Parent then return end
 	local scaleObj = button:FindFirstChild("VeloxRefreshScale")
 	if not scaleObj then
@@ -2383,10 +2404,18 @@ local function AnimateRefreshButton(button, active)
 		scaleObj.Scale = 1
 		scaleObj.Parent = button
 	end
-	if active then
+	if state == true or state == "refreshing" then
 		button.Text = "Refreshing"
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.96})
 		_VH_SafeTween(button, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.1})
+	elseif state == "success" then
+		button.Text = "Successfully Refreshed Latest Script"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
+	elseif state == "error" then
+		button.Text = "Refresh Failed"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25})
 	else
 		button.Text = "Refresh"
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
@@ -2566,19 +2595,35 @@ _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetU
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
-		AnimateRefreshButton(btn, true)
 		if dbRefreshing then
 			ShowNotification("Catalog is already refreshing.", "Info")
-			AnimateRefreshButton(btn, false)
 			return
 		end
+		AnimateRefreshButton(btn, true)
 		ShowNotification("Refreshing script catalog...", "System")
-		pcall(function()
-			LoadDynamicCatalog(true)
+		local started = false
+		local ok = pcall(function()
+			started = PendingTasks.__LoadCatalog(true) == true
 		end)
-		task.delay(1, function()
-			if btn and btn.Parent then
-				AnimateRefreshButton(btn, false)
+		if not ok or not started then
+			if btn and btn.Parent and not isDestroying then
+				AnimateRefreshButton(btn, "error")
+				ShowNotification("Could not start catalog refresh.", "Error")
+			end
+			return
+		end
+		_VH_TrackTask(function()
+			while not isDestroying and dbRefreshing do
+				task.wait(0.1)
+			end
+			if btn and btn.Parent and not isDestroying then
+				if StatusText.Text == "Online" then
+					AnimateRefreshButton(btn, "success")
+					ShowNotification("Successfully refreshed latest script.", "Success")
+				else
+					AnimateRefreshButton(btn, "error")
+					ShowNotification("Catalog refresh failed.", "Error")
+				end
 			end
 		end)
 	end)
