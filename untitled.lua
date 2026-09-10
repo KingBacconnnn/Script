@@ -275,7 +275,7 @@ local SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false }
+	Settings = { AntiAFK = false, UIScale = 1 }
 }
 local isSaving = false
 local saveQueued = false
@@ -307,7 +307,7 @@ local function SaveConfiguration()
 		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true }
+			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2) }
 		}
 		for k, v in pairs(SavedData.Favorites) do
 			if v then cleanData.Favorites[tostring(k)] = true end
@@ -368,6 +368,7 @@ local function LoadConfiguration()
 					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
 				end
 			end
+			SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 		else
 			SaveConfiguration()
 		end
@@ -672,6 +673,29 @@ PanelGroup.BackgroundTransparency = 1
 PanelGroup.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
+local PanelUIScale = Instance.new("UIScale", MainPanel)
+PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+local function ApplyPanelUIScale(scaleValue)
+	local nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
+	SavedData.Settings.UIScale = nextScale
+	if PanelUIScale and PanelUIScale.Parent then
+		_VH_SafeTween(PanelUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
+	end
+	task.defer(function()
+		if isDestroying or not MainPanel or not MainPanel.Parent then return end
+		local camera = workspace.CurrentCamera
+		local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+		task.wait(0.24)
+		if isDestroying or not MainPanel or not MainPanel.Parent then return end
+		local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+		local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+		local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+		local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+		currentX = math.clamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+		currentY = math.clamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
+	end)
+end
 local SearchInput
 local function RestoreCachedProperties()
 	for obj, c in pairs(OriginalCache) do
@@ -1510,6 +1534,8 @@ local function CreateTab(name, index)
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
 			UpdateFilter()
+			SearchRow.BackgroundTransparency = 1
+			_VH_SafeTween(SearchRow, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
 		elseif SearchInput and SearchInput.Parent then
 			pcall(function() SearchInput:ReleaseFocus() end)
 		end
@@ -1912,6 +1938,13 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		end
 	end))
 	card.Parent = renderParent
+	local cardScale = Instance.new("UIScale", card)
+	cardScale.Scale = 0.965
+	local entranceDelay = math.min(((originalIndex or 1) - 1) * 0.025, 0.18)
+	task.delay(entranceDelay, function()
+		if isDestroying or not cardScale or not cardScale.Parent then return end
+		_VH_SafeTween(cardScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+	end)
 	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
@@ -2341,6 +2374,25 @@ local function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btn
 	end)))
 	return btn
 end
+local function AnimateRefreshButton(button, active)
+	if not button or not button.Parent then return end
+	local scaleObj = button:FindFirstChild("VeloxRefreshScale")
+	if not scaleObj then
+		scaleObj = Instance.new("UIScale")
+		scaleObj.Name = "VeloxRefreshScale"
+		scaleObj.Scale = 1
+		scaleObj.Parent = button
+	end
+	if active then
+		button.Text = "Refreshing"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.96})
+		_VH_SafeTween(button, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.1})
+	else
+		button.Text = "Refresh"
+		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
+	end
+end
 local function BuildSettings()
 local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
@@ -2456,15 +2508,86 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 		ShowNotification("Anti-AFK deactivated.", "Warning")
 	end
 end)
+
+local scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
+local scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+local scaleFrame = Instance.new("Frame", scaleRight)
+scaleFrame.Size = UDim2.new(1, 0, 1, 0)
+scaleFrame.BackgroundTransparency = 1
+local scaleMinus = Instance.new("TextButton", scaleFrame)
+scaleMinus.Size = UDim2.new(0, 28, 0, 26)
+scaleMinus.Position = UDim2.new(0, 0, 0.5, -13)
+scaleMinus.BackgroundColor3 = Theme.BackgroundMain
+scaleMinus.Text = "−"
+scaleMinus.TextColor3 = Theme.TextPrimary
+scaleMinus.Font = Enum.Font.GothamBold
+scaleMinus.TextSize = 15
+scaleMinus.AutoButtonColor = false
+Instance.new("UICorner", scaleMinus).CornerRadius = UDim.new(0, 6)
+local scaleMinusStroke = Instance.new("UIStroke", scaleMinus)
+scaleMinusStroke.Color = Theme.Stroke
+local scaleLabel = Instance.new("TextLabel", scaleFrame)
+scaleLabel.Size = UDim2.new(0, 48, 0, 26)
+scaleLabel.Position = UDim2.new(0.5, -24, 0.5, -13)
+scaleLabel.BackgroundTransparency = 1
+scaleLabel.TextColor3 = Theme.Accent
+scaleLabel.Font = Enum.Font.GothamBold
+scaleLabel.TextSize = 11
+scaleLabel.TextXAlignment = Enum.TextXAlignment.Center
+local scalePlus = Instance.new("TextButton", scaleFrame)
+scalePlus.Size = UDim2.new(0, 28, 0, 26)
+scalePlus.Position = UDim2.new(1, -28, 0.5, -13)
+scalePlus.BackgroundColor3 = Theme.BackgroundMain
+scalePlus.Text = "+"
+scalePlus.TextColor3 = Theme.TextPrimary
+scalePlus.Font = Enum.Font.GothamBold
+scalePlus.TextSize = 15
+scalePlus.AutoButtonColor = false
+Instance.new("UICorner", scalePlus).CornerRadius = UDim.new(0, 6)
+local scalePlusStroke = Instance.new("UIStroke", scalePlus)
+scalePlusStroke.Color = Theme.Stroke
+local function RefreshScaleLabel()
+	scaleLabel.Text = tostring(math.floor(scaleValue * 100 + 0.5)) .. "%"
+end
+local function SetUIScaleFromSetting(nextValue, source)
+	scaleValue = math.clamp(math.round((tonumber(nextValue) or 1) * 20) / 20, 0.8, 1.2)
+	SavedData.Settings.UIScale = scaleValue
+	RefreshScaleLabel()
+	ApplyPanelUIScale(scaleValue)
+	SaveConfiguration()
+	ShowNotification("UI Scale set to " .. tostring(math.floor(scaleValue * 100 + 0.5)) .. "%.", "Success")
+end
+RefreshScaleLabel()
+ApplyInteractiveAnimations(scaleMinus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scaleMinusStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(scalePlus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scalePlusStroke, Theme.Stroke, Theme.Accent)
+_VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue - 0.05) end)))
+_VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
+
 local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function()
+local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
+		AnimateRefreshButton(btn, true)
 		if dbRefreshing then
 			CatalogRefreshQueued = true
-			ShowNotification("Catalog refresh queued.", "Info")
+			ShowNotification("Catalog is already refreshing — your refresh has been queued.", "Info")
+			task.delay(0.6, function() if btn and btn.Parent then AnimateRefreshButton(btn, false) end end)
 			return
 		end
+		ShowNotification("Refreshing script catalog...", "System")
 		LoadDynamicCatalog(true)
+		task.spawn(function()
+			local started = tick()
+			while dbRefreshing and not isDestroying and tick() - started < 30 do
+				task.wait(0.15)
+			end
+			if isDestroying or not btn or not btn.Parent then return end
+			if dbRefreshing then
+				AnimateRefreshButton(btn, false)
+				ShowNotification("Catalog refresh is taking longer than expected.", "Warning")
+			else
+				AnimateRefreshButton(btn, false)
+			end
+		end)
 	end)
 end)
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
