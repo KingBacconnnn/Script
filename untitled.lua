@@ -2434,37 +2434,60 @@ local function AnimateRefreshButton(button, active)
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	end
 end
-local function BuildSettings()
-local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
-local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
-local KeybindButton = Instance.new("TextButton", kbRightContainer)
-KeybindButton.Size = UDim2.new(0, 95, 0, 26)
-KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
-KeybindButton.BackgroundColor3 = Theme.BackgroundMain
-KeybindButton.BackgroundTransparency = 0.4
-KeybindButton.Text = ToggleKeybind.Name
-KeybindButton.TextColor3 = Theme.TextPrimary
-KeybindButton.Font = Enum.Font.GothamMedium
-KeybindButton.TextSize = 11
-KeybindButton.AutoButtonColor = false
-Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
-local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
-kbBtnStroke.Color = Theme.Stroke
-KeybindButtonRef = KeybindButton
-ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
-_VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
-	if isDestroying or IsBindingKey then return end
-	IsBindingKey = true
-	KeybindButton.Text = "Press Any..."
-	ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
-	if KeybindCaptureConnection then
-		_VH_UnregConn(KeybindCaptureConnection)
-		KeybindCaptureConnection = nil
-	end
-	KeybindCaptureConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
-		if isDestroying then return end
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			if input.KeyCode == Enum.KeyCode.Escape then
+local function BuildUserPreferencesSettings()
+	local prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
+	local _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
+	local KeybindButton = Instance.new("TextButton", kbRightContainer)
+	KeybindButton.Size = UDim2.new(0, 95, 0, 26)
+	KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
+	KeybindButton.BackgroundColor3 = Theme.BackgroundMain
+	KeybindButton.BackgroundTransparency = 0.4
+	KeybindButton.Text = ToggleKeybind.Name
+	KeybindButton.TextColor3 = Theme.TextPrimary
+	KeybindButton.Font = Enum.Font.GothamMedium
+	KeybindButton.TextSize = 11
+	KeybindButton.AutoButtonColor = false
+	Instance.new("UICorner", KeybindButton).CornerRadius = UDim.new(0, 6)
+	local kbBtnStroke = Instance.new("UIStroke", KeybindButton)
+	kbBtnStroke.Color = Theme.Stroke
+	KeybindButtonRef = KeybindButton
+	ApplyInteractiveAnimations(KeybindButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), kbBtnStroke, Theme.Stroke, Theme.Accent)
+	_VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
+		if isDestroying or IsBindingKey then return end
+		IsBindingKey = true
+		KeybindButton.Text = "Press Any..."
+		ShowNotification("Press any key to bind (Press Escape to cancel).", "System")
+		if KeybindCaptureConnection then
+			_VH_UnregConn(KeybindCaptureConnection)
+			KeybindCaptureConnection = nil
+		end
+		KeybindCaptureConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
+			if isDestroying then return end
+			if input.UserInputType == Enum.UserInputType.Keyboard then
+				if input.KeyCode == Enum.KeyCode.Escape then
+					IsBindingKey = false
+					if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+					ShowNotification("Keybind mapping canceled.", "Warning")
+					if KeybindCaptureConnection then
+						_VH_UnregConn(KeybindCaptureConnection)
+						KeybindCaptureConnection = nil
+					end
+					return
+				end
+				if input.KeyCode.Name ~= "Unknown" then
+					ToggleKeybind = input.KeyCode
+					IsBindingKey = false
+					SavedData.ToggleKeybind = ToggleKeybind.Name
+					SaveConfiguration()
+					if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
+					ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
+					BindToggleKey(ToggleKeybind)
+					if KeybindCaptureConnection then
+						_VH_UnregConn(KeybindCaptureConnection)
+						KeybindCaptureConnection = nil
+					end
+				end
+			elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				IsBindingKey = false
 				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
 				ShowNotification("Keybind mapping canceled.", "Warning")
@@ -2472,207 +2495,167 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 					_VH_UnregConn(KeybindCaptureConnection)
 					KeybindCaptureConnection = nil
 				end
-				return
 			end
-			if input.KeyCode.Name ~= "Unknown" then
-				ToggleKeybind = input.KeyCode
-				IsBindingKey = false
-				SavedData.ToggleKeybind = ToggleKeybind.Name
-				SaveConfiguration()
-				if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-				ShowNotification("Keybind successfully updated to: " .. input.KeyCode.Name, "Success")
-				BindToggleKey(ToggleKeybind)
-				if KeybindCaptureConnection then
-					_VH_UnregConn(KeybindCaptureConnection)
-					KeybindCaptureConnection = nil
+		end))
+	end)))
+
+	local function ApplyAntiAFK()
+		if AntiAFKConnection and AntiAFKConnection.Connected then return end
+		local player = Players.LocalPlayer
+		local GC = getconnections or get_signal_cons
+		if type(GC) == "function" then
+			table.clear(AntiAFKDisabledConnections)
+			local ok, connections = pcall(function() return GC(player.Idled) end)
+			if ok and type(connections) == "table" then
+				for _, connection in pairs(connections) do
+					if connection.Disable then
+						local disabled = pcall(function() connection:Disable() end)
+						if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
+					end
 				end
-			end
-		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			IsBindingKey = false
-			if KeybindButtonRef then KeybindButtonRef.Text = ToggleKeybind.Name end
-			ShowNotification("Keybind mapping canceled.", "Warning")
-			if KeybindCaptureConnection then
-				_VH_UnregConn(KeybindCaptureConnection)
-				KeybindCaptureConnection = nil
 			end
 		end
-	end))
-end)))
-local function ApplyAntiAFK()
-	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	local player = Players.LocalPlayer
-	local GC = getconnections or get_signal_cons
-	if type(GC) == "function" then
-		table.clear(AntiAFKDisabledConnections)
-		local ok, connections = pcall(function() return GC(player.Idled) end)
-		if ok and type(connections) == "table" then
-			for _, connection in pairs(connections) do
-				if connection.Disable then
-					local disabled = pcall(function() connection:Disable() end)
-					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
-				end
-			end
+		if type(GC) ~= "function" or #AntiAFKDisabledConnections == 0 then
+			AntiAFKConnection = player.Idled:Connect(function()
+				if isDestroying then return end
+				pcall(function()
+					local virtualUser = Services.VirtualUser
+					if virtualUser then
+						virtualUser:CaptureController()
+						virtualUser:ClickButton2(Vector2.new())
+					end
+				end)
+			end)
 		end
 	end
-	if type(GC) ~= "function" or #AntiAFKDisabledConnections == 0 then
-		AntiAFKConnection = player.Idled:Connect(function()
-			if isDestroying then return end
-			pcall(function()
-				local virtualUser = Services.VirtualUser
-				if virtualUser then
-					virtualUser:CaptureController()
-					virtualUser:ClickButton2(Vector2.new())
+	DisableAntiAFK = function()
+		if AntiAFKConnection then
+			pcall(function() AntiAFKConnection:Disconnect() end)
+			AntiAFKConnection = nil
+		end
+		for i = #AntiAFKDisabledConnections, 1, -1 do
+			local connection = AntiAFKDisabledConnections[i]
+			if connection and connection.Enable then pcall(function() connection:Enable() end) end
+			AntiAFKDisabledConnections[i] = nil
+		end
+	end
+	CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
+		SavedData.Settings.AntiAFK = val
+		SaveConfiguration()
+		if val then
+			ApplyAntiAFK()
+			ShowNotification("Anti-AFK system engaged.", "Success")
+		else
+			DisableAntiAFK()
+			ShowNotification("Anti-AFK deactivated.", "Warning")
+		end
+	end)
+
+	local _, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
+	local scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+	local scaleFrame = Instance.new("Frame", scaleRight)
+	scaleFrame.Size = UDim2.new(1, 0, 1, 0)
+	scaleFrame.BackgroundTransparency = 1
+	local scaleMinus = Instance.new("TextButton", scaleFrame)
+	scaleMinus.Size = UDim2.new(0, 28, 0, 26)
+	scaleMinus.Position = UDim2.new(0, 0, 0.5, -13)
+	scaleMinus.BackgroundColor3 = Theme.BackgroundMain
+	scaleMinus.Text = "-"
+	scaleMinus.TextColor3 = Theme.TextPrimary
+	scaleMinus.Font = Enum.Font.GothamBold
+	scaleMinus.TextSize = 15
+	scaleMinus.AutoButtonColor = false
+	Instance.new("UICorner", scaleMinus).CornerRadius = UDim.new(0, 6)
+	local scaleMinusStroke = Instance.new("UIStroke", scaleMinus)
+	scaleMinusStroke.Color = Theme.Stroke
+	local scaleLabel = Instance.new("TextLabel", scaleFrame)
+	scaleLabel.Size = UDim2.new(0, 48, 0, 26)
+	scaleLabel.Position = UDim2.new(0.5, -24, 0.5, -13)
+	scaleLabel.BackgroundTransparency = 1
+	scaleLabel.TextColor3 = Theme.Accent
+	scaleLabel.Font = Enum.Font.GothamBold
+	scaleLabel.TextSize = 11
+	scaleLabel.TextXAlignment = Enum.TextXAlignment.Center
+	local scalePlus = Instance.new("TextButton", scaleFrame)
+	scalePlus.Size = UDim2.new(0, 28, 0, 26)
+	scalePlus.Position = UDim2.new(1, -28, 0.5, -13)
+	scalePlus.BackgroundColor3 = Theme.BackgroundMain
+	scalePlus.Text = "+"
+	scalePlus.TextColor3 = Theme.TextPrimary
+	scalePlus.Font = Enum.Font.GothamBold
+	scalePlus.TextSize = 15
+	scalePlus.AutoButtonColor = false
+	Instance.new("UICorner", scalePlus).CornerRadius = UDim.new(0, 6)
+	local scalePlusStroke = Instance.new("UIStroke", scalePlus)
+	scalePlusStroke.Color = Theme.Stroke
+	local function RefreshScaleLabel()
+		scaleLabel.Text = tostring(math.floor(scaleValue * 100 + 0.5)) .. "%"
+	end
+	local function SetUIScaleFromSetting(nextValue)
+		scaleValue = math.clamp(math.round((tonumber(nextValue) or 1) * 20) / 20, 0.8, 1.2)
+		SavedData.Settings.UIScale = scaleValue
+		RefreshScaleLabel()
+		ApplyPanelUIScale(scaleValue)
+		SaveConfiguration()
+		ShowNotification("UI Scale set to " .. tostring(math.floor(scaleValue * 100 + 0.5)) .. "%." , "Success")
+	end
+	RefreshScaleLabel()
+	ApplyInteractiveAnimations(scaleMinus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scaleMinusStroke, Theme.Stroke, Theme.Accent)
+	ApplyInteractiveAnimations(scalePlus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scalePlusStroke, Theme.Stroke, Theme.Accent)
+	_VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue - 0.05) end)))
+	_VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
+
+	if SavedData.Settings.AntiAFK then
+		ApplyAntiAFK()
+	end
+end
+
+local function BuildSystemActionSettings()
+	local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
+	local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
+		AttemptActionWithCooldown(function()
+			AnimateRefreshButton(btn, true)
+			local restoreDelay = math.max(CATALOG_REFRESH_WATCHDOG + 2, 8)
+			local restored = false
+			local function RestoreButton()
+				if restored then return end
+				restored = true
+				if btn and btn.Parent then AnimateRefreshButton(btn, false) end
+			end
+			local callOk, started = pcall(function()
+				return PendingTasks.__LoadCatalog(true)
+			end)
+			if not callOk then
+				RestoreButton()
+				ShowNotification("Catalog refresh failed to start.", "Error")
+				return
+			end
+			if started == false and not dbRefreshing then
+				RestoreButton()
+				ShowNotification("Catalog refresh was not started. Try again.", "Warning")
+				return
+			end
+			task.delay(restoreDelay, RestoreButton)
+			task.spawn(function()
+				while not isDestroying and not restored do
+					if not dbRefreshing then
+						RestoreButton()
+						return
+					end
+					task.wait(0.1)
 				end
 			end)
 		end)
-	end
-end
-DisableAntiAFK = function()
-	if AntiAFKConnection then
-		pcall(function() AntiAFKConnection:Disconnect() end)
-		AntiAFKConnection = nil
-	end
-	for i = #AntiAFKDisabledConnections, 1, -1 do
-		local connection = AntiAFKDisabledConnections[i]
-		if connection and connection.Enable then pcall(function() connection:Enable() end) end
-		AntiAFKDisabledConnections[i] = nil
-	end
-end
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
-	SaveConfiguration()
-	if val then
-		ApplyAntiAFK()
-		ShowNotification("Anti-AFK system engaged.", "Success")
-	else
-		DisableAntiAFK()
-		ShowNotification("Anti-AFK deactivated.", "Warning")
-	end
-end)
-
-local scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
-local scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-local scaleFrame = Instance.new("Frame", scaleRight)
-scaleFrame.Size = UDim2.new(1, 0, 1, 0)
-scaleFrame.BackgroundTransparency = 1
-local scaleMinus = Instance.new("TextButton", scaleFrame)
-scaleMinus.Size = UDim2.new(0, 28, 0, 26)
-scaleMinus.Position = UDim2.new(0, 0, 0.5, -13)
-scaleMinus.BackgroundColor3 = Theme.BackgroundMain
-scaleMinus.Text = "−"
-scaleMinus.TextColor3 = Theme.TextPrimary
-scaleMinus.Font = Enum.Font.GothamBold
-scaleMinus.TextSize = 15
-scaleMinus.AutoButtonColor = false
-Instance.new("UICorner", scaleMinus).CornerRadius = UDim.new(0, 6)
-local scaleMinusStroke = Instance.new("UIStroke", scaleMinus)
-scaleMinusStroke.Color = Theme.Stroke
-local scaleLabel = Instance.new("TextLabel", scaleFrame)
-scaleLabel.Size = UDim2.new(0, 48, 0, 26)
-scaleLabel.Position = UDim2.new(0.5, -24, 0.5, -13)
-scaleLabel.BackgroundTransparency = 1
-scaleLabel.TextColor3 = Theme.Accent
-scaleLabel.Font = Enum.Font.GothamBold
-scaleLabel.TextSize = 11
-scaleLabel.TextXAlignment = Enum.TextXAlignment.Center
-local scalePlus = Instance.new("TextButton", scaleFrame)
-scalePlus.Size = UDim2.new(0, 28, 0, 26)
-scalePlus.Position = UDim2.new(1, -28, 0.5, -13)
-scalePlus.BackgroundColor3 = Theme.BackgroundMain
-scalePlus.Text = "+"
-scalePlus.TextColor3 = Theme.TextPrimary
-scalePlus.Font = Enum.Font.GothamBold
-scalePlus.TextSize = 15
-scalePlus.AutoButtonColor = false
-Instance.new("UICorner", scalePlus).CornerRadius = UDim.new(0, 6)
-local scalePlusStroke = Instance.new("UIStroke", scalePlus)
-scalePlusStroke.Color = Theme.Stroke
-local function RefreshScaleLabel()
-	scaleLabel.Text = tostring(math.floor(scaleValue * 100 + 0.5)) .. "%"
-end
-local function SetUIScaleFromSetting(nextValue, source)
-	scaleValue = math.clamp(math.round((tonumber(nextValue) or 1) * 20) / 20, 0.8, 1.2)
-	SavedData.Settings.UIScale = scaleValue
-	RefreshScaleLabel()
-	ApplyPanelUIScale(scaleValue)
-	SaveConfiguration()
-	ShowNotification("UI Scale set to " .. tostring(math.floor(scaleValue * 100 + 0.5)) .. "%.", "Success")
-end
-RefreshScaleLabel()
-ApplyInteractiveAnimations(scaleMinus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scaleMinusStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(scalePlus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scalePlusStroke, Theme.Stroke, Theme.Accent)
-_VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue - 0.05) end)))
-_VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
-
-local actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
-	AttemptActionWithCooldown(function()
-		AnimateRefreshButton(btn, true)
-		local requestStarted = tick()
-		local completed = false
-		local function RestoreButton()
-			if completed then return end
-			completed = true
-			if btn and btn.Parent then AnimateRefreshButton(btn, false) end
-		end
-
-		if dbRefreshing then
-			CatalogRefreshQueued = true
-			PendingCatalogRefreshForce = true
-			ShowNotification("Catalog is already refreshing — your refresh has been queued.", "Info")
-			task.delay(0.5, RestoreButton)
-			return
-		end
-
-		local callOk, callResult = pcall(function()
-			return PendingTasks.__LoadCatalog(true)
-		end)
-		if not callOk then
-			dbRefreshing = false
-			CatalogRefreshQueued = false
-			PendingCatalogRefreshForce = false
-			CatalogRefreshToken += 1
-			CatalogGeneration += 1
-			RestoreButton()
-			ShowNotification("Catalog refresh failed to start safely.", "Error")
-			return
-		end
-		if callResult == false and not dbRefreshing then
-			RestoreButton()
-			return
-		end
-
-		-- Button watchdog is independent of the catalog worker, so it can never stay visually stuck.
-		task.spawn(function()
-			while not isDestroying and not completed and tick() - requestStarted < (CATALOG_REFRESH_WATCHDOG + 2) do
-				if not dbRefreshing then
-					RestoreButton()
-					return
-				end
-				task.wait(0.1)
-			end
-			RestoreButton()
-		end)
 	end)
-end)
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
-	ShowNotification("Unloading Velox Hub...", "Info")
-	task.wait(0.3)
-	CloseUI()
-end)
-if SavedData.Settings.AntiAFK then
-	ApplyAntiAFK()
+	CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
+		ShowNotification("Unloading Velox Hub...", "Info")
+		task.wait(0.3)
+		CloseUI()
+	end)
 end
-TabViews["Changelogs"].Visible = true
-TabViews["Scripts"].Visible = false
-TabViews["Settings"].Visible = false
-TabIndicator.Position = UDim2.new(0, 4, 1, -2)
-SectionHeaderLabel.Text = "Updates"
-MainPanel.Visible = true
-SearchRow.Visible = false
-FloatingBtn.Visible = false
-ShowNotification("Velox Hub is ready for use!", "Success")
-if IsMobile then
+
+local function BuildUserDataSettings()
+	if not IsMobile then return end
 	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
@@ -2684,5 +2667,19 @@ if IsMobile then
 		ShowNotification("UI Cache cleared successfully.", "Success")
 	end)
 end
+
+local function BuildSettings()
+	BuildUserPreferencesSettings()
+	BuildSystemActionSettings()
+	BuildUserDataSettings()
+	TabViews["Changelogs"].Visible = true
+	TabViews["Scripts"].Visible = false
+	TabViews["Settings"].Visible = false
+	TabIndicator.Position = UDim2.new(0, 4, 1, -2)
+	SectionHeaderLabel.Text = "Updates"
+	MainPanel.Visible = true
+	SearchRow.Visible = false
+	FloatingBtn.Visible = false
+	ShowNotification("Velox Hub is ready for use!", "Success")
 end
 BuildSettings()
