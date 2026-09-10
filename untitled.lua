@@ -1984,11 +1984,12 @@ local function RestoreCatalogCardsAfterRefreshFailure()
 	end
 	UpdateFilter()
 end
-PendingTasks.__LoadCatalog = function(force)
+PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	if isDestroying then return false end
 	if dbRefreshing then
 		CatalogRefreshQueued = true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
+		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		return false
 	end
 	local now = os.clock()
@@ -2011,12 +2012,18 @@ PendingTasks.__LoadCatalog = function(force)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
+		-- A manual refresh restarts the automatic 5-minute interval after it finishes.
+		if not isAutoRefresh then
+			LastCatalogRefreshAt = os.clock()
+		end
 		if CatalogRefreshQueued and not isDestroying then
 			local queuedForce = PendingTasks.__CatalogRefreshForce == true
+			local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
 			CatalogRefreshQueued = false
 			PendingTasks.__CatalogRefreshForce = false
+			PendingTasks.__CatalogRefreshAuto = false
 			task.defer(function()
-				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce) end
+				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce, queuedAuto) end
 			end)
 		end
 	end
@@ -2102,7 +2109,9 @@ PendingTasks.__LoadCatalog = function(force)
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
-				ShowNotification("Catalog is already up to date.", "Info")
+				if not isAutoRefresh then
+					ShowNotification("Catalog is already up to date.", "Info")
+				end
 				FinishRefresh()
 				return
 			end
@@ -2142,6 +2151,9 @@ PendingTasks.__LoadCatalog = function(force)
 				else
 					if existing then replacedEntries[#replacedEntries + 1] = existing end
 					entry = CreateScriptCard(scriptData, activeBuildFolder, false, index)
+					if entry and entry.Instance then
+						entry.Instance.Visible = false
+					end
 					entry.EntryFingerprint = entryFingerprint
 					entry.OriginalIndex = index
 					activeNewEntries[#activeNewEntries + 1] = entry
@@ -2207,7 +2219,11 @@ PendingTasks.__LoadCatalog = function(force)
 			StatusDot.BackgroundColor3 = Theme.Success
 			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
-			ShowNotification("Script catalog loaded successfully!", "Success")
+			if isAutoRefresh then
+				ShowNotification("Catalog updated.", "Success")
+			else
+				ShowNotification("Script catalog loaded successfully!", "Success")
+			end
 		end, function(err) return tostring(err) end)
 		if not taskOk then
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
@@ -2225,12 +2241,25 @@ PendingTasks.__LoadCatalog = function(force)
 	end)
 	return true
 end
+-- Initial catalog load.
 PendingTasks.__LoadCatalog()
+
+-- Built-in automatic catalog refresh.
+-- Runs every CATALOG_REFRESH_INTERVAL (5 minutes) with no user toggle.
+-- The existing refresh guard prevents this from overlapping a manual refresh.
 _VH_TrackTask(function()
 	while not isDestroying do
-		task.wait(CATALOG_REFRESH_INTERVAL)
-		if isDestroying then break end
-		PendingTasks.__LoadCatalog(false)
+		local remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - LastCatalogRefreshAt)
+		if remaining > 0 then
+			task.wait(math.min(remaining, 1))
+		else
+			if not dbRefreshing then
+				PendingTasks.__LoadCatalog(false, true)
+			else
+				-- Check again shortly after the current refresh finishes.
+				task.wait(1)
+			end
+		end
 	end
 end)
 _VH_TrackTask(function()
@@ -2611,7 +2640,7 @@ local RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Ca
 		local ok = pcall(function()
 			started = PendingTasks.__LoadCatalog(true) == true
 		end)
-		if not ok or not started then
+		if not ok or (not started and not dbRefreshing) then
 			if btn and btn.Parent and not isDestroying then
 				AnimateRefreshButton(btn, "error")
 				ShowNotification("Could not start catalog refresh.", "Error")
