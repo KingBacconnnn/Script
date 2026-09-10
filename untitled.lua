@@ -1938,13 +1938,8 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		end
 	end))
 	card.Parent = renderParent
-	local cardScale = Instance.new("UIScale", card)
-	cardScale.Scale = 0.965
-	local entranceDelay = math.min(((originalIndex or 1) - 1) * 0.025, 0.18)
-	task.delay(entranceDelay, function()
-		if isDestroying or not cardScale or not cardScale.Parent then return end
-		_VH_SafeTween(cardScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
-	end)
+	-- Cards are inserted at their final scale during catalog refresh.
+	-- Avoiding one delayed tween per card prevents a mobile frame spike when many items load.
 	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
@@ -1969,22 +1964,25 @@ local function BuildCatalogFingerprint(entries)
 	return table.concat(parts, "\30")
 end
 local function ClearCatalogCardsForRefresh()
+	-- Keep the existing cards alive and only hide them while fetching.
+	-- Destroying/recreating the whole UI on mobile causes a large frame spike.
 	filterVersion = filterVersion + 1
 	for _, entry in ipairs(RegisteredScripts) do
-		if entry and entry.DisconnectConnections then
-			pcall(entry.DisconnectConnections)
-		end
 		if entry and entry.Instance and entry.Instance.Parent then
-			pcall(function() entry.Instance:Destroy() end)
+			entry.Instance.Visible = false
 		end
 	end
-	if RegisteredScripts.__ByKey then
-		RegisteredScripts.__ByKey = nil
-	end
-	table.clear(RegisteredScripts)
 	EmptyStateMessage.Visible = false
 	EmptyStateMessage.Text = ""
 	ScriptsView.CanvasPosition = Vector2.new(0, 0)
+end
+local function RestoreCatalogCardsAfterRefreshFailure()
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry and entry.Instance and entry.Instance.Parent then
+			entry.Instance.Visible = true
+		end
+	end
+	UpdateFilter()
 end
 PendingTasks.__LoadCatalog = function(force)
 	if isDestroying then return false end
@@ -2029,6 +2027,7 @@ PendingTasks.__LoadCatalog = function(force)
 			local raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
+				RestoreCatalogCardsAfterRefreshFailure()
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
@@ -2039,6 +2038,7 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
+				RestoreCatalogCardsAfterRefreshFailure()
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Data Error"
@@ -2095,6 +2095,9 @@ PendingTasks.__LoadCatalog = function(force)
 			end
 			local fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
 			if fingerprint == LastCatalogFingerprint and force ~= true then
+				for _, existingEntry in ipairs(RegisteredScripts) do
+					if existingEntry and existingEntry.Instance and existingEntry.Instance.Parent then existingEntry.Instance.Visible = true end
+				end
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2125,6 +2128,7 @@ PendingTasks.__LoadCatalog = function(force)
 				if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 				activeBuildFolder = nil
 				table.clear(activeNewEntries)
+				RestoreCatalogCardsAfterRefreshFailure()
 			end
 			for index, scriptData in ipairs(validEntries) do
 				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
@@ -2154,6 +2158,7 @@ PendingTasks.__LoadCatalog = function(force)
 			for _, entry in ipairs(nextEntries) do
 				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
 				entry.Instance.LayoutOrder = entry.OriginalIndex
+				entry.Instance.Visible = true
 			end
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
@@ -2208,6 +2213,7 @@ PendingTasks.__LoadCatalog = function(force)
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
+			RestoreCatalogCardsAfterRefreshFailure()
 		end
 		if not taskOk and not isDestroying and generation == CatalogGeneration then
 			StatusDot.BackgroundColor3 = Theme.Error
@@ -2413,7 +2419,7 @@ local function AnimateRefreshButton(button, state)
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	elseif state == "error" then
-		button.Text = "Refresh Failed"
+		button.Text = "Retry"
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25})
 	else
