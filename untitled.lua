@@ -47,10 +47,24 @@ GameId = game.GameId
 gethui = gethui or function() return nil end
 protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-write_file = type(writefile) == "function" and writefile or nil
-read_file = type(readfile) == "function" and readfile or nil
-is_file = type(isfile) == "function" and isfile or nil
-del_file = type(delfile) == "function" and delfile or nil
+local _vh_env = (getgenv and getgenv()) or _G
+write_file = (type(writefile) == "function" and writefile)
+	or (type(_vh_env.writefile) == "function" and _vh_env.writefile)
+	or (syn and type(syn.writefile) == "function" and syn.writefile)
+	or nil
+read_file = (type(readfile) == "function" and readfile)
+	or (type(_vh_env.readfile) == "function" and _vh_env.readfile)
+	or (syn and type(syn.readfile) == "function" and syn.readfile)
+	or nil
+is_file = (type(isfile) == "function" and isfile)
+	or (type(_vh_env.isfile) == "function" and _vh_env.isfile)
+	or (syn and type(syn.isfile) == "function" and syn.isfile)
+	or nil
+make_folder = (type(makefolder) == "function" and makefolder)
+	or (type(_vh_env.makefolder) == "function" and _vh_env.makefolder)
+	or (syn and type(syn.makefolder) == "function" and syn.makefolder)
+	or nil
+del_file = (type(delfile) == "function" and delfile) or nil
 CompileFunction = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
@@ -269,8 +283,9 @@ function _VH_CreateDebounce(cooldown, func)
 		end)
 	end
 end
-DATA_FILE = ".VeloxHub_Data_V3.1.json"
-TEMP_FILE = ".VeloxHub_Data_Temp.json"
+DATA_FOLDER = "VeloxHub"
+DATA_FILE = DATA_FOLDER .. "/Config.json"
+TEMP_FILE = DATA_FOLDER .. "/Config_Temp.json"
 SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
@@ -296,8 +311,21 @@ function _VH_SanitizeForJSON(data)
 	end
 	return nil
 end
+function EnsureConfigFolder()
+	if type(make_folder) ~= "function" then
+		return true
+	end
+	local ok = pcall(function()
+		make_folder(DATA_FOLDER)
+	end)
+	return ok
+end
+
 function SaveConfiguration()
 	if type(write_file) ~= "function" then
+		return false
+	end
+	if not EnsureConfigFolder() then
 		return false
 	end
 
@@ -341,8 +369,16 @@ function SaveConfiguration()
 end
 
 function LoadConfiguration()
-	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+	if type(read_file) == "function" then
+		local canRead = true
+		if type(is_file) == "function" then
+			canRead = pcall(function() return is_file(DATA_FILE) end)
+		end
+		if canRead then
+			success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+		else
+			success = false
+		end
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
 				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
