@@ -51,7 +51,7 @@ write_file = type(writefile) == "function" and writefile or nil
 read_file = type(readfile) == "function" and readfile or nil
 is_file = type(isfile) == "function" and isfile or nil
 del_file = type(delfile) == "function" and delfile or nil
-CompileFunction
+CompileFunction = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
 	ok, chunk, err = pcall(fn, source, chunkName)
@@ -107,8 +107,8 @@ isMinimized = false
 isTransitioning = false
 IsBindingKey = false
 IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
-mainDragConnection, floatDragConnection
-activeMainDragInput, activeFloatDragInput
+mainDragConnection, floatDragConnection = nil, nil
+activeMainDragInput, activeFloatDragInput = nil, nil
 ToggleKeybindConnection = nil
 KeybindCaptureConnection = nil
 DropdownContainer = nil
@@ -120,7 +120,7 @@ GlobalActionCooldownEndTime = 0
 OriginalCache = setmetatable({}, { __mode = "k" })
 AntiAFKConnection = nil
 AntiAFKDisabledConnections = {}
-DisableAntiAFK
+DisableAntiAFK = nil
 function _VH_CacheInstanceAndDescendants(root)
 	function function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
@@ -170,7 +170,7 @@ function _VH_UnregConn(connection)
 	end
 end
 function _VH_TrackTask(fn)
-	thread
+	thread = nil
 	thread = task.spawn(function()
 		pcall(fn)
 		PendingTasks[thread] = nil
@@ -239,7 +239,7 @@ function _VH_SafeTween(instance, tweenInfo, properties)
 		end
 	end
 	tween = TweenService:Create(instance, tweenInfo, properties)
-	conn
+	conn = nil
 	conn = tween.Completed:Connect(function()
 		if conn then conn:Disconnect() end
 		if ActiveTweens[instance] and ActiveTweens[instance].Tween == tween then
@@ -396,7 +396,7 @@ function function AddCacheBuster(url)
 end
 function function FetchWithRetry(url, retries, cacheBust)
 	retries = math.max(1, tonumber(retries) or 3)
-	lastStatus, lastError
+	lastStatus, lastError = nil, nil
 	for i = 1, retries do
 		requestUrl = cacheBust and AddCacheBuster(url) or url
 		response, status, err = UniversalHttpGet(requestUrl)
@@ -619,7 +619,7 @@ FloatPadding.PaddingTop = UDim.new(0, 6); FloatPadding.PaddingBottom = UDim.new(
 Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
-floatStart, floatPos
+floatStart, floatPos = nil, nil
 _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeFloatDragInput then
 		activeFloatDragInput = input
@@ -693,7 +693,7 @@ function function ApplyPanelUIScale(scaleValue)
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 	end)
 end
-SearchInput
+SearchInput = nil
 function function RestoreCachedProperties()
 	for obj, c in pairs(OriginalCache) do
 		if obj and obj.Parent then
@@ -1090,7 +1090,7 @@ function function ShowNotification(msg, notifType)
 		Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
 
 		closeRequested = false
-		progressTween
+		progressTween = nil
 		function function Dismiss()
 			if closeRequested then return end
 			closeRequested = true
@@ -1378,7 +1378,7 @@ HeaderContainer.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 56)
 HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true
-mainDragStart, mainStartPos
+mainDragStart, mainStartPos = nil, nil
 _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeMainDragInput then
 		activeMainDragInput = input
@@ -1607,7 +1607,7 @@ DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize 
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
-viewportConn
+viewportConn = nil
 function function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
 	cam = workspace.CurrentCamera
@@ -2434,7 +2434,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
 				entryFingerprint = BuildEntryFingerprint(scriptData)
 				existing = previousByKey[key]
-				entry
+				entry = nil
 				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
 					entry = existing
 					entry.OriginalIndex = index
