@@ -281,49 +281,99 @@ SavedData = {
 SavedConfigExtras = {}
 ConfigurationLoaded = false
 ConfigurationLoadError = nil
-function _VH_SanitizeForJSON(data, seen, depth)
-	depth = (tonumber(depth) or 0) + 1
-	if depth > 32 then return nil end
-	local valueType = type(data)
-	if valueType == "table" then
-		seen = seen or {}
-		if seen[data] then return nil end
-		seen[data] = true
-		local clean = {}
-		for k, v in pairs(data) do
-			local keyType = type(k)
-			if keyType == "string" or keyType == "number" then
-				local cleanVal = _VH_SanitizeForJSON(v, seen, depth)
-				if cleanVal ~= nil then
-					clean[tostring(k)] = cleanVal
-				end
-			end
-		end
-		seen[data] = nil
-		return clean
-	elseif valueType == "string" or valueType == "boolean" then
-		return data
-	elseif valueType == "number" then
-		if data ~= data or data == math.huge or data == -math.huge then return nil end
-		return data
-	end
-	return nil
-end
+
 function _VH_EnsureConfigDirectory(path)
 	if type(make_folder) ~= "function" or type(path) ~= "string" then return true end
 	local dir = string.match(path, "^(.*)[/\\][^/\\]+$")
 	if not dir or dir == "" then return true end
 	local ok = pcall(function() make_folder(dir) end)
-	if ok then return true end
-	return false
+	return ok
 end
-function SaveConfiguration()
-	if type(write_file) ~= "function" then
-		return false, "this executor does not expose a usable writefile() API"
+
+function _VH_SanitizeForJSON(data, seen, depth)
+	depth = (tonumber(depth) or 0) + 1
+	if depth > 64 then return nil end
+	local valueType = type(data)
+	if valueType == "string" or valueType == "boolean" then return data end
+	if valueType == "number" then
+		if data ~= data or data == math.huge or data == -math.huge then return nil end
+		return data
 	end
-	if not _VH_EnsureConfigDirectory(DATA_FILE) then
-		return false, "the configuration directory could not be created"
+	if valueType ~= "table" then return nil end
+	seen = seen or {}
+	if seen[data] then return nil end
+	seen[data] = true
+	local out = {}
+	for k, v in pairs(data) do
+		local keyType = type(k)
+		if keyType == "string" or keyType == "number" then
+			local cleanVal = _VH_SanitizeForJSON(v, seen, depth)
+			if cleanVal ~= nil then out[tostring(k)] = cleanVal end
+		end
 	end
+	seen[data] = nil
+	return out
+end
+
+function _VH_JsonEscapeString(value)
+	local s = tostring(value)
+	s = string.gsub(s, "\\", "\\\\")
+	s = string.gsub(s, '"', '\\"')
+	s = string.gsub(s, "\b", "\\b")
+	s = string.gsub(s, "\f", "\\f")
+	s = string.gsub(s, "\n", "\\n")
+	s = string.gsub(s, "\r", "\\r")
+	s = string.gsub(s, "\t", "\\t")
+	return '"' .. s .. '"'
+end
+
+function _VH_NumberToJSON(value)
+	local n = tonumber(value)
+	if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
+	local s = string.format("%.17g", n)
+	if string.find(s, "[^%d%+%-%eE%.]", 1) then return nil end
+	return s
+end
+
+function _VH_EncodeJSONFallback(value, stack, depth)
+	depth = (tonumber(depth) or 0) + 1
+	if depth > 64 then return nil end
+	local t = type(value)
+	if t == "nil" then return "null" end
+	if t == "boolean" then return value and "true" or "false" end
+	if t == "string" then return _VH_JsonEscapeString(value) end
+	if t == "number" then return _VH_NumberToJSON(value) end
+	if t ~= "table" then return nil end
+	stack = stack or {}
+	if stack[value] then return nil end
+	stack[value] = true
+	local parts = {}
+	for k, v in pairs(value) do
+		local keyType = type(k)
+		if keyType ~= "string" and keyType ~= "number" then stack[value] = nil return nil end
+		local encodedValue = _VH_EncodeJSONFallback(v, stack, depth)
+		if not encodedValue then stack[value] = nil return nil end
+		parts[#parts + 1] = _VH_JsonEscapeString(tostring(k)) .. ":" .. encodedValue
+	end
+	stack[value] = nil
+	return "{" .. table.concat(parts, ",") .. "}"
+end
+
+function _VH_EncodeConfiguration(data)
+	local sanitized = _VH_SanitizeForJSON(data)
+	if type(sanitized) ~= "table" then return nil, "configuration sanitization failed" end
+	local ok, encoded = pcall(function()
+		return HttpService:JSONEncode(sanitized)
+	end)
+	if ok and type(encoded) == "string" and encoded ~= "" then return encoded, nil end
+	local fallbackOk, fallback = pcall(function()
+		return _VH_EncodeJSONFallback(sanitized)
+	end)
+	if fallbackOk and type(fallback) == "string" and fallback ~= "" then return fallback, nil end
+	return nil, "configuration JSON encoding failed"
+end
+
+function _VH_BuildConfigurationData()
 	local cleanData = _VH_SanitizeForJSON(SavedConfigExtras)
 	if type(cleanData) ~= "table" then cleanData = {} end
 	cleanData.Favorites = {}
@@ -338,30 +388,37 @@ function SaveConfiguration()
 	end
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(v) == "table" then
-			cleanData.AutoExecutes[tostring(k)] = {
-				PlaceId = tonumber(v.PlaceId),
-				GameId = tonumber(v.GameId),
-				Name = type(v.Name) == "string" and v.Name or nil
-			}
+			local place = tonumber(v.PlaceId)
+			local gameId = tonumber(v.GameId)
+			local entry = { Name = type(v.Name) == "string" and v.Name or nil }
+			if place then entry.PlaceId = place end
+			if gameId then entry.GameId = gameId end
+			if entry.PlaceId or entry.GameId then cleanData.AutoExecutes[tostring(k)] = entry end
 		end
 	end
-	local encodedOk, result = pcall(function()
-		return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
-	end)
-	if not encodedOk or type(result) ~= "string" then
-		return false, "configuration JSON encoding failed"
+	return cleanData
+end
+
+function SaveConfiguration()
+	if type(write_file) ~= "function" then
+		return false, "this executor does not expose a usable writefile() API"
 	end
-	local writeOk, writeResult = pcall(function()
-		return write_file(DATA_FILE, result)
-	end)
+	if not _VH_EnsureConfigDirectory(DATA_FILE) then
+		return false, "the configuration directory could not be created"
+	end
+	local cleanData = _VH_BuildConfigurationData()
+	local result, encodeError = _VH_EncodeConfiguration(cleanData)
+	if not result then return false, encodeError end
+	local writeOk, writeResult = pcall(function() return write_file(DATA_FILE, result) end)
 	if not writeOk or writeResult == false then
 		return false, "writefile() failed for " .. tostring(DATA_FILE)
 	end
 	if type(read_file) == "function" then
 		local verifyOk, verifyResult = pcall(function()
 			local check = read_file(DATA_FILE)
+			if type(check) ~= "string" or check == "" then return false end
 			local decoded = HttpService:JSONDecode(check)
-			return type(decoded) == "table" and decoded.AutoExecutes ~= nil
+			return type(decoded) == "table"
 		end)
 		if not verifyOk or verifyResult ~= true then
 			return false, "writefile() completed but the saved configuration could not be verified"
@@ -369,6 +426,7 @@ function SaveConfiguration()
 	end
 	return true, nil
 end
+
 function LoadConfiguration()
 	ConfigurationLoaded = false
 	ConfigurationLoadError = nil
@@ -387,10 +445,7 @@ function LoadConfiguration()
 	end
 	local readOk, raw = pcall(function() return read_file(DATA_FILE) end)
 	if not readOk or type(raw) ~= "string" or raw == "" then
-		if exists == nil then
-			ConfigurationLoadError = "the configuration file could not be read"
-			return false, ConfigurationLoadError
-		end
+		if exists == nil then ConfigurationLoadError = "the configuration file could not be read" return false, ConfigurationLoadError end
 		ConfigurationLoaded = true
 		return true, nil
 	end
@@ -402,15 +457,13 @@ function LoadConfiguration()
 	SavedConfigExtras = {}
 	for k, v in pairs(result) do
 		if k ~= "Favorites" and k ~= "AutoExecutes" and k ~= "ToggleKeybind" and k ~= "Settings" then
-			SavedConfigExtras[tostring(k)] = v
+			SavedConfigExtras[tostring(k)] = _VH_SanitizeForJSON(v)
 		end
 	end
 	SavedData.Favorites = {}
 	SavedData.AutoExecutes = {}
 	if type(result.Favorites) == "table" then
-		for k, _ in pairs(result.Favorites) do
-			SavedData.Favorites[tostring(k)] = true
-		end
+		for k, v in pairs(result.Favorites) do if v then SavedData.Favorites[tostring(k)] = true end end
 	end
 	if type(result.AutoExecutes) == "table" then
 		for k, v in pairs(result.AutoExecutes) do
@@ -419,25 +472,21 @@ function LoadConfiguration()
 				local savedGame = tonumber(v.GameId)
 				local savedName = type(v.Name) == "string" and v.Name or nil
 				if savedPlace or savedGame then
-					SavedData.AutoExecutes[tostring(k)] = {
-						PlaceId = savedPlace,
-						GameId = savedGame,
-						Name = savedName
-					}
+					SavedData.AutoExecutes[tostring(k)] = { PlaceId = savedPlace, GameId = savedGame, Name = savedName }
 				end
 			end
 		end
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 	if type(result.Settings) == "table" then
-		for k, _ in pairs(result.Settings) do
-			if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
-		end
+		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" then SavedData.Settings[k] = v end end
 	end
+	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
 	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	ConfigurationLoaded = true
 	return true, nil
 end
+
 LoadConfiguration()
 
 function UniversalHttpGet(url)
