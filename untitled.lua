@@ -2983,15 +2983,15 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 end)))
 function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	player = Players.LocalPlayer
-	GC = getconnections or get_signal_cons
+	local player = Players.LocalPlayer
+	local GC = getconnections or get_signal_cons
 	if type(GC) == "function" then
 		table.clear(AntiAFKDisabledConnections)
-		ok, connections = pcall(function() return GC(player.Idled) end)
+		local ok, connections = pcall(function() return GC(player.Idled) end)
 		if ok and type(connections) == "table" then
 			for _, connection in pairs(connections) do
 				if connection.Disable then
-					disabled = pcall(function() connection:Disable() end)
+					local disabled = pcall(function() connection:Disable() end)
 					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
 				end
 			end
@@ -3001,7 +3001,7 @@ function ApplyAntiAFK()
 		AntiAFKConnection = player.Idled:Connect(function()
 			if isDestroying then return end
 			pcall(function()
-				virtualUser = Services.VirtualUser
+				local virtualUser = Services.VirtualUser
 				if virtualUser then
 					virtualUser:CaptureController()
 					virtualUser:ClickButton2(Vector2.new())
@@ -3016,7 +3016,7 @@ DisableAntiAFK = function()
 		AntiAFKConnection = nil
 	end
 	for i = #AntiAFKDisabledConnections, 1, -1 do
-		connection = AntiAFKDisabledConnections[i]
+		local connection = AntiAFKDisabledConnections[i]
 		if connection and connection.Enable then pcall(function() connection:Enable() end) end
 		AntiAFKDisabledConnections[i] = nil
 	end
