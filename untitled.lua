@@ -281,19 +281,30 @@ SavedData = {
 SavedConfigExtras = {}
 ConfigurationLoaded = false
 ConfigurationLoadError = nil
-function _VH_SanitizeForJSON(data)
-	if type(data) == "table" then
-		clean = {}
+function _VH_SanitizeForJSON(data, seen, depth)
+	depth = (tonumber(depth) or 0) + 1
+	if depth > 32 then return nil end
+	local valueType = type(data)
+	if valueType == "table" then
+		seen = seen or {}
+		if seen[data] then return nil end
+		seen[data] = true
+		local clean = {}
 		for k, v in pairs(data) do
-			if type(k) == "string" or type(k) == "number" then
-				cleanVal = _VH_SanitizeForJSON(v)
+			local keyType = type(k)
+			if keyType == "string" or keyType == "number" then
+				local cleanVal = _VH_SanitizeForJSON(v, seen, depth)
 				if cleanVal ~= nil then
 					clean[tostring(k)] = cleanVal
 				end
 			end
 		end
+		seen[data] = nil
 		return clean
-	elseif type(data) == "string" or type(data) == "number" or type(data) == "boolean" then
+	elseif valueType == "string" or valueType == "boolean" then
+		return data
+	elseif valueType == "number" then
+		if data ~= data or data == math.huge or data == -math.huge then return nil end
 		return data
 	end
 	return nil
