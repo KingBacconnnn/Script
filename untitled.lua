@@ -297,54 +297,49 @@ function _VH_SanitizeForJSON(data)
 	return nil
 end
 function SaveConfiguration()
-	if type(write_file) ~= "function" then return end
-	if isSaving then
-		saveQueued = true
-		return
+	if type(write_file) ~= "function" then
+		return false
 	end
-	isSaving = true
-	task.spawn(function()
-		cleanData = {
-			Favorites = {}, AutoExecutes = {},
-			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2) }
+
+	local cleanData = {
+		Favorites = {},
+		AutoExecutes = {},
+		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+		Settings = {
+			AntiAFK = SavedData.Settings.AntiAFK == true,
+			UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 		}
-		for k, v in pairs(SavedData.Favorites) do
-			if v then cleanData.Favorites[tostring(k)] = true end
+	}
+
+	for k, v in pairs(SavedData.Favorites) do
+		if v then
+			cleanData.Favorites[tostring(k)] = true
 		end
-		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" then
-				cleanData.AutoExecutes[tostring(k)] = {
-					PlaceId = tonumber(v.PlaceId),
-					GameId = tonumber(v.GameId)
-				}
-			end
+	end
+
+	for k, v in pairs(SavedData.AutoExecutes) do
+		if type(v) == "table" then
+			cleanData.AutoExecutes[tostring(k)] = {
+				PlaceId = tonumber(v.PlaceId),
+				GameId = tonumber(v.GameId)
+			}
 		end
-		encodedOk, result = pcall(function()
-			return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
-		end)
-		if encodedOk then
-			tempOk = pcall(function() write_file(TEMP_FILE, result) end)
-			verified = false
-			if tempOk and type(read_file) == "function" then
-				verified = pcall(function()
-					check = read_file(TEMP_FILE)
-					decoded = HttpService:JSONDecode(check)
-					return type(decoded) == "table"
-				end)
-			end
-			if verified then
-				mainOk = pcall(function() write_file(DATA_FILE, result) end)
-				if mainOk and del_file then pcall(function() del_file(TEMP_FILE) end) end
-			end
-		end
-		isSaving = false
-		if saveQueued then
-			saveQueued = false
-			SaveConfiguration()
-		end
+	end
+
+	local encodedOk, result = pcall(function()
+		return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
 	end)
+	if not encodedOk or type(result) ~= "string" then
+		return false
+	end
+
+	-- Write directly. Do not require readfile/isfile support just to save.
+	local writeOk = pcall(function()
+		write_file(DATA_FILE, result)
+	end)
+	return writeOk
 end
+
 function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
 		success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
@@ -2176,7 +2171,10 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		else
 			SavedData.AutoExecutes[scriptId] = {PlaceId = PlaceId, GameId = GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		if not SaveConfiguration() then
+			ShowNotification("Auto-execute setting could not be saved by this executor.", "Error")
+		end
+		RefreshAllCardStates(); UpdateFilter()
 	end)))
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
@@ -2464,7 +2462,16 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				AutoExecuteRanThisSession = true
 				autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
-					auto = SavedData.AutoExecutes[scriptData.Id]
+					local lookupId = tostring(scriptData.Id or "")
+					auto = SavedData.AutoExecutes[lookupId]
+					if auto == nil and type(scriptData.Name) == "string" then
+						auto = SavedData.AutoExecutes[scriptData.Name]
+						if type(auto) == "table" and lookupId ~= "" then
+							SavedData.AutoExecutes[lookupId] = auto
+							SavedData.AutoExecutes[scriptData.Name] = nil
+							SaveConfiguration()
+						end
+					end
 					if type(auto) == "table" then
 						validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
 						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
