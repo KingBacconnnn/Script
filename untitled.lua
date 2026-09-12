@@ -738,15 +738,136 @@ local function ToggleUI()
 end
 ToastContainer = Instance.new("Frame", ScreenGui)
 ToastContainer.Name = "ToastContainer"
-ToastContainer.Size = UDim2.new(0, IsMobile and 240 or 320, 1, -40)
-ToastContainer.Position = UDim2.new(1, IsMobile and -250 or -330, 0, 20)
+ToastContainer.Size = UDim2.new(0, IsMobile and 300 or 390, 1, -32)
+ToastContainer.Position = UDim2.new(1, IsMobile and -312 or -402, 0, 16)
 ToastContainer.BackgroundTransparency = 1
 ToastContainer.ZIndex = 2000
+ToastContainer.ClipsDescendants = false
+
 local ToastLayout = Instance.new("UIListLayout", ToastContainer)
+ToastLayout.Name = "NotificationLayout"
 ToastLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-ToastLayout.Padding = UDim.new(0, 8)
+ToastLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+ToastLayout.Padding = UDim.new(0, 10)
+ToastLayout.FillDirection = Enum.FillDirection.Vertical
+
 local NOTIF_DURATION = 3.5
+local MAX_VISIBLE_NOTIFICATIONS = IsMobile and 3 or 5
+local NotificationSequence = 0
+
+local NotificationTypeInfo = {
+	Success = {
+		Label = "SUCCESS",
+		Title = "Completed",
+		Color = Theme.Success
+	},
+	Error = {
+		Label = "ERROR",
+		Title = "Something went wrong",
+		Color = Theme.Error
+	},
+	Warning = {
+		Label = "WARNING",
+		Title = "Needs your attention",
+		Color = Theme.Warning
+	},
+	Info = {
+		Label = "INFO",
+		Title = "Information",
+		Color = Theme.Info
+	},
+	System = {
+		Label = "SYSTEM",
+		Title = "System update",
+		Color = Theme.System
+	},
+	Execution = {
+		Label = "EXECUTION",
+		Title = "Script execution",
+		Color = Theme.Execution
+	}
+}
+
+local function NormalizeNotificationType(value)
+	if type(value) == "boolean" then
+		return value and "Success" or "Error"
+	end
+	if type(value) ~= "string" then
+		return "Info"
+	end
+	if NotificationTypeInfo[value] then
+		return value
+	end
+	local normalized = string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	for key, _ in pairs(NotificationTypeInfo) do
+		if string.lower(key) == normalized then
+			return key
+		end
+	end
+	return "Info"
+end
+
+local function GetNotificationMessage(msg)
+	local message = tostring(msg == nil and "" or msg)
+	message = string.gsub(message, "^%s+", "")
+	message = string.gsub(message, "%s+$", "")
+	if message == "" then
+		return "No additional details were provided."
+	end
+	return message
+end
+
+local function GetNotificationTitle(notifType, message)
+	local info = NotificationTypeInfo[notifType] or NotificationTypeInfo.Info
+
+	-- Keep the headline specific when the existing message already provides
+	-- enough context. This changes presentation only; the original message
+	-- remains the notification description.
+	local lowerMessage = string.lower(message)
+	if notifType == "Success" then
+		if string.find(lowerMessage, "execut") then return "Execution complete" end
+		if string.find(lowerMessage, "refresh") or string.find(lowerMessage, "catalog") then
+			return "Update complete"
+		end
+	elseif notifType == "Error" then
+		if string.find(lowerMessage, "download") or string.find(lowerMessage, "connect") then
+			return "Connection failed"
+		end
+		if string.find(lowerMessage, "compile") or string.find(lowerMessage, "loadstring") then
+			return "Execution unavailable"
+		end
+	elseif notifType == "Warning" then
+		if string.find(lowerMessage, "cancel") then return "Action canceled" end
+		if string.find(lowerMessage, "compatible") then return "Compatibility warning" end
+	elseif notifType == "System" then
+		if string.find(lowerMessage, "catalog") then return "Catalog update" end
+	elseif notifType == "Execution" then
+		if string.find(lowerMessage, "execut") then return "Script executed" end
+	end
+
+	return info.Title
+end
+
+local function TrimNotificationStack()
+	if not ToastContainer or not ToastContainer.Parent then return end
+	local active = {}
+	for _, child in ipairs(ToastContainer:GetChildren()) do
+		if child:IsA("Frame") and child:GetAttribute("VeloxNotification") == true then
+			table.insert(active, child)
+		end
+	end
+	table.sort(active, function(a, b)
+		return (a.LayoutOrder or 0) < (b.LayoutOrder or 0)
+	end)
+	while #active > MAX_VISIBLE_NOTIFICATIONS do
+		local oldest = table.remove(active, 1)
+		if oldest and oldest.Parent then
+			pcall(function() oldest:Destroy() end)
+		end
+	end
+end
+
 local function EmergencyFallbackNotification(msg, title)
 	pcall(function()
 		if StarterGui and type(StarterGui.SetCore) == "function" then
@@ -758,108 +879,293 @@ local function EmergencyFallbackNotification(msg, title)
 		end
 	end)
 end
+
 local function StandaloneBannerNotification(msg, notifType)
 	local parent = GetSecureParent()
 	if not parent then
-		EmergencyFallbackNotification(msg, notifType)
+		EmergencyFallbackNotification(msg, GetNotificationTitle(notifType, GetNotificationMessage(msg)))
 		return
 	end
+
 	local success = pcall(function()
+		local message = GetNotificationMessage(msg)
+		local typeInfo = NotificationTypeInfo[NormalizeNotificationType(notifType)] or NotificationTypeInfo.Info
+		local title = GetNotificationTitle(NormalizeNotificationType(notifType), message)
+
 		local bannerGui = Instance.new("ScreenGui")
 		bannerGui.Name = "VeloxBanner_" .. _VH_GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
+		bannerGui.IgnoreGuiInset = true
+		bannerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 		bannerGui.Parent = parent
+
 		local frame = Instance.new("Frame", bannerGui)
-		frame.Size = UDim2.new(0, IsMobile and 260 or 340, 0, 45)
-		frame.Position = UDim2.new(0.5, 0, 0, -60)
+		frame.Size = UDim2.new(0, IsMobile and 290 or 370, 0, IsMobile and 88 or 96)
+		frame.Position = UDim2.new(0.5, 0, 0, -110)
 		frame.AnchorPoint = Vector2.new(0.5, 0)
 		frame.BackgroundColor3 = Theme.BackgroundSecondary
 		frame.BorderSizePixel = 0
-		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+		frame.ZIndex = 1
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
 		local stroke = Instance.new("UIStroke", frame)
-		stroke.Color = Theme[notifType] or Theme.Info
+		stroke.Color = typeInfo.Color
 		stroke.Thickness = 1.5
-		local txt = Instance.new("TextLabel", frame)
-		txt.Size = UDim2.new(1, -20, 1, 0)
-		txt.Position = UDim2.new(0, 10, 0, 0)
-		txt.BackgroundTransparency = 1
-		txt.Text = tostring(msg)
-		txt.TextColor3 = Theme.TextPrimary
-		txt.Font = Enum.Font.GothamMedium
-		txt.TextSize = IsMobile and 11 or 13
-		txt.TextWrapped = true
-		TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.5, 0, 0, 20)
+		stroke.Transparency = 0.15
+
+		local topLine = Instance.new("Frame", frame)
+		topLine.Size = UDim2.new(1, 0, 0, 3)
+		topLine.BackgroundColor3 = typeInfo.Color
+		topLine.BorderSizePixel = 0
+		topLine.ZIndex = 2
+		Instance.new("UICorner", topLine).CornerRadius = UDim.new(0, 12)
+
+		local titleLabel = Instance.new("TextLabel", frame)
+		titleLabel.Size = UDim2.new(1, -28, 0, 22)
+		titleLabel.Position = UDim2.new(0, 14, 0, 10)
+		titleLabel.BackgroundTransparency = 1
+		titleLabel.Text = title
+		titleLabel.TextColor3 = Theme.TextPrimary
+		titleLabel.Font = Enum.Font.GothamBold
+		titleLabel.TextSize = IsMobile and 13 or 14
+		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+		titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		titleLabel.ZIndex = 3
+
+		local desc = Instance.new("TextLabel", frame)
+		desc.Size = UDim2.new(1, -28, 0, 42)
+		desc.Position = UDim2.new(0, 14, 0, 34)
+		desc.BackgroundTransparency = 1
+		desc.Text = message
+		desc.TextColor3 = Theme.TextSecondary
+		desc.Font = Enum.Font.Gotham
+		desc.TextSize = IsMobile and 11 or 12
+		desc.TextWrapped = true
+		desc.TextXAlignment = Enum.TextXAlignment.Left
+		desc.TextYAlignment = Enum.TextYAlignment.Top
+		desc.ZIndex = 3
+
+		TweenService:Create(frame, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.5, 0, 0, 18)
 		}):Play()
+
 		task.delay(NOTIF_DURATION, function()
-			local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(0.5, 0, 0, -60)
+			if not frame or not frame.Parent then return end
+			local outro = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.5, 0, 0, -110)
 			})
 			outro:Play()
 			outro.Completed:Connect(function()
-				bannerGui:Destroy()
+				if bannerGui and bannerGui.Parent then
+					bannerGui:Destroy()
+				end
 			end)
 		end)
 	end)
+
 	if not success then
-		EmergencyFallbackNotification(msg, notifType)
+		EmergencyFallbackNotification(msg, GetNotificationTitle(notifType, GetNotificationMessage(msg)))
 	end
 end
+
 local function ShowNotification(msg, notifType)
 	if isDestroying then return end
-	local nType = type(notifType) == "boolean" and (notifType and "Success" or "Error") or (notifType or "Info")
-	local indicatorColor = Theme[nType] or Theme.Info
+
+	local nType = NormalizeNotificationType(notifType)
+	local typeInfo = NotificationTypeInfo[nType] or NotificationTypeInfo.Info
+	local message = GetNotificationMessage(msg)
+	local title = GetNotificationTitle(nType, message)
+	local indicatorColor = typeInfo.Color
+
 	if not ToastContainer or not ToastContainer.Parent then
-		StandaloneBannerNotification(msg, nType)
+		StandaloneBannerNotification(message, nType)
 		return
 	end
+
 	local success = pcall(function()
+		NotificationSequence = NotificationSequence + 1
+
 		local wrapper = Instance.new("Frame", ToastContainer)
-		wrapper.Size = UDim2.new(1, 0, 0, 0)
-		wrapper.AutomaticSize = Enum.AutomaticSize.Y
+		wrapper.Name = "Notification_" .. tostring(NotificationSequence)
+		wrapper:SetAttribute("VeloxNotification", true)
+		wrapper.LayoutOrder = NotificationSequence
+		wrapper.Size = UDim2.new(1, 0, 0, IsMobile and 94 or 104)
 		wrapper.BackgroundTransparency = 1
 		wrapper.ZIndex = 2001
+
 		local box = Instance.new("Frame", wrapper)
-		box.Size = UDim2.new(1, 0, 0, 0)
-		box.AutomaticSize = Enum.AutomaticSize.Y
-		box.BackgroundColor3 = Theme.CardHover
-		box.Position = UDim2.new(1.2, 0, 0, 0)
+		box.Name = "Card"
+		box.Size = UDim2.new(1, 0, 1, 0)
+		box.Position = UDim2.new(1.15, 0, 0, 0)
+		box.BackgroundColor3 = Theme.Card
+		box.BorderSizePixel = 0
 		box.ClipsDescendants = true
 		box.ZIndex = 2002
-		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-		Instance.new("UIStroke", box).Color = Color3.fromRGB(40, 53, 75)
-		local pad = Instance.new("UIPadding", box)
-		pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-		pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 12)
-		local indicator = Instance.new("Frame", box)
-		indicator.Size = UDim2.new(0, 4, 1, 0)
-		indicator.Position = UDim2.new(0, -12, 0, -10)
-		indicator.BackgroundColor3 = indicatorColor
-		indicator.BorderSizePixel = 0
-		indicator.ZIndex = 2003
-		Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 6)
-		local txt = Instance.new("TextLabel", box)
-		txt.Size = UDim2.new(1, 0, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y
-		txt.BackgroundTransparency = 1; txt.Text = tostring(msg)
-		txt.TextColor3 = Theme.TextPrimary; txt.Font = Enum.Font.GothamMedium
-		txt.TextSize = IsMobile and 11 or 13; txt.TextXAlignment = Enum.TextXAlignment.Left
-		txt.TextWrapped = true; txt.ZIndex = 2003
-		local introTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
-		introTween:Play()
-		task.delay(NOTIF_DURATION, function()
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 12)
+
+		local stroke = Instance.new("UIStroke", box)
+		stroke.Color = Theme.Stroke
+		stroke.Thickness = 1
+		stroke.Transparency = 0.2
+
+		local accent = Instance.new("Frame", box)
+		accent.Name = "StatusBar"
+		accent.Size = UDim2.new(0, 4, 1, 0)
+		accent.Position = UDim2.new(0, 0, 0, 0)
+		accent.BackgroundColor3 = indicatorColor
+		accent.BorderSizePixel = 0
+		accent.ZIndex = 2004
+
+		local iconCircle = Instance.new("Frame", box)
+		iconCircle.Size = UDim2.new(0, 30, 0, 30)
+		iconCircle.Position = UDim2.new(0, 14, 0, 14)
+		iconCircle.BackgroundColor3 = indicatorColor
+		iconCircle.BackgroundTransparency = 0.84
+		iconCircle.BorderSizePixel = 0
+		iconCircle.ZIndex = 2004
+		Instance.new("UICorner", iconCircle).CornerRadius = UDim.new(1, 0)
+
+		local icon = Instance.new("TextLabel", iconCircle)
+		icon.Size = UDim2.new(1, 0, 1, 0)
+		icon.BackgroundTransparency = 1
+		icon.Text = ({
+			Success = "✓",
+			Error = "!",
+			Warning = "!",
+			Info = "i",
+			System = "•",
+			Execution = "▶"
+		})[nType] or "i"
+		icon.TextColor3 = indicatorColor
+		icon.Font = Enum.Font.GothamBold
+		icon.TextSize = IsMobile and 14 or 15
+		icon.ZIndex = 2005
+
+		local typeLabel = Instance.new("TextLabel", box)
+		typeLabel.Size = UDim2.new(1, -98, 0, 16)
+		typeLabel.Position = UDim2.new(0, 54, 0, 10)
+		typeLabel.BackgroundTransparency = 1
+		typeLabel.Text = typeInfo.Label
+		typeLabel.TextColor3 = indicatorColor
+		typeLabel.Font = Enum.Font.GothamBold
+		typeLabel.TextSize = IsMobile and 8 or 9
+		typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+		typeLabel.ZIndex = 2004
+
+		local titleLabel = Instance.new("TextLabel", box)
+		titleLabel.Name = "Title"
+		titleLabel.Size = UDim2.new(1, -98, 0, 22)
+		titleLabel.Position = UDim2.new(0, 54, 0, 23)
+		titleLabel.BackgroundTransparency = 1
+		titleLabel.Text = title
+		titleLabel.TextColor3 = Theme.TextPrimary
+		titleLabel.Font = Enum.Font.GothamBold
+		titleLabel.TextSize = IsMobile and 12 or 13
+		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+		titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		titleLabel.ZIndex = 2004
+
+		local closeButton = Instance.new("TextButton", box)
+		closeButton.Name = "Close"
+		closeButton.Size = UDim2.new(0, 26, 0, 26)
+		closeButton.Position = UDim2.new(1, -34, 0, 10)
+		closeButton.BackgroundTransparency = 1
+		closeButton.AutoButtonColor = false
+		closeButton.Text = "×"
+		closeButton.TextColor3 = Theme.TextSecondary
+		closeButton.Font = Enum.Font.GothamBold
+		closeButton.TextSize = 18
+		closeButton.ZIndex = 2006
+
+		local description = Instance.new("TextLabel", box)
+		description.Name = "Description"
+		description.Size = UDim2.new(1, -70, 0, IsMobile and 38 or 43)
+		description.Position = UDim2.new(0, 54, 0, 48)
+		description.BackgroundTransparency = 1
+		description.Text = message
+		description.TextColor3 = Theme.TextSecondary
+		description.Font = Enum.Font.Gotham
+		description.TextSize = IsMobile and 10 or 11
+		description.TextWrapped = true
+		description.TextXAlignment = Enum.TextXAlignment.Left
+		description.TextYAlignment = Enum.TextYAlignment.Top
+		description.ZIndex = 2004
+
+		local progressTrack = Instance.new("Frame", box)
+		progressTrack.Name = "ProgressTrack"
+		progressTrack.Size = UDim2.new(1, -28, 0, 2)
+		progressTrack.Position = UDim2.new(0, 14, 1, -8)
+		progressTrack.BackgroundColor3 = Theme.Stroke
+		progressTrack.BackgroundTransparency = 0.35
+		progressTrack.BorderSizePixel = 0
+		progressTrack.ZIndex = 2004
+
+		local progress = Instance.new("Frame", progressTrack)
+		progress.Name = "Progress"
+		progress.Size = UDim2.new(1, 0, 1, 0)
+		progress.BackgroundColor3 = indicatorColor
+		progress.BorderSizePixel = 0
+		progress.ZIndex = 2005
+
+		local closeRequested = false
+		local function Dismiss()
+			if closeRequested then return end
+			closeRequested = true
 			if not wrapper or not wrapper.Parent then return end
-			local outroTween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1.2, 0, 0, 0)})
-			outroTween:Play()
-			local conn
-			conn = outroTween.Completed:Connect(function()
-				if conn then conn:Disconnect() end
-				if wrapper and wrapper.Parent then wrapper:Destroy() end
+			local tween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(1.15, 0, 0, 0)
+			})
+			tween:Play()
+			tween.Completed:Connect(function()
+				if wrapper and wrapper.Parent then
+					wrapper:Destroy()
+				end
 			end)
+		end
+
+		closeButton.MouseEnter:Connect(function()
+			closeButton.TextColor3 = Theme.TextPrimary
+		end)
+		closeButton.MouseLeave:Connect(function()
+			if not closeRequested then
+				closeButton.TextColor3 = Theme.TextSecondary
+			end
+		end)
+		closeButton.MouseButton1Click:Connect(Dismiss)
+
+		box.MouseEnter:Connect(function()
+			_VH_SafeTween(box, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				BackgroundColor3 = Theme.CardHover
+			})
+		end)
+		box.MouseLeave:Connect(function()
+			if not closeRequested then
+				_VH_SafeTween(box, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					BackgroundColor3 = Theme.Card
+				})
+			end
+		end)
+
+		TrimNotificationStack()
+
+		local introTween = TweenService:Create(box, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0, 0, 0, 0)
+		})
+		introTween:Play()
+
+		_VH_SafeTween(progress, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, 0, 1, 0)
+		})
+
+		task.delay(NOTIF_DURATION, function()
+			if not wrapper or not wrapper.Parent or closeRequested then return end
+			Dismiss()
 		end)
 	end)
+
 	if not success then
-		StandaloneBannerNotification(msg, nType)
+		StandaloneBannerNotification(message, nType)
 	end
 end
 local function AttemptActionWithCooldown(actionFunc)
