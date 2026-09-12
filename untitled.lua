@@ -274,7 +274,7 @@ SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1 }
+	Settings = { AntiAFK = false, UIScale = 1, SafeMode = false, AccentPreset = "Indigo", RefreshKeybind = "F6", SearchKeybind = "F7", RecentScripts = {}, ExperimentalProfiles = {} }
 }
 SavedConfigExtras = {}
 ConfigurationLoaded = false
@@ -379,7 +379,13 @@ function _VH_BuildConfigurationData()
 	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
 	cleanData.Settings = {
 		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
+		SafeMode = SavedData.Settings.SafeMode == true,
+		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
+		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
+		SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7"),
+		RecentScripts = _VH_SanitizeForJSON(SavedData.Settings.RecentScripts or {}) or {},
+		ExperimentalProfiles = _VH_SanitizeForJSON(SavedData.Settings.ExperimentalProfiles or {}) or {}
 	}
 	for k, v in pairs(SavedData.Favorites) do
 		if v then cleanData.Favorites[tostring(k)] = true end
@@ -477,15 +483,144 @@ function LoadConfiguration()
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 	if type(result.Settings) == "table" then
-		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" then SavedData.Settings[k] = v end end
+		for k, v in pairs(result.Settings) do
+			if k == "AntiAFK" or k == "UIScale" or k == "SafeMode" or k == "AccentPreset" or k == "RefreshKeybind" or k == "SearchKeybind" or k == "RecentScripts" or k == "ExperimentalProfiles" then
+				SavedData.Settings[k] = v
+			end
+		end
 	end
 	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
+	SavedData.Settings.SafeMode = SavedData.Settings.SafeMode == true
 	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+	SavedData.Settings.AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo")
+	SavedData.Settings.RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6")
+	SavedData.Settings.SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7")
+	SavedData.Settings.RecentScripts = _VH_NormalizeRecentList(SavedData.Settings.RecentScripts)
+	if type(SavedData.Settings.ExperimentalProfiles) ~= "table" then SavedData.Settings.ExperimentalProfiles = {} end
 	ConfigurationLoaded = true
 	return true, nil
 end
 
 LoadConfiguration()
+
+LastScriptError = nil
+ThemeAccentPresets = {
+	Indigo = Color3.fromRGB(99, 102, 241),
+	Cyan = Color3.fromRGB(34, 211, 238),
+	Emerald = Color3.fromRGB(16, 185, 129),
+	Rose = Color3.fromRGB(244, 63, 94),
+	Amber = Color3.fromRGB(245, 158, 11)
+}
+function _VH_SetClipboard(text)
+	if type(setclipboard) == "function" then
+		local ok = pcall(function() setclipboard(tostring(text)) end)
+		return ok
+	end
+	if type(toclipboard) == "function" then
+		local ok = pcall(function() toclipboard(tostring(text)) end)
+		return ok
+	end
+	return false
+end
+function _VH_NormalizeRecentList(value)
+	local out = {}
+	if type(value) ~= "table" then return out end
+	local numeric = {}
+	for k, v in pairs(value) do
+		local n = tonumber(k)
+		if n and type(v) == "string" then numeric[#numeric + 1] = { Index = n, Value = v } end
+	end
+	table.sort(numeric, function(a, b) return a.Index < b.Index end)
+	for _, entry in ipairs(numeric) do out[#out + 1] = entry.Value end
+	return out
+end
+function _VH_GetRecentRank(scriptId)
+	local list = SavedData.Settings.RecentScripts
+	if type(list) ~= "table" then return math.huge end
+	for index, id in ipairs(list) do
+		if tostring(id) == tostring(scriptId) then return index end
+	end
+	return math.huge
+end
+function _VH_MarkScriptUsed(scriptData)
+	if type(scriptData) ~= "table" then return end
+	local id = StableScriptId and StableScriptId(scriptData) or scriptData.Id or scriptData.Name
+	if not id then return end
+	local list = SavedData.Settings.RecentScripts
+	if type(list) ~= "table" then list = {}; SavedData.Settings.RecentScripts = list end
+	for i = #list, 1, -1 do
+		if tostring(list[i]) == tostring(id) then table.remove(list, i) end
+	end
+	table.insert(list, 1, tostring(id))
+	while #list > 12 do table.remove(list) end
+end
+function _VH_ApplyAccentPreset(name, silent)
+	local preset = ThemeAccentPresets[name] and name or "Indigo"
+	local oldAccent = Theme.Accent
+	Theme.Accent = ThemeAccentPresets[preset]
+	SavedData.Settings.AccentPreset = preset
+	if ScreenGui and ScreenGui.Parent then
+		for _, obj in ipairs(ScreenGui:GetDescendants()) do
+			pcall(function()
+				if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+					if obj.TextColor3 == oldAccent then obj.TextColor3 = Theme.Accent end
+				elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+					if obj.ImageColor3 == oldAccent then obj.ImageColor3 = Theme.Accent end
+				elseif obj:IsA("Frame") then
+					if obj.BackgroundColor3 == oldAccent then obj.BackgroundColor3 = Theme.Accent end
+				elseif obj:IsA("UIStroke") then
+					if obj.Color == oldAccent then obj.Color = Theme.Accent end
+				end
+			end)
+		end
+		if TabIndicator then TabIndicator.BackgroundColor3 = Theme.Accent end
+		if AvatarStroke then AvatarStroke.Color = Theme.Accent end
+		if StatusDot and StatusDot.BackgroundColor3 == oldAccent then StatusDot.BackgroundColor3 = Theme.Accent end
+		if SearchStroke and SearchInput and SearchInput:IsFocused() then SearchStroke.Color = Theme.Accent end
+	end
+	if not silent then
+		SaveConfiguration()
+		ShowNotification("Experimental accent set to " .. preset .. ".", "Success")
+	end
+end
+function _VH_FindKeyCode(name)
+	if type(name) ~= "string" then return nil end
+	local key = Enum.KeyCode[name]
+	return key
+end
+function _VH_ApplySafeModeToExecution()
+	return SavedData.Settings.SafeMode == true
+end
+function _VH_SnapshotProfile()
+	return {
+		AntiAFK = SavedData.Settings.AntiAFK == true,
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
+		SafeMode = SavedData.Settings.SafeMode == true,
+		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
+		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
+		SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7"),
+		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
+	}
+end
+function _VH_ApplyProfile(profile)
+	if type(profile) ~= "table" then return false end
+	SavedData.Settings.AntiAFK = profile.AntiAFK == true
+	SavedData.Settings.UIScale = math.clamp(tonumber(profile.UIScale) or 1, 0.8, 1.2)
+	SavedData.Settings.SafeMode = profile.SafeMode == true
+	SavedData.Settings.AccentPreset = tostring(profile.AccentPreset or "Indigo")
+	SavedData.Settings.RefreshKeybind = tostring(profile.RefreshKeybind or "F6")
+	SavedData.Settings.SearchKeybind = tostring(profile.SearchKeybind or "F7")
+	if type(profile.ToggleKeybind) == "string" and _VH_FindKeyCode(profile.ToggleKeybind) then
+		SavedData.ToggleKeybind = profile.ToggleKeybind
+		ToggleKeybind = _VH_FindKeyCode(profile.ToggleKeybind)
+	end
+	ApplyPanelUIScale(SavedData.Settings.UIScale)
+	if type(_VH_ApplyAccentPreset) == "function" then _VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true) end
+	if SavedData.Settings.AntiAFK then ApplyAntiAFK() else DisableAntiAFK() end
+	if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
+	SaveConfiguration()
+	return true
+end
 
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
@@ -1550,7 +1685,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.3 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.3 EXPERIMENTAL | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -1758,7 +1893,7 @@ SortMode = "Most Relevant"
 SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
+	"Recently Used", "Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 function UpdateFilter()
 	if isDestroying then return end
@@ -1790,6 +1925,8 @@ function UpdateFilter()
 					filterPass = IsCalendarWeek(scr.LastUpdatedNumber)
 				elseif currentSort == "Updated This Month" then
 					filterPass = IsCalendarMonth(scr.LastUpdatedNumber)
+				elseif currentSort == "Recently Used" then
+					filterPass = _VH_GetRecentRank(scr.Id) < math.huge
 				elseif currentSort == "Favorites" then
 					filterPass = SavedData.Favorites[scr.Id] == true
 				elseif currentSort == "Auto Execute: ON" then
@@ -1813,6 +1950,9 @@ function UpdateFilter()
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
 			elseif currentSort == "Oldest" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber < b.LastUpdatedNumber end
+			elseif currentSort == "Recently Used" then
+				local ar, br = _VH_GetRecentRank(a.Id), _VH_GetRecentRank(b.Id)
+				if ar ~= br then return ar < br end
 			elseif currentSort == "Newest" or currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
 			else
@@ -1962,7 +2102,8 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.
+• Experimental Lab adds profiles, theme presets, safer execution, custom utility keybinds, import/export, recent scripts, and error reporting.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -2090,14 +2231,18 @@ function ExecuteSandboxed(code, scriptName)
 	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
 			local success, runtimeErr = pcall(chunk)
-			if not success and not isDestroying then
-				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			if not success then
+				LastScriptError = { Name = tostring(scriptName), Error = tostring(runtimeErr), Time = os.time() }
+				if not isDestroying then
+					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "].", "Error")
+				end
 			end
 		end)
 		return true, "Script dispatched successfully"
 	end
 
 	local detail = tostring(compileErr or chunk or "unknown compiler error")
+	LastScriptError = { Name = tostring(scriptName), Error = detail, Time = os.time() }
 	local normalized = string.lower(detail)
 	if string.find(normalized, "out of local", 1, true)
 		or string.find(normalized, "registers", 1, true)
@@ -2380,6 +2525,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
+						_VH_MarkScriptUsed(data)
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
@@ -2388,7 +2534,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				end
 			end)
 		end
-		if SavedData.AutoExecutes[scriptId] ~= nil then
+		if SavedData.Settings.SafeMode == true then
+			OpenConfirmDialog(exactName, executeScript)
+		elseif SavedData.AutoExecutes[scriptId] ~= nil then
 			AttemptActionWithCooldown(executeScript)
 		else
 			OpenConfirmDialog(exactName, executeScript)
@@ -2647,7 +2795,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 					for _, scriptData in ipairs(validEntries) do
 						auto, migrated = _VH_GetSavedAutoExecute(scriptData)
 						if migrated then autoConfigMigrated = true end
-						if type(auto) == "table" and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
+						if type(auto) == "table" and SavedData.Settings.SafeMode ~= true and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
 							autoQueue[#autoQueue + 1] = scriptData
 						end
 					end
@@ -3128,6 +3276,160 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
+
+-- Experimental Lab: all new utility features live behind this clearly marked area.
+experimentalGroup = CreateSettingsGroup("Experimental Lab • v2.1", SettingsView, 3)
+CreateToggleSettingInGroup(experimentalGroup, "Safe Mode", "Always confirm script execution and skip saved auto-execution.", "rbxassetid://10734976528", 1, SavedData.Settings.SafeMode, function(val)
+	SavedData.Settings.SafeMode = val
+	SaveConfiguration()
+	ShowNotification(val and "Safe Mode enabled." or "Safe Mode disabled.", val and "Warning" or "Success")
+end)
+
+-- Accent presets
+accentRow, accentRight = CreateSettingRowInGroup(experimentalGroup, "Experimental Theme", "Switch accent presets without changing the base theme.", "rbxassetid://10709782497", 2)
+accentFrame = Instance.new("Frame", accentRight)
+accentFrame.Size = UDim2.new(1, 0, 1, 0); accentFrame.BackgroundTransparency = 1
+accentLayout = Instance.new("UIListLayout", accentFrame)
+accentLayout.FillDirection = Enum.FillDirection.Horizontal; accentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right; accentLayout.VerticalAlignment = Enum.VerticalAlignment.Center; accentLayout.Padding = UDim.new(0, 4)
+for _, presetName in ipairs({"Indigo", "Cyan", "Emerald", "Rose", "Amber"}) do
+	local presetBtn = Instance.new("TextButton", accentFrame)
+	presetBtn.Size = UDim2.new(0, IsMobile and 30 or 34, 0, 24)
+	presetBtn.BackgroundColor3 = ThemeAccentPresets[presetName]
+	presetBtn.Text = ""
+	presetBtn.AutoButtonColor = false
+	Instance.new("UICorner", presetBtn).CornerRadius = UDim.new(0, 7)
+	local pStroke = Instance.new("UIStroke", presetBtn); pStroke.Color = Theme.Stroke; pStroke.Thickness = 1
+	presetBtn:SetAttribute("VeloxAccentPreset", presetName)
+	ApplyInteractiveAnimations(presetBtn, presetBtn.BackgroundColor3, presetBtn.BackgroundColor3:Lerp(Color3.new(1,1,1), 0.12), presetBtn.BackgroundColor3:Lerp(Color3.new(0,0,0), 0.15), pStroke, Theme.Stroke, Theme.TextPrimary)
+	_VH_RegConn(presetBtn.Activated:Connect(function() _VH_ApplyAccentPreset(presetName) end))
+end
+
+-- Profiles
+profileGroup = CreateSettingsGroup("Config Profiles", SettingsView, 4)
+profileRow, profileRight = CreateSettingRowInGroup(profileGroup, "Profile Slots", "Save or restore your experimental settings quickly.", "rbxassetid://10734976528", 1)
+profileFrame = Instance.new("Frame", profileRight); profileFrame.Size = UDim2.new(1,0,1,0); profileFrame.BackgroundTransparency = 1
+profileLayout = Instance.new("UIListLayout", profileFrame); profileLayout.FillDirection = Enum.FillDirection.Horizontal; profileLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right; profileLayout.VerticalAlignment = Enum.VerticalAlignment.Center; profileLayout.Padding = UDim.new(0,4)
+SavedData.Settings.ExperimentalProfiles = type(SavedData.Settings.ExperimentalProfiles) == "table" and SavedData.Settings.ExperimentalProfiles or {}
+for slot = 1, 3 do
+	local saveBtn = Instance.new("TextButton", profileFrame)
+	saveBtn.Size = UDim2.new(0, 30, 0, 24); saveBtn.BackgroundColor3 = Theme.BackgroundMain; saveBtn.Text = "S"..slot; saveBtn.TextColor3 = Theme.TextPrimary; saveBtn.Font = Enum.Font.GothamBold; saveBtn.TextSize = 9; saveBtn.AutoButtonColor = false
+	Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 6); local ss = Instance.new("UIStroke", saveBtn); ss.Color = Theme.Stroke
+	local loadBtn = Instance.new("TextButton", profileFrame)
+	loadBtn.Size = UDim2.new(0, 30, 0, 24); loadBtn.BackgroundColor3 = Theme.CardHover; loadBtn.Text = "L"..slot; loadBtn.TextColor3 = Theme.TextPrimary; loadBtn.Font = Enum.Font.GothamBold; loadBtn.TextSize = 9; loadBtn.AutoButtonColor = false
+	Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 6); local ls = Instance.new("UIStroke", loadBtn); ls.Color = Theme.Stroke
+	ApplyInteractiveAnimations(saveBtn, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), ss, Theme.Stroke, Theme.Accent)
+	ApplyInteractiveAnimations(loadBtn, Theme.CardHover, Theme.BackgroundSecondary, Color3.fromRGB(10,15,30), ls, Theme.Stroke, Theme.Accent)
+	local slotKey = "Slot" .. tostring(slot)
+	_VH_RegConn(saveBtn.Activated:Connect(function()
+		SavedData.Settings.ExperimentalProfiles[slotKey] = _VH_SnapshotProfile()
+		SaveConfiguration()
+		ShowNotification("Saved profile " .. tostring(slot) .. ".", "Success")
+	end))
+	_VH_RegConn(loadBtn.Activated:Connect(function()
+		local profile = SavedData.Settings.ExperimentalProfiles[slotKey]
+		if type(profile) ~= "table" then ShowNotification("Profile " .. tostring(slot) .. " is empty.", "Warning"); return end
+		if _VH_ApplyProfile(profile) then ShowNotification("Loaded profile " .. tostring(slot) .. ".", "Success") end
+	end))
+end
+
+-- Utility keybinds: refresh and focus search.
+keyGroup = CreateSettingsGroup("Utility Keybinds", SettingsView, 5)
+refreshKeyRow, refreshKeyRight = CreateSettingRowInGroup(keyGroup, "Refresh Catalog Key", "Press the button, then press a keyboard key.", "rbxassetid://10734976528", 1)
+RefreshKeyButton = Instance.new("TextButton", refreshKeyRight); RefreshKeyButton.Size = UDim2.new(0, 95, 0, 26); RefreshKeyButton.Position = UDim2.new(1,-95,0.5,-13); RefreshKeyButton.BackgroundColor3 = Theme.BackgroundMain; RefreshKeyButton.BackgroundTransparency = .4; RefreshKeyButton.Text = SavedData.Settings.RefreshKeybind; RefreshKeyButton.TextColor3 = Theme.TextPrimary; RefreshKeyButton.Font = Enum.Font.GothamMedium; RefreshKeyButton.TextSize = 11; RefreshKeyButton.AutoButtonColor = false
+Instance.new("UICorner", RefreshKeyButton).CornerRadius = UDim.new(0,6); RefreshKeyStroke = Instance.new("UIStroke", RefreshKeyButton); RefreshKeyStroke.Color = Theme.Stroke
+ApplyInteractiveAnimations(RefreshKeyButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), RefreshKeyStroke, Theme.Stroke, Theme.Accent)
+searchKeyRow, searchKeyRight = CreateSettingRowInGroup(keyGroup, "Focus Search Key", "Quickly focus the script search box.", "rbxassetid://10734976528", 2)
+SearchKeyButton = Instance.new("TextButton", searchKeyRight); SearchKeyButton.Size = UDim2.new(0, 95, 0, 26); SearchKeyButton.Position = UDim2.new(1,-95,0.5,-13); SearchKeyButton.BackgroundColor3 = Theme.BackgroundMain; SearchKeyButton.BackgroundTransparency = .4; SearchKeyButton.Text = SavedData.Settings.SearchKeybind; SearchKeyButton.TextColor3 = Theme.TextPrimary; SearchKeyButton.Font = Enum.Font.GothamMedium; SearchKeyButton.TextSize = 11; SearchKeyButton.AutoButtonColor = false
+Instance.new("UICorner", SearchKeyButton).CornerRadius = UDim.new(0,6); SearchKeyStroke = Instance.new("UIStroke", SearchKeyButton); SearchKeyStroke.Color = Theme.Stroke
+ApplyInteractiveAnimations(SearchKeyButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), SearchKeyStroke, Theme.Stroke, Theme.Accent)
+function BindExperimentalKeyButton(button, settingName, fallback)
+	local listening = false
+	_VH_RegConn(button.Activated:Connect(function()
+		if listening or isDestroying then return end
+		listening = true; button.Text = "Press Key..."
+		local conn
+		conn = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+			if input.KeyCode == Enum.KeyCode.Escape then
+				listening = false; button.Text = tostring(SavedData.Settings[settingName] or fallback); _VH_UnregConn(conn); return
+			end
+			if input.KeyCode ~= Enum.KeyCode.Unknown then
+				SavedData.Settings[settingName] = input.KeyCode.Name
+				button.Text = input.KeyCode.Name
+				SaveConfiguration()
+				if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
+				listening = false; _VH_UnregConn(conn)
+				ShowNotification("Updated " .. settingName .. " to " .. input.KeyCode.Name .. ".", "Success")
+			end
+		end))
+	end))
+end
+BindExperimentalKeyButton(RefreshKeyButton, "RefreshKeybind", "F6")
+BindExperimentalKeyButton(SearchKeyButton, "SearchKeybind", "F7")
+
+-- Import/export with clipboard support.
+ioGroup = CreateSettingsGroup("Configuration Tools", SettingsView, 6)
+ioRow, ioRight = CreateSettingRowInGroup(ioGroup, "Import / Export", "Export JSON or paste JSON into the field and import it.", "rbxassetid://10734976528", 1)
+ioFrame = Instance.new("Frame", ioRight); ioFrame.Size = UDim2.new(1,0,1,0); ioFrame.BackgroundTransparency = 1
+ioExport = Instance.new("TextButton", ioFrame); ioExport.Size = UDim2.new(0,48,0,24); ioExport.Position = UDim2.new(0,0,0.5,-12); ioExport.BackgroundColor3 = Theme.BackgroundMain; ioExport.Text = "Export"; ioExport.TextColor3 = Theme.TextPrimary; ioExport.Font = Enum.Font.GothamBold; ioExport.TextSize = 9; ioExport.AutoButtonColor = false
+ioImport = Instance.new("TextButton", ioFrame); ioImport.Size = UDim2.new(0,48,0,24); ioImport.Position = UDim2.new(1,-48,0.5,-12); ioImport.BackgroundColor3 = Theme.CardHover; ioImport.Text = "Import"; ioImport.TextColor3 = Theme.TextPrimary; ioImport.Font = Enum.Font.GothamBold; ioImport.TextSize = 9; ioImport.AutoButtonColor = false
+Instance.new("UICorner", ioExport).CornerRadius = UDim.new(0,6); Instance.new("UICorner", ioImport).CornerRadius = UDim.new(0,6)
+ioExportStroke=Instance.new("UIStroke",ioExport); ioExportStroke.Color=Theme.Stroke; ioImportStroke=Instance.new("UIStroke",ioImport); ioImportStroke.Color=Theme.Stroke
+ApplyInteractiveAnimations(ioExport, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), ioExportStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(ioImport, Theme.CardHover, Theme.BackgroundSecondary, Color3.fromRGB(10,15,30), ioImportStroke, Theme.Stroke, Theme.Accent)
+local exportBox = Instance.new("TextBox", SettingsView); exportBox.Size = UDim2.new(1,0,0,90); exportBox.BackgroundColor3 = Theme.BackgroundMain; exportBox.TextColor3 = Theme.TextSecondary; exportBox.PlaceholderText = "Configuration JSON appears here / paste JSON here to import..."; exportBox.PlaceholderColor3 = Theme.TextSecondary; exportBox.Text = ""; exportBox.ClearTextOnFocus=false; exportBox.MultiLine=true; exportBox.TextWrapped=true; exportBox.TextXAlignment=Enum.TextXAlignment.Left; exportBox.TextYAlignment=Enum.TextYAlignment.Top; exportBox.Font=Enum.Font.Code; exportBox.TextSize=10; exportBox.LayoutOrder=7; exportBox.ClipsDescendants=true
+Instance.new("UICorner",exportBox).CornerRadius=UDim.new(0,8); exportStroke=Instance.new("UIStroke",exportBox); exportStroke.Color=Theme.Stroke
+local exportPad=Instance.new("UIPadding",exportBox); exportPad.PaddingLeft=UDim.new(0,8); exportPad.PaddingRight=UDim.new(0,8); exportPad.PaddingTop=UDim.new(0,8); exportPad.PaddingBottom=UDim.new(0,8)
+_VH_RegConn(ioExport.Activated:Connect(function()
+	local ok, encoded = pcall(function() return HttpService:JSONEncode(_VH_BuildConfigurationData()) end)
+	if not ok or not encoded then ShowNotification("Could not encode configuration.", "Error"); return end
+	exportBox.Text = encoded
+	local copied = _VH_SetClipboard(encoded)
+	ShowNotification(copied and "Configuration exported and copied to clipboard." or "Configuration exported to the text box.", "Success")
+end))
+_VH_RegConn(ioImport.Activated:Connect(function()
+	local raw = exportBox.Text
+	if type(raw) ~= "string" or string.gsub(raw, "%s+", "") == "" then ShowNotification("Paste configuration JSON first.", "Warning"); return end
+	local ok, result = pcall(function() return HttpService:JSONDecode(raw) end)
+	if not ok or type(result) ~= "table" then ShowNotification("Configuration JSON is invalid.", "Error"); return end
+	if type(result.Favorites)=="table" then SavedData.Favorites=result.Favorites end
+	if type(result.AutoExecutes)=="table" then SavedData.AutoExecutes=result.AutoExecutes end
+	if type(result.ToggleKeybind)=="string" then SavedData.ToggleKeybind=result.ToggleKeybind; if _VH_FindKeyCode(result.ToggleKeybind) then ToggleKeybind=_VH_FindKeyCode(result.ToggleKeybind); BindToggleKey(ToggleKeybind) end end
+	if type(result.Settings)=="table" then
+		SavedData.Settings.AntiAFK=result.Settings.AntiAFK==true
+		SavedData.Settings.UIScale=math.clamp(tonumber(result.Settings.UIScale) or 1,0.8,1.2)
+		SavedData.Settings.SafeMode=result.Settings.SafeMode==true
+		SavedData.Settings.AccentPreset=tostring(result.Settings.AccentPreset or "Indigo")
+		SavedData.Settings.RefreshKeybind=tostring(result.Settings.RefreshKeybind or "F6")
+		SavedData.Settings.SearchKeybind=tostring(result.Settings.SearchKeybind or "F7")
+		SavedData.Settings.RecentScripts=_VH_NormalizeRecentList(result.Settings.RecentScripts)
+		SavedData.Settings.ExperimentalProfiles=type(result.Settings.ExperimentalProfiles)=="table" and result.Settings.ExperimentalProfiles or {}
+	end
+	if SavedData.Settings.AntiAFK then ApplyAntiAFK() else DisableAntiAFK() end
+	ApplyPanelUIScale(SavedData.Settings.UIScale)
+	_VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true)
+	if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
+	SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+	ShowNotification("Configuration imported successfully.", "Success")
+end))
+
+-- Error reporter + recent scripts utility actions.
+reportGroup = CreateSettingsGroup("Diagnostics & Activity", SettingsView, 8)
+CreateButtonSettingInGroup(reportGroup, "Copy Last Error", "Copies the most recent script runtime/compile error when supported.", "rbxassetid://10709790537", "Copy", 1, false, function()
+	if not LastScriptError then ShowNotification("No captured script error yet.", "Info"); return end
+	local text = "VeloxHub Experimental Error Report\nScript: " .. tostring(LastScriptError.Name) .. "\nTime: " .. os.date("!%Y-%m-%d %H:%M:%S", tonumber(LastScriptError.Time) or os.time()) .. " UTC\nError: " .. tostring(LastScriptError.Error)
+	local copied = _VH_SetClipboard(text)
+	ShowNotification(copied and "Last error copied to clipboard." or "Clipboard API unavailable; see the notification details.", copied and "Success" or "Warning")
+	if not copied then ShowNotification(tostring(LastScriptError.Error), "Error") end
+end)
+CreateButtonSettingInGroup(reportGroup, "Clear Recent History", "Clears the experimental recent-script list used by the Recently Used filter.", "rbxassetid://10734976528", "Clear", 2, true, function()
+	SavedData.Settings.RecentScripts = {}
+	SaveConfiguration()
+	UpdateFilter()
+	ShowNotification("Recent script history cleared.", "Success")
+end)
+
+if SavedData.Settings.AccentPreset then _VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true) end
 if SavedData.Settings.AntiAFK then
 	ApplyAntiAFK()
 end
@@ -3141,7 +3443,7 @@ SearchRow.Visible = false
 FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
-	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 9)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
@@ -3154,3 +3456,35 @@ if IsMobile then
 end
 end
 BuildSettings()
+
+-- Experimental global utility hotkeys are bound after Settings UI creation.
+ExperimentalKeybindConnections = ExperimentalKeybindConnections or {}
+function _VH_RebindExperimentalHotkeys()
+	for _, conn in pairs(ExperimentalKeybindConnections) do if conn then _VH_UnregConn(conn) end end
+	table.clear(ExperimentalKeybindConnections)
+	local refreshKey = _VH_FindKeyCode(SavedData.Settings.RefreshKeybind or "F6")
+	local searchKey = _VH_FindKeyCode(SavedData.Settings.SearchKeybind or "F7")
+	if refreshKey then
+		ExperimentalKeybindConnections.Refresh = _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed or isDestroying or IsBindingKey then return end
+			if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == refreshKey then
+				if PendingTasks.__LoadCatalog then pcall(function() PendingTasks.__LoadCatalog(true) end) end
+			end
+		end))
+	end
+	if searchKey then
+		ExperimentalKeybindConnections.Search = _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed or isDestroying or IsBindingKey then return end
+			if SearchInput and SearchInput:IsFocused() then return end
+			if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == searchKey then
+				currentTab = "Scripts"
+				for tName, view in pairs(TabViews) do view.Visible = (tName == "Scripts") end
+				if TabButtonCache["Scripts"] then TabButtonCache["Scripts"].TextColor3 = Theme.TextPrimary end
+				SearchRow.Visible = true
+				if SearchInput and SearchInput.Parent then SearchInput:CaptureFocus() end
+				UpdateFilter()
+			end
+		end))
+	end
+end
+_VH_RebindExperimentalHotkeys()
