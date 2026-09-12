@@ -379,7 +379,7 @@ function _VH_BuildConfigurationData()
 	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
 	cleanData.Settings = {
 		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
+		UIScale = _VH_ClampScale(SavedData.Settings.UIScale),
 		SafeMode = SavedData.Settings.SafeMode == true,
 		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
 		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
@@ -431,7 +431,14 @@ function SaveConfiguration()
 	return true, nil
 end
 
-function _VH_NormalizeRecentList(value)
+local function _VH_ClampScale(value)
+	value = tonumber(value) or 1
+	if value < 0.8 then return 0.8 end
+	if value > 1.2 then return 1.2 end
+	return value
+end
+
+local function _VH_NormalizeRecentList(value)
 	local out = {}
 	if type(value) ~= "table" then return out end
 	local numeric = {}
@@ -444,7 +451,7 @@ function _VH_NormalizeRecentList(value)
 	return out
 end
 
-function LoadConfiguration()
+local function LoadConfiguration()
 	ConfigurationLoaded = false
 	ConfigurationLoadError = nil
 	if type(read_file) ~= "function" then
@@ -472,31 +479,45 @@ function LoadConfiguration()
 		return false, ConfigurationLoadError
 	end
 	SavedConfigExtras = {}
-	for k, v in pairs(result) do
+	local safePairs = pairs
+	local safeType = type
+	local safeToString = tostring
+	local safeToNumber = tonumber
+	if safeType(safePairs) ~= "function" then
+		ConfigurationLoadError = "configuration loader could not access pairs()"
+		ConfigurationLoaded = true
+		return false, ConfigurationLoadError
+	end
+	if safeType(result) ~= "table" then
+		ConfigurationLoadError = "configuration root is not a table"
+		ConfigurationLoaded = true
+		return false, ConfigurationLoadError
+	end
+	for k, v in safePairs(result) do
 		if k ~= "Favorites" and k ~= "AutoExecutes" and k ~= "ToggleKeybind" and k ~= "Settings" then
-			SavedConfigExtras[tostring(k)] = _VH_SanitizeForJSON(v)
+			SavedConfigExtras[safeToString(k)] = _VH_SanitizeForJSON(v)
 		end
 	end
 	SavedData.Favorites = {}
 	SavedData.AutoExecutes = {}
-	if type(result.Favorites) == "table" then
-		for k, v in pairs(result.Favorites) do if v then SavedData.Favorites[tostring(k)] = true end end
+	if safeType(result.Favorites) == "table" then
+		for k, v in safePairs(result.Favorites) do if v then SavedData.Favorites[safeToString(k)] = true end end
 	end
-	if type(result.AutoExecutes) == "table" then
-		for k, v in pairs(result.AutoExecutes) do
-			if type(k) == "string" and type(v) == "table" then
-				local savedPlace = tonumber(v.PlaceId)
-				local savedGame = tonumber(v.GameId)
-				local savedName = type(v.Name) == "string" and v.Name or nil
+	if safeType(result.AutoExecutes) == "table" then
+		for k, v in safePairs(result.AutoExecutes) do
+			if safeType(k) == "string" and safeType(v) == "table" then
+				local savedPlace = safeToNumber(v.PlaceId)
+				local savedGame = safeToNumber(v.GameId)
+				local savedName = safeType(v.Name) == "string" and v.Name or nil
 				if savedPlace or savedGame then
-					SavedData.AutoExecutes[tostring(k)] = { PlaceId = savedPlace, GameId = savedGame, Name = savedName }
+					SavedData.AutoExecutes[safeToString(k)] = { PlaceId = savedPlace, GameId = savedGame, Name = savedName }
 				end
 			end
 		end
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
-	if type(result.Settings) == "table" then
-		for k, v in pairs(result.Settings) do
+	if safeType(result.Settings) == "table" then
+		for k, v in safePairs(result.Settings) do
 			if k == "AntiAFK" or k == "UIScale" or k == "SafeMode" or k == "AccentPreset" or k == "RefreshKeybind" or k == "SearchKeybind" or k == "RecentScripts" or k == "ExperimentalProfiles" then
 				SavedData.Settings[k] = v
 			end
@@ -504,7 +525,7 @@ function LoadConfiguration()
 	end
 	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
 	SavedData.Settings.SafeMode = SavedData.Settings.SafeMode == true
-	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+	SavedData.Settings.UIScale = _VH_ClampScale(SavedData.Settings.UIScale)
 	SavedData.Settings.AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo")
 	SavedData.Settings.RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6")
 	SavedData.Settings.SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7")
@@ -514,7 +535,11 @@ function LoadConfiguration()
 	return true, nil
 end
 
-LoadConfiguration()
+local _configCallOk, _configCallResult = pcall(LoadConfiguration)
+if not _configCallOk then
+	ConfigurationLoadError = "configuration load failed safely"
+	ConfigurationLoaded = true
+end
 
 LastScriptError = nil
 ThemeAccentPresets = {
@@ -595,7 +620,7 @@ end
 function _VH_SnapshotProfile()
 	return {
 		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
+		UIScale = _VH_ClampScale(SavedData.Settings.UIScale),
 		SafeMode = SavedData.Settings.SafeMode == true,
 		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
 		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
@@ -606,7 +631,7 @@ end
 function _VH_ApplyProfile(profile)
 	if type(profile) ~= "table" then return false end
 	SavedData.Settings.AntiAFK = profile.AntiAFK == true
-	SavedData.Settings.UIScale = math.clamp(tonumber(profile.UIScale) or 1, 0.8, 1.2)
+	SavedData.Settings.UIScale = _VH_ClampScale(profile.UIScale)
 	SavedData.Settings.SafeMode = profile.SafeMode == true
 	SavedData.Settings.AccentPreset = tostring(profile.AccentPreset or "Indigo")
 	SavedData.Settings.RefreshKeybind = tostring(profile.RefreshKeybind or "F6")
@@ -922,7 +947,7 @@ PanelGroup.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 PanelUIScale = Instance.new("UIScale", MainPanel)
-PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+PanelUIScale.Scale = _VH_ClampScale(SavedData.Settings.UIScale)
 function ApplyPanelUIScale(scaleValue)
 	nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
 	SavedData.Settings.UIScale = nextScale
@@ -3192,7 +3217,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 end)
 
 scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
-scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+scaleValue = _VH_ClampScale(SavedData.Settings.UIScale)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
 scaleFrame.BackgroundTransparency = 1
@@ -3407,7 +3432,7 @@ _VH_RegConn(ioImport.Activated:Connect(function()
 	if type(result.ToggleKeybind)=="string" then SavedData.ToggleKeybind=result.ToggleKeybind; if _VH_FindKeyCode(result.ToggleKeybind) then ToggleKeybind=_VH_FindKeyCode(result.ToggleKeybind); BindToggleKey(ToggleKeybind) end end
 	if type(result.Settings)=="table" then
 		SavedData.Settings.AntiAFK=result.Settings.AntiAFK==true
-		SavedData.Settings.UIScale=math.clamp(tonumber(result.Settings.UIScale) or 1,0.8,1.2)
+		SavedData.Settings.UIScale=_VH_ClampScale(result.Settings.UIScale)
 		SavedData.Settings.SafeMode=result.Settings.SafeMode==true
 		SavedData.Settings.AccentPreset=tostring(result.Settings.AccentPreset or "Indigo")
 		SavedData.Settings.RefreshKeybind=tostring(result.Settings.RefreshKeybind or "F6")
