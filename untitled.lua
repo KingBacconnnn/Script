@@ -47,24 +47,10 @@ GameId = game.GameId
 gethui = gethui or function() return nil end
 protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
 exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
-local _vh_env = (getgenv and getgenv()) or _G
-write_file = (type(writefile) == "function" and writefile)
-	or (type(_vh_env.writefile) == "function" and _vh_env.writefile)
-	or (syn and type(syn.writefile) == "function" and syn.writefile)
-	or nil
-read_file = (type(readfile) == "function" and readfile)
-	or (type(_vh_env.readfile) == "function" and _vh_env.readfile)
-	or (syn and type(syn.readfile) == "function" and syn.readfile)
-	or nil
-is_file = (type(isfile) == "function" and isfile)
-	or (type(_vh_env.isfile) == "function" and _vh_env.isfile)
-	or (syn and type(syn.isfile) == "function" and syn.isfile)
-	or nil
-make_folder = (type(makefolder) == "function" and makefolder)
-	or (type(_vh_env.makefolder) == "function" and _vh_env.makefolder)
-	or (syn and type(syn.makefolder) == "function" and syn.makefolder)
-	or nil
-del_file = (type(delfile) == "function" and delfile) or nil
+write_file = type(writefile) == "function" and writefile or nil
+read_file = type(readfile) == "function" and readfile or nil
+is_file = type(isfile) == "function" and isfile or nil
+del_file = type(delfile) == "function" and delfile or nil
 CompileFunction = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
@@ -283,17 +269,18 @@ function _VH_CreateDebounce(cooldown, func)
 		end)
 	end
 end
-DATA_FOLDER = "VeloxHub"
-DATA_FILE = DATA_FOLDER .. "/Config.json"
-TEMP_FILE = DATA_FOLDER .. "/Config_Temp.json"
+DATA_FILE = ".VeloxHub_Data_V3.1.json"
+TEMP_FILE = ".VeloxHub_Data_Temp.json"
+make_folder = type(makefolder) == "function" and makefolder or nil
 SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
 	Settings = { AntiAFK = false, UIScale = 1 }
 }
-isSaving = false
-saveQueued = false
+SavedConfigExtras = {}
+ConfigurationLoaded = false
+ConfigurationLoadError = nil
 function _VH_SanitizeForJSON(data)
 	if type(data) == "table" then
 		clean = {}
@@ -311,101 +298,137 @@ function _VH_SanitizeForJSON(data)
 	end
 	return nil
 end
-function EnsureConfigFolder()
-	if type(make_folder) ~= "function" then
-		return true
-	end
-	local ok = pcall(function()
-		make_folder(DATA_FOLDER)
-	end)
-	return ok
+function _VH_EnsureConfigDirectory(path)
+	if type(make_folder) ~= "function" or type(path) ~= "string" then return true end
+	local dir = string.match(path, "^(.*)[/\\][^/\\]+$")
+	if not dir or dir == "" then return true end
+	local ok = pcall(function() make_folder(dir) end)
+	if ok then return true end
+	return false
 end
-
 function SaveConfiguration()
 	if type(write_file) ~= "function" then
-		return false
+		return false, "this executor does not expose a usable writefile() API"
 	end
-	if not EnsureConfigFolder() then
-		return false
+	if not _VH_EnsureConfigDirectory(DATA_FILE) then
+		return false, "the configuration directory could not be created"
 	end
-
-	local cleanData = {
-		Favorites = {},
-		AutoExecutes = {},
-		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-		Settings = {
-			AntiAFK = SavedData.Settings.AntiAFK == true,
-			UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-		}
+	local cleanData = _VH_SanitizeForJSON(SavedConfigExtras)
+	if type(cleanData) ~= "table" then cleanData = {} end
+	cleanData.Favorites = {}
+	cleanData.AutoExecutes = {}
+	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
+	cleanData.Settings = {
+		AntiAFK = SavedData.Settings.AntiAFK == true,
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	}
-
 	for k, v in pairs(SavedData.Favorites) do
-		if v then
-			cleanData.Favorites[tostring(k)] = true
-		end
+		if v then cleanData.Favorites[tostring(k)] = true end
 	end
-
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(v) == "table" then
 			cleanData.AutoExecutes[tostring(k)] = {
 				PlaceId = tonumber(v.PlaceId),
-				GameId = tonumber(v.GameId)
+				GameId = tonumber(v.GameId),
+				Name = type(v.Name) == "string" and v.Name or nil
 			}
 		end
 	end
-
 	local encodedOk, result = pcall(function()
 		return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
 	end)
 	if not encodedOk or type(result) ~= "string" then
-		return false
+		return false, "configuration JSON encoding failed"
 	end
-
-	-- Write directly. Do not require readfile/isfile support just to save.
-	local writeOk = pcall(function()
-		write_file(DATA_FILE, result)
+	local writeOk, writeResult = pcall(function()
+		return write_file(DATA_FILE, result)
 	end)
-	return writeOk
-end
-
-function LoadConfiguration()
+	if not writeOk or writeResult == false then
+		return false, "writefile() failed for " .. tostring(DATA_FILE)
+	end
 	if type(read_file) == "function" then
-		local canRead = true
-		if type(is_file) == "function" then
-			canRead = pcall(function() return is_file(DATA_FILE) end)
-		end
-		if canRead then
-			success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
-		else
-			success = false
-		end
-		if success and type(result) == "table" then
-			if type(result.Favorites) == "table" then
-				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
-			end
-			if type(result.AutoExecutes) == "table" then
-				for k, v in pairs(result.AutoExecutes) do
-					if type(k) == "string" and type(v) == "table" then
-						SavedData.AutoExecutes[tostring(k)] = {
-							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
-							GameId = type(v.GameId) == "number" and v.GameId or nil
-						}
-					end
-				end
-			end
-			if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
-			if type(result.Settings) == "table" then
-				for k, _ in pairs(result.Settings) do
-					if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
-				end
-			end
-			SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-		else
-			SaveConfiguration()
+		local verifyOk, verifyResult = pcall(function()
+			local check = read_file(DATA_FILE)
+			local decoded = HttpService:JSONDecode(check)
+			return type(decoded) == "table" and decoded.AutoExecutes ~= nil
+		end)
+		if not verifyOk or verifyResult ~= true then
+			return false, "writefile() completed but the saved configuration could not be verified"
 		end
 	end
+	return true, nil
+end
+function LoadConfiguration()
+	ConfigurationLoaded = false
+	ConfigurationLoadError = nil
+	if type(read_file) ~= "function" then
+		ConfigurationLoadError = "this executor does not expose readfile()"
+		return false, ConfigurationLoadError
+	end
+	local exists = nil
+	if type(is_file) == "function" then
+		local existsOk, existsResult = pcall(function() return is_file(DATA_FILE) end)
+		if existsOk then exists = existsResult == true end
+	end
+	if exists == false then
+		ConfigurationLoaded = true
+		return true, nil
+	end
+	local readOk, raw = pcall(function() return read_file(DATA_FILE) end)
+	if not readOk or type(raw) ~= "string" or raw == "" then
+		if exists == nil then
+			ConfigurationLoadError = "the configuration file could not be read"
+			return false, ConfigurationLoadError
+		end
+		ConfigurationLoaded = true
+		return true, nil
+	end
+	local decodeOk, result = pcall(function() return HttpService:JSONDecode(raw) end)
+	if not decodeOk or type(result) ~= "table" then
+		ConfigurationLoadError = "the configuration file contains invalid JSON"
+		return false, ConfigurationLoadError
+	end
+	SavedConfigExtras = {}
+	for k, v in pairs(result) do
+		if k ~= "Favorites" and k ~= "AutoExecutes" and k ~= "ToggleKeybind" and k ~= "Settings" then
+			SavedConfigExtras[tostring(k)] = v
+		end
+	end
+	SavedData.Favorites = {}
+	SavedData.AutoExecutes = {}
+	if type(result.Favorites) == "table" then
+		for k, _ in pairs(result.Favorites) do
+			SavedData.Favorites[tostring(k)] = true
+		end
+	end
+	if type(result.AutoExecutes) == "table" then
+		for k, v in pairs(result.AutoExecutes) do
+			if type(k) == "string" and type(v) == "table" then
+				local savedPlace = tonumber(v.PlaceId)
+				local savedGame = tonumber(v.GameId)
+				local savedName = type(v.Name) == "string" and v.Name or nil
+				if savedPlace or savedGame then
+					SavedData.AutoExecutes[tostring(k)] = {
+						PlaceId = savedPlace,
+						GameId = savedGame,
+						Name = savedName
+					}
+				end
+			end
+		end
+	end
+	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
+	if type(result.Settings) == "table" then
+		for k, _ in pairs(result.Settings) do
+			if result.Settings[k] ~= nil then SavedData.Settings[k] = result.Settings[k] end
+		end
+	end
+	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+	ConfigurationLoaded = true
+	return true, nil
 end
 LoadConfiguration()
+
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
@@ -1900,6 +1923,54 @@ function IsRecommendedForCurrentPlace(data)
 	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
 	return PlaceId ~= 0 and allowedPlaceId == PlaceId
 end
+function _VH_NormalizeAutoExecuteName(value)
+	if type(value) ~= "string" then return "" end
+	return string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+end
+function _VH_GetSavedAutoExecute(scriptData)
+	if type(scriptData) ~= "table" then return nil, false end
+	local scriptId = tostring(scriptData.Id or "")
+	local direct = scriptId ~= "" and SavedData.AutoExecutes[scriptId] or nil
+	if type(direct) == "table" then
+		return direct, false
+	end
+	local stableId = StableScriptId(scriptData)
+	if type(stableId) == "string" and SavedData.AutoExecutes[stableId] then
+		local entry = SavedData.AutoExecutes[stableId]
+		if scriptId ~= "" and stableId ~= scriptId then
+			SavedData.AutoExecutes[scriptId] = entry
+			SavedData.AutoExecutes[stableId] = nil
+			entry.Name = entry.Name or scriptData.ExactName or scriptData.Name
+			return entry, true
+		end
+		return entry, false
+	end
+	local targetName = _VH_NormalizeAutoExecuteName(scriptData.ExactName or scriptData.Name)
+	if targetName == "" then return nil, false end
+	for key, entry in pairs(SavedData.AutoExecutes) do
+		if type(entry) == "table" then
+			local savedName = _VH_NormalizeAutoExecuteName(entry.Name)
+			local keyName = _VH_NormalizeAutoExecuteName(key)
+			if (savedName ~= "" and savedName == targetName) or keyName == targetName then
+				if scriptId ~= "" then
+					SavedData.AutoExecutes[scriptId] = entry
+					SavedData.AutoExecutes[key] = nil
+					entry.Name = scriptData.ExactName or scriptData.Name
+				end
+				return entry, true
+			end
+		end
+	end
+	return nil, false
+end
+function _VH_AutoExecuteGameMatches(entry)
+	if type(entry) ~= "table" then return false end
+	local savedGame = tonumber(entry.GameId)
+	local savedPlace = tonumber(entry.PlaceId)
+	if savedGame and savedGame ~= 0 and savedGame == GameId then return true end
+	if savedPlace and savedPlace ~= 0 and savedPlace == PlaceId then return true end
+	return false
+end
 function IsCalendarDay(timestamp)
 	local value = tonumber(timestamp)
 	if not value or value <= 0 then return false end
@@ -2202,15 +2273,25 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			ShowNotification("This script is only compatible with its configured Roblox experience.", "Warning")
 			return
 		end
-		if SavedData.AutoExecutes[scriptId] then
-			SavedData.AutoExecutes[scriptId] = nil; ShowNotification("Disabled auto-execute for '" .. exactName .. "'.", "Warning")
+		local previousEntry = SavedData.AutoExecutes[scriptId]
+		if previousEntry then
+			SavedData.AutoExecutes[scriptId] = nil
 		else
-			SavedData.AutoExecutes[scriptId] = {PlaceId = PlaceId, GameId = GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
+			SavedData.AutoExecutes[scriptId] = {
+				PlaceId = PlaceId,
+				GameId = GameId,
+				Name = exactName
+			}
 		end
-		if not SaveConfiguration() then
-			ShowNotification("Auto-execute setting could not be saved by this executor.", "Error")
+		local saveOk, saveError = SaveConfiguration()
+		if not saveOk then
+			SavedData.AutoExecutes[scriptId] = previousEntry
+			ShowNotification("Auto-execute setting could not be saved: " .. tostring(saveError), "Error")
+		else
+			ShowNotification(previousEntry and "Disabled auto-execute for '" .. exactName .. "'." or "Enabled auto-execute for '" .. exactName .. "'.", previousEntry and "Warning" or "Success")
 		end
-		RefreshAllCardStates(); UpdateFilter()
+		RefreshAllCardStates()
+		UpdateFilter()
 	end)))
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
@@ -2497,21 +2578,20 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			if not AutoExecuteRanThisSession then
 				AutoExecuteRanThisSession = true
 				autoQueue = {}
-				for _, scriptData in ipairs(validEntries) do
-					local lookupId = tostring(scriptData.Id or "")
-					auto = SavedData.AutoExecutes[lookupId]
-					if auto == nil and type(scriptData.Name) == "string" then
-						auto = SavedData.AutoExecutes[scriptData.Name]
-						if type(auto) == "table" and lookupId ~= "" then
-							SavedData.AutoExecutes[lookupId] = auto
-							SavedData.AutoExecutes[scriptData.Name] = nil
-							SaveConfiguration()
+				autoConfigMigrated = false
+				if ConfigurationLoaded then
+					for _, scriptData in ipairs(validEntries) do
+						auto, migrated = _VH_GetSavedAutoExecute(scriptData)
+						if migrated then autoConfigMigrated = true end
+						if type(auto) == "table" and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
+							autoQueue[#autoQueue + 1] = scriptData
 						end
 					end
-					if type(auto) == "table" then
-						validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
-						if validPlace and IsScriptCompatible(scriptData) then autoQueue[#autoQueue + 1] = scriptData end
+					if autoConfigMigrated then
+						local migrationSaved = SaveConfiguration()
+						if not migrationSaved then
+							ShowNotification("Auto-execute migration could not be persisted; the current session can still use the saved entry.", "Warning")
+						end
 					end
 				end
 				if #autoQueue > 0 then
