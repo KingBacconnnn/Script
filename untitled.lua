@@ -944,11 +944,6 @@ local function StandaloneBannerNotification(msg, notifType)
 			Position = UDim2.new(0.5, 0, 0, 18)
 		}):Play()
 
-		local timerTween = TweenService:Create(timerBar, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear), {
-			Size = UDim2.new(0, 0, 0, IsMobile and 2 or 2)
-		})
-		timerTween:Play()
-
 		task.delay(NOTIF_DURATION, function()
 			if not frame or not frame.Parent then return end
 			local outro = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
@@ -1084,24 +1079,33 @@ local function ShowNotification(msg, notifType)
 		description.TextYAlignment = Enum.TextYAlignment.Top
 		description.ZIndex = 2004
 
-		-- Small green timer bar: visually shows how long the notification remains visible.
-		local timerBar = Instance.new("Frame", box)
-		timerBar.Name = "TimerBar"
-		timerBar.AnchorPoint = Vector2.new(0, 1)
-		timerBar.Size = UDim2.new(1, 0, 0, IsMobile and 2 or 2)
-		timerBar.Position = UDim2.new(0, 0, 1, 0)
-		timerBar.BackgroundColor3 = Theme.Success
-		timerBar.BackgroundTransparency = 0.05
-		timerBar.BorderSizePixel = 0
-		timerBar.ZIndex = 2005
+		-- Countdown progress bar: drains from full to empty for the exact notification lifetime.
+		local progressTrack = Instance.new("Frame", box)
+		progressTrack.Name = "TimerProgressTrack"
+		progressTrack.Size = UDim2.new(1, -18, 0, 3)
+		progressTrack.Position = UDim2.new(0, 9, 1, -6)
+		progressTrack.BackgroundColor3 = Theme.BackgroundMain
+		progressTrack.BackgroundTransparency = 0.3
+		progressTrack.BorderSizePixel = 0
+		progressTrack.ZIndex = 2005
+		Instance.new("UICorner", progressTrack).CornerRadius = UDim.new(1, 0)
 
-		local timerCorner = Instance.new("UICorner", timerBar)
-		timerCorner.CornerRadius = UDim.new(1, 0)
+		local progressFill = Instance.new("Frame", progressTrack)
+		progressFill.Name = "TimerProgress"
+		progressFill.Size = UDim2.new(1, 0, 1, 0)
+		progressFill.BackgroundColor3 = indicatorColor
+		progressFill.BorderSizePixel = 0
+		progressFill.ZIndex = 2006
+		Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
 
 		local closeRequested = false
+		local progressTween
 		local function Dismiss()
 			if closeRequested then return end
 			closeRequested = true
+			if progressTween then
+				pcall(function() progressTween:Cancel() end)
+			end
 			if not wrapper or not wrapper.Parent then return end
 			local tween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = UDim2.new(1.08, 0, 0, 0)
@@ -1144,6 +1148,13 @@ local function ShowNotification(msg, notifType)
 		})
 		introTween:Play()
 
+		-- Start the timer after the notification is created so the bar matches the auto-dismiss delay.
+		progressTween = TweenService:Create(
+			progressFill,
+			TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+			{Size = UDim2.new(0, 0, 1, 0)}
+		)
+		progressTween:Play()
 
 		task.delay(NOTIF_DURATION, function()
 			if not wrapper or not wrapper.Parent or closeRequested then return end
