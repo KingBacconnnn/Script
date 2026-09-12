@@ -189,6 +189,7 @@ function _VH_CancelTrackedTasks()
 end
 typingTask = nil
 function _VH_CleanUpMemory()
+	if type(SaveConfiguration) == "function" then pcall(SaveConfiguration) end
 	isDestroying = true
 	GlobalEnv[_G_Identifier] = nil
 	if typingTask then task.cancel(typingTask); typingTask = nil end
@@ -297,54 +298,59 @@ function _VH_SanitizeForJSON(data)
 	return nil
 end
 function SaveConfiguration()
-	if type(write_file) ~= "function" then return end
+	if type(write_file) ~= "function" or type(SavedData) ~= "table" then return false end
 	if isSaving then
 		saveQueued = true
-		return
+		return false
 	end
 	isSaving = true
-	task.spawn(function()
-		cleanData = {
-			Favorites = {}, AutoExecutes = {},
-			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
-			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2) }
+	local cleanData = {
+		Favorites = {}, AutoExecutes = {},
+		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
+		Settings = {
+			AntiAFK = SavedData.Settings.AntiAFK == true,
+			UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 		}
-		for k, v in pairs(SavedData.Favorites) do
-			if v then cleanData.Favorites[tostring(k)] = true end
-		end
-		for k, v in pairs(SavedData.AutoExecutes) do
-			if type(v) == "table" then
-				cleanData.AutoExecutes[tostring(k)] = {
-					PlaceId = tonumber(v.PlaceId),
-					GameId = tonumber(v.GameId)
-				}
+	}
+	for k, v in pairs(SavedData.Favorites) do
+		if v then cleanData.Favorites[tostring(k)] = true end
+	end
+	for k, v in pairs(SavedData.AutoExecutes) do
+		if type(v) == "table" then
+			local savedPlaceId = tonumber(v.PlaceId)
+			if savedPlaceId and savedPlaceId > 0 then
+				cleanData.AutoExecutes[tostring(k)] = { PlaceId = savedPlaceId, GameId = tonumber(v.GameId) or 0 }
 			end
 		end
-		encodedOk, result = pcall(function()
-			return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
-		end)
-		if encodedOk then
-			tempOk = pcall(function() write_file(TEMP_FILE, result) end)
-			verified = false
-			if tempOk and type(read_file) == "function" then
-				verified = pcall(function()
-					check = read_file(TEMP_FILE)
-					decoded = HttpService:JSONDecode(check)
-					return type(decoded) == "table"
-				end)
-			end
-			if verified then
-				mainOk = pcall(function() write_file(DATA_FILE, result) end)
-				if mainOk and del_file then pcall(function() del_file(TEMP_FILE) end) end
-			end
-		end
-		isSaving = false
-		if saveQueued then
-			saveQueued = false
-			SaveConfiguration()
-		end
+	end
+	local encodedOk, result = pcall(function()
+		return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
 	end)
+	local success = false
+	if encodedOk then
+		local tempOk = pcall(function() write_file(TEMP_FILE, result) end)
+		local verified = tempOk
+		if tempOk and type(read_file) == "function" then
+			verified = pcall(function()
+				local check = read_file(TEMP_FILE)
+				local decoded = HttpService:JSONDecode(check)
+				return type(decoded) == "table"
+			end)
+		end
+		if verified then
+			success = pcall(function() write_file(DATA_FILE, result) end)
+			if success and del_file then pcall(function() del_file(TEMP_FILE) end) end
+		end
+	end
+	isSaving = false
+	if saveQueued then
+		saveQueued = false
+		local queuedSuccess = SaveConfiguration()
+		return queuedSuccess or success
+	end
+	return success
 end
+
 function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
 		success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
@@ -355,10 +361,13 @@ function LoadConfiguration()
 			if type(result.AutoExecutes) == "table" then
 				for k, v in pairs(result.AutoExecutes) do
 					if type(k) == "string" and type(v) == "table" then
-						SavedData.AutoExecutes[tostring(k)] = {
-							PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
-							GameId = type(v.GameId) == "number" and v.GameId or nil
-						}
+						local savedPlaceId = tonumber(v.PlaceId)
+						if savedPlaceId and savedPlaceId > 0 then
+							SavedData.AutoExecutes[tostring(k)] = {
+								PlaceId = savedPlaceId,
+								GameId = tonumber(v.GameId) or 0
+							}
+						end
 					end
 				end
 			end
@@ -2466,8 +2475,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				for _, scriptData in ipairs(validEntries) do
 					auto = SavedData.AutoExecutes[scriptData.Id]
 					if type(auto) == "table" then
-						validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
-						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
+						local savedPlaceId = tonumber(auto.PlaceId)
+						local validPlace = savedPlaceId and savedPlaceId > 0 and savedPlaceId == PlaceId
 						if validPlace and IsScriptCompatible(scriptData) then autoQueue[#autoQueue + 1] = scriptData end
 					end
 				end
