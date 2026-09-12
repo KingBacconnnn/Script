@@ -2102,7 +2102,17 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.\n• Experimental Lab adds profiles, theme presets, safer execution, custom utility keybinds, import/export, recent scripts, and error reporting.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", table.concat({
+	"• Added adjustable UI scaling from 80% to 120% with saved scale settings.",
+	"• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.",
+	"• Improved notification stacking and mobile positioning/sizing.",
+	"• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.",
+	"• Improved automatic catalog refresh handling and refresh button feedback.",
+	"• Updated script recommendation badges and card presentation.",
+	"• Improved recommendation filtering based on the current place/game.",
+	"• Added additional UI and mobile performance refinements.",
+	"• Experimental Lab adds profiles, theme presets, safer execution, custom utility keybinds, import/export, recent scripts, and error reporting.",
+}, string.char(10)), ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -3416,7 +3426,12 @@ end))
 reportGroup = CreateSettingsGroup("Diagnostics & Activity", SettingsView, 8)
 CreateButtonSettingInGroup(reportGroup, "Copy Last Error", "Copies the most recent script runtime/compile error when supported.", "rbxassetid://10709790537", "Copy", 1, false, function()
 	if not LastScriptError then ShowNotification("No captured script error yet.", "Info"); return end
-	local text = "VeloxHub Experimental Error Report\nScript: " .. tostring(LastScriptError.Name) .. "\nTime: " .. os.date("!%Y-%m-%d %H:%M:%S", tonumber(LastScriptError.Time) or os.time()) .. " UTC\nError: " .. tostring(LastScriptError.Error)
+	local text = table.concat({
+	"VeloxHub Experimental Error Report",
+	"Script: " .. tostring(LastScriptError.Name),
+	"Time: " .. os.date("!%Y-%m-%d %H:%M:%S", tonumber(LastScriptError.Time) or os.time()) .. " UTC",
+	"Error: " .. tostring(LastScriptError.Error),
+}, string.char(10))
 	local copied = _VH_SetClipboard(text)
 	ShowNotification(copied and "Last error copied to clipboard." or "Clipboard API unavailable; see the notification details.", copied and "Success" or "Warning")
 	if not copied then ShowNotification(tostring(LastScriptError.Error), "Error") end
