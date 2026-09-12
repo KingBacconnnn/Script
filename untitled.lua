@@ -50,7 +50,6 @@ exec_request = request or http_request or (syn and syn.request) or (fluxus and f
 write_file = type(writefile) == "function" and writefile or nil
 read_file = type(readfile) == "function" and readfile or nil
 is_file = type(isfile) == "function" and isfile or nil
-del_file = type(delfile) == "function" and delfile or nil
 CompileFunction = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
@@ -270,7 +269,6 @@ function _VH_CreateDebounce(cooldown, func)
 	end
 end
 DATA_FILE = ".VeloxHub_Data_V3.1.json"
-TEMP_FILE = ".VeloxHub_Data_Temp.json"
 make_folder = type(makefolder) == "function" and makefolder or nil
 SavedData = {
 	Favorites = {},
@@ -2058,9 +2056,15 @@ function MigrateSavedEntries(entries)
 	for _, data in ipairs(entries) do
 		id = data.Id
 		name = data.Name
-		if id and name then
-			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then SavedData.Favorites[id] = SavedData.Favorites[name] end
-			if SavedData.AutoExecutes[id] == nil and SavedData.AutoExecutes[name] ~= nil then SavedData.AutoExecutes[id] = SavedData.AutoExecutes[name] end
+		if id and name and id ~= name then
+			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then
+				SavedData.Favorites[id] = SavedData.Favorites[name]
+				SavedData.Favorites[name] = nil
+			end
+			if SavedData.AutoExecutes[id] == nil and SavedData.AutoExecutes[name] ~= nil then
+				SavedData.AutoExecutes[id] = SavedData.AutoExecutes[name]
+				SavedData.AutoExecutes[name] = nil
+			end
 		end
 	end
 end
