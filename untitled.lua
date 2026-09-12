@@ -100,6 +100,12 @@ ActiveTweens = setmetatable({}, { __mode = "k" })
 CatalogGeneration = 0
 LastCatalogRefreshAt = 0
 AutoExecuteRanThisSession = false
+SessionStartedAt = os.time()
+SessionExecutionCount = 0
+SessionExecutionErrors = 0
+LastExecutedScriptName = "None"
+SessionCatalogBuilds = 0
+SessionCatalogUpdates = 0
 InteractiveElements = setmetatable({}, { __mode = "k" })
 isDestroying = false
 isMinimized = false
@@ -1748,7 +1754,12 @@ task.spawn(function()
 		success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
-			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
+			if AvatarFrame and AvatarFrame.Parent then
+				AvatarFrame.Image = content
+				if ProfileRefs and ProfileRefs.HeroAvatar and ProfileRefs.HeroAvatar.Parent then
+					ProfileRefs.HeroAvatar.Image = content
+				end
+			end
 			break
 		else
 			task.wait(2)
@@ -1809,6 +1820,9 @@ end
 ChangelogsView = CreateCanvas("Changelogs")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
+ProfileView = CreateCanvas("Profile")
+ProfileView.Position = IsMobile and UDim2.new(0, 16, 0, 108) or UDim2.new(0, 16, 0, 128)
+ProfileView.Size = IsMobile and UDim2.new(1, -32, 1, -116) or UDim2.new(1, -32, 1, -138)
 ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
 ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
@@ -2088,7 +2102,12 @@ function CreateTab(name, index)
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
-		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
+		SectionHeaderLabel.Text =
+			(name == "Changelogs") and "Updates"
+			or (name == "Scripts") and "Scripts Catalog"
+			or (name == "Settings") and "Settings Hub"
+			or (name == "Profile") and "Profile & Statistics"
+			or "Velox Hub"
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
 			UpdateFilter()
@@ -2096,6 +2115,9 @@ function CreateTab(name, index)
 			_VH_SafeTween(SearchRow, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
 		elseif SearchInput and SearchInput.Parent then
 			pcall(function() SearchInput:ReleaseFocus() end)
+		end
+		if name == "Profile" and type(RefreshProfileStats) == "function" then
+			RefreshProfileStats()
 		end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
@@ -2106,7 +2128,328 @@ function CreateTab(name, index)
 		end
 	end))
 end
-CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
+CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3); CreateTab("Profile", 4)
+
+ProfileRefs = {}
+
+local function _VH_CreateProfileCard(parent, height)
+	local frame = Instance.new("Frame", parent)
+	frame.Size = UDim2.new(1, 0, 0, height or 70)
+	frame.BackgroundColor3 = Theme.CardHover
+	frame.BorderSizePixel = 0
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+	local stroke = Instance.new("UIStroke", frame)
+	stroke.Color = Theme.Stroke
+	stroke.Thickness = 1
+	return frame
+end
+
+local profileHero = _VH_CreateProfileCard(ProfileView, IsMobile and 108 or 124)
+profileHero.LayoutOrder = 1
+
+local heroAvatar = Instance.new("ImageLabel", profileHero)
+heroAvatar.Size = UDim2.new(0, IsMobile and 66 or 82, 0, IsMobile and 66 or 82)
+heroAvatar.Position = UDim2.new(0, 14, 0.5, -(IsMobile and 33 or 41))
+heroAvatar.BackgroundColor3 = Theme.BackgroundMain
+heroAvatar.Image = AvatarFrame.Image
+heroAvatar.ScaleType = Enum.ScaleType.Crop
+Instance.new("UICorner", heroAvatar).CornerRadius = UDim.new(0, 12)
+local heroStroke = Instance.new("UIStroke", heroAvatar)
+heroStroke.Color = Theme.Accent
+heroStroke.Thickness = 1.5
+ProfileRefs.HeroAvatar = heroAvatar
+
+local heroContent = Instance.new("Frame", profileHero)
+heroContent.Size = UDim2.new(1, -(IsMobile and 96 or 112), 1, -20)
+heroContent.Position = UDim2.new(0, IsMobile and 92 or 110, 0, 10)
+heroContent.BackgroundTransparency = 1
+local heroLayout = Instance.new("UIListLayout", heroContent)
+heroLayout.SortOrder = Enum.SortOrder.LayoutOrder
+heroLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+heroLayout.Padding = UDim.new(0, 4)
+
+local heroName = Instance.new("TextLabel", heroContent)
+heroName.Size = UDim2.new(1, 0, 0, 22)
+heroName.BackgroundTransparency = 1
+heroName.Text = LocalPlayer.DisplayName ~= "" and LocalPlayer.DisplayName or LocalPlayer.Name
+heroName.TextColor3 = Theme.TextPrimary
+heroName.Font = Enum.Font.GothamBold
+heroName.TextSize = IsMobile and 15 or 18
+heroName.TextXAlignment = Enum.TextXAlignment.Left
+heroName.LayoutOrder = 1
+ProfileRefs.HeroName = heroName
+
+local heroUser = Instance.new("TextLabel", heroContent)
+heroUser.Size = UDim2.new(1, 0, 0, 18)
+heroUser.BackgroundTransparency = 1
+heroUser.Text = "@" .. LocalPlayer.Name
+heroUser.TextColor3 = Theme.TextSecondary
+heroUser.Font = Enum.Font.GothamMedium
+heroUser.TextSize = IsMobile and 10 or 11
+heroUser.TextXAlignment = Enum.TextXAlignment.Left
+heroUser.LayoutOrder = 2
+
+local heroMeta = Instance.new("TextLabel", heroContent)
+heroMeta.Size = UDim2.new(1, 0, 0, 30)
+heroMeta.BackgroundTransparency = 1
+heroMeta.TextColor3 = Theme.TextSecondary
+heroMeta.Font = Enum.Font.Gotham
+heroMeta.TextSize = IsMobile and 9 or 10
+heroMeta.TextWrapped = true
+heroMeta.TextXAlignment = Enum.TextXAlignment.Left
+heroMeta.LayoutOrder = 3
+ProfileRefs.HeroMeta = heroMeta
+
+local statsGrid = Instance.new("Frame", ProfileView)
+statsGrid.Size = UDim2.new(1, 0, 0, IsMobile and 152 or 82)
+statsGrid.BackgroundTransparency = 1
+statsGrid.LayoutOrder = 2
+local statsLayout = Instance.new("UIGridLayout", statsGrid)
+statsLayout.CellPadding = UDim2.new(0, 8, 0, 8)
+statsLayout.CellSize = IsMobile and UDim2.new(0.5, -4, 0, 72) or UDim2.new(0.25, -6, 0, 74)
+statsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ProfileRefs.Stats = {}
+
+local function _VH_CreateStatTile(title, value, subtitle, color, order)
+	local tile = Instance.new("Frame", statsGrid)
+	tile.BackgroundColor3 = Theme.Card
+	tile.LayoutOrder = order
+	Instance.new("UICorner", tile).CornerRadius = UDim.new(0, 8)
+	local stripe = Instance.new("Frame", tile)
+	stripe.Size = UDim2.new(0, 3, 1, -18)
+	stripe.Position = UDim2.new(0, 8, 0, 9)
+	stripe.BackgroundColor3 = color or Theme.Accent
+	Instance.new("UICorner", stripe).CornerRadius = UDim.new(1, 0)
+
+	local lbl = Instance.new("TextLabel", tile)
+	lbl.Size = UDim2.new(1, -20, 0, 16)
+	lbl.Position = UDim2.new(0, 16, 0, 8)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = title
+	lbl.TextColor3 = Theme.TextSecondary
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.TextSize = 9
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+	local val = Instance.new("TextLabel", tile)
+	val.Size = UDim2.new(1, -20, 0, 24)
+	val.Position = UDim2.new(0, 16, 0, 24)
+	val.BackgroundTransparency = 1
+	val.Text = tostring(value)
+	val.TextColor3 = Theme.TextPrimary
+	val.Font = Enum.Font.GothamBold
+	val.TextSize = IsMobile and 14 or 16
+	val.TextXAlignment = Enum.TextXAlignment.Left
+
+	local sub = Instance.new("TextLabel", tile)
+	sub.Size = UDim2.new(1, -20, 0, 14)
+	sub.Position = UDim2.new(0, 16, 1, -20)
+	sub.BackgroundTransparency = 1
+	sub.Text = subtitle
+	sub.TextColor3 = Theme.TextSecondary
+	sub.Font = Enum.Font.Gotham
+	sub.TextSize = 8
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+
+	ProfileRefs.Stats[title] = { Value = val, Sub = sub, Stripe = stripe }
+end
+
+_VH_CreateStatTile("Scripts", 0, "in catalog", Theme.Accent, 1)
+_VH_CreateStatTile("Favorites", 0, "saved scripts", Color3.fromRGB(250, 204, 21), 2)
+_VH_CreateStatTile("Recent", 0, "recent scripts", Theme.Info, 3)
+_VH_CreateStatTile("Auto-Execute", 0, "configured", Theme.Success, 4)
+
+local sessionCard = _VH_CreateProfileCard(ProfileView, IsMobile and 142 or 112)
+sessionCard.LayoutOrder = 3
+local sessionTitle = Instance.new("TextLabel", sessionCard)
+sessionTitle.Size = UDim2.new(1, -24, 0, 20)
+sessionTitle.Position = UDim2.new(0, 12, 0, 10)
+sessionTitle.BackgroundTransparency = 1
+sessionTitle.Text = "Session Activity"
+sessionTitle.TextColor3 = Theme.TextPrimary
+sessionTitle.Font = Enum.Font.GothamBold
+sessionTitle.TextSize = 13
+sessionTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local sessionGrid = Instance.new("Frame", sessionCard)
+sessionGrid.Size = UDim2.new(1, -24, 0, IsMobile and 94 or 68)
+sessionGrid.Position = UDim2.new(0, 12, 0, 34)
+sessionGrid.BackgroundTransparency = 1
+local sessionLayout = Instance.new("UIGridLayout", sessionGrid)
+sessionLayout.CellPadding = UDim2.new(0, 8, 0, 6)
+sessionLayout.CellSize = IsMobile and UDim2.new(0.5, -4, 0, 44) or UDim2.new(0.25, -6, 0, 58)
+sessionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function _VH_CreateMiniStat(title, order)
+	local box = Instance.new("Frame", sessionGrid)
+	box.BackgroundColor3 = Theme.BackgroundMain
+	box.LayoutOrder = order
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 7)
+	local t = Instance.new("TextLabel", box)
+	t.Size = UDim2.new(1, -12, 0, 13)
+	t.Position = UDim2.new(0, 6, 0, 6)
+	t.BackgroundTransparency = 1
+	t.Text = title
+	t.TextColor3 = Theme.TextSecondary
+	t.Font = Enum.Font.GothamMedium
+	t.TextSize = 8
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	local v = Instance.new("TextLabel", box)
+	v.Size = UDim2.new(1, -12, 0, 18)
+	v.Position = UDim2.new(0, 6, 0, 20)
+	v.BackgroundTransparency = 1
+	v.Text = "0"
+	v.TextColor3 = Theme.TextPrimary
+	v.Font = Enum.Font.GothamBold
+	v.TextSize = 11
+	v.TextXAlignment = Enum.TextXAlignment.Left
+	ProfileRefs[title] = v
+end
+_VH_CreateMiniStat("Session", 1)
+_VH_CreateMiniStat("Executions", 2)
+_VH_CreateMiniStat("Errors", 3)
+_VH_CreateMiniStat("Catalog Builds", 4)
+
+local infoCard = _VH_CreateProfileCard(ProfileView, IsMobile and 174 or 144)
+infoCard.LayoutOrder = 4
+local infoTitle = Instance.new("TextLabel", infoCard)
+infoTitle.Size = UDim2.new(1, -24, 0, 20)
+infoTitle.Position = UDim2.new(0, 12, 0, 10)
+infoTitle.BackgroundTransparency = 1
+infoTitle.Text = "Account & Environment"
+infoTitle.TextColor3 = Theme.TextPrimary
+infoTitle.Font = Enum.Font.GothamBold
+infoTitle.TextSize = 13
+infoTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local infoBody = Instance.new("Frame", infoCard)
+infoBody.Size = UDim2.new(1, -24, 1, -38)
+infoBody.Position = UDim2.new(0, 12, 0, 34)
+infoBody.BackgroundTransparency = 1
+local infoGrid = Instance.new("UIGridLayout", infoBody)
+infoGrid.CellPadding = UDim2.new(0, 10, 0, 6)
+infoGrid.CellSize = IsMobile and UDim2.new(0.5, -5, 0, 34) or UDim2.new(0.3333, -7, 0, 34)
+infoGrid.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function _VH_CreateInfoField(label, order)
+	local field = Instance.new("Frame", infoBody)
+	field.BackgroundTransparency = 1
+	field.LayoutOrder = order
+	local l = Instance.new("TextLabel", field)
+	l.Size = UDim2.new(1, 0, 0, 12)
+	l.BackgroundTransparency = 1
+	l.Text = label
+	l.TextColor3 = Theme.TextSecondary
+	l.Font = Enum.Font.GothamMedium
+	l.TextSize = 8
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	local v = Instance.new("TextLabel", field)
+	v.Size = UDim2.new(1, 0, 0, 18)
+	v.Position = UDim2.new(0, 0, 0, 12)
+	v.BackgroundTransparency = 1
+	v.Text = "--"
+	v.TextColor3 = Theme.TextPrimary
+	v.Font = Enum.Font.Gotham
+	v.TextSize = 9
+	v.TextXAlignment = Enum.TextXAlignment.Left
+	v.TextTruncate = Enum.TextTruncate.AtEnd
+	ProfileRefs[label] = v
+end
+_VH_CreateInfoField("User ID", 1)
+_VH_CreateInfoField("Account Age", 2)
+_VH_CreateInfoField("Membership", 3)
+_VH_CreateInfoField("Experience", 4)
+_VH_CreateInfoField("Place ID", 5)
+_VH_CreateInfoField("Executor", 6)
+
+local statusCard = _VH_CreateProfileCard(ProfileView, IsMobile and 108 or 92)
+statusCard.LayoutOrder = 5
+local statusTitle = Instance.new("TextLabel", statusCard)
+statusTitle.Size = UDim2.new(1, -24, 0, 18)
+statusTitle.Position = UDim2.new(0, 12, 0, 9)
+statusTitle.BackgroundTransparency = 1
+statusTitle.Text = "Hub Status"
+statusTitle.TextColor3 = Theme.TextPrimary
+statusTitle.Font = Enum.Font.GothamBold
+statusTitle.TextSize = 13
+statusTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local statusBody = Instance.new("TextLabel", statusCard)
+statusBody.Size = UDim2.new(1, -24, 1, -34)
+statusBody.Position = UDim2.new(0, 12, 0, 31)
+statusBody.BackgroundTransparency = 1
+statusBody.TextColor3 = Theme.TextSecondary
+statusBody.Font = Enum.Font.Gotham
+statusBody.TextSize = 9
+statusBody.TextWrapped = true
+statusBody.TextXAlignment = Enum.TextXAlignment.Left
+statusBody.TextYAlignment = Enum.TextYAlignment.Top
+ProfileRefs.StatusBody = statusBody
+
+local function _VH_FormatDuration(seconds)
+	seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local sec = seconds % 60
+	if h > 0 then return string.format("%dh %02dm", h, m) end
+	if m > 0 then return string.format("%dm %02ds", m, sec) end
+	return string.format("%ds", sec)
+end
+
+function RefreshProfileStats()
+	if isDestroying or not ProfileView or not ProfileView.Parent then return end
+	local favoriteCount = 0
+	for _, enabled in pairs(SavedData.Favorites or {}) do
+		if enabled then favoriteCount = favoriteCount + 1 end
+	end
+	local autoCount = 0
+	for _, entry in pairs(SavedData.AutoExecutes or {}) do
+		if type(entry) == "table" then autoCount = autoCount + 1 end
+	end
+	local recentCount = type(SavedData.Settings.RecentScripts) == "table" and #SavedData.Settings.RecentScripts or 0
+
+	if ProfileRefs.Stats.Scripts then ProfileRefs.Stats.Scripts.Value.Text = tostring(#RegisteredScripts) end
+	if ProfileRefs.Stats.Favorites then ProfileRefs.Stats.Favorites.Value.Text = tostring(favoriteCount) end
+	if ProfileRefs.Stats.Recent then ProfileRefs.Stats.Recent.Value.Text = tostring(recentCount) end
+	if ProfileRefs.Stats["Auto-Execute"] then ProfileRefs.Stats["Auto-Execute"].Value.Text = tostring(autoCount) end
+
+	ProfileRefs.Session.Text = _VH_FormatDuration(os.time() - SessionStartedAt)
+	ProfileRefs.Executions.Text = tostring(SessionExecutionCount)
+	ProfileRefs.Errors.Text = tostring(SessionExecutionErrors)
+	ProfileRefs["Catalog Builds"].Text = tostring(SessionCatalogBuilds)
+
+	local membership = tostring(LocalPlayer.MembershipType or "None")
+	membership = string.gsub(membership, "^Enum%.MembershipType%.", "")
+	ProfileRefs["User ID"].Text = tostring(LocalPlayer.UserId)
+	ProfileRefs["Account Age"].Text = tostring(tonumber(LocalPlayer.AccountAge) or 0) .. " days"
+	ProfileRefs.Membership.Text = membership
+	ProfileRefs.Experience.Text = tostring(game.Name or "Unknown")
+	ProfileRefs["Place ID"].Text = tostring(PlaceId)
+	ProfileRefs.Executor.Text =
+		type(identifyexecutor) == "function" and tostring(identifyexecutor())
+		or (type(getexecutorname) == "function" and tostring(getexecutorname()) or "Unknown")
+	ProfileRefs.HeroMeta.Text = "User ID " .. tostring(LocalPlayer.UserId) .. " • Place " .. tostring(PlaceId)
+
+	local fpsText = DiagnosticsLabel and DiagnosticsLabel.Text or "FPS: -- | Ping: --ms"
+	local configText = ConfigurationLoadError and ("Config warning: " .. tostring(ConfigurationLoadError)) or "Configuration: OK"
+	local favoriteText = favoriteCount > 0 and ("Favorites: " .. tostring(favoriteCount)) or "Favorites: none"
+	ProfileRefs.StatusBody.Text = table.concat({
+		"Last executed: " .. tostring(LastExecutedScriptName or "None"),
+		"Session errors: " .. tostring(SessionExecutionErrors) .. " | Catalog updates: " .. tostring(SessionCatalogUpdates),
+		fpsText .. " | " .. favoriteText,
+		configText .. " | Safe Mode: " .. (SavedData.Settings.SafeMode and "ON" or "OFF") .. " | Anti-AFK: " .. (SavedData.Settings.AntiAFK and "ON" or "OFF")
+	}, string.char(10))
+
+	if heroAvatar.Image == "" or heroAvatar.Image == "rbxasset://textures/ui/GuiImagePlaceholder.png" then
+		heroAvatar.Image = AvatarFrame.Image
+	end
+end
+
+_VH_RegConn(RunService.Heartbeat:Connect(function()
+	if isDestroying or currentTab ~= "Profile" then return end
+	RefreshProfileStats()
+end))
+
 function CreateParagraph(title, desc, parentView)
 	block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
@@ -2264,9 +2607,12 @@ function ExecuteSandboxed(code, scriptName)
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
+		SessionExecutionCount = SessionExecutionCount + 1
+		LastExecutedScriptName = tostring(scriptName)
 		_VH_TrackTask(function()
 			local success, runtimeErr = pcall(chunk)
 			if not success then
+				SessionExecutionErrors = SessionExecutionErrors + 1
 				LastScriptError = { Name = tostring(scriptName), Error = tostring(runtimeErr), Time = os.time() }
 				if not isDestroying then
 					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "].", "Error")
@@ -2508,7 +2854,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		else
 			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter(); if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -2536,6 +2882,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		end
 		RefreshAllCardStates()
 		UpdateFilter()
+		if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 	end)))
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
@@ -2561,6 +2908,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
 						_VH_MarkScriptUsed(data)
+						if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
@@ -2759,6 +3107,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			nextKeys = {}
 			replacedEntries = {}
 			table.clear(activeNewEntries)
+			SessionCatalogBuilds = SessionCatalogBuilds + 1
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
@@ -2817,6 +3166,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
+			SessionCatalogUpdates = SessionCatalogUpdates + 1
+			if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
@@ -3470,6 +3821,7 @@ CreateButtonSettingInGroup(reportGroup, "Clear Recent History", "Clears the expe
 end)
 
 if SavedData.Settings.AccentPreset then _VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true) end
+if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 if SavedData.Settings.AntiAFK then
 	ApplyAntiAFK()
 end
