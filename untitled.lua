@@ -1,15 +1,15 @@
 GlobalEnv = _G
 if type(getgenv) == "function" then
-	ok, env = pcall(getgenv)
+	local ok, env = pcall(getgenv)
 	if ok and type(env) == "table" then
 		GlobalEnv = env
 	end
 end
 function _VH_GenerateRandomString(len)
-	chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	str = ""
+	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local str = ""
 	for i = 1, len do
-		r = math.random(1, #chars)
+		local r = math.random(1, #chars)
 		str = str .. string.sub(chars, r, r)
 	end
 	return str
@@ -20,9 +20,9 @@ if GlobalEnv[_G_Identifier] then
 end
 Services = setmetatable({}, {
 	__index = function(self, key)
-		success, service = pcall(function() return game:GetService(key) end)
+		local success, service = pcall(function() return game:GetService(key) end)
 		if success and service then
-			final = (type(cloneref) == "function") and cloneref(service) or service
+			local final = (type(cloneref) == "function") and cloneref(service) or service
 			self[key] = final
 			return final
 		end
@@ -52,13 +52,14 @@ read_file = type(readfile) == "function" and readfile or nil
 is_file = type(isfile) == "function" and isfile or nil
 del_file = type(delfile) == "function" and delfile or nil
 CompileFunction = nil
+CompileFunctionName = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
-	ok, chunk, err = pcall(fn, source, chunkName)
+	local ok, chunk, err = pcall(fn, source, chunkName)
 	if ok and type(chunk) == "function" then
 		return true, chunk, nil
 	end
-	okSingle, chunkSingle, errSingle = pcall(fn, source)
+	local okSingle, chunkSingle, errSingle = pcall(fn, source)
 	if okSingle and type(chunkSingle) == "function" then
 		return true, chunkSingle, nil
 	end
@@ -66,16 +67,18 @@ function _VH_TryCompiler(fn, source, chunkName)
 end
 if type(loadstring) == "function" then
 	CompileFunction = function(source, chunkName)
-		ok, chunk, err = _VH_TryCompiler(loadstring, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(loadstring, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
+	CompileFunctionName = "loadstring"
 elseif type(load) == "function" then
 	CompileFunction = function(source, chunkName)
-		ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
+	CompileFunctionName = "load"
 end
 Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -122,9 +125,9 @@ AntiAFKConnection = nil
 AntiAFKDisabledConnections = {}
 DisableAntiAFK = nil
 function _VH_CacheInstanceAndDescendants(root)
-	function function CacheObj(obj)
+	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
-		c = {}
+		local c = {}
 		if obj:IsA("GuiObject") then
 			c.BackgroundTransparency = obj.BackgroundTransparency
 			c.Size = obj.Size
@@ -170,7 +173,7 @@ function _VH_UnregConn(connection)
 	end
 end
 function _VH_TrackTask(fn)
-	thread = nil
+	local thread
 	thread = task.spawn(function()
 		pcall(fn)
 		PendingTasks[thread] = nil
@@ -227,7 +230,7 @@ end
 function _VH_SafeTween(instance, tweenInfo, properties)
 	if not instance or not instance.Parent then return nil end
 	if ActiveTweens[instance] then
-		oldData = ActiveTweens[instance]
+		local oldData = ActiveTweens[instance]
 		if oldData and type(oldData) == "table" then
 			if oldData.Connection then pcall(function() oldData.Connection:Disconnect() end) end
 			if oldData.Tween then
@@ -238,8 +241,8 @@ function _VH_SafeTween(instance, tweenInfo, properties)
 			end
 		end
 	end
-	tween = TweenService:Create(instance, tweenInfo, properties)
-	conn = nil
+	local tween = TweenService:Create(instance, tweenInfo, properties)
+	local conn
 	conn = tween.Completed:Connect(function()
 		if conn then conn:Disconnect() end
 		if ActiveTweens[instance] and ActiveTweens[instance].Tween == tween then
@@ -252,11 +255,11 @@ function _VH_SafeTween(instance, tweenInfo, properties)
 	return tween
 end
 function _VH_CreateDebounce(cooldown, func)
-	isRunning = false
+	local isRunning = false
 	return function(...)
 		if isRunning or isDestroying then return end
 		isRunning = true
-		args = {...}
+		local args = {...}
 		task.spawn(function()
 			xpcall(function()
 				func(unpack(args))
@@ -278,10 +281,10 @@ isSaving = false
 saveQueued = false
 function _VH_SanitizeForJSON(data)
 	if type(data) == "table" then
-		clean = {}
+		local clean = {}
 		for k, v in pairs(data) do
 			if type(k) == "string" or type(k) == "number" then
-				cleanVal = _VH_SanitizeForJSON(v)
+				local cleanVal = _VH_SanitizeForJSON(v)
 				if cleanVal ~= nil then
 					clean[tostring(k)] = cleanVal
 				end
@@ -293,7 +296,7 @@ function _VH_SanitizeForJSON(data)
 	end
 	return nil
 end
-function function SaveConfiguration()
+function SaveConfiguration()
 	if type(write_file) ~= "function" then return end
 	if isSaving then
 		saveQueued = true
@@ -301,7 +304,7 @@ function function SaveConfiguration()
 	end
 	isSaving = true
 	task.spawn(function()
-		cleanData = {
+		local cleanData = {
 			Favorites = {}, AutoExecutes = {},
 			ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl"),
 			Settings = { AntiAFK = SavedData.Settings.AntiAFK == true, UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2) }
@@ -317,21 +320,21 @@ function function SaveConfiguration()
 				}
 			end
 		end
-		encodedOk, result = pcall(function()
+		local encodedOk, result = pcall(function()
 			return HttpService:JSONEncode(_VH_SanitizeForJSON(cleanData))
 		end)
 		if encodedOk then
-			tempOk = pcall(function() write_file(TEMP_FILE, result) end)
-			verified = false
+			local tempOk = pcall(function() write_file(TEMP_FILE, result) end)
+			local verified = false
 			if tempOk and type(read_file) == "function" then
 				verified = pcall(function()
-					check = read_file(TEMP_FILE)
-					decoded = HttpService:JSONDecode(check)
+					local check = read_file(TEMP_FILE)
+					local decoded = HttpService:JSONDecode(check)
 					return type(decoded) == "table"
 				end)
 			end
 			if verified then
-				mainOk = pcall(function() write_file(DATA_FILE, result) end)
+				local mainOk = pcall(function() write_file(DATA_FILE, result) end)
 				if mainOk and del_file then pcall(function() del_file(TEMP_FILE) end) end
 			end
 		end
@@ -342,9 +345,9 @@ function function SaveConfiguration()
 		end
 	end)
 end
-function function LoadConfiguration()
+function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
+		local success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
 		if success and type(result) == "table" then
 			if type(result.Favorites) == "table" then
 				for k, _ in pairs(result.Favorites) do SavedData.Favorites[tostring(k)] = true end
@@ -372,34 +375,34 @@ function function LoadConfiguration()
 	end
 end
 LoadConfiguration()
-function function UniversalHttpGet(url)
+function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
-		reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
+		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
 		if reqSuccess and reqResult then
-			body = reqResult.Body or reqResult.body or reqResult.Response
-			status = tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code)
+			local body = reqResult.Body or reqResult.body or reqResult.Response
+			local status = tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code)
 			if status == nil and body then status = 200 end
 			if body and status == 200 then return body, status, nil end
 			return nil, status, "http " .. tostring(status or "unknown")
 		end
 	end
-	success, result = pcall(function() return game:HttpGet(url) end)
+	local success, result = pcall(function() return game:HttpGet(url) end)
 	if success and type(result) == "string" and result ~= "" then return result, 200, nil end
 	return nil, nil, "request failed"
 end
-function function AddCacheBuster(url)
+function AddCacheBuster(url)
 	if type(url) ~= "string" or url == "" then return url end
-	separator = string.find(url, "?", 1, true) and "&" or "?"
-	nonce = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+	local separator = string.find(url, "?", 1, true) and "&" or "?"
+	local nonce = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
 	return url .. separator .. "velox_cache=" .. nonce
 end
-function function FetchWithRetry(url, retries, cacheBust)
+function FetchWithRetry(url, retries, cacheBust)
 	retries = math.max(1, tonumber(retries) or 3)
-	lastStatus, lastError = nil, nil
+	local lastStatus, lastError
 	for i = 1, retries do
-		requestUrl = cacheBust and AddCacheBuster(url) or url
-		response, status, err = UniversalHttpGet(requestUrl)
+		local requestUrl = cacheBust and AddCacheBuster(url) or url
+		local response, status, err = UniversalHttpGet(requestUrl)
 		lastStatus, lastError = status, err
 		if response and type(response) == "string" and #response > 0 then
 			return response, status, nil
@@ -445,15 +448,15 @@ TagTypeConfig = {
 		StrokeColor = Color3.fromRGB(44, 58, 77)
 	}
 }
-function function NormalizeTagType(value)
+function NormalizeTagType(value)
 	if type(value) ~= "string" then return "NONE" end
-	normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 	if TagTypeConfig[normalized] then return normalized end
 	return "NONE"
 end
-function function GetOrCreateCardStroke(card)
+function GetOrCreateCardStroke(card)
 	if not card or not card:IsA("GuiObject") then return nil end
-	stroke = card:FindFirstChild("TagTypeStroke")
+	local stroke = card:FindFirstChild("TagTypeStroke")
 	if stroke and stroke:IsA("UIStroke") then return stroke end
 	if stroke then pcall(function() stroke:Destroy() end) end
 	stroke = Instance.new("UIStroke")
@@ -461,67 +464,67 @@ function function GetOrCreateCardStroke(card)
 	stroke.Parent = card
 	return stroke
 end
-function function ApplyTagBorder(card, tagType, stroke)
+function ApplyTagBorder(card, tagType, stroke)
 	if not card or not card.Parent then return end
 	stroke = stroke or GetOrCreateCardStroke(card)
 	if not stroke or not stroke.Parent then return end
-	normalized = NormalizeTagType(tagType)
-	config = TagTypeConfig[normalized] or TagTypeConfig.NONE
+	local normalized = NormalizeTagType(tagType)
+	local config = TagTypeConfig[normalized] or TagTypeConfig.NONE
 	stroke.Color = config.StrokeColor
 	stroke.Transparency = 0
 	stroke.Enabled = true
 end
-function function GetSafeTimestamp(value)
-	timestamp = tonumber(value)
+function GetSafeTimestamp(value)
+	local timestamp = tonumber(value)
 	if type(timestamp) ~= "number" or timestamp ~= timestamp then return 0 end
 	return timestamp
 end
-function function GetRelativeTime(timestamp)
-	value = tonumber(timestamp)
+function GetRelativeTime(timestamp)
+	local value = tonumber(timestamp)
 	if type(value) ~= "number" or value ~= value then return "Updated just now" end
-	diff = os.time() - value
+	local diff = os.time() - value
 	if diff <= 0 then return "Updated just now" end
 	if diff < 60 then return "Updated just now" end
-	minutes = math.floor(diff / 60)
+	local minutes = math.floor(diff / 60)
 	if minutes < 60 then
 		return "Updated " .. minutes .. (minutes == 1 and " minute ago" or " minutes ago")
 	end
-	hours = math.floor(diff / 3600)
+	local hours = math.floor(diff / 3600)
 	if hours < 24 then
 		return "Updated " .. hours .. (hours == 1 and " hour ago" or " hours ago")
 	end
-	days = math.floor(diff / 86400)
+	local days = math.floor(diff / 86400)
 	if days == 1 then return "Updated yesterday" end
 	if days < 7 then
 		return "Updated " .. days .. (days == 1 and " day ago" or " days ago")
 	end
-	weeks = math.floor(days / 7)
+	local weeks = math.floor(days / 7)
 	if weeks < 4 then
 		return "Updated " .. weeks .. (weeks == 1 and " week ago" or " weeks ago")
 	end
-	months = math.floor(days / 30.44)
+	local months = math.floor(days / 30.44)
 	if months < 12 then
 		return "Updated " .. months .. (months == 1 and " month ago" or " months ago")
 	end
-	years = math.floor(days / 365.25)
+	local years = math.floor(days / 365.25)
 	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
 end
-function function GetSecureParent()
-	huiSuccess, huiTarget = pcall(function() return gethui() end)
+function GetSecureParent()
+	local huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
 		return huiTarget
 	end
-	coreSuccess, coreTarget = pcall(function() return CoreGui end)
+	local coreSuccess, coreTarget = pcall(function() return CoreGui end)
 	if coreSuccess and coreTarget then
-		testAccess = pcall(function()
-			t = Instance.new("Folder")
+		local testAccess = pcall(function()
+			local t = Instance.new("Folder")
 			t.Parent = coreTarget
 			t:Destroy()
 		end)
 		if testAccess then return coreTarget end
 	end
 	if LocalPlayer then
-		playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 		if playerGui then return playerGui end
 	end
 	return nil
@@ -546,19 +549,19 @@ GlobalEnv[_G_Identifier] = function()
 	_VH_CleanUpMemory()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
-function function GetPanelSize()
-	camera = workspace.CurrentCamera
-	viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	maxWidth = IsMobile and 480 or 560
-	maxHeight = IsMobile and 360 or 515
+function GetPanelSize()
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local maxWidth = IsMobile and 480 or 560
+	local maxHeight = IsMobile and 360 or 515
 	return UDim2.fromOffset(math.max(320, math.min(maxWidth, viewport.X - 20)), math.max(300, math.min(maxHeight, viewport.Y - 20)))
 end
 PANEL_SIZE = GetPanelSize()
-function function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
+function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
 	connectionRegistry = connectionRegistry or VeloxConnections
 	InteractiveElements[gui] = {BaseColor = originalColor, BaseStroke = originalStroke, StrokeObj = strokeObj}
-	function function RegInteractive(connection)
+	local function RegInteractive(connection)
 		if type(connectionRegistry) == "table" then
 			connectionRegistry[#connectionRegistry + 1] = connection
 			return connection
@@ -629,13 +632,13 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		floatDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
-				delta = moveInput.Position - floatStart
-				camera = workspace.CurrentCamera
-				viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-				targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
-				targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
-				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				local delta = moveInput.Position - floatStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
+				local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
+				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
 				targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
 				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
@@ -672,29 +675,29 @@ Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 PanelUIScale = Instance.new("UIScale", MainPanel)
 PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
-function function ApplyPanelUIScale(scaleValue)
-	nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
+function ApplyPanelUIScale(scaleValue)
+	local nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
 	SavedData.Settings.UIScale = nextScale
 	if PanelUIScale and PanelUIScale.Parent then
 		_VH_SafeTween(PanelUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
 	end
 	task.defer(function()
 		if isDestroying or not MainPanel or not MainPanel.Parent then return end
-		camera = workspace.CurrentCamera
-		viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+		local camera = workspace.CurrentCamera
+		local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
 		task.wait(0.24)
 		if isDestroying or not MainPanel or not MainPanel.Parent then return end
-		halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-		halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+		local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+		local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+		local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+		local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
 		currentX = math.clamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 		currentY = math.clamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 	end)
 end
 SearchInput = nil
-function function RestoreCachedProperties()
+function RestoreCachedProperties()
 	for obj, c in pairs(OriginalCache) do
 		if obj and obj.Parent then
 			if c.BackgroundTransparency ~= nil then pcall(function() obj.BackgroundTransparency = c.BackgroundTransparency end) end
@@ -710,7 +713,7 @@ function function RestoreCachedProperties()
 		end
 	end
 end
-function function ToggleUI()
+function ToggleUI()
 	if isDestroying or isTransitioning then return end
 	isTransitioning = true
 	if DropdownContainer and DropdownContainer.Visible then
@@ -786,7 +789,7 @@ NotificationTypeInfo = {
 	}
 }
 
-function function NormalizeNotificationType(value)
+function NormalizeNotificationType(value)
 	if type(value) == "boolean" then
 		return value and "Success" or "Error"
 	end
@@ -796,7 +799,7 @@ function function NormalizeNotificationType(value)
 	if NotificationTypeInfo[value] then
 		return value
 	end
-	normalized = string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	local normalized = string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 	for key, _ in pairs(NotificationTypeInfo) do
 		if string.lower(key) == normalized then
 			return key
@@ -805,8 +808,8 @@ function function NormalizeNotificationType(value)
 	return "Info"
 end
 
-function function GetNotificationMessage(msg)
-	message = tostring(msg == nil and "" or msg)
+function GetNotificationMessage(msg)
+	local message = tostring(msg == nil and "" or msg)
 	message = string.gsub(message, "^%s+", "")
 	message = string.gsub(message, "%s+$", "")
 	if message == "" then
@@ -815,10 +818,13 @@ function function GetNotificationMessage(msg)
 	return message
 end
 
-function function GetNotificationTitle(notifType, message)
-	info = NotificationTypeInfo[notifType] or NotificationTypeInfo.Info
+function GetNotificationTitle(notifType, message)
+	local info = NotificationTypeInfo[notifType] or NotificationTypeInfo.Info
 
-	lowerMessage = string.lower(message)
+	
+	
+	
+	local lowerMessage = string.lower(message)
 	if notifType == "Success" then
 		if string.find(lowerMessage, "execut") then return "Execution complete" end
 		if string.find(lowerMessage, "refresh") or string.find(lowerMessage, "catalog") then
@@ -843,9 +849,9 @@ function function GetNotificationTitle(notifType, message)
 	return info.Title
 end
 
-function function TrimNotificationStack()
+function TrimNotificationStack()
 	if not ToastContainer or not ToastContainer.Parent then return end
-	active = {}
+	local active = {}
 	for _, child in ipairs(ToastContainer:GetChildren()) do
 		if child:IsA("Frame") and child:GetAttribute("VeloxNotification") == true then
 			table.insert(active, child)
@@ -855,14 +861,14 @@ function function TrimNotificationStack()
 		return (a.LayoutOrder or 0) < (b.LayoutOrder or 0)
 	end)
 	while #active > MAX_VISIBLE_NOTIFICATIONS do
-		oldest = table.remove(active, 1)
+		local oldest = table.remove(active, 1)
 		if oldest and oldest.Parent then
 			pcall(function() oldest:Destroy() end)
 		end
 	end
 end
 
-function function EmergencyFallbackNotification(msg, title)
+function EmergencyFallbackNotification(msg, title)
 	pcall(function()
 		if StarterGui and type(StarterGui.SetCore) == "function" then
 			StarterGui:SetCore("SendNotification", {
@@ -874,19 +880,19 @@ function function EmergencyFallbackNotification(msg, title)
 	end)
 end
 
-function function StandaloneBannerNotification(msg, notifType)
-	parent = GetSecureParent()
+function StandaloneBannerNotification(msg, notifType)
+	local parent = GetSecureParent()
 	if not parent then
 		EmergencyFallbackNotification(msg, GetNotificationTitle(notifType, GetNotificationMessage(msg)))
 		return
 	end
 
-	success = pcall(function()
-		message = GetNotificationMessage(msg)
-		typeInfo = NotificationTypeInfo[NormalizeNotificationType(notifType)] or NotificationTypeInfo.Info
-		title = GetNotificationTitle(NormalizeNotificationType(notifType), message)
+	local success = pcall(function()
+		local message = GetNotificationMessage(msg)
+		local typeInfo = NotificationTypeInfo[NormalizeNotificationType(notifType)] or NotificationTypeInfo.Info
+		local title = GetNotificationTitle(NormalizeNotificationType(notifType), message)
 
-		bannerGui = Instance.new("ScreenGui")
+		local bannerGui = Instance.new("ScreenGui")
 		bannerGui.Name = "VeloxBanner_" .. _VH_GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
@@ -894,7 +900,7 @@ function function StandaloneBannerNotification(msg, notifType)
 		bannerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 		bannerGui.Parent = parent
 
-		frame = Instance.new("Frame", bannerGui)
+		local frame = Instance.new("Frame", bannerGui)
 		frame.Size = UDim2.new(0, IsMobile and 225 or 280, 0, IsMobile and 68 or 72)
 		frame.Position = UDim2.new(0.5, 0, 0, -95)
 		frame.AnchorPoint = Vector2.new(0.5, 0)
@@ -903,12 +909,13 @@ function function StandaloneBannerNotification(msg, notifType)
 		frame.ZIndex = 1
 		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
 
-		stroke = Instance.new("UIStroke", frame)
+		local stroke = Instance.new("UIStroke", frame)
 		stroke.Color = typeInfo.Color
 		stroke.Thickness = 1.5
 		stroke.Transparency = 0.15
 
-		titleLabel = Instance.new("TextLabel", frame)
+
+		local titleLabel = Instance.new("TextLabel", frame)
 		titleLabel.Size = UDim2.new(1, -24, 0, 18)
 		titleLabel.Position = UDim2.new(0, 12, 0, 8)
 		titleLabel.BackgroundTransparency = 1
@@ -920,7 +927,7 @@ function function StandaloneBannerNotification(msg, notifType)
 		titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
 		titleLabel.ZIndex = 3
 
-		desc = Instance.new("TextLabel", frame)
+		local desc = Instance.new("TextLabel", frame)
 		desc.Size = UDim2.new(1, -24, 0, 36)
 		desc.Position = UDim2.new(0, 12, 0, 27)
 		desc.BackgroundTransparency = 1
@@ -939,7 +946,7 @@ function function StandaloneBannerNotification(msg, notifType)
 
 		task.delay(NOTIF_DURATION, function()
 			if not frame or not frame.Parent then return end
-			outro = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			local outro = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = UDim2.new(0.5, 0, 0, -95)
 			})
 			outro:Play()
@@ -956,24 +963,24 @@ function function StandaloneBannerNotification(msg, notifType)
 	end
 end
 
-function function ShowNotification(msg, notifType)
+function ShowNotification(msg, notifType)
 	if isDestroying then return end
 
-	nType = NormalizeNotificationType(notifType)
-	typeInfo = NotificationTypeInfo[nType] or NotificationTypeInfo.Info
-	message = GetNotificationMessage(msg)
-	title = GetNotificationTitle(nType, message)
-	indicatorColor = typeInfo.Color
+	local nType = NormalizeNotificationType(notifType)
+	local typeInfo = NotificationTypeInfo[nType] or NotificationTypeInfo.Info
+	local message = GetNotificationMessage(msg)
+	local title = GetNotificationTitle(nType, message)
+	local indicatorColor = typeInfo.Color
 
 	if not ToastContainer or not ToastContainer.Parent then
 		StandaloneBannerNotification(message, nType)
 		return
 	end
 
-	success = pcall(function()
+	local success = pcall(function()
 		NotificationSequence = NotificationSequence + 1
 
-		wrapper = Instance.new("Frame", ToastContainer)
+		local wrapper = Instance.new("Frame", ToastContainer)
 		wrapper.Name = "Notification_" .. tostring(NotificationSequence)
 		wrapper:SetAttribute("VeloxNotification", true)
 		wrapper.LayoutOrder = NotificationSequence
@@ -981,7 +988,7 @@ function function ShowNotification(msg, notifType)
 		wrapper.BackgroundTransparency = 1
 		wrapper.ZIndex = 2001
 
-		box = Instance.new("Frame", wrapper)
+		local box = Instance.new("Frame", wrapper)
 		box.Name = "Card"
 		box.Size = UDim2.new(1, 0, 1, 0)
 		box.Position = UDim2.new(1.08, 0, 0, 0)
@@ -991,12 +998,13 @@ function function ShowNotification(msg, notifType)
 		box.ZIndex = 2002
 		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 12)
 
-		stroke = Instance.new("UIStroke", box)
+		local stroke = Instance.new("UIStroke", box)
 		stroke.Color = Theme.Stroke
 		stroke.Thickness = 1
 		stroke.Transparency = 0.2
 
-		iconCircle = Instance.new("Frame", box)
+
+		local iconCircle = Instance.new("Frame", box)
 		iconCircle.Size = UDim2.new(0, 22, 0, 22)
 		iconCircle.Position = UDim2.new(0, 10, 0, 9)
 		iconCircle.BackgroundColor3 = indicatorColor
@@ -1005,7 +1013,7 @@ function function ShowNotification(msg, notifType)
 		iconCircle.ZIndex = 2004
 		Instance.new("UICorner", iconCircle).CornerRadius = UDim.new(1, 0)
 
-		icon = Instance.new("TextLabel", iconCircle)
+		local icon = Instance.new("TextLabel", iconCircle)
 		icon.Size = UDim2.new(1, 0, 1, 0)
 		icon.BackgroundTransparency = 1
 		icon.Text = ({
@@ -1021,7 +1029,7 @@ function function ShowNotification(msg, notifType)
 		icon.TextSize = IsMobile and 10 or 11
 		icon.ZIndex = 2005
 
-		typeLabel = Instance.new("TextLabel", box)
+		local typeLabel = Instance.new("TextLabel", box)
 		typeLabel.Size = UDim2.new(1, -72, 0, 11)
 		typeLabel.Position = UDim2.new(0, 40, 0, 7)
 		typeLabel.BackgroundTransparency = 1
@@ -1032,7 +1040,7 @@ function function ShowNotification(msg, notifType)
 		typeLabel.TextXAlignment = Enum.TextXAlignment.Left
 		typeLabel.ZIndex = 2004
 
-		titleLabel = Instance.new("TextLabel", box)
+		local titleLabel = Instance.new("TextLabel", box)
 		titleLabel.Name = "Title"
 		titleLabel.Size = UDim2.new(1, -72, 0, 18)
 		titleLabel.Position = UDim2.new(0, 40, 0, 17)
@@ -1045,7 +1053,7 @@ function function ShowNotification(msg, notifType)
 		titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
 		titleLabel.ZIndex = 2004
 
-		closeButton = Instance.new("TextButton", box)
+		local closeButton = Instance.new("TextButton", box)
 		closeButton.Name = "Close"
 		closeButton.Size = UDim2.new(0, 20, 0, 20)
 		closeButton.Position = UDim2.new(1, -27, 0, 5)
@@ -1057,7 +1065,7 @@ function function ShowNotification(msg, notifType)
 		closeButton.TextSize = 14
 		closeButton.ZIndex = 2006
 
-		description = Instance.new("TextLabel", box)
+		local description = Instance.new("TextLabel", box)
 		description.Name = "Description"
 		description.Size = UDim2.new(1, -60, 0, IsMobile and 24 or 26)
 		description.Position = UDim2.new(0, 40, 0, 34)
@@ -1071,7 +1079,8 @@ function function ShowNotification(msg, notifType)
 		description.TextYAlignment = Enum.TextYAlignment.Top
 		description.ZIndex = 2004
 
-		progressTrack = Instance.new("Frame", box)
+		
+		local progressTrack = Instance.new("Frame", box)
 		progressTrack.Name = "TimerProgressTrack"
 		progressTrack.Size = UDim2.new(1, -18, 0, 3)
 		progressTrack.Position = UDim2.new(0, 9, 1, -6)
@@ -1081,7 +1090,7 @@ function function ShowNotification(msg, notifType)
 		progressTrack.ZIndex = 2005
 		Instance.new("UICorner", progressTrack).CornerRadius = UDim.new(1, 0)
 
-		progressFill = Instance.new("Frame", progressTrack)
+		local progressFill = Instance.new("Frame", progressTrack)
 		progressFill.Name = "TimerProgress"
 		progressFill.Size = UDim2.new(1, 0, 1, 0)
 		progressFill.BackgroundColor3 = indicatorColor
@@ -1089,16 +1098,16 @@ function function ShowNotification(msg, notifType)
 		progressFill.ZIndex = 2006
 		Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
 
-		closeRequested = false
-		progressTween = nil
-		function function Dismiss()
+		local closeRequested = false
+		local progressTween
+		local function Dismiss()
 			if closeRequested then return end
 			closeRequested = true
 			if progressTween then
 				pcall(function() progressTween:Cancel() end)
 			end
 			if not wrapper or not wrapper.Parent then return end
-			tween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			local tween = TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = UDim2.new(1.08, 0, 0, 0)
 			})
 			tween:Play()
@@ -1134,11 +1143,12 @@ function function ShowNotification(msg, notifType)
 
 		TrimNotificationStack()
 
-		introTween = TweenService:Create(box, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+		local introTween = TweenService:Create(box, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 			Position = UDim2.new(0, 0, 0, 0)
 		})
 		introTween:Play()
 
+		
 		progressTween = TweenService:Create(
 			progressFill,
 			TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
@@ -1156,31 +1166,31 @@ function function ShowNotification(msg, notifType)
 		StandaloneBannerNotification(message, nType)
 	end
 end
-function function AttemptActionWithCooldown(actionFunc)
-	now = tick()
+function AttemptActionWithCooldown(actionFunc)
+	local now = tick()
 	if now < GlobalActionCooldownEndTime then
 		if not GlobalCooldownBanner or not GlobalCooldownBanner.Parent then
 			GlobalCooldownLoopVersion = GlobalCooldownLoopVersion + 1
-			currentLoop = GlobalCooldownLoopVersion
-			parent = GetSecureParent()
+			local currentLoop = GlobalCooldownLoopVersion
+			local parent = GetSecureParent()
 			if not parent then return end
-			bannerGui = Instance.new("ScreenGui")
+			local bannerGui = Instance.new("ScreenGui")
 			bannerGui.Name = "VeloxCooldown_" .. _VH_GenerateRandomString(8)
 			bannerGui.DisplayOrder = 10000
 			bannerGui.ResetOnSpawn = false
 			bannerGui.Parent = parent
 			GlobalCooldownBanner = bannerGui
-			frame = Instance.new("Frame", bannerGui)
+			local frame = Instance.new("Frame", bannerGui)
 			frame.Size = UDim2.new(0, IsMobile and 280 or 340, 0, 45)
 			frame.Position = UDim2.new(0.5, 0, 0, -60)
 			frame.AnchorPoint = Vector2.new(0.5, 0)
 			frame.BackgroundColor3 = Theme.BackgroundSecondary
 			frame.BorderSizePixel = 0
 			Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-			stroke = Instance.new("UIStroke", frame)
+			local stroke = Instance.new("UIStroke", frame)
 			stroke.Color = Theme.Warning
 			stroke.Thickness = 1.5
-			txt = Instance.new("TextLabel", frame)
+			local txt = Instance.new("TextLabel", frame)
 			txt.Size = UDim2.new(1, -20, 1, 0)
 			txt.Position = UDim2.new(0, 10, 0, 0)
 			txt.BackgroundTransparency = 1
@@ -1193,7 +1203,7 @@ function function AttemptActionWithCooldown(actionFunc)
 			}):Play()
 			task.spawn(function()
 				while currentLoop == GlobalCooldownLoopVersion do
-					rem = math.ceil(GlobalActionCooldownEndTime - tick())
+					local rem = math.ceil(GlobalActionCooldownEndTime - tick())
 					if rem > 1 then
 						if txt and txt.Parent then txt.Text = "Please try again in " .. rem .. " seconds" end
 					elseif rem == 1 then
@@ -1206,7 +1216,7 @@ function function AttemptActionWithCooldown(actionFunc)
 						task.wait(1)
 						if currentLoop == GlobalCooldownLoopVersion then
 							if frame and frame.Parent then
-								outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+								local outro = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 									Position = UDim2.new(0.5, 0, 0, -60)
 								})
 								outro:Play()
@@ -1301,7 +1311,7 @@ ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Color3.fromRGB(40,
 ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Accent, Color3.fromRGB(120, 123, 245), Color3.fromRGB(79, 82, 221))
 isConfirming = false
 pendingExecuteCallback = nil
-function function OpenConfirmDialog(scriptName, onExecute)
+function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
@@ -1313,14 +1323,14 @@ function function OpenConfirmDialog(scriptName, onExecute)
 	ConfirmOverlay.Visible = true
 	ConfirmOverlay.Active = true
 end
-function function CloseConfirmDialog(shouldExecute)
+function CloseConfirmDialog(shouldExecute)
 	if not isConfirming then return end
 	ConfirmExecuteBtn.Active = false
 	ConfirmOverlay.BackgroundTransparency = 1
 	ConfirmOverlay.Visible = false
 	ConfirmOverlay.Active = false
 	isConfirming = false
-	cb = pendingExecuteCallback
+	local cb = pendingExecuteCallback
 	pendingExecuteCallback = nil
 	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
 end
@@ -1333,9 +1343,9 @@ end))
 _VH_RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	if not isConfirming then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		pos = input.Position
-		bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
-		inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
+		local pos = input.Position
+		local bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
+		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
 		if not inside then CloseConfirmDialog(false) end
 	end
 end))
@@ -1343,7 +1353,7 @@ ToggleKeybind = Enum.KeyCode.RightControl
 savedKeyCode = type(SavedData.ToggleKeybind) == "string" and Enum.KeyCode[SavedData.ToggleKeybind] or nil
 if savedKeyCode then ToggleKeybind = savedKeyCode else SavedData.ToggleKeybind = ToggleKeybind.Name end
 KeybindButtonRef = nil
-function function BindToggleKey(keyCode)
+function BindToggleKey(keyCode)
 	if ToggleKeybindConnection then
 		_VH_UnregConn(ToggleKeybindConnection)
 		ToggleKeybindConnection = nil
@@ -1367,7 +1377,7 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		end
 	end
 end))
-function function CloseUI()
+function CloseUI()
 	if isDestroying then return end
 	if SearchInput and SearchInput.Parent then pcall(function() SearchInput:ReleaseFocus() end) end
 	isDestroying = true
@@ -1388,13 +1398,13 @@ _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		mainDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
-				delta = moveInput.Position - mainDragStart
-				camera = workspace.CurrentCamera
-				viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-				targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
-				targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
-				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				local delta = moveInput.Position - mainDragStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
+				local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 				targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 				targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
@@ -1419,7 +1429,7 @@ _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 			floatDragConnection = nil
 		end
 		if floatStart then
-			dist = (input.Position - floatStart).Magnitude
+			local dist = (input.Position - floatStart).Magnitude
 			if dist < 12 then
 				ToggleUI()
 			else
@@ -1483,10 +1493,10 @@ AvatarFrame.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"; AvatarFram
 Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(0, 8)
 AvatarStroke = Instance.new("UIStroke", AvatarFrame); AvatarStroke.Color = Theme.Accent; AvatarStroke.Thickness = 1.5
 task.spawn(function()
-	attempts = 0
+	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
@@ -1516,7 +1526,7 @@ _VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	diagnosticsElapsed = diagnosticsElapsed + deltaTime
 	if diagnosticsElapsed < 1 then return end
 	diagnosticsElapsed = diagnosticsElapsed - 1
-	success, ping = pcall(function()
+	local success, ping = pcall(function()
 		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
 	if DiagnosticsLabel and DiagnosticsLabel.Parent then
@@ -1532,17 +1542,17 @@ SectionHeaderLabel.Text = "Updates"; SectionHeaderLabel.TextColor3 = Theme.TextP
 SectionHeaderLabel.Font = Enum.Font.GothamBold; SectionHeaderLabel.TextSize = IsMobile and 13 or 16; SectionHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
 TabViews = {}
 currentTab = "Changelogs"
-function function CreateCanvas(name)
-	scroll = Instance.new("ScrollingFrame", PanelGroup)
+function CreateCanvas(name)
+	local scroll = Instance.new("ScrollingFrame", PanelGroup)
 	scroll.Size = UDim2.new(1, -32, 1, IsMobile and -116 or -138)
 	scroll.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
 	scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 2; scroll.ScrollBarImageColor3 = Theme.Stroke
 	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.Active = true
-	layout = Instance.new("UIListLayout", scroll)
+	local layout = Instance.new("UIListLayout", scroll)
 	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder
-	pad = Instance.new("UIPadding", scroll)
+	local pad = Instance.new("UIPadding", scroll)
 	pad.PaddingRight = UDim.new(0, 4); pad.PaddingBottom = UDim.new(0, 16)
 	TabViews[name] = scroll
 	return scroll
@@ -1608,26 +1618,26 @@ Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 viewportConn = nil
-function function BindCamera()
+function BindCamera()
 	if viewportConn then viewportConn:Disconnect() end
-	cam = workspace.CurrentCamera
+	local cam = workspace.CurrentCamera
 	if cam then
 		viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			if DropdownContainer and DropdownContainer.Visible then
 				DropdownContainer.Visible = false
 			end
 			if MainPanel and MainPanel.Parent then
-				viewport = cam.ViewportSize
-				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				currentOffsetX = MainPanel.Position.X.Offset
-				currentOffsetY = MainPanel.Position.Y.Offset
+				local viewport = cam.ViewportSize
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				local currentOffsetX = MainPanel.Position.X.Offset
+				local currentOffsetY = MainPanel.Position.Y.Offset
 				if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
 					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
 					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
 				end
-				targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				local targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				local targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -1635,20 +1645,20 @@ function function BindCamera()
 end
 _VH_RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
 BindCamera()
-function function RefreshViewportLayout()
+function RefreshViewportLayout()
 	if isDestroying or not MainPanel or not MainPanel.Parent then return end
 	MainPanel.Size = GetPanelSize()
-	camera = workspace.CurrentCamera
-	viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-	halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-	currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-	currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+	local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+	local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+	local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
 	currentX = math.clamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
 	currentY = math.clamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 end
-function function BindViewportSizeChanged(camera)
+function BindViewportSizeChanged(camera)
 	if not camera then return end
 	_VH_RegConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(RefreshViewportLayout))
 	RefreshViewportLayout()
@@ -1662,20 +1672,20 @@ SortOptions = {
 	"Updated Today", "Updated This Week", "Updated This Month",
 	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
-function function UpdateFilter()
+function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
-	currentVersion = filterVersion
+	local currentVersion = filterVersion
 	task.defer(function()
 		if isDestroying or currentVersion ~= filterVersion then return end
-		query = string.lower(string.gsub(SearchInput.Text or "", "^%s*(.-)%s*$", "%1"))
-		words = {}
+		local query = string.lower(string.gsub(SearchInput.Text or "", "^%s*(.-)%s*$", "%1"))
+		local words = {}
 		for word in string.gmatch(query, "%S+") do words[#words + 1] = word end
-		matches = {}
-		currentSort = SortMode
+		local matches = {}
+		local currentSort = SortMode
 		for _, scr in ipairs(RegisteredScripts) do
 			if currentVersion ~= filterVersion then return end
-			isMatch = true
+			local isMatch = true
 			if query ~= "" then
 				for _, word in ipairs(words) do
 					if not string.find(scr.SearchTitle, word, 1, true) and not string.find(scr.SearchDesc, word, 1, true) and not string.find(scr.SearchMeta, word, 1, true) then
@@ -1684,7 +1694,7 @@ function function UpdateFilter()
 					end
 				end
 			end
-			filterPass = not FilterFavoritesActive or SavedData.Favorites[scr.Id] == true
+			local filterPass = not FilterFavoritesActive or SavedData.Favorites[scr.Id] == true
 			if filterPass then
 				if currentSort == "Updated Today" then
 					filterPass = IsCalendarDay(scr.LastUpdatedNumber)
@@ -1700,7 +1710,7 @@ function function UpdateFilter()
 					filterPass = SavedData.AutoExecutes[scr.Id] == nil
 				end
 			end
-			visible = isMatch and filterPass
+			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then matches[#matches + 1] = scr end
 		end
@@ -1725,7 +1735,7 @@ function function UpdateFilter()
 			return a.Id < b.Id
 		end)
 		for order, scr in ipairs(matches) do scr.Instance.LayoutOrder = order end
-		shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
+		local shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
 		if EmptyStateMessage.Visible ~= shouldShowEmpty then EmptyStateMessage.Visible = shouldShowEmpty end
 		if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		if query == "" and shouldShowEmpty == false and EmptyStateMessage.Text == "No scripts matched your search or filters." then EmptyStateMessage.Text = "" end
@@ -1753,7 +1763,7 @@ _VH_RegConn(FavFilterBtn.MouseButton1Click:Connect(_VH_CreateDebounce(0.1, funct
 	UpdateFilter()
 end)))
 for _, opt in ipairs(SortOptions) do
-	btn = Instance.new("TextButton", DropdownContainer)
+	local btn = Instance.new("TextButton", DropdownContainer)
 	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
 	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
 	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
@@ -1773,13 +1783,13 @@ _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 	if DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	else
-		absPos = SortDropdownBtn.AbsolutePosition
-		absSize = SortDropdownBtn.AbsoluteSize
-		camera = workspace.CurrentCamera
-		viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		dropWidth, dropHeight = 190, 210
-		posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
-		posY = absPos.Y + absSize.Y + 4
+		local absPos = SortDropdownBtn.AbsolutePosition
+		local absSize = SortDropdownBtn.AbsoluteSize
+		local camera = workspace.CurrentCamera
+		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+		local dropWidth, dropHeight = 190, 210
+		local posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
+		local posY = absPos.Y + absSize.Y + 4
 		if posY + dropHeight > viewportSize.Y - 10 then
 			posY = absPos.Y - dropHeight - 4
 		end
@@ -1790,11 +1800,11 @@ _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 end))
 _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	if DropdownContainer.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-		pos = input.Position
-		dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
-		sPos, sSize = SortDropdownBtn.AbsolutePosition, SortDropdownBtn.AbsoluteSize
-		insideDrop = pos.X >= dPos.X and pos.X <= dPos.X + dSize.X and pos.Y >= dPos.Y and pos.Y <= dPos.Y + dSize.Y
-		insideBtn = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
+		local pos = input.Position
+		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
+		local sPos, sSize = SortDropdownBtn.AbsolutePosition, SortDropdownBtn.AbsoluteSize
+		local insideDrop = pos.X >= dPos.X and pos.X <= dPos.X + dSize.X and pos.Y >= dPos.Y and pos.Y <= dPos.Y + dSize.Y
+		local insideBtn = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
 		if not insideDrop and not insideBtn then DropdownContainer.Visible = false end
 	end
 end))
@@ -1804,16 +1814,16 @@ TabIndicator.Position = UDim2.new(0, 4, 1, -2)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabButtonCache = {}
-function function CreateTab(name, index)
-	xOffset = (index - 1) * (IsMobile and 90 or 115)
-	btn = Instance.new("TextButton", TabContainer)
+function CreateTab(name, index)
+	local xOffset = (index - 1) * (IsMobile and 90 or 115)
+	local btn = Instance.new("TextButton", TabContainer)
 	btn.Size = UDim2.new(0, IsMobile and 85 or 105, 1, 0)
 	btn.Position = UDim2.new(0, xOffset, 0, 0); btn.BackgroundTransparency = 1
 	btn.Text = name; btn.Font = Enum.Font.GothamMedium; btn.TextSize = IsMobile and 11 or 13
 	btn.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
 	btn.ClipsDescendants = true; TabButtonCache[name] = btn
 	if index > 1 then
-		div = Instance.new("Frame", TabContainer)
+		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, 10); div.Position = UDim2.new(0, xOffset - 3, 0.5, -5)
 		div.BackgroundColor3 = Theme.Stroke; div.BackgroundTransparency = 0.3
 	end
@@ -1843,80 +1853,80 @@ function function CreateTab(name, index)
 	end))
 end
 CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
-function function CreateParagraph(title, desc, parentView)
-	block = Instance.new("Frame", parentView)
+function CreateParagraph(title, desc, parentView)
+	local block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover
 	Instance.new("UICorner", block).CornerRadius = UDim.new(0, 8)
-	blockStroke = Instance.new("UIStroke", block); blockStroke.Color = Color3.fromRGB(33, 43, 61)
-	pad = Instance.new("UIPadding", block)
+	local blockStroke = Instance.new("UIStroke", block); blockStroke.Color = Color3.fromRGB(33, 43, 61)
+	local pad = Instance.new("UIPadding", block)
 	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-	lay = Instance.new("UIListLayout", block)
+	local lay = Instance.new("UIListLayout", block)
 	lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder
-	tLbl = Instance.new("TextLabel", block)
+	local tLbl = Instance.new("TextLabel", block)
 	tLbl.Size = UDim2.new(1, 0, 0, 18); tLbl.BackgroundTransparency = 1; tLbl.Text = title
 	tLbl.TextColor3 = Theme.TextPrimary; tLbl.Font = Enum.Font.GothamBold; tLbl.TextSize = 13
 	tLbl.TextXAlignment = Enum.TextXAlignment.Left; tLbl.LayoutOrder = 1
-	dLbl = Instance.new("TextLabel", block)
+	local dLbl = Instance.new("TextLabel", block)
 	dLbl.Size = UDim2.new(1, 0, 0, 0); dLbl.AutomaticSize = Enum.AutomaticSize.Y
 	dLbl.BackgroundTransparency = 1; dLbl.Text = desc; dLbl.TextColor3 = Theme.TextSecondary
 	dLbl.Font = Enum.Font.Gotham; dLbl.TextSize = 12; dLbl.TextXAlignment = Enum.TextXAlignment.Left
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
-function function StableScriptId(data)
+CreateParagraph("v2.0.3 - Compiler Compatibility, Notifications & UI Updates", "• Fixed the main-chunk local-register pressure that could exceed the 200-register limit on compatible Luau executors.\n• Cleaned up generated code paths so the script remains syntactically valid after register-limit changes.\n• Improved notification handling with clearer titles, types, countdown progress, and stacking behavior.\n• Added the adjustable UI scale setting from 80% to 120%.\n• Improved catalog refresh behavior and refresh-button feedback.\n• Updated recommendation and card presentation behavior.\n• Removed source comments for a cleaner release build.", ChangelogsView)
+function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
 		return string.gsub(data.Id, "^%s*(.-)%s*$", "%1")
 	end
-	source = type(data.RawUrl) == "string" and string.gsub(data.RawUrl, "^%s*(.-)%s*$", "%1") or ""
+	local source = type(data.RawUrl) == "string" and string.gsub(data.RawUrl, "^%s*(.-)%s*$", "%1") or ""
 	if source ~= "" then return "url:" .. source end
-	name = type(data.Name) == "string" and string.gsub(data.Name, "^%s*(.-)%s*$", "%1") or "Unnamed Script"
+	local name = type(data.Name) == "string" and string.gsub(data.Name, "^%s*(.-)%s*$", "%1") or "Unnamed Script"
 	return "name:" .. string.lower(name) .. ":" .. tostring(tonumber(data.PlaceId) or 0)
 end
-function function IsScriptCompatible(data)
-	allowedPlaceId = tonumber(data and data.PlaceId) or 0
+function IsScriptCompatible(data)
+	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
 	return allowedPlaceId == 0 or allowedPlaceId == PlaceId
 end
-function function IsRecommendedForCurrentPlace(data)
-	allowedPlaceId = tonumber(data and data.PlaceId) or 0
+function IsRecommendedForCurrentPlace(data)
+	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
 	return PlaceId ~= 0 and allowedPlaceId == PlaceId
 end
-function function IsCalendarDay(timestamp)
-	value = tonumber(timestamp)
+function IsCalendarDay(timestamp)
+	local value = tonumber(timestamp)
 	if not value or value <= 0 then return false end
-	nowDate = os.date("*t", os.time())
-	valueDate = os.date("*t", value)
+	local nowDate = os.date("*t", os.time())
+	local valueDate = os.date("*t", value)
 	return nowDate.year == valueDate.year and nowDate.month == valueDate.month and nowDate.day == valueDate.day
 end
-function function IsCalendarWeek(timestamp)
-	value = tonumber(timestamp)
+function IsCalendarWeek(timestamp)
+	local value = tonumber(timestamp)
 	if not value or value <= 0 then return false end
-	now = os.time()
-	nowDate = os.date("*t", now)
-	currentDay = nowDate.wday == 1 and 7 or nowDate.wday - 1
-	start = os.time({year = nowDate.year, month = nowDate.month, day = nowDate.day, hour = 0, min = 0, sec = 0}) - ((currentDay - 1) * 86400)
+	local now = os.time()
+	local nowDate = os.date("*t", now)
+	local currentDay = nowDate.wday == 1 and 7 or nowDate.wday - 1
+	local start = os.time({year = nowDate.year, month = nowDate.month, day = nowDate.day, hour = 0, min = 0, sec = 0}) - ((currentDay - 1) * 86400)
 	return value >= start and value <= now
 end
-function function IsCalendarMonth(timestamp)
-	value = tonumber(timestamp)
+function IsCalendarMonth(timestamp)
+	local value = tonumber(timestamp)
 	if not value or value <= 0 then return false end
-	nowDate = os.date("*t", os.time())
-	valueDate = os.date("*t", value)
+	local nowDate = os.date("*t", os.time())
+	local valueDate = os.date("*t", value)
 	return nowDate.year == valueDate.year and nowDate.month == valueDate.month and value <= os.time()
 end
-function function MigrateSavedEntries(entries)
+function MigrateSavedEntries(entries)
 	for _, data in ipairs(entries) do
-		id = data.Id
-		name = data.Name
+		local id = data.Id
+		local name = data.Name
 		if id and name then
 			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then SavedData.Favorites[id] = SavedData.Favorites[name] end
 			if SavedData.AutoExecutes[id] == nil and SavedData.AutoExecutes[name] ~= nil then SavedData.AutoExecutes[id] = SavedData.AutoExecutes[name] end
 		end
 	end
 end
-function function RefreshAllCardStates()
+function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
 		if type(scrData.UpdateUI) == "function" then scrData.UpdateUI() end
 		if scrData.TimeLabel and scrData.TimeLabel.Parent then
@@ -1924,7 +1934,7 @@ function function RefreshAllCardStates()
 		end
 	end
 end
-function function ExecuteSandboxed(code, scriptName)
+function ExecuteSandboxed(code, scriptName)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
@@ -1934,10 +1944,10 @@ function function ExecuteSandboxed(code, scriptName)
 		return false, "empty script source"
 	end
 
-	ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
+	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
-			success, runtimeErr = pcall(chunk)
+			local success, runtimeErr = pcall(chunk)
 			if not success and not isDestroying then
 				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 			end
@@ -1945,10 +1955,10 @@ function function ExecuteSandboxed(code, scriptName)
 		return true, "Script dispatched successfully"
 	end
 
-	detail = tostring(compileErr or chunk or "unknown compiler error")
-	normalized = string.lower(detail)
+	local detail = tostring(compileErr or chunk or "unknown compiler error")
+	local normalized = string.lower(detail)
 	if string.find(normalized, "out of local", 1, true)
-		or string.find(normalized, "registers", 1, true)
+		or string.find(normalized, "local registers", 1, true)
 		or (string.find(normalized, "register", 1, true) and string.find(normalized, "limit", 1, true)) then
 		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: executor compiler local-register limit was exceeded.", "Error")
 		return false, detail
@@ -1957,92 +1967,92 @@ function function ExecuteSandboxed(code, scriptName)
 	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
 	return false, detail
 end
-function function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
-	tagType = NormalizeTagType(data and data.TagType)
-	tagConfig = TagTypeConfig[tagType]
-	exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
-	isRecommended = IsRecommendedForCurrentPlace(data)
-	scriptId = StableScriptId(data) or ("name:" .. string.lower(exactName))
-	safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
-	entryConnections = {}
-	function function RegEntryConn(connection)
+function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
+	local tagType = NormalizeTagType(data and data.TagType)
+	local tagConfig = TagTypeConfig[tagType]
+	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
+	local isRecommended = IsRecommendedForCurrentPlace(data)
+	local scriptId = StableScriptId(data) or ("name:" .. string.lower(exactName))
+	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
+	local entryConnections = {}
+	local function RegEntryConn(connection)
 		if connection and typeof(connection) == "RBXScriptConnection" then entryConnections[#entryConnections + 1] = connection end
 		return connection
 	end
-	card = Instance.new("TextButton")
+	local card = Instance.new("TextButton")
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-	cardStroke = GetOrCreateCardStroke(card)
+	local cardStroke = GetOrCreateCardStroke(card)
 	ApplyTagBorder(card, tagType, cardStroke)
 	if isRecommended then
 		card.BackgroundColor3 = Color3.fromRGB(31, 42, 55)
 	end
-	pad = Instance.new("UIPadding", card)
+	local pad = Instance.new("UIPadding", card)
 	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
 	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-	img = Instance.new("ImageLabel", card)
+	local img = Instance.new("ImageLabel", card)
 	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
 	img.BorderSizePixel = 0; img.Image = safeImageAssetId
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
-	content = Instance.new("Frame", card)
+	local content = Instance.new("Frame", card)
 	content.Size = UDim2.new(1, -76, 0, 0); content.Position = UDim2.new(0, 76, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
-	cLay = Instance.new("UIListLayout", content)
+	local cLay = Instance.new("UIListLayout", content)
 	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 4)
-	topRow = Instance.new("Frame", content)
+	local topRow = Instance.new("Frame", content)
 	topRow.Size = UDim2.new(1, 0, 0, 0); topRow.AutomaticSize = Enum.AutomaticSize.Y
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
-	trLay = Instance.new("UIListLayout", topRow)
+	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	metaWidth = IsMobile and 212 or 250
-	titleContainer = Instance.new("Frame", topRow)
+	local metaWidth = IsMobile and 212 or 250
+	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
-	titleContainerLay = Instance.new("UIListLayout", titleContainer)
+	local titleContainerLay = Instance.new("UIListLayout", titleContainer)
 	titleContainerLay.FillDirection = Enum.FillDirection.Vertical
 	titleContainerLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	titleContainerLay.VerticalAlignment = Enum.VerticalAlignment.Top
 	titleContainerLay.SortOrder = Enum.SortOrder.LayoutOrder
 	titleContainerLay.Padding = UDim.new(0, 5)
 
-	titleLine = Instance.new("Frame", titleContainer)
+	local titleLine = Instance.new("Frame", titleContainer)
 	titleLine.Size = UDim2.new(1, 0, 0, 0); titleLine.AutomaticSize = Enum.AutomaticSize.Y
 	titleLine.BackgroundTransparency = 1; titleLine.LayoutOrder = 1
-	titleLineLay = Instance.new("UIListLayout", titleLine)
+	local titleLineLay = Instance.new("UIListLayout", titleLine)
 	titleLineLay.FillDirection = Enum.FillDirection.Horizontal
 	titleLineLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	titleLineLay.VerticalAlignment = Enum.VerticalAlignment.Top
 	titleLineLay.SortOrder = Enum.SortOrder.LayoutOrder
 	titleLineLay.Padding = UDim.new(0, 6)
 
-	titleLbl = Instance.new("TextLabel", titleLine)
+	local titleLbl = Instance.new("TextLabel", titleLine)
 	titleLbl.Size = UDim2.new(1, 0, 0, 0); titleLbl.AutomaticSize = Enum.AutomaticSize.Y
 	titleLbl.BackgroundTransparency = 1; titleLbl.Text = data.Name or "Unnamed Script"
 	titleLbl.TextColor3 = Theme.TextPrimary; titleLbl.Font = Enum.Font.GothamBold
 	titleLbl.TextSize = IsMobile and 12 or 13; titleLbl.TextWrapped = true; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	titleLbl.LayoutOrder = 1; titleLbl.ZIndex = 3
 
-	recommendBadge = Instance.new("Frame", titleContainer)
+	local recommendBadge = Instance.new("Frame", titleContainer)
 	recommendBadge.Size = UDim2.new(0, 68, 0, 20)
 	recommendBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 	recommendBadge.Visible = isRecommended
 	recommendBadge.LayoutOrder = 2
 	recommendBadge.ZIndex = 4
 	Instance.new("UICorner", recommendBadge).CornerRadius = UDim.new(0, 7)
-	recommendStroke = Instance.new("UIStroke", recommendBadge)
+	local recommendStroke = Instance.new("UIStroke", recommendBadge)
 	recommendStroke.Color = Color3.fromRGB(165, 180, 252)
 	recommendStroke.Transparency = 0.05
 	recommendStroke.Thickness = 1
-	recommendGradient = Instance.new("UIGradient", recommendBadge)
+	local recommendGradient = Instance.new("UIGradient", recommendBadge)
 	recommendGradient.Rotation = 0
 	recommendGradient.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(129, 140, 248)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(79, 70, 229))
 	})
-	recommendText = Instance.new("TextLabel", recommendBadge)
+	local recommendText = Instance.new("TextLabel", recommendBadge)
 	recommendText.Size = UDim2.new(1, 0, 1, 0)
 	recommendText.BackgroundTransparency = 1
 	recommendText.Text = "FOR YOU"
@@ -2052,12 +2062,13 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 	recommendText.TextXAlignment = Enum.TextXAlignment.Center
 	recommendText.ZIndex = 5
 
-	badgeRow = Instance.new("Frame", titleContainer)
+	
+	local badgeRow = Instance.new("Frame", titleContainer)
 	badgeRow.Size = UDim2.new(1, 0, 0, 20)
 	badgeRow.BackgroundTransparency = 1
 	badgeRow.LayoutOrder = 2
 	badgeRow.Visible = isRecommended or tagType ~= "NONE"
-	badgeLay = Instance.new("UIListLayout", badgeRow)
+	local badgeLay = Instance.new("UIListLayout", badgeRow)
 	badgeLay.FillDirection = Enum.FillDirection.Horizontal
 	badgeLay.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	badgeLay.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -2067,12 +2078,12 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 	recommendBadge.LayoutOrder = 1
 
 	if tagType ~= "NONE" then
-		tag = Instance.new("Frame", badgeRow)
+		local tag = Instance.new("Frame", badgeRow)
 		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 20)
 		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 6)
-		tPad = Instance.new("UIPadding", tag)
+		local tPad = Instance.new("UIPadding", tag)
 		tPad.PaddingLeft = UDim.new(0, 7); tPad.PaddingRight = UDim.new(0, 7)
-		tText = Instance.new("TextLabel", tag)
+		local tText = Instance.new("TextLabel", tag)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
 		tText.BackgroundTransparency = 1; tText.Text = tagType
 		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = IsMobile and 8 or 9
@@ -2081,25 +2092,26 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 		tag.ZIndex = 4
 	end
 
-	metaRightContainer = Instance.new("Frame", topRow)
+	local metaRightContainer = Instance.new("Frame", topRow)
 	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
-	mrLay = Instance.new("UIListLayout", metaRightContainer)
+	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
-	dateLbl = Instance.new("TextLabel", metaRightContainer)
+	local dateLbl = Instance.new("TextLabel", metaRightContainer)
 	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 1; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 	dateLbl.TextWrapped = false; dateLbl.TextTruncate = Enum.TextTruncate.AtEnd
-	function function UpdateCardMetaLayout()
-		available = topRow.AbsoluteSize.X
+	local function UpdateCardMetaLayout()
+		local available = topRow.AbsoluteSize.X
 		if available <= 0 then return end
-		target = metaWidth
+		local target = metaWidth
 		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.46))) end
 		if tagType == "NONE" then target = math.max(125, target - 34) end
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
+		
 		titleLine.Size = UDim2.new(1, 0, 0, 0)
 		titleLbl.Size = UDim2.new(1, 0, 0, 0)
 		recommendBadge.Visible = isRecommended
@@ -2107,50 +2119,50 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 	end
 	RegEntryConn(topRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateCardMetaLayout))
 	UpdateCardMetaLayout()
-	descLbl = Instance.new("TextLabel", content)
+	local descLbl = Instance.new("TextLabel", content)
 	descLbl.Size = UDim2.new(1, 0, 0, 0); descLbl.AutomaticSize = Enum.AutomaticSize.Y
 	descLbl.BackgroundTransparency = 1; descLbl.Text = type(data.Description) == "string" and data.Description or "No description provided."
 	descLbl.TextColor3 = Theme.TextSecondary; descLbl.Font = Enum.Font.Gotham; descLbl.TextSize = 11
 	descLbl.TextWrapped = true; descLbl.TextXAlignment = Enum.TextXAlignment.Left; descLbl.LayoutOrder = 2
-	btmRow = Instance.new("Frame", content)
+	local btmRow = Instance.new("Frame", content)
 	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
-	brLay = Instance.new("UIListLayout", btmRow)
+	local brLay = Instance.new("UIListLayout", btmRow)
 	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
-	autoExecBtn = Instance.new("TextButton", btmRow)
+	local autoExecBtn = Instance.new("TextButton", btmRow)
 	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
-	aeLbl = Instance.new("TextLabel", autoExecBtn)
+	local aeLbl = Instance.new("TextLabel", autoExecBtn)
 	aeLbl.Size = UDim2.new(1, -34, 1, 0); aeLbl.Position = UDim2.new(0, 6, 0, 0); aeLbl.BackgroundTransparency = 1
 	aeLbl.Text = "Auto Execute"; aeLbl.TextColor3 = Theme.TextPrimary
 	aeLbl.Font = Enum.Font.GothamBold; aeLbl.TextSize = 10; aeLbl.TextXAlignment = Enum.TextXAlignment.Left; aeLbl.ZIndex = 2
-	aeState = Instance.new("Frame", autoExecBtn)
+	local aeState = Instance.new("Frame", autoExecBtn)
 	aeState.Size = UDim2.new(0, 24, 0, 14); aeState.Position = UDim2.new(1, -28, 0.5, -7); aeState.ZIndex = 2
 	Instance.new("UICorner", aeState).CornerRadius = UDim.new(0, 4)
-	aeStateTxt = Instance.new("TextLabel", aeState)
+	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
-	starBtn = Instance.new("TextButton", btmRow)
+	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
-	description = type(data.Description) == "string" and data.Description or ""
-	tagSearch = tagType
-	scriptEntry = {
+	local description = type(data.Description) == "string" and data.Description or ""
+	local tagSearch = tagType
+	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or ""}, " ")),
 		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
-			connection = entryConnections[i]
+			local connection = entryConnections[i]
 			if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
 			entryConnections[i] = nil
 		end
 	end
-	innerActionTime = 0
+	local innerActionTime = 0
 	scriptEntry.UpdateUI = function()
 		ApplyTagBorder(card, tagType, cardStroke)
 		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
@@ -2159,10 +2171,10 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 			cardStroke.Color = Color3.fromRGB(129, 140, 248)
 			cardStroke.Thickness = 1.5
 		end
-		isFav = SavedData.Favorites[scriptId]
+		local isFav = SavedData.Favorites[scriptId]
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
-		compatible = IsScriptCompatible(data)
-		isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
+		local compatible = IsScriptCompatible(data)
+		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
@@ -2195,7 +2207,7 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
 		if tick() - innerActionTime < 0.2 then return end
-		function function executeScript()
+		local function executeScript()
 			if not IsScriptCompatible(data) then
 				ShowNotification("This script is not compatible with this game.", "Warning")
 				return
@@ -2206,14 +2218,14 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 			end
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
+				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
 				if isDestroying then return end
 				if not raw then
 					ShowNotification("Failed to download script" .. (status and " (HTTP " .. tostring(status) .. ")" or "") .. ".", "Error")
 				elseif #string.gsub(raw, "%s+", "") == 0 then
 					ShowNotification("The script returned an empty response.", "Error")
 				else
-					success = ExecuteSandboxed(raw, exactName)
+					local success = ExecuteSandboxed(raw, exactName)
 					if success then
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
@@ -2230,7 +2242,8 @@ function function CreateScriptCard(data, renderParent, registerImmediately, orig
 		end
 	end))
 	card.Parent = renderParent
-
+	
+	
 	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
@@ -2240,8 +2253,8 @@ CATALOG_REFRESH_INTERVAL = 300
 dbRefreshing = false
 CatalogRefreshQueued = false
 LastCatalogFingerprint = nil
-function function BuildCatalogFingerprint(entries)
-	parts = {}
+function BuildCatalogFingerprint(entries)
+	local parts = {}
 	for index, entry in ipairs(entries) do
 		if type(entry) == "table" then
 			parts[#parts + 1] = table.concat({
@@ -2254,8 +2267,9 @@ function function BuildCatalogFingerprint(entries)
 	end
 	return table.concat(parts, "\30")
 end
-function function ClearCatalogCardsForRefresh()
-
+function ClearCatalogCardsForRefresh()
+	
+	
 	filterVersion = filterVersion + 1
 	for _, entry in ipairs(RegisteredScripts) do
 		if entry and entry.Instance and entry.Instance.Parent then
@@ -2266,7 +2280,7 @@ function function ClearCatalogCardsForRefresh()
 	EmptyStateMessage.Text = ""
 	ScriptsView.CanvasPosition = Vector2.new(0, 0)
 end
-function function RestoreCatalogCardsAfterRefreshFailure()
+function RestoreCatalogCardsAfterRefreshFailure()
 	for _, entry in ipairs(RegisteredScripts) do
 		if entry and entry.Instance and entry.Instance.Parent then
 			entry.Instance.Visible = true
@@ -2282,7 +2296,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		return false
 	end
-	now = os.clock()
+	local now = os.clock()
 	if not force and now - LastCatalogRefreshAt < 5 then
 		CatalogRefreshQueued = true
 		return false
@@ -2290,8 +2304,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	LastCatalogRefreshAt = now
 	dbRefreshing = true
 	CatalogGeneration += 1
-	generation = CatalogGeneration
-	savedScroll = ScriptsView.CanvasPosition
+	local generation = CatalogGeneration
+	local savedScroll = ScriptsView.CanvasPosition
 	if force == true then
 		ClearCatalogCardsForRefresh()
 	end
@@ -2299,16 +2313,16 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
-	function function FinishRefresh()
+	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-
+		
 		if not isAutoRefresh then
 			LastCatalogRefreshAt = os.clock()
 		end
 		if CatalogRefreshQueued and not isDestroying then
-			queuedForce = PendingTasks.__CatalogRefreshForce == true
-			queuedAuto = PendingTasks.__CatalogRefreshAuto == true
+			local queuedForce = PendingTasks.__CatalogRefreshForce == true
+			local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
 			CatalogRefreshQueued = false
 			PendingTasks.__CatalogRefreshForce = false
 			PendingTasks.__CatalogRefreshAuto = false
@@ -2317,11 +2331,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			end)
 		end
 	end
-	activeBuildFolder = nil
-	activeNewEntries = {}
+	local activeBuildFolder = nil
+	local activeNewEntries = {}
 	_VH_TrackTask(function()
-		taskOk, taskErr = xpcall(function()
-			raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
+		local taskOk, taskErr = xpcall(function()
+			local raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
 				RestoreCatalogCardsAfterRefreshFailure()
@@ -2333,7 +2347,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				FinishRefresh()
 				return
 			end
-			success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
 				RestoreCatalogCardsAfterRefreshFailure()
 				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Failed to parse catalog data format." end
@@ -2344,24 +2358,24 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				FinishRefresh()
 				return
 			end
-			catalogVersion = 0
-			catalogEntries = parsed
+			local catalogVersion = 0
+			local catalogEntries = parsed
 			if type(parsed.Scripts) == "table" then
 				catalogEntries = parsed.Scripts
 				catalogVersion = tonumber(parsed.CatalogVersion) or 0
 			end
-			validEntries = {}
-			seenIds = {}
-			validationIssueCount = 0
+			local validEntries = {}
+			local seenIds = {}
+			local validationIssueCount = 0
 			for index, entry in ipairs(catalogEntries) do
 				if type(entry) ~= "table" then
 					validationIssueCount = validationIssueCount + 1
 				else
-					name = type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") or ""
-					rawUrl = type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") or ""
-					id = StableScriptId(entry)
-					placeId = tonumber(entry.PlaceId) or 0
-					validUrl = rawUrl:match("^https?://") ~= nil
+					local name = type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") or ""
+					local rawUrl = type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") or ""
+					local id = StableScriptId(entry)
+					local placeId = tonumber(entry.PlaceId) or 0
+					local validUrl = rawUrl:match("^https?://") ~= nil
 					if name == "" then validationIssueCount = validationIssueCount + 1 end
 					if rawUrl == "" or not validUrl then validationIssueCount = validationIssueCount + 1 end
 					if type(id) ~= "string" or id == "" then validationIssueCount = validationIssueCount + 1 end
@@ -2390,7 +2404,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			if validationIssueCount > 0 and #validEntries == 0 then
 				ShowNotification("Catalog validation failed: no usable scripts were found.", "Error")
 			end
-			fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
+			local fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
 			if fingerprint == LastCatalogFingerprint and force ~= true then
 				for _, existingEntry in ipairs(RegisteredScripts) do
 					if existingEntry and existingEntry.Instance and existingEntry.Instance.Parent then existingEntry.Instance.Visible = true end
@@ -2405,24 +2419,24 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				FinishRefresh()
 				return
 			end
-			previousByKey = RegisteredScripts.__ByKey or {}
-			nextByKey = {}
-			nextEntries = {}
-			nextKeys = {}
-			replacedEntries = {}
+			local previousByKey = RegisteredScripts.__ByKey or {}
+			local nextByKey = {}
+			local nextEntries = {}
+			local nextKeys = {}
+			local replacedEntries = {}
 			table.clear(activeNewEntries)
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
-			function function BuildEntryFingerprint(data)
+			local function BuildEntryFingerprint(data)
 				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
 			end
-			function function DestroyEntry(entry)
+			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
 				if entry.DisconnectConnections then pcall(entry.DisconnectConnections) end
 				if entry.Instance.Parent then pcall(function() entry.Instance:Destroy() end) end
 			end
-			function function CleanupNewEntries()
+			local function CleanupNewEntries()
 				for _, entry in ipairs(activeNewEntries) do DestroyEntry(entry) end
 				if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 				activeBuildFolder = nil
@@ -2431,10 +2445,10 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			end
 			for index, scriptData in ipairs(validEntries) do
 				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
-				key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
-				entryFingerprint = BuildEntryFingerprint(scriptData)
-				existing = previousByKey[key]
-				entry = nil
+				local key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
+				local entryFingerprint = BuildEntryFingerprint(scriptData)
+				local existing = previousByKey[key]
+				local entry
 				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
 					entry = existing
 					entry.OriginalIndex = index
@@ -2476,11 +2490,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			end)
 			if not AutoExecuteRanThisSession then
 				AutoExecuteRanThisSession = true
-				autoQueue = {}
+				local autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
-					auto = SavedData.AutoExecutes[scriptData.Id]
+					local auto = SavedData.AutoExecutes[scriptData.Id]
 					if type(auto) == "table" then
-						validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
+						local validPlace = auto.GameId and auto.GameId ~= 0 and auto.GameId == game.GameId
 						if not validPlace then validPlace = auto.PlaceId == PlaceId or auto.PlaceId == 0 or not auto.PlaceId end
 						if validPlace and IsScriptCompatible(scriptData) then autoQueue[#autoQueue + 1] = scriptData end
 					end
@@ -2488,11 +2502,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				if #autoQueue > 0 then
 					_VH_TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
-						successList, failList = {}, {}
+						local successList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
+							local scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
@@ -2534,16 +2548,19 @@ end
 
 PendingTasks.__LoadCatalog()
 
+
+
+
 _VH_TrackTask(function()
 	while not isDestroying do
-		remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - LastCatalogRefreshAt)
+		local remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - LastCatalogRefreshAt)
 		if remaining > 0 then
 			task.wait(math.min(remaining, 1))
 		else
 			if not dbRefreshing then
 				PendingTasks.__LoadCatalog(false, true)
 			else
-
+				
 				task.wait(1)
 			end
 		end
@@ -2560,16 +2577,16 @@ _VH_TrackTask(function()
 		end
 	end
 end)
-function function CreateSettingsGroup(titleText, parentView, order)
-	container = Instance.new("Frame", parentView)
+function CreateSettingsGroup(titleText, parentView, order)
+	local container = Instance.new("Frame", parentView)
 	container.Size = UDim2.new(1, 0, 0, 0)
 	container.AutomaticSize = Enum.AutomaticSize.Y
 	container.BackgroundTransparency = 1
 	container.LayoutOrder = order
-	groupLayout = Instance.new("UIListLayout", container)
+	local groupLayout = Instance.new("UIListLayout", container)
 	groupLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	groupLayout.Padding = UDim.new(0, 6)
-	header = Instance.new("TextLabel", container)
+	local header = Instance.new("TextLabel", container)
 	header.Size = UDim2.new(1, 0, 0, 16)
 	header.BackgroundTransparency = 1
 	header.Text = string.upper(titleText)
@@ -2578,26 +2595,26 @@ function function CreateSettingsGroup(titleText, parentView, order)
 	header.TextSize = 10
 	header.TextXAlignment = Enum.TextXAlignment.Left
 	header.LayoutOrder = 1
-	card = Instance.new("Frame", container)
+	local card = Instance.new("Frame", container)
 	card.Size = UDim2.new(1, 0, 0, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = Theme.CardHover
 	card.LayoutOrder = 2
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-	cardGradient = Instance.new("UIGradient", card)
+	local cardGradient = Instance.new("UIGradient", card)
 	cardGradient.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Theme.CardHover),
 		ColorSequenceKeypoint.new(1, Theme.Card)
 	})
 	cardGradient.Rotation = 45
-	cardLayout = Instance.new("UIListLayout", card)
+	local cardLayout = Instance.new("UIListLayout", card)
 	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	cardLayout.Padding = UDim.new(0, 0)
 	return card
 end
-function function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	if order > 1 then
-		divider = Instance.new("Frame", groupCard)
+		local divider = Instance.new("Frame", groupCard)
 		divider.Size = UDim2.new(1, -24, 0, 1)
 		divider.Position = UDim2.new(0, 12, 0, 0)
 		divider.BackgroundColor3 = Theme.Stroke
@@ -2605,36 +2622,36 @@ function function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, ord
 		divider.BorderSizePixel = 0
 		divider.LayoutOrder = (order - 1) * 2
 	end
-	row = Instance.new("Frame", groupCard)
+	local row = Instance.new("Frame", groupCard)
 	row.Size = UDim2.new(1, 0, 0, IsMobile and 56 or 60)
 	row.BackgroundTransparency = 1
 	row.LayoutOrder = (order * 2) - 1
-	rowPad = Instance.new("UIPadding", row)
+	local rowPad = Instance.new("UIPadding", row)
 	rowPad.PaddingLeft = UDim.new(0, 12)
 	rowPad.PaddingRight = UDim.new(0, 12)
 	rowPad.PaddingTop = UDim.new(0, 8)
 	rowPad.PaddingBottom = UDim.new(0, 8)
-	iconContainer = Instance.new("Frame", row)
+	local iconContainer = Instance.new("Frame", row)
 	iconContainer.Size = UDim2.new(0, 32, 0, 32)
 	iconContainer.Position = UDim2.new(0, 0, 0.5, -16)
 	iconContainer.BackgroundColor3 = Theme.Accent
 	iconContainer.BackgroundTransparency = 0.85
 	Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
-	iconImg = Instance.new("ImageLabel", iconContainer)
+	local iconImg = Instance.new("ImageLabel", iconContainer)
 	iconImg.Size = UDim2.new(0, 18, 0, 18)
 	iconImg.Position = UDim2.new(0.5, -9, 0.5, -9)
 	iconImg.BackgroundTransparency = 1
 	iconImg.Image = iconAsset or "rbxassetid://10709782497"
 	iconImg.ImageColor3 = Theme.Accent
-	textContainer = Instance.new("Frame", row)
+	local textContainer = Instance.new("Frame", row)
 	textContainer.Size = UDim2.new(1, -165, 1, 0)
 	textContainer.Position = UDim2.new(0, 42, 0, 0)
 	textContainer.BackgroundTransparency = 1
-	tLay = Instance.new("UIListLayout", textContainer)
+	local tLay = Instance.new("UIListLayout", textContainer)
 	tLay.SortOrder = Enum.SortOrder.LayoutOrder
 	tLay.Padding = UDim.new(0, 2)
 	tLay.VerticalAlignment = Enum.VerticalAlignment.Center
-	t = Instance.new("TextLabel", textContainer)
+	local t = Instance.new("TextLabel", textContainer)
 	t.Size = UDim2.new(1, 0, 0, 16)
 	t.BackgroundTransparency = 1
 	t.Text = title
@@ -2643,7 +2660,7 @@ function function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, ord
 	t.TextSize = 12
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.LayoutOrder = 1
-	d = Instance.new("TextLabel", textContainer)
+	local d = Instance.new("TextLabel", textContainer)
 	d.Size = UDim2.new(1, 0, 0, 14)
 	d.BackgroundTransparency = 1
 	d.Text = desc
@@ -2653,30 +2670,30 @@ function function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, ord
 	d.TextXAlignment = Enum.TextXAlignment.Left
 	d.LayoutOrder = 2
 	d.TextWrapped = true
-	rightContainer = Instance.new("Frame", row)
+	local rightContainer = Instance.new("Frame", row)
 	rightContainer.Size = UDim2.new(0, 110, 1, 0)
 	rightContainer.Position = UDim2.new(1, -110, 0, 0)
 	rightContainer.BackgroundTransparency = 1
 	return row, rightContainer
 end
-function function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
-	row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-	toggleBtn = Instance.new("TextButton", rightContainer)
+function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
+	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local toggleBtn = Instance.new("TextButton", rightContainer)
 	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
 	toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
 	toggleBtn.BackgroundColor3 = defaultValue and Theme.Accent or Theme.BackgroundMain
 	toggleBtn.Text = ""
 	toggleBtn.AutoButtonColor = false
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
-	toggleStroke = Instance.new("UIStroke", toggleBtn)
+	local toggleStroke = Instance.new("UIStroke", toggleBtn)
 	toggleStroke.Color = defaultValue and Theme.Accent or Theme.Stroke
 	toggleStroke.Thickness = 1
-	circle = Instance.new("Frame", toggleBtn)
+	local circle = Instance.new("Frame", toggleBtn)
 	circle.Size = UDim2.new(0, 16, 0, 16)
 	circle.Position = defaultValue and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
 	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-	state = defaultValue
+	local state = defaultValue
 	_VH_RegConn(toggleBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		state = not state
@@ -2692,9 +2709,9 @@ function function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, 
 		if type(callback) == "function" then task.spawn(callback, state) end
 	end)))
 end
-function function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
-	row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
-	btn = Instance.new("TextButton", rightContainer)
+function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
+	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local btn = Instance.new("TextButton", rightContainer)
 	btn.Size = UDim2.new(0, 95, 0, 26)
 	btn.Position = UDim2.new(1, -95, 0.5, -13)
 	btn.BackgroundColor3 = Theme.BackgroundMain
@@ -2705,11 +2722,11 @@ function function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, 
 	btn.TextSize = 11
 	btn.AutoButtonColor = false
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-	btnStroke = Instance.new("UIStroke", btn)
+	local btnStroke = Instance.new("UIStroke", btn)
 	btnStroke.Color = isDestructive and Theme.Error or Theme.Stroke
 	btnStroke.Thickness = 1
-	hoverColor = isDestructive and Color3.fromRGB(55, 25, 25) or Theme.CardHover
-	hoverStroke = isDestructive and Theme.Error or Theme.Accent
+	local hoverColor = isDestructive and Color3.fromRGB(55, 25, 25) or Theme.CardHover
+	local hoverStroke = isDestructive and Theme.Error or Theme.Accent
 	ApplyInteractiveAnimations(btn, Theme.BackgroundMain, hoverColor, Color3.fromRGB(10, 15, 30), btnStroke, btnStroke.Color, hoverStroke)
 	_VH_RegConn(btn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -2717,9 +2734,9 @@ function function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, 
 	end)))
 	return btn
 end
-function function AnimateRefreshButton(button, state)
+function AnimateRefreshButton(button, state)
 	if not button or not button.Parent then return end
-	scaleObj = button:FindFirstChild("VeloxRefreshScale")
+	local scaleObj = button:FindFirstChild("VeloxRefreshScale")
 	if not scaleObj then
 		scaleObj = Instance.new("UIScale")
 		scaleObj.Name = "VeloxRefreshScale"
@@ -2744,7 +2761,7 @@ function function AnimateRefreshButton(button, state)
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	end
 end
-function function BuildSettings()
+function BuildSettings()
 prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
 KeybindButton = Instance.new("TextButton", kbRightContainer)
@@ -2808,17 +2825,17 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		end
 	end))
 end)))
-function function ApplyAntiAFK()
+function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	player = Players.LocalPlayer
-	GC = getconnections or get_signal_cons
+	local player = Players.LocalPlayer
+	local GC = getconnections or get_signal_cons
 	if type(GC) == "function" then
 		table.clear(AntiAFKDisabledConnections)
-		ok, connections = pcall(function() return GC(player.Idled) end)
+		local ok, connections = pcall(function() return GC(player.Idled) end)
 		if ok and type(connections) == "table" then
 			for _, connection in pairs(connections) do
 				if connection.Disable then
-					disabled = pcall(function() connection:Disable() end)
+					local disabled = pcall(function() connection:Disable() end)
 					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
 				end
 			end
@@ -2828,7 +2845,7 @@ function function ApplyAntiAFK()
 		AntiAFKConnection = player.Idled:Connect(function()
 			if isDestroying then return end
 			pcall(function()
-				virtualUser = Services.VirtualUser
+				local virtualUser = Services.VirtualUser
 				if virtualUser then
 					virtualUser:CaptureController()
 					virtualUser:ClickButton2(Vector2.new())
@@ -2843,7 +2860,7 @@ DisableAntiAFK = function()
 		AntiAFKConnection = nil
 	end
 	for i = #AntiAFKDisabledConnections, 1, -1 do
-		connection = AntiAFKDisabledConnections[i]
+		local connection = AntiAFKDisabledConnections[i]
 		if connection and connection.Enable then pcall(function() connection:Enable() end) end
 		AntiAFKDisabledConnections[i] = nil
 	end
@@ -2897,10 +2914,10 @@ scalePlus.AutoButtonColor = false
 Instance.new("UICorner", scalePlus).CornerRadius = UDim.new(0, 6)
 scalePlusStroke = Instance.new("UIStroke", scalePlus)
 scalePlusStroke.Color = Theme.Stroke
-function function RefreshScaleLabel()
+function RefreshScaleLabel()
 	scaleLabel.Text = tostring(math.floor(scaleValue * 100 + 0.5)) .. "%"
 end
-function function SetUIScaleFromSetting(nextValue, source)
+function SetUIScaleFromSetting(nextValue, source)
 	scaleValue = math.clamp(math.round((tonumber(nextValue) or 1) * 20) / 20, 0.8, 1.2)
 	SavedData.Settings.UIScale = scaleValue
 	RefreshScaleLabel()
@@ -2923,8 +2940,8 @@ RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog"
 		end
 		AnimateRefreshButton(btn, true)
 		ShowNotification("Refreshing script catalog...", "System")
-		started = false
-		ok = pcall(function()
+		local started = false
+		local ok = pcall(function()
 			started = PendingTasks.__LoadCatalog(true) == true
 		end)
 		if not ok or (not started and not dbRefreshing) then
@@ -2968,7 +2985,7 @@ SearchRow.Visible = false
 FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
-	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
+	local UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
