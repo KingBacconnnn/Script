@@ -431,6 +431,19 @@ function SaveConfiguration()
 	return true, nil
 end
 
+function _VH_NormalizeRecentList(value)
+	local out = {}
+	if type(value) ~= "table" then return out end
+	local numeric = {}
+	for k, v in pairs(value) do
+		local n = tonumber(k)
+		if n and type(v) == "string" then numeric[#numeric + 1] = { Index = n, Value = v } end
+	end
+	table.sort(numeric, function(a, b) return a.Index < b.Index end)
+	for _, entry in ipairs(numeric) do out[#out + 1] = entry.Value end
+	return out
+end
+
 function LoadConfiguration()
 	ConfigurationLoaded = false
 	ConfigurationLoadError = nil
@@ -521,18 +534,6 @@ function _VH_SetClipboard(text)
 		return ok
 	end
 	return false
-end
-function _VH_NormalizeRecentList(value)
-	local out = {}
-	if type(value) ~= "table" then return out end
-	local numeric = {}
-	for k, v in pairs(value) do
-		local n = tonumber(k)
-		if n and type(v) == "string" then numeric[#numeric + 1] = { Index = n, Value = v } end
-	end
-	table.sort(numeric, function(a, b) return a.Index < b.Index end)
-	for _, entry in ipairs(numeric) do out[#out + 1] = entry.Value end
-	return out
 end
 function _VH_GetRecentRank(scriptId)
 	local list = SavedData.Settings.RecentScripts
