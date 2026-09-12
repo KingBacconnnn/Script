@@ -52,7 +52,6 @@ local read_file = type(readfile) == "function" and readfile or nil
 local is_file = type(isfile) == "function" and isfile or nil
 local del_file = type(delfile) == "function" and delfile or nil
 local CompileFunction
-local CompileFunctionName = nil
 function _VH_TryCompiler(fn, source, chunkName)
 	if type(fn) ~= "function" then return false, nil end
 	local ok, chunk, err = pcall(fn, source, chunkName)
@@ -71,14 +70,12 @@ if type(loadstring) == "function" then
 		if ok then return chunk end
 		return nil, err
 	end
-	CompileFunctionName = "loadstring"
 elseif type(load) == "function" then
 	CompileFunction = function(source, chunkName)
 		local ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
-	CompileFunctionName = "load"
 end
 local Theme = {
 	Accent = Color3.fromRGB(99, 102, 241),
@@ -821,9 +818,6 @@ end
 local function GetNotificationTitle(notifType, message)
 	local info = NotificationTypeInfo[notifType] or NotificationTypeInfo.Info
 
-	-- Keep the headline specific when the existing message already provides
-	-- enough context. This changes presentation only; the original message
-	-- remains the notification description.
 	local lowerMessage = string.lower(message)
 	if notifType == "Success" then
 		if string.find(lowerMessage, "execut") then return "Execution complete" end
@@ -914,7 +908,6 @@ local function StandaloneBannerNotification(msg, notifType)
 		stroke.Thickness = 1.5
 		stroke.Transparency = 0.15
 
-
 		local titleLabel = Instance.new("TextLabel", frame)
 		titleLabel.Size = UDim2.new(1, -24, 0, 18)
 		titleLabel.Position = UDim2.new(0, 12, 0, 8)
@@ -1003,7 +996,6 @@ local function ShowNotification(msg, notifType)
 		stroke.Thickness = 1
 		stroke.Transparency = 0.2
 
-
 		local iconCircle = Instance.new("Frame", box)
 		iconCircle.Size = UDim2.new(0, 22, 0, 22)
 		iconCircle.Position = UDim2.new(0, 10, 0, 9)
@@ -1079,7 +1071,6 @@ local function ShowNotification(msg, notifType)
 		description.TextYAlignment = Enum.TextYAlignment.Top
 		description.ZIndex = 2004
 
-		-- Countdown progress bar: drains from full to empty for the exact notification lifetime.
 		local progressTrack = Instance.new("Frame", box)
 		progressTrack.Name = "TimerProgressTrack"
 		progressTrack.Size = UDim2.new(1, -18, 0, 3)
@@ -1148,7 +1139,6 @@ local function ShowNotification(msg, notifType)
 		})
 		introTween:Play()
 
-		-- Start the timer after the notification is created so the bar matches the auto-dismiss delay.
 		progressTween = TweenService:Create(
 			progressFill,
 			TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
@@ -2062,7 +2052,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 	recommendText.TextXAlignment = Enum.TextXAlignment.Center
 	recommendText.ZIndex = 5
 
-	-- Badge row lives directly under the title, keeping all script badges together.
 	local badgeRow = Instance.new("Frame", titleContainer)
 	badgeRow.Size = UDim2.new(1, 0, 0, 20)
 	badgeRow.BackgroundTransparency = 1
@@ -2111,7 +2100,6 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
-		-- Keep FOR YOU + tag type on a dedicated row directly beneath the title.
 		titleLine.Size = UDim2.new(1, 0, 0, 0)
 		titleLbl.Size = UDim2.new(1, 0, 0, 0)
 		recommendBadge.Visible = isRecommended
@@ -2242,8 +2230,7 @@ local function CreateScriptCard(data, renderParent, registerImmediately, origina
 		end
 	end))
 	card.Parent = renderParent
-	-- Cards are inserted at their final scale during catalog refresh.
-	-- Avoiding one delayed tween per card prevents a mobile frame spike when many items load.
+
 	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
@@ -2268,8 +2255,7 @@ local function BuildCatalogFingerprint(entries)
 	return table.concat(parts, "\30")
 end
 local function ClearCatalogCardsForRefresh()
-	-- Keep the existing cards alive and only hide them while fetching.
-	-- Destroying/recreating the whole UI on mobile causes a large frame spike.
+
 	filterVersion = filterVersion + 1
 	for _, entry in ipairs(RegisteredScripts) do
 		if entry and entry.Instance and entry.Instance.Parent then
@@ -2316,7 +2302,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-		-- A manual refresh restarts the automatic 5-minute interval after it finishes.
+
 		if not isAutoRefresh then
 			LastCatalogRefreshAt = os.clock()
 		end
@@ -2545,12 +2531,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	end)
 	return true
 end
--- Initial catalog load.
+
 PendingTasks.__LoadCatalog()
 
--- Built-in automatic catalog refresh.
--- Runs every CATALOG_REFRESH_INTERVAL (5 minutes) with no user toggle.
--- The existing refresh guard prevents this from overlapping a manual refresh.
 _VH_TrackTask(function()
 	while not isDestroying do
 		local remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - LastCatalogRefreshAt)
@@ -2560,7 +2543,7 @@ _VH_TrackTask(function()
 			if not dbRefreshing then
 				PendingTasks.__LoadCatalog(false, true)
 			else
-				-- Check again shortly after the current refresh finishes.
+
 				task.wait(1)
 			end
 		end
