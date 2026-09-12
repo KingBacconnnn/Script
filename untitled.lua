@@ -944,6 +944,11 @@ local function StandaloneBannerNotification(msg, notifType)
 			Position = UDim2.new(0.5, 0, 0, 18)
 		}):Play()
 
+		local timerTween = TweenService:Create(timerBar, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear), {
+			Size = UDim2.new(0, 0, 0, IsMobile and 2 or 2)
+		})
+		timerTween:Play()
+
 		task.delay(NOTIF_DURATION, function()
 			if not frame or not frame.Parent then return end
 			local outro = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
@@ -1078,6 +1083,20 @@ local function ShowNotification(msg, notifType)
 		description.TextXAlignment = Enum.TextXAlignment.Left
 		description.TextYAlignment = Enum.TextYAlignment.Top
 		description.ZIndex = 2004
+
+		-- Small green timer bar: visually shows how long the notification remains visible.
+		local timerBar = Instance.new("Frame", box)
+		timerBar.Name = "TimerBar"
+		timerBar.AnchorPoint = Vector2.new(0, 1)
+		timerBar.Size = UDim2.new(1, 0, 0, IsMobile and 2 or 2)
+		timerBar.Position = UDim2.new(0, 0, 1, 0)
+		timerBar.BackgroundColor3 = Theme.Success
+		timerBar.BackgroundTransparency = 0.05
+		timerBar.BorderSizePixel = 0
+		timerBar.ZIndex = 2005
+
+		local timerCorner = Instance.new("UICorner", timerBar)
+		timerCorner.CornerRadius = UDim.new(1, 0)
 
 		local closeRequested = false
 		local function Dismiss()
