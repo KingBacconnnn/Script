@@ -345,65 +345,6 @@ function SaveConfiguration()
 		end
 	end)
 end
-function SaveAutoExecuteConfiguration()
-	if type(write_file) ~= "function" then return false end
-	local cleanAutoExecutes = {}
-	for k, v in pairs(SavedData.AutoExecutes) do
-		if type(v) == "table" then
-			cleanAutoExecutes[tostring(k)] = {
-				PlaceId = tonumber(v.PlaceId),
-				GameId = tonumber(v.GameId)
-			}
-		end
-	end
-	local encodedOk, result = pcall(function()
-		return HttpService:JSONEncode(_VH_SanitizeForJSON({ AutoExecutes = cleanAutoExecutes }))
-	end)
-	if not encodedOk then return false end
-
-	-- Keep auto-execute persistence in the same main data file without
-	-- overwriting Favorites, Settings, or the keybind.
-	local existing = {}
-	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
-		pcall(function()
-			local decoded = HttpService:JSONDecode(read_file(DATA_FILE))
-			if type(decoded) == "table" then existing = decoded end
-		end)
-	end
-	existing.AutoExecutes = cleanAutoExecutes
-
-	local fullEncodedOk, fullResult = pcall(function()
-		return HttpService:JSONEncode(_VH_SanitizeForJSON(existing))
-	end)
-	if not fullEncodedOk then return false end
-
-	return pcall(function()
-		write_file(DATA_FILE, fullResult)
-	end)
-end
-
-function LoadAutoExecuteConfiguration()
-	if type(is_file) ~= "function" or type(read_file) ~= "function" or not is_file(DATA_FILE) then
-		return false
-	end
-	local success, result = pcall(function()
-		return HttpService:JSONDecode(read_file(DATA_FILE))
-	end)
-	if not success or type(result) ~= "table" or type(result.AutoExecutes) ~= "table" then
-		return false
-	end
-	table.clear(SavedData.AutoExecutes)
-	for k, v in pairs(result.AutoExecutes) do
-		if type(k) == "string" and type(v) == "table" then
-			SavedData.AutoExecutes[k] = {
-				PlaceId = type(v.PlaceId) == "number" and v.PlaceId or game.PlaceId,
-				GameId = type(v.GameId) == "number" and v.GameId or nil
-			}
-		end
-	end
-	return true
-end
-
 function LoadConfiguration()
 	if type(is_file) == "function" and type(read_file) == "function" and is_file(DATA_FILE) then
 		success, result = pcall(function() return HttpService:JSONDecode(read_file(DATA_FILE)) end)
@@ -2235,7 +2176,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		else
 			SavedData.AutoExecutes[scriptId] = {PlaceId = PlaceId, GameId = GameId}; ShowNotification("Enabled auto-execute for '" .. exactName .. "'.", "Success")
 		end
-		SaveAutoExecuteConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
@@ -2521,7 +2462,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			end)
 			if not AutoExecuteRanThisSession then
 				AutoExecuteRanThisSession = true
-				LoadAutoExecuteConfiguration()
 				autoQueue = {}
 				for _, scriptData in ipairs(validEntries) do
 					auto = SavedData.AutoExecutes[scriptData.Id]
@@ -2547,7 +2487,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 							end
 							task.wait(0.3)
 						end
-						SaveAutoExecuteConfiguration()
 						if #successList > 0 then ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success") end
 						if #failList > 0 then ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning") end
 					end)
