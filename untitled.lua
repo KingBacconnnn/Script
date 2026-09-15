@@ -100,12 +100,6 @@ ActiveTweens = setmetatable({}, { __mode = "k" })
 CatalogGeneration = 0
 LastCatalogRefreshAt = 0
 AutoExecuteRanThisSession = false
-SessionStartedAt = os.time()
-SessionExecutionCount = 0
-SessionExecutionErrors = 0
-LastExecutedScriptName = "None"
-SessionCatalogBuilds = 0
-SessionCatalogUpdates = 0
 InteractiveElements = setmetatable({}, { __mode = "k" })
 isDestroying = false
 isMinimized = false
@@ -280,7 +274,7 @@ SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1, SafeMode = false, AccentPreset = "Indigo", RefreshKeybind = "F6", SearchKeybind = "F7", RecentScripts = {}, ExperimentalProfiles = {} }
+	Settings = { AntiAFK = false, UIScale = 1 }
 }
 SavedConfigExtras = {}
 ConfigurationLoaded = false
@@ -385,13 +379,7 @@ function _VH_BuildConfigurationData()
 	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
 	cleanData.Settings = {
 		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = _VH_ClampScale(SavedData.Settings.UIScale),
-		SafeMode = SavedData.Settings.SafeMode == true,
-		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
-		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
-		SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7"),
-		RecentScripts = _VH_SanitizeForJSON(SavedData.Settings.RecentScripts or {}) or {},
-		ExperimentalProfiles = _VH_SanitizeForJSON(SavedData.Settings.ExperimentalProfiles or {}) or {}
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	}
 	for k, v in pairs(SavedData.Favorites) do
 		if v then cleanData.Favorites[tostring(k)] = true end
@@ -437,27 +425,7 @@ function SaveConfiguration()
 	return true, nil
 end
 
-local function _VH_ClampScale(value)
-	value = tonumber(value) or 1
-	if value < 0.8 then return 0.8 end
-	if value > 1.2 then return 1.2 end
-	return value
-end
-
-local function _VH_NormalizeRecentList(value)
-	local out = {}
-	if type(value) ~= "table" then return out end
-	local numeric = {}
-	for k, v in pairs(value) do
-		local n = tonumber(k)
-		if n and type(v) == "string" then numeric[#numeric + 1] = { Index = n, Value = v } end
-	end
-	table.sort(numeric, function(a, b) return a.Index < b.Index end)
-	for _, entry in ipairs(numeric) do out[#out + 1] = entry.Value end
-	return out
-end
-
-local function LoadConfiguration()
+function LoadConfiguration()
 	ConfigurationLoaded = false
 	ConfigurationLoadError = nil
 	if type(read_file) ~= "function" then
@@ -485,174 +453,39 @@ local function LoadConfiguration()
 		return false, ConfigurationLoadError
 	end
 	SavedConfigExtras = {}
-	local safePairs = pairs
-	local safeType = type
-	local safeToString = tostring
-	local safeToNumber = tonumber
-	if safeType(safePairs) ~= "function" then
-		ConfigurationLoadError = "configuration loader could not access pairs()"
-		ConfigurationLoaded = true
-		return false, ConfigurationLoadError
-	end
-	if safeType(result) ~= "table" then
-		ConfigurationLoadError = "configuration root is not a table"
-		ConfigurationLoaded = true
-		return false, ConfigurationLoadError
-	end
-	for k, v in safePairs(result) do
+	for k, v in pairs(result) do
 		if k ~= "Favorites" and k ~= "AutoExecutes" and k ~= "ToggleKeybind" and k ~= "Settings" then
-			SavedConfigExtras[safeToString(k)] = _VH_SanitizeForJSON(v)
+			SavedConfigExtras[tostring(k)] = _VH_SanitizeForJSON(v)
 		end
 	end
 	SavedData.Favorites = {}
 	SavedData.AutoExecutes = {}
-	if safeType(result.Favorites) == "table" then
-		for k, v in safePairs(result.Favorites) do if v then SavedData.Favorites[safeToString(k)] = true end end
+	if type(result.Favorites) == "table" then
+		for k, v in pairs(result.Favorites) do if v then SavedData.Favorites[tostring(k)] = true end end
 	end
-	if safeType(result.AutoExecutes) == "table" then
-		for k, v in safePairs(result.AutoExecutes) do
-			if safeType(k) == "string" and safeType(v) == "table" then
-				local savedPlace = safeToNumber(v.PlaceId)
-				local savedGame = safeToNumber(v.GameId)
-				local savedName = safeType(v.Name) == "string" and v.Name or nil
+	if type(result.AutoExecutes) == "table" then
+		for k, v in pairs(result.AutoExecutes) do
+			if type(k) == "string" and type(v) == "table" then
+				local savedPlace = tonumber(v.PlaceId)
+				local savedGame = tonumber(v.GameId)
+				local savedName = type(v.Name) == "string" and v.Name or nil
 				if savedPlace or savedGame then
-					SavedData.AutoExecutes[safeToString(k)] = { PlaceId = savedPlace, GameId = savedGame, Name = savedName }
+					SavedData.AutoExecutes[tostring(k)] = { PlaceId = savedPlace, GameId = savedGame, Name = savedName }
 				end
 			end
 		end
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
-	if safeType(result.Settings) == "table" then
-		for k, v in safePairs(result.Settings) do
-			if k == "AntiAFK" or k == "UIScale" or k == "SafeMode" or k == "AccentPreset" or k == "RefreshKeybind" or k == "SearchKeybind" or k == "RecentScripts" or k == "ExperimentalProfiles" then
-				SavedData.Settings[k] = v
-			end
-		end
+	if type(result.Settings) == "table" then
+		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" then SavedData.Settings[k] = v end end
 	end
 	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
-	SavedData.Settings.SafeMode = SavedData.Settings.SafeMode == true
-	SavedData.Settings.UIScale = _VH_ClampScale(SavedData.Settings.UIScale)
-	SavedData.Settings.AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo")
-	SavedData.Settings.RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6")
-	SavedData.Settings.SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7")
-	SavedData.Settings.RecentScripts = _VH_NormalizeRecentList(SavedData.Settings.RecentScripts)
-	if type(SavedData.Settings.ExperimentalProfiles) ~= "table" then SavedData.Settings.ExperimentalProfiles = {} end
+	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	ConfigurationLoaded = true
 	return true, nil
 end
 
-local _configCallOk, _configCallResult = pcall(LoadConfiguration)
-if not _configCallOk then
-	ConfigurationLoadError = "configuration load failed safely"
-	ConfigurationLoaded = true
-end
-
-LastScriptError = nil
-ThemeAccentPresets = {
-	Indigo = Color3.fromRGB(99, 102, 241),
-	Cyan = Color3.fromRGB(34, 211, 238),
-	Emerald = Color3.fromRGB(16, 185, 129),
-	Rose = Color3.fromRGB(244, 63, 94),
-	Amber = Color3.fromRGB(245, 158, 11)
-}
-function _VH_SetClipboard(text)
-	if type(setclipboard) == "function" then
-		local ok = pcall(function() setclipboard(tostring(text)) end)
-		return ok
-	end
-	if type(toclipboard) == "function" then
-		local ok = pcall(function() toclipboard(tostring(text)) end)
-		return ok
-	end
-	return false
-end
-function _VH_GetRecentRank(scriptId)
-	local list = SavedData.Settings.RecentScripts
-	if type(list) ~= "table" then return math.huge end
-	for index, id in ipairs(list) do
-		if tostring(id) == tostring(scriptId) then return index end
-	end
-	return math.huge
-end
-function _VH_MarkScriptUsed(scriptData)
-	if type(scriptData) ~= "table" then return end
-	local id = StableScriptId and StableScriptId(scriptData) or scriptData.Id or scriptData.Name
-	if not id then return end
-	local list = SavedData.Settings.RecentScripts
-	if type(list) ~= "table" then list = {}; SavedData.Settings.RecentScripts = list end
-	for i = #list, 1, -1 do
-		if tostring(list[i]) == tostring(id) then table.remove(list, i) end
-	end
-	table.insert(list, 1, tostring(id))
-	while #list > 12 do table.remove(list) end
-end
-function _VH_ApplyAccentPreset(name, silent)
-	local preset = ThemeAccentPresets[name] and name or "Indigo"
-	local oldAccent = Theme.Accent
-	Theme.Accent = ThemeAccentPresets[preset]
-	SavedData.Settings.AccentPreset = preset
-	if ScreenGui and ScreenGui.Parent then
-		for _, obj in ipairs(ScreenGui:GetDescendants()) do
-			pcall(function()
-				if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-					if obj.TextColor3 == oldAccent then obj.TextColor3 = Theme.Accent end
-				elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-					if obj.ImageColor3 == oldAccent then obj.ImageColor3 = Theme.Accent end
-				elseif obj:IsA("Frame") then
-					if obj.BackgroundColor3 == oldAccent then obj.BackgroundColor3 = Theme.Accent end
-				elseif obj:IsA("UIStroke") then
-					if obj.Color == oldAccent then obj.Color = Theme.Accent end
-				end
-			end)
-		end
-		if TabIndicator then TabIndicator.BackgroundColor3 = Theme.Accent end
-		if AvatarStroke then AvatarStroke.Color = Theme.Accent end
-		if StatusDot and StatusDot.BackgroundColor3 == oldAccent then StatusDot.BackgroundColor3 = Theme.Accent end
-		if SearchStroke and SearchInput and SearchInput:IsFocused() then SearchStroke.Color = Theme.Accent end
-	end
-	if not silent then
-		SaveConfiguration()
-		ShowNotification("Experimental accent set to " .. preset .. ".", "Success")
-	end
-end
-function _VH_FindKeyCode(name)
-	if type(name) ~= "string" then return nil end
-	local key = Enum.KeyCode[name]
-	return key
-end
-function _VH_ApplySafeModeToExecution()
-	return SavedData.Settings.SafeMode == true
-end
-function _VH_SnapshotProfile()
-	return {
-		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = _VH_ClampScale(SavedData.Settings.UIScale),
-		SafeMode = SavedData.Settings.SafeMode == true,
-		AccentPreset = tostring(SavedData.Settings.AccentPreset or "Indigo"),
-		RefreshKeybind = tostring(SavedData.Settings.RefreshKeybind or "F6"),
-		SearchKeybind = tostring(SavedData.Settings.SearchKeybind or "F7"),
-		ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
-	}
-end
-function _VH_ApplyProfile(profile)
-	if type(profile) ~= "table" then return false end
-	SavedData.Settings.AntiAFK = profile.AntiAFK == true
-	SavedData.Settings.UIScale = _VH_ClampScale(profile.UIScale)
-	SavedData.Settings.SafeMode = profile.SafeMode == true
-	SavedData.Settings.AccentPreset = tostring(profile.AccentPreset or "Indigo")
-	SavedData.Settings.RefreshKeybind = tostring(profile.RefreshKeybind or "F6")
-	SavedData.Settings.SearchKeybind = tostring(profile.SearchKeybind or "F7")
-	if type(profile.ToggleKeybind) == "string" and _VH_FindKeyCode(profile.ToggleKeybind) then
-		SavedData.ToggleKeybind = profile.ToggleKeybind
-		ToggleKeybind = _VH_FindKeyCode(profile.ToggleKeybind)
-	end
-	ApplyPanelUIScale(SavedData.Settings.UIScale)
-	if type(_VH_ApplyAccentPreset) == "function" then _VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true) end
-	if SavedData.Settings.AntiAFK then ApplyAntiAFK() else DisableAntiAFK() end
-	if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
-	SaveConfiguration()
-	return true
-end
+LoadConfiguration()
 
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
@@ -953,7 +786,7 @@ PanelGroup.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 PanelUIScale = Instance.new("UIScale", MainPanel)
-PanelUIScale.Scale = _VH_ClampScale(SavedData.Settings.UIScale)
+PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 function ApplyPanelUIScale(scaleValue)
 	nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
 	SavedData.Settings.UIScale = nextScale
@@ -1717,7 +1550,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.3 EXPERIMENTAL | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.3 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -1754,12 +1587,7 @@ task.spawn(function()
 		success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
-			if AvatarFrame and AvatarFrame.Parent then
-				AvatarFrame.Image = content
-				if ProfileRefs and ProfileRefs.HeroAvatar and ProfileRefs.HeroAvatar.Parent then
-					ProfileRefs.HeroAvatar.Image = content
-				end
-			end
+			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
 			break
 		else
 			task.wait(2)
@@ -1820,9 +1648,6 @@ end
 ChangelogsView = CreateCanvas("Changelogs")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
-ProfileView = CreateCanvas("Profile")
-ProfileView.Position = IsMobile and UDim2.new(0, 16, 0, 108) or UDim2.new(0, 16, 0, 128)
-ProfileView.Size = IsMobile and UDim2.new(1, -32, 1, -116) or UDim2.new(1, -32, 1, -138)
 ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
 ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
@@ -1933,7 +1758,7 @@ SortMode = "Most Relevant"
 SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
-	"Recently Used", "Favorites", "Auto Execute: ON", "Auto Execute: OFF"
+	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
 function UpdateFilter()
 	if isDestroying then return end
@@ -1965,8 +1790,6 @@ function UpdateFilter()
 					filterPass = IsCalendarWeek(scr.LastUpdatedNumber)
 				elseif currentSort == "Updated This Month" then
 					filterPass = IsCalendarMonth(scr.LastUpdatedNumber)
-				elseif currentSort == "Recently Used" then
-					filterPass = _VH_GetRecentRank(scr.Id) < math.huge
 				elseif currentSort == "Favorites" then
 					filterPass = SavedData.Favorites[scr.Id] == true
 				elseif currentSort == "Auto Execute: ON" then
@@ -1990,9 +1813,6 @@ function UpdateFilter()
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
 			elseif currentSort == "Oldest" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber < b.LastUpdatedNumber end
-			elseif currentSort == "Recently Used" then
-				local ar, br = _VH_GetRecentRank(a.Id), _VH_GetRecentRank(b.Id)
-				if ar ~= br then return ar < br end
 			elseif currentSort == "Newest" or currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
 			else
@@ -2102,12 +1922,7 @@ function CreateTab(name, index)
 		TabIndicator.Size = UDim2.new(0, IsMobile and 80 or 100, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, xOffset + 4, 1, -2)})
-		SectionHeaderLabel.Text =
-			(name == "Changelogs") and "Updates"
-			or (name == "Scripts") and "Scripts Catalog"
-			or (name == "Settings") and "Settings Hub"
-			or (name == "Profile") and "Profile & Statistics"
-			or "Velox Hub"
+		SectionHeaderLabel.Text = (name == "Changelogs") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
 			UpdateFilter()
@@ -2115,9 +1930,6 @@ function CreateTab(name, index)
 			_VH_SafeTween(SearchRow, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
 		elseif SearchInput and SearchInput.Parent then
 			pcall(function() SearchInput:ReleaseFocus() end)
-		end
-		if name == "Profile" and type(RefreshProfileStats) == "function" then
-			RefreshProfileStats()
 		end
 		for tName, view in pairs(TabViews) do
 			view.Visible = (tName == name)
@@ -2128,328 +1940,7 @@ function CreateTab(name, index)
 		end
 	end))
 end
-CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3); CreateTab("Profile", 4)
-
-ProfileRefs = {}
-
-local function _VH_CreateProfileCard(parent, height)
-	local frame = Instance.new("Frame", parent)
-	frame.Size = UDim2.new(1, 0, 0, height or 70)
-	frame.BackgroundColor3 = Theme.CardHover
-	frame.BorderSizePixel = 0
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-	local stroke = Instance.new("UIStroke", frame)
-	stroke.Color = Theme.Stroke
-	stroke.Thickness = 1
-	return frame
-end
-
-local profileHero = _VH_CreateProfileCard(ProfileView, IsMobile and 108 or 124)
-profileHero.LayoutOrder = 1
-
-local heroAvatar = Instance.new("ImageLabel", profileHero)
-heroAvatar.Size = UDim2.new(0, IsMobile and 66 or 82, 0, IsMobile and 66 or 82)
-heroAvatar.Position = UDim2.new(0, 14, 0.5, -(IsMobile and 33 or 41))
-heroAvatar.BackgroundColor3 = Theme.BackgroundMain
-heroAvatar.Image = AvatarFrame.Image
-heroAvatar.ScaleType = Enum.ScaleType.Crop
-Instance.new("UICorner", heroAvatar).CornerRadius = UDim.new(0, 12)
-local heroStroke = Instance.new("UIStroke", heroAvatar)
-heroStroke.Color = Theme.Accent
-heroStroke.Thickness = 1.5
-ProfileRefs.HeroAvatar = heroAvatar
-
-local heroContent = Instance.new("Frame", profileHero)
-heroContent.Size = UDim2.new(1, -(IsMobile and 96 or 112), 1, -20)
-heroContent.Position = UDim2.new(0, IsMobile and 92 or 110, 0, 10)
-heroContent.BackgroundTransparency = 1
-local heroLayout = Instance.new("UIListLayout", heroContent)
-heroLayout.SortOrder = Enum.SortOrder.LayoutOrder
-heroLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-heroLayout.Padding = UDim.new(0, 4)
-
-local heroName = Instance.new("TextLabel", heroContent)
-heroName.Size = UDim2.new(1, 0, 0, 22)
-heroName.BackgroundTransparency = 1
-heroName.Text = LocalPlayer.DisplayName ~= "" and LocalPlayer.DisplayName or LocalPlayer.Name
-heroName.TextColor3 = Theme.TextPrimary
-heroName.Font = Enum.Font.GothamBold
-heroName.TextSize = IsMobile and 15 or 18
-heroName.TextXAlignment = Enum.TextXAlignment.Left
-heroName.LayoutOrder = 1
-ProfileRefs.HeroName = heroName
-
-local heroUser = Instance.new("TextLabel", heroContent)
-heroUser.Size = UDim2.new(1, 0, 0, 18)
-heroUser.BackgroundTransparency = 1
-heroUser.Text = "@" .. LocalPlayer.Name
-heroUser.TextColor3 = Theme.TextSecondary
-heroUser.Font = Enum.Font.GothamMedium
-heroUser.TextSize = IsMobile and 10 or 11
-heroUser.TextXAlignment = Enum.TextXAlignment.Left
-heroUser.LayoutOrder = 2
-
-local heroMeta = Instance.new("TextLabel", heroContent)
-heroMeta.Size = UDim2.new(1, 0, 0, 30)
-heroMeta.BackgroundTransparency = 1
-heroMeta.TextColor3 = Theme.TextSecondary
-heroMeta.Font = Enum.Font.Gotham
-heroMeta.TextSize = IsMobile and 9 or 10
-heroMeta.TextWrapped = true
-heroMeta.TextXAlignment = Enum.TextXAlignment.Left
-heroMeta.LayoutOrder = 3
-ProfileRefs.HeroMeta = heroMeta
-
-local statsGrid = Instance.new("Frame", ProfileView)
-statsGrid.Size = UDim2.new(1, 0, 0, IsMobile and 152 or 82)
-statsGrid.BackgroundTransparency = 1
-statsGrid.LayoutOrder = 2
-local statsLayout = Instance.new("UIGridLayout", statsGrid)
-statsLayout.CellPadding = UDim2.new(0, 8, 0, 8)
-statsLayout.CellSize = IsMobile and UDim2.new(0.5, -4, 0, 72) or UDim2.new(0.25, -6, 0, 74)
-statsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ProfileRefs.Stats = {}
-
-local function _VH_CreateStatTile(title, value, subtitle, color, order)
-	local tile = Instance.new("Frame", statsGrid)
-	tile.BackgroundColor3 = Theme.Card
-	tile.LayoutOrder = order
-	Instance.new("UICorner", tile).CornerRadius = UDim.new(0, 8)
-	local stripe = Instance.new("Frame", tile)
-	stripe.Size = UDim2.new(0, 3, 1, -18)
-	stripe.Position = UDim2.new(0, 8, 0, 9)
-	stripe.BackgroundColor3 = color or Theme.Accent
-	Instance.new("UICorner", stripe).CornerRadius = UDim.new(1, 0)
-
-	local lbl = Instance.new("TextLabel", tile)
-	lbl.Size = UDim2.new(1, -20, 0, 16)
-	lbl.Position = UDim2.new(0, 16, 0, 8)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = title
-	lbl.TextColor3 = Theme.TextSecondary
-	lbl.Font = Enum.Font.GothamMedium
-	lbl.TextSize = 9
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-	local val = Instance.new("TextLabel", tile)
-	val.Size = UDim2.new(1, -20, 0, 24)
-	val.Position = UDim2.new(0, 16, 0, 24)
-	val.BackgroundTransparency = 1
-	val.Text = tostring(value)
-	val.TextColor3 = Theme.TextPrimary
-	val.Font = Enum.Font.GothamBold
-	val.TextSize = IsMobile and 14 or 16
-	val.TextXAlignment = Enum.TextXAlignment.Left
-
-	local sub = Instance.new("TextLabel", tile)
-	sub.Size = UDim2.new(1, -20, 0, 14)
-	sub.Position = UDim2.new(0, 16, 1, -20)
-	sub.BackgroundTransparency = 1
-	sub.Text = subtitle
-	sub.TextColor3 = Theme.TextSecondary
-	sub.Font = Enum.Font.Gotham
-	sub.TextSize = 8
-	sub.TextXAlignment = Enum.TextXAlignment.Left
-
-	ProfileRefs.Stats[title] = { Value = val, Sub = sub, Stripe = stripe }
-end
-
-_VH_CreateStatTile("Scripts", 0, "in catalog", Theme.Accent, 1)
-_VH_CreateStatTile("Favorites", 0, "saved scripts", Color3.fromRGB(250, 204, 21), 2)
-_VH_CreateStatTile("Recent", 0, "recent scripts", Theme.Info, 3)
-_VH_CreateStatTile("Auto-Execute", 0, "configured", Theme.Success, 4)
-
-local sessionCard = _VH_CreateProfileCard(ProfileView, IsMobile and 142 or 112)
-sessionCard.LayoutOrder = 3
-local sessionTitle = Instance.new("TextLabel", sessionCard)
-sessionTitle.Size = UDim2.new(1, -24, 0, 20)
-sessionTitle.Position = UDim2.new(0, 12, 0, 10)
-sessionTitle.BackgroundTransparency = 1
-sessionTitle.Text = "Session Activity"
-sessionTitle.TextColor3 = Theme.TextPrimary
-sessionTitle.Font = Enum.Font.GothamBold
-sessionTitle.TextSize = 13
-sessionTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local sessionGrid = Instance.new("Frame", sessionCard)
-sessionGrid.Size = UDim2.new(1, -24, 0, IsMobile and 94 or 68)
-sessionGrid.Position = UDim2.new(0, 12, 0, 34)
-sessionGrid.BackgroundTransparency = 1
-local sessionLayout = Instance.new("UIGridLayout", sessionGrid)
-sessionLayout.CellPadding = UDim2.new(0, 8, 0, 6)
-sessionLayout.CellSize = IsMobile and UDim2.new(0.5, -4, 0, 44) or UDim2.new(0.25, -6, 0, 58)
-sessionLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function _VH_CreateMiniStat(title, order)
-	local box = Instance.new("Frame", sessionGrid)
-	box.BackgroundColor3 = Theme.BackgroundMain
-	box.LayoutOrder = order
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 7)
-	local t = Instance.new("TextLabel", box)
-	t.Size = UDim2.new(1, -12, 0, 13)
-	t.Position = UDim2.new(0, 6, 0, 6)
-	t.BackgroundTransparency = 1
-	t.Text = title
-	t.TextColor3 = Theme.TextSecondary
-	t.Font = Enum.Font.GothamMedium
-	t.TextSize = 8
-	t.TextXAlignment = Enum.TextXAlignment.Left
-	local v = Instance.new("TextLabel", box)
-	v.Size = UDim2.new(1, -12, 0, 18)
-	v.Position = UDim2.new(0, 6, 0, 20)
-	v.BackgroundTransparency = 1
-	v.Text = "0"
-	v.TextColor3 = Theme.TextPrimary
-	v.Font = Enum.Font.GothamBold
-	v.TextSize = 11
-	v.TextXAlignment = Enum.TextXAlignment.Left
-	ProfileRefs[title] = v
-end
-_VH_CreateMiniStat("Session", 1)
-_VH_CreateMiniStat("Executions", 2)
-_VH_CreateMiniStat("Errors", 3)
-_VH_CreateMiniStat("Catalog Builds", 4)
-
-local infoCard = _VH_CreateProfileCard(ProfileView, IsMobile and 174 or 144)
-infoCard.LayoutOrder = 4
-local infoTitle = Instance.new("TextLabel", infoCard)
-infoTitle.Size = UDim2.new(1, -24, 0, 20)
-infoTitle.Position = UDim2.new(0, 12, 0, 10)
-infoTitle.BackgroundTransparency = 1
-infoTitle.Text = "Account & Environment"
-infoTitle.TextColor3 = Theme.TextPrimary
-infoTitle.Font = Enum.Font.GothamBold
-infoTitle.TextSize = 13
-infoTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local infoBody = Instance.new("Frame", infoCard)
-infoBody.Size = UDim2.new(1, -24, 1, -38)
-infoBody.Position = UDim2.new(0, 12, 0, 34)
-infoBody.BackgroundTransparency = 1
-local infoGrid = Instance.new("UIGridLayout", infoBody)
-infoGrid.CellPadding = UDim2.new(0, 10, 0, 6)
-infoGrid.CellSize = IsMobile and UDim2.new(0.5, -5, 0, 34) or UDim2.new(0.3333, -7, 0, 34)
-infoGrid.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function _VH_CreateInfoField(label, order)
-	local field = Instance.new("Frame", infoBody)
-	field.BackgroundTransparency = 1
-	field.LayoutOrder = order
-	local l = Instance.new("TextLabel", field)
-	l.Size = UDim2.new(1, 0, 0, 12)
-	l.BackgroundTransparency = 1
-	l.Text = label
-	l.TextColor3 = Theme.TextSecondary
-	l.Font = Enum.Font.GothamMedium
-	l.TextSize = 8
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	local v = Instance.new("TextLabel", field)
-	v.Size = UDim2.new(1, 0, 0, 18)
-	v.Position = UDim2.new(0, 0, 0, 12)
-	v.BackgroundTransparency = 1
-	v.Text = "--"
-	v.TextColor3 = Theme.TextPrimary
-	v.Font = Enum.Font.Gotham
-	v.TextSize = 9
-	v.TextXAlignment = Enum.TextXAlignment.Left
-	v.TextTruncate = Enum.TextTruncate.AtEnd
-	ProfileRefs[label] = v
-end
-_VH_CreateInfoField("User ID", 1)
-_VH_CreateInfoField("Account Age", 2)
-_VH_CreateInfoField("Membership", 3)
-_VH_CreateInfoField("Experience", 4)
-_VH_CreateInfoField("Place ID", 5)
-_VH_CreateInfoField("Executor", 6)
-
-local statusCard = _VH_CreateProfileCard(ProfileView, IsMobile and 108 or 92)
-statusCard.LayoutOrder = 5
-local statusTitle = Instance.new("TextLabel", statusCard)
-statusTitle.Size = UDim2.new(1, -24, 0, 18)
-statusTitle.Position = UDim2.new(0, 12, 0, 9)
-statusTitle.BackgroundTransparency = 1
-statusTitle.Text = "Hub Status"
-statusTitle.TextColor3 = Theme.TextPrimary
-statusTitle.Font = Enum.Font.GothamBold
-statusTitle.TextSize = 13
-statusTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local statusBody = Instance.new("TextLabel", statusCard)
-statusBody.Size = UDim2.new(1, -24, 1, -34)
-statusBody.Position = UDim2.new(0, 12, 0, 31)
-statusBody.BackgroundTransparency = 1
-statusBody.TextColor3 = Theme.TextSecondary
-statusBody.Font = Enum.Font.Gotham
-statusBody.TextSize = 9
-statusBody.TextWrapped = true
-statusBody.TextXAlignment = Enum.TextXAlignment.Left
-statusBody.TextYAlignment = Enum.TextYAlignment.Top
-ProfileRefs.StatusBody = statusBody
-
-local function _VH_FormatDuration(seconds)
-	seconds = math.max(0, math.floor(tonumber(seconds) or 0))
-	local h = math.floor(seconds / 3600)
-	local m = math.floor((seconds % 3600) / 60)
-	local sec = seconds % 60
-	if h > 0 then return string.format("%dh %02dm", h, m) end
-	if m > 0 then return string.format("%dm %02ds", m, sec) end
-	return string.format("%ds", sec)
-end
-
-function RefreshProfileStats()
-	if isDestroying or not ProfileView or not ProfileView.Parent then return end
-	local favoriteCount = 0
-	for _, enabled in pairs(SavedData.Favorites or {}) do
-		if enabled then favoriteCount = favoriteCount + 1 end
-	end
-	local autoCount = 0
-	for _, entry in pairs(SavedData.AutoExecutes or {}) do
-		if type(entry) == "table" then autoCount = autoCount + 1 end
-	end
-	local recentCount = type(SavedData.Settings.RecentScripts) == "table" and #SavedData.Settings.RecentScripts or 0
-
-	if ProfileRefs.Stats.Scripts then ProfileRefs.Stats.Scripts.Value.Text = tostring(#RegisteredScripts) end
-	if ProfileRefs.Stats.Favorites then ProfileRefs.Stats.Favorites.Value.Text = tostring(favoriteCount) end
-	if ProfileRefs.Stats.Recent then ProfileRefs.Stats.Recent.Value.Text = tostring(recentCount) end
-	if ProfileRefs.Stats["Auto-Execute"] then ProfileRefs.Stats["Auto-Execute"].Value.Text = tostring(autoCount) end
-
-	ProfileRefs.Session.Text = _VH_FormatDuration(os.time() - SessionStartedAt)
-	ProfileRefs.Executions.Text = tostring(SessionExecutionCount)
-	ProfileRefs.Errors.Text = tostring(SessionExecutionErrors)
-	ProfileRefs["Catalog Builds"].Text = tostring(SessionCatalogBuilds)
-
-	local membership = tostring(LocalPlayer.MembershipType or "None")
-	membership = string.gsub(membership, "^Enum%.MembershipType%.", "")
-	ProfileRefs["User ID"].Text = tostring(LocalPlayer.UserId)
-	ProfileRefs["Account Age"].Text = tostring(tonumber(LocalPlayer.AccountAge) or 0) .. " days"
-	ProfileRefs.Membership.Text = membership
-	ProfileRefs.Experience.Text = tostring(game.Name or "Unknown")
-	ProfileRefs["Place ID"].Text = tostring(PlaceId)
-	ProfileRefs.Executor.Text =
-		type(identifyexecutor) == "function" and tostring(identifyexecutor())
-		or (type(getexecutorname) == "function" and tostring(getexecutorname()) or "Unknown")
-	ProfileRefs.HeroMeta.Text = "User ID " .. tostring(LocalPlayer.UserId) .. " • Place " .. tostring(PlaceId)
-
-	local fpsText = DiagnosticsLabel and DiagnosticsLabel.Text or "FPS: -- | Ping: --ms"
-	local configText = ConfigurationLoadError and ("Config warning: " .. tostring(ConfigurationLoadError)) or "Configuration: OK"
-	local favoriteText = favoriteCount > 0 and ("Favorites: " .. tostring(favoriteCount)) or "Favorites: none"
-	ProfileRefs.StatusBody.Text = table.concat({
-		"Last executed: " .. tostring(LastExecutedScriptName or "None"),
-		"Session errors: " .. tostring(SessionExecutionErrors) .. " | Catalog updates: " .. tostring(SessionCatalogUpdates),
-		fpsText .. " | " .. favoriteText,
-		configText .. " | Safe Mode: " .. (SavedData.Settings.SafeMode and "ON" or "OFF") .. " | Anti-AFK: " .. (SavedData.Settings.AntiAFK and "ON" or "OFF")
-	}, string.char(10))
-
-	if heroAvatar.Image == "" or heroAvatar.Image == "rbxasset://textures/ui/GuiImagePlaceholder.png" then
-		heroAvatar.Image = AvatarFrame.Image
-	end
-end
-
-_VH_RegConn(RunService.Heartbeat:Connect(function()
-	if isDestroying or currentTab ~= "Profile" then return end
-	RefreshProfileStats()
-end))
-
+CreateTab("Changelogs", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 function CreateParagraph(title, desc, parentView)
 	block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
@@ -2471,17 +1962,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", table.concat({
-	"• Added adjustable UI scaling from 80% to 120% with saved scale settings.",
-	"• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.",
-	"• Improved notification stacking and mobile positioning/sizing.",
-	"• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.",
-	"• Improved automatic catalog refresh handling and refresh button feedback.",
-	"• Updated script recommendation badges and card presentation.",
-	"• Improved recommendation filtering based on the current place/game.",
-	"• Added additional UI and mobile performance refinements.",
-	"• Experimental Lab adds profiles, theme presets, safer execution, custom utility keybinds, import/export, recent scripts, and error reporting.",
-}, string.char(10)), ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -2607,23 +2088,16 @@ function ExecuteSandboxed(code, scriptName)
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
-		SessionExecutionCount = SessionExecutionCount + 1
-		LastExecutedScriptName = tostring(scriptName)
 		_VH_TrackTask(function()
 			local success, runtimeErr = pcall(chunk)
-			if not success then
-				SessionExecutionErrors = SessionExecutionErrors + 1
-				LastScriptError = { Name = tostring(scriptName), Error = tostring(runtimeErr), Time = os.time() }
-				if not isDestroying then
-					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "].", "Error")
-				end
+			if not success and not isDestroying then
+				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 			end
 		end)
 		return true, "Script dispatched successfully"
 	end
 
 	local detail = tostring(compileErr or chunk or "unknown compiler error")
-	LastScriptError = { Name = tostring(scriptName), Error = detail, Time = os.time() }
 	local normalized = string.lower(detail)
 	if string.find(normalized, "out of local", 1, true)
 		or string.find(normalized, "registers", 1, true)
@@ -2854,7 +2328,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		else
 			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter(); if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
+		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -2882,7 +2356,6 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		end
 		RefreshAllCardStates()
 		UpdateFilter()
-		if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 	end)))
 	RegEntryConn(card.Activated:Connect(function()
 		if isDestroying then return end
@@ -2907,8 +2380,6 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
-						_VH_MarkScriptUsed(data)
-						if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
@@ -2917,9 +2388,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				end
 			end)
 		end
-		if SavedData.Settings.SafeMode == true then
-			OpenConfirmDialog(exactName, executeScript)
-		elseif SavedData.AutoExecutes[scriptId] ~= nil then
+		if SavedData.AutoExecutes[scriptId] ~= nil then
 			AttemptActionWithCooldown(executeScript)
 		else
 			OpenConfirmDialog(exactName, executeScript)
@@ -3107,7 +2576,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			nextKeys = {}
 			replacedEntries = {}
 			table.clear(activeNewEntries)
-			SessionCatalogBuilds = SessionCatalogBuilds + 1
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
@@ -3166,8 +2634,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
-			SessionCatalogUpdates = SessionCatalogUpdates + 1
-			if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
@@ -3181,7 +2647,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 					for _, scriptData in ipairs(validEntries) do
 						auto, migrated = _VH_GetSavedAutoExecute(scriptData)
 						if migrated then autoConfigMigrated = true end
-						if type(auto) == "table" and SavedData.Settings.SafeMode ~= true and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
+						if type(auto) == "table" and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
 							autoQueue[#autoQueue + 1] = scriptData
 						end
 					end
@@ -3517,15 +2983,15 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 end)))
 function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	local player = Players.LocalPlayer
-	local GC = getconnections or get_signal_cons
+	player = Players.LocalPlayer
+	GC = getconnections or get_signal_cons
 	if type(GC) == "function" then
 		table.clear(AntiAFKDisabledConnections)
-		local ok, connections = pcall(function() return GC(player.Idled) end)
+		ok, connections = pcall(function() return GC(player.Idled) end)
 		if ok and type(connections) == "table" then
 			for _, connection in pairs(connections) do
 				if connection.Disable then
-					local disabled = pcall(function() connection:Disable() end)
+					disabled = pcall(function() connection:Disable() end)
 					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
 				end
 			end
@@ -3535,7 +3001,7 @@ function ApplyAntiAFK()
 		AntiAFKConnection = player.Idled:Connect(function()
 			if isDestroying then return end
 			pcall(function()
-				local virtualUser = Services.VirtualUser
+				virtualUser = Services.VirtualUser
 				if virtualUser then
 					virtualUser:CaptureController()
 					virtualUser:ClickButton2(Vector2.new())
@@ -3550,7 +3016,7 @@ DisableAntiAFK = function()
 		AntiAFKConnection = nil
 	end
 	for i = #AntiAFKDisabledConnections, 1, -1 do
-		local connection = AntiAFKDisabledConnections[i]
+		connection = AntiAFKDisabledConnections[i]
 		if connection and connection.Enable then pcall(function() connection:Enable() end) end
 		AntiAFKDisabledConnections[i] = nil
 	end
@@ -3568,7 +3034,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 end)
 
 scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
-scaleValue = _VH_ClampScale(SavedData.Settings.UIScale)
+scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
 scaleFrame.BackgroundTransparency = 1
@@ -3662,166 +3128,6 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
-
--- Experimental Lab: all new utility features live behind this clearly marked area.
-experimentalGroup = CreateSettingsGroup("Experimental Lab • v2.1", SettingsView, 3)
-CreateToggleSettingInGroup(experimentalGroup, "Safe Mode", "Always confirm script execution and skip saved auto-execution.", "rbxassetid://10734976528", 1, SavedData.Settings.SafeMode, function(val)
-	SavedData.Settings.SafeMode = val
-	SaveConfiguration()
-	ShowNotification(val and "Safe Mode enabled." or "Safe Mode disabled.", val and "Warning" or "Success")
-end)
-
--- Accent presets
-accentRow, accentRight = CreateSettingRowInGroup(experimentalGroup, "Experimental Theme", "Switch accent presets without changing the base theme.", "rbxassetid://10709782497", 2)
-accentFrame = Instance.new("Frame", accentRight)
-accentFrame.Size = UDim2.new(1, 0, 1, 0); accentFrame.BackgroundTransparency = 1
-accentLayout = Instance.new("UIListLayout", accentFrame)
-accentLayout.FillDirection = Enum.FillDirection.Horizontal; accentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right; accentLayout.VerticalAlignment = Enum.VerticalAlignment.Center; accentLayout.Padding = UDim.new(0, 4)
-for _, presetName in ipairs({"Indigo", "Cyan", "Emerald", "Rose", "Amber"}) do
-	local presetBtn = Instance.new("TextButton", accentFrame)
-	presetBtn.Size = UDim2.new(0, IsMobile and 30 or 34, 0, 24)
-	presetBtn.BackgroundColor3 = ThemeAccentPresets[presetName]
-	presetBtn.Text = ""
-	presetBtn.AutoButtonColor = false
-	Instance.new("UICorner", presetBtn).CornerRadius = UDim.new(0, 7)
-	local pStroke = Instance.new("UIStroke", presetBtn); pStroke.Color = Theme.Stroke; pStroke.Thickness = 1
-	presetBtn:SetAttribute("VeloxAccentPreset", presetName)
-	ApplyInteractiveAnimations(presetBtn, presetBtn.BackgroundColor3, presetBtn.BackgroundColor3:Lerp(Color3.new(1,1,1), 0.12), presetBtn.BackgroundColor3:Lerp(Color3.new(0,0,0), 0.15), pStroke, Theme.Stroke, Theme.TextPrimary)
-	_VH_RegConn(presetBtn.Activated:Connect(function() _VH_ApplyAccentPreset(presetName) end))
-end
-
--- Profiles
-profileGroup = CreateSettingsGroup("Config Profiles", SettingsView, 4)
-profileRow, profileRight = CreateSettingRowInGroup(profileGroup, "Profile Slots", "Save or restore your experimental settings quickly.", "rbxassetid://10734976528", 1)
-profileFrame = Instance.new("Frame", profileRight); profileFrame.Size = UDim2.new(1,0,1,0); profileFrame.BackgroundTransparency = 1
-profileLayout = Instance.new("UIListLayout", profileFrame); profileLayout.FillDirection = Enum.FillDirection.Horizontal; profileLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right; profileLayout.VerticalAlignment = Enum.VerticalAlignment.Center; profileLayout.Padding = UDim.new(0,4)
-SavedData.Settings.ExperimentalProfiles = type(SavedData.Settings.ExperimentalProfiles) == "table" and SavedData.Settings.ExperimentalProfiles or {}
-for slot = 1, 3 do
-	local saveBtn = Instance.new("TextButton", profileFrame)
-	saveBtn.Size = UDim2.new(0, 30, 0, 24); saveBtn.BackgroundColor3 = Theme.BackgroundMain; saveBtn.Text = "S"..slot; saveBtn.TextColor3 = Theme.TextPrimary; saveBtn.Font = Enum.Font.GothamBold; saveBtn.TextSize = 9; saveBtn.AutoButtonColor = false
-	Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 6); local ss = Instance.new("UIStroke", saveBtn); ss.Color = Theme.Stroke
-	local loadBtn = Instance.new("TextButton", profileFrame)
-	loadBtn.Size = UDim2.new(0, 30, 0, 24); loadBtn.BackgroundColor3 = Theme.CardHover; loadBtn.Text = "L"..slot; loadBtn.TextColor3 = Theme.TextPrimary; loadBtn.Font = Enum.Font.GothamBold; loadBtn.TextSize = 9; loadBtn.AutoButtonColor = false
-	Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 6); local ls = Instance.new("UIStroke", loadBtn); ls.Color = Theme.Stroke
-	ApplyInteractiveAnimations(saveBtn, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), ss, Theme.Stroke, Theme.Accent)
-	ApplyInteractiveAnimations(loadBtn, Theme.CardHover, Theme.BackgroundSecondary, Color3.fromRGB(10,15,30), ls, Theme.Stroke, Theme.Accent)
-	local slotKey = "Slot" .. tostring(slot)
-	_VH_RegConn(saveBtn.Activated:Connect(function()
-		SavedData.Settings.ExperimentalProfiles[slotKey] = _VH_SnapshotProfile()
-		SaveConfiguration()
-		ShowNotification("Saved profile " .. tostring(slot) .. ".", "Success")
-	end))
-	_VH_RegConn(loadBtn.Activated:Connect(function()
-		local profile = SavedData.Settings.ExperimentalProfiles[slotKey]
-		if type(profile) ~= "table" then ShowNotification("Profile " .. tostring(slot) .. " is empty.", "Warning"); return end
-		if _VH_ApplyProfile(profile) then ShowNotification("Loaded profile " .. tostring(slot) .. ".", "Success") end
-	end))
-end
-
--- Utility keybinds: refresh and focus search.
-keyGroup = CreateSettingsGroup("Utility Keybinds", SettingsView, 5)
-refreshKeyRow, refreshKeyRight = CreateSettingRowInGroup(keyGroup, "Refresh Catalog Key", "Press the button, then press a keyboard key.", "rbxassetid://10734976528", 1)
-RefreshKeyButton = Instance.new("TextButton", refreshKeyRight); RefreshKeyButton.Size = UDim2.new(0, 95, 0, 26); RefreshKeyButton.Position = UDim2.new(1,-95,0.5,-13); RefreshKeyButton.BackgroundColor3 = Theme.BackgroundMain; RefreshKeyButton.BackgroundTransparency = .4; RefreshKeyButton.Text = SavedData.Settings.RefreshKeybind; RefreshKeyButton.TextColor3 = Theme.TextPrimary; RefreshKeyButton.Font = Enum.Font.GothamMedium; RefreshKeyButton.TextSize = 11; RefreshKeyButton.AutoButtonColor = false
-Instance.new("UICorner", RefreshKeyButton).CornerRadius = UDim.new(0,6); RefreshKeyStroke = Instance.new("UIStroke", RefreshKeyButton); RefreshKeyStroke.Color = Theme.Stroke
-ApplyInteractiveAnimations(RefreshKeyButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), RefreshKeyStroke, Theme.Stroke, Theme.Accent)
-searchKeyRow, searchKeyRight = CreateSettingRowInGroup(keyGroup, "Focus Search Key", "Quickly focus the script search box.", "rbxassetid://10734976528", 2)
-SearchKeyButton = Instance.new("TextButton", searchKeyRight); SearchKeyButton.Size = UDim2.new(0, 95, 0, 26); SearchKeyButton.Position = UDim2.new(1,-95,0.5,-13); SearchKeyButton.BackgroundColor3 = Theme.BackgroundMain; SearchKeyButton.BackgroundTransparency = .4; SearchKeyButton.Text = SavedData.Settings.SearchKeybind; SearchKeyButton.TextColor3 = Theme.TextPrimary; SearchKeyButton.Font = Enum.Font.GothamMedium; SearchKeyButton.TextSize = 11; SearchKeyButton.AutoButtonColor = false
-Instance.new("UICorner", SearchKeyButton).CornerRadius = UDim.new(0,6); SearchKeyStroke = Instance.new("UIStroke", SearchKeyButton); SearchKeyStroke.Color = Theme.Stroke
-ApplyInteractiveAnimations(SearchKeyButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), SearchKeyStroke, Theme.Stroke, Theme.Accent)
-function BindExperimentalKeyButton(button, settingName, fallback)
-	local listening = false
-	_VH_RegConn(button.Activated:Connect(function()
-		if listening or isDestroying then return end
-		listening = true; button.Text = "Press Key..."
-		local conn
-		conn = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-			if input.KeyCode == Enum.KeyCode.Escape then
-				listening = false; button.Text = tostring(SavedData.Settings[settingName] or fallback); _VH_UnregConn(conn); return
-			end
-			if input.KeyCode ~= Enum.KeyCode.Unknown then
-				SavedData.Settings[settingName] = input.KeyCode.Name
-				button.Text = input.KeyCode.Name
-				SaveConfiguration()
-				if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
-				listening = false; _VH_UnregConn(conn)
-				ShowNotification("Updated " .. settingName .. " to " .. input.KeyCode.Name .. ".", "Success")
-			end
-		end))
-	end))
-end
-BindExperimentalKeyButton(RefreshKeyButton, "RefreshKeybind", "F6")
-BindExperimentalKeyButton(SearchKeyButton, "SearchKeybind", "F7")
-
--- Import/export with clipboard support.
-ioGroup = CreateSettingsGroup("Configuration Tools", SettingsView, 6)
-ioRow, ioRight = CreateSettingRowInGroup(ioGroup, "Import / Export", "Export JSON or paste JSON into the field and import it.", "rbxassetid://10734976528", 1)
-ioFrame = Instance.new("Frame", ioRight); ioFrame.Size = UDim2.new(1,0,1,0); ioFrame.BackgroundTransparency = 1
-ioExport = Instance.new("TextButton", ioFrame); ioExport.Size = UDim2.new(0,48,0,24); ioExport.Position = UDim2.new(0,0,0.5,-12); ioExport.BackgroundColor3 = Theme.BackgroundMain; ioExport.Text = "Export"; ioExport.TextColor3 = Theme.TextPrimary; ioExport.Font = Enum.Font.GothamBold; ioExport.TextSize = 9; ioExport.AutoButtonColor = false
-ioImport = Instance.new("TextButton", ioFrame); ioImport.Size = UDim2.new(0,48,0,24); ioImport.Position = UDim2.new(1,-48,0.5,-12); ioImport.BackgroundColor3 = Theme.CardHover; ioImport.Text = "Import"; ioImport.TextColor3 = Theme.TextPrimary; ioImport.Font = Enum.Font.GothamBold; ioImport.TextSize = 9; ioImport.AutoButtonColor = false
-Instance.new("UICorner", ioExport).CornerRadius = UDim.new(0,6); Instance.new("UICorner", ioImport).CornerRadius = UDim.new(0,6)
-ioExportStroke=Instance.new("UIStroke",ioExport); ioExportStroke.Color=Theme.Stroke; ioImportStroke=Instance.new("UIStroke",ioImport); ioImportStroke.Color=Theme.Stroke
-ApplyInteractiveAnimations(ioExport, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10,15,30), ioExportStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(ioImport, Theme.CardHover, Theme.BackgroundSecondary, Color3.fromRGB(10,15,30), ioImportStroke, Theme.Stroke, Theme.Accent)
-local exportBox = Instance.new("TextBox", SettingsView); exportBox.Size = UDim2.new(1,0,0,90); exportBox.BackgroundColor3 = Theme.BackgroundMain; exportBox.TextColor3 = Theme.TextSecondary; exportBox.PlaceholderText = "Configuration JSON appears here / paste JSON here to import..."; exportBox.PlaceholderColor3 = Theme.TextSecondary; exportBox.Text = ""; exportBox.ClearTextOnFocus=false; exportBox.MultiLine=true; exportBox.TextWrapped=true; exportBox.TextXAlignment=Enum.TextXAlignment.Left; exportBox.TextYAlignment=Enum.TextYAlignment.Top; exportBox.Font=Enum.Font.Code; exportBox.TextSize=10; exportBox.LayoutOrder=7; exportBox.ClipsDescendants=true
-Instance.new("UICorner",exportBox).CornerRadius=UDim.new(0,8); exportStroke=Instance.new("UIStroke",exportBox); exportStroke.Color=Theme.Stroke
-local exportPad=Instance.new("UIPadding",exportBox); exportPad.PaddingLeft=UDim.new(0,8); exportPad.PaddingRight=UDim.new(0,8); exportPad.PaddingTop=UDim.new(0,8); exportPad.PaddingBottom=UDim.new(0,8)
-_VH_RegConn(ioExport.Activated:Connect(function()
-	local ok, encoded = pcall(function() return HttpService:JSONEncode(_VH_BuildConfigurationData()) end)
-	if not ok or not encoded then ShowNotification("Could not encode configuration.", "Error"); return end
-	exportBox.Text = encoded
-	local copied = _VH_SetClipboard(encoded)
-	ShowNotification(copied and "Configuration exported and copied to clipboard." or "Configuration exported to the text box.", "Success")
-end))
-_VH_RegConn(ioImport.Activated:Connect(function()
-	local raw = exportBox.Text
-	if type(raw) ~= "string" or string.gsub(raw, "%s+", "") == "" then ShowNotification("Paste configuration JSON first.", "Warning"); return end
-	local ok, result = pcall(function() return HttpService:JSONDecode(raw) end)
-	if not ok or type(result) ~= "table" then ShowNotification("Configuration JSON is invalid.", "Error"); return end
-	if type(result.Favorites)=="table" then SavedData.Favorites=result.Favorites end
-	if type(result.AutoExecutes)=="table" then SavedData.AutoExecutes=result.AutoExecutes end
-	if type(result.ToggleKeybind)=="string" then SavedData.ToggleKeybind=result.ToggleKeybind; if _VH_FindKeyCode(result.ToggleKeybind) then ToggleKeybind=_VH_FindKeyCode(result.ToggleKeybind); BindToggleKey(ToggleKeybind) end end
-	if type(result.Settings)=="table" then
-		SavedData.Settings.AntiAFK=result.Settings.AntiAFK==true
-		SavedData.Settings.UIScale=_VH_ClampScale(result.Settings.UIScale)
-		SavedData.Settings.SafeMode=result.Settings.SafeMode==true
-		SavedData.Settings.AccentPreset=tostring(result.Settings.AccentPreset or "Indigo")
-		SavedData.Settings.RefreshKeybind=tostring(result.Settings.RefreshKeybind or "F6")
-		SavedData.Settings.SearchKeybind=tostring(result.Settings.SearchKeybind or "F7")
-		SavedData.Settings.RecentScripts=_VH_NormalizeRecentList(result.Settings.RecentScripts)
-		SavedData.Settings.ExperimentalProfiles=type(result.Settings.ExperimentalProfiles)=="table" and result.Settings.ExperimentalProfiles or {}
-	end
-	if SavedData.Settings.AntiAFK then ApplyAntiAFK() else DisableAntiAFK() end
-	ApplyPanelUIScale(SavedData.Settings.UIScale)
-	_VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true)
-	if type(_VH_RebindExperimentalHotkeys) == "function" then _VH_RebindExperimentalHotkeys() end
-	SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
-	ShowNotification("Configuration imported successfully.", "Success")
-end))
-
--- Error reporter + recent scripts utility actions.
-reportGroup = CreateSettingsGroup("Diagnostics & Activity", SettingsView, 8)
-CreateButtonSettingInGroup(reportGroup, "Copy Last Error", "Copies the most recent script runtime/compile error when supported.", "rbxassetid://10709790537", "Copy", 1, false, function()
-	if not LastScriptError then ShowNotification("No captured script error yet.", "Info"); return end
-	local text = table.concat({
-	"VeloxHub Experimental Error Report",
-	"Script: " .. tostring(LastScriptError.Name),
-	"Time: " .. os.date("!%Y-%m-%d %H:%M:%S", tonumber(LastScriptError.Time) or os.time()) .. " UTC",
-	"Error: " .. tostring(LastScriptError.Error),
-}, string.char(10))
-	local copied = _VH_SetClipboard(text)
-	ShowNotification(copied and "Last error copied to clipboard." or "Clipboard API unavailable; see the notification details.", copied and "Success" or "Warning")
-	if not copied then ShowNotification(tostring(LastScriptError.Error), "Error") end
-end)
-CreateButtonSettingInGroup(reportGroup, "Clear Recent History", "Clears the experimental recent-script list used by the Recently Used filter.", "rbxassetid://10734976528", "Clear", 2, true, function()
-	SavedData.Settings.RecentScripts = {}
-	SaveConfiguration()
-	UpdateFilter()
-	ShowNotification("Recent script history cleared.", "Success")
-end)
-
-if SavedData.Settings.AccentPreset then _VH_ApplyAccentPreset(SavedData.Settings.AccentPreset, true) end
-if type(RefreshProfileStats) == "function" then RefreshProfileStats() end
 if SavedData.Settings.AntiAFK then
 	ApplyAntiAFK()
 end
@@ -3835,7 +3141,7 @@ SearchRow.Visible = false
 FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
-	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 9)
+	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
@@ -3848,35 +3154,3 @@ if IsMobile then
 end
 end
 BuildSettings()
-
--- Experimental global utility hotkeys are bound after Settings UI creation.
-ExperimentalKeybindConnections = ExperimentalKeybindConnections or {}
-function _VH_RebindExperimentalHotkeys()
-	for _, conn in pairs(ExperimentalKeybindConnections) do if conn then _VH_UnregConn(conn) end end
-	table.clear(ExperimentalKeybindConnections)
-	local refreshKey = _VH_FindKeyCode(SavedData.Settings.RefreshKeybind or "F6")
-	local searchKey = _VH_FindKeyCode(SavedData.Settings.SearchKeybind or "F7")
-	if refreshKey then
-		ExperimentalKeybindConnections.Refresh = _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if gameProcessed or isDestroying or IsBindingKey then return end
-			if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == refreshKey then
-				if PendingTasks.__LoadCatalog then pcall(function() PendingTasks.__LoadCatalog(true) end) end
-			end
-		end))
-	end
-	if searchKey then
-		ExperimentalKeybindConnections.Search = _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if gameProcessed or isDestroying or IsBindingKey then return end
-			if SearchInput and SearchInput:IsFocused() then return end
-			if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == searchKey then
-				currentTab = "Scripts"
-				for tName, view in pairs(TabViews) do view.Visible = (tName == "Scripts") end
-				if TabButtonCache["Scripts"] then TabButtonCache["Scripts"].TextColor3 = Theme.TextPrimary end
-				SearchRow.Visible = true
-				if SearchInput and SearchInput.Parent then SearchInput:CaptureFocus() end
-				UpdateFilter()
-			end
-		end))
-	end
-end
-_VH_RebindExperimentalHotkeys()
