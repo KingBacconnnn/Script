@@ -1334,93 +1334,281 @@ end
 ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
-ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ConfirmOverlay.BackgroundColor3 = Theme.BackgroundMain
 ConfirmOverlay.BackgroundTransparency = 1
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
 ConfirmOverlay.Active = false
+
 ConfirmBox = Instance.new("Frame", ConfirmOverlay)
-ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
-ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+ConfirmBox.Size = IsMobile and UDim2.new(0, 312, 0, 228) or UDim2.new(0, 420, 0, 250)
+ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 18)
 ConfirmBox.AnchorPoint = Vector2.new(0.5, 0.5)
 ConfirmBox.BackgroundColor3 = Theme.BackgroundSecondary
 ConfirmBox.BorderSizePixel = 0
 ConfirmBox.ClipsDescendants = true
 ConfirmBox.ZIndex = 401
-Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 14)
 ConfirmBoxStroke = Instance.new("UIStroke", ConfirmBox)
-ConfirmBoxStroke.Color = Theme.Stroke; ConfirmBoxStroke.Thickness = 1
-ConfirmPadding = Instance.new("UIPadding", ConfirmBox)
-ConfirmPadding.PaddingTop = UDim.new(0, 16); ConfirmPadding.PaddingBottom = UDim.new(0, 16)
-ConfirmPadding.PaddingLeft = UDim.new(0, 20); ConfirmPadding.PaddingRight = UDim.new(0, 20)
-ConfirmLayout = Instance.new("UIListLayout", ConfirmBox)
-ConfirmLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfirmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ConfirmLayout.VerticalAlignment = Enum.VerticalAlignment.Center; ConfirmLayout.Padding = UDim.new(0, 8)
-ConfirmTitle = Instance.new("TextLabel", ConfirmBox)
-ConfirmTitle.Size = UDim2.new(1, 0, 0, 22); ConfirmTitle.BackgroundTransparency = 1
-ConfirmTitle.Text = "Execute Script"; ConfirmTitle.TextColor3 = Theme.TextPrimary
-ConfirmTitle.Font = Enum.Font.GothamBold; ConfirmTitle.TextSize = IsMobile and 14 or 16
-ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Center; ConfirmTitle.LayoutOrder = 1; ConfirmTitle.ZIndex = 402
-ConfirmMessage = Instance.new("TextLabel", ConfirmBox)
-ConfirmMessage.Size = UDim2.new(1, 0, 0, 18); ConfirmMessage.BackgroundTransparency = 1
-ConfirmMessage.Text = "Are you sure you want to run this script?"
-ConfirmMessage.TextColor3 = Theme.TextSecondary; ConfirmMessage.Font = Enum.Font.Gotham
-ConfirmMessage.TextSize = IsMobile and 11 or 12; ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmMessage.TextWrapped = true; ConfirmMessage.LayoutOrder = 2; ConfirmMessage.ZIndex = 402
-ConfirmScriptName = Instance.new("TextLabel", ConfirmBox)
-ConfirmScriptName.Size = UDim2.new(1, 0, 0, 0); ConfirmScriptName.AutomaticSize = Enum.AutomaticSize.Y
-ConfirmScriptName.BackgroundTransparency = 1; ConfirmScriptName.Text = ""
-ConfirmScriptName.TextColor3 = Theme.Accent; ConfirmScriptName.Font = Enum.Font.GothamBold
-ConfirmScriptName.TextSize = IsMobile and 12 or 13; ConfirmScriptName.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmScriptName.TextWrapped = true; ConfirmScriptName.LayoutOrder = 3; ConfirmScriptName.ZIndex = 402
-ConfirmButtonRow = Instance.new("Frame", ConfirmBox)
-ConfirmButtonRow.Size = UDim2.new(1, 0, 0, 34); ConfirmButtonRow.BackgroundTransparency = 1
-ConfirmButtonRow.LayoutOrder = 4; ConfirmButtonRow.ZIndex = 402
+ConfirmBoxStroke.Color = Theme.Stroke
+ConfirmBoxStroke.Thickness = 1
+
+ConfirmAccentBar = Instance.new("Frame", ConfirmBox)
+ConfirmAccentBar.Size = UDim2.new(1, 0, 0, 4)
+ConfirmAccentBar.Position = UDim2.new(0, 0, 0, 0)
+ConfirmAccentBar.BackgroundColor3 = Theme.Execution or Theme.Accent
+ConfirmAccentBar.BorderSizePixel = 0
+ConfirmAccentBar.ZIndex = 402
+
+ConfirmGlow = Instance.new("Frame", ConfirmBox)
+ConfirmGlow.Size = UDim2.new(1, 0, 0, 78)
+ConfirmGlow.Position = UDim2.new(0, 0, 0, 0)
+ConfirmGlow.BackgroundColor3 = Theme.Accent
+ConfirmGlow.BackgroundTransparency = 0.94
+ConfirmGlow.BorderSizePixel = 0
+ConfirmGlow.ZIndex = 401
+
+ConfirmMainPadding = Instance.new("UIPadding", ConfirmBox)
+ConfirmMainPadding.PaddingTop = UDim.new(0, 18)
+ConfirmMainPadding.PaddingBottom = UDim.new(0, 16)
+ConfirmMainPadding.PaddingLeft = UDim.new(0, IsMobile and 16 or 20)
+ConfirmMainPadding.PaddingRight = UDim.new(0, IsMobile and 16 or 20)
+
+ConfirmContent = Instance.new("Frame", ConfirmBox)
+ConfirmContent.Size = UDim2.new(1, 0, 1, 0)
+ConfirmContent.BackgroundTransparency = 1
+ConfirmContent.ZIndex = 403
+
+ConfirmContentLayout = Instance.new("UIListLayout", ConfirmContent)
+ConfirmContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ConfirmContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ConfirmContentLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+ConfirmContentLayout.Padding = UDim.new(0, 8)
+
+ConfirmHeaderRow = Instance.new("Frame", ConfirmContent)
+ConfirmHeaderRow.Size = UDim2.new(1, 0, 0, IsMobile and 40 or 44)
+ConfirmHeaderRow.BackgroundTransparency = 1
+ConfirmHeaderRow.LayoutOrder = 1
+ConfirmHeaderRow.ZIndex = 404
+
+ConfirmIconHolder = Instance.new("Frame", ConfirmHeaderRow)
+ConfirmIconHolder.Size = UDim2.new(0, IsMobile and 36 or 40, 0, IsMobile and 36 or 40)
+ConfirmIconHolder.Position = UDim2.new(0, 0, 0.5, 0)
+ConfirmIconHolder.AnchorPoint = Vector2.new(0, 0.5)
+ConfirmIconHolder.BackgroundColor3 = Theme.Accent
+ConfirmIconHolder.BackgroundTransparency = 0.86
+ConfirmIconHolder.BorderSizePixel = 0
+ConfirmIconHolder.ZIndex = 405
+Instance.new("UICorner", ConfirmIconHolder).CornerRadius = UDim.new(1, 0)
+ConfirmIconStroke = Instance.new("UIStroke", ConfirmIconHolder)
+ConfirmIconStroke.Color = Theme.Accent
+ConfirmIconStroke.Transparency = 0.35
+ConfirmIconStroke.Thickness = 1
+
+ConfirmIcon = Instance.new("TextLabel", ConfirmIconHolder)
+ConfirmIcon.Size = UDim2.new(1, 0, 1, 0)
+ConfirmIcon.BackgroundTransparency = 1
+ConfirmIcon.Text = "▶"
+ConfirmIcon.TextColor3 = Theme.Accent
+ConfirmIcon.Font = Enum.Font.GothamBold
+ConfirmIcon.TextSize = IsMobile and 14 or 16
+ConfirmIcon.ZIndex = 406
+
+ConfirmTitleGroup = Instance.new("Frame", ConfirmHeaderRow)
+ConfirmTitleGroup.Size = UDim2.new(1, -(IsMobile and 48 or 54), 1, 0)
+ConfirmTitleGroup.Position = UDim2.new(0, IsMobile and 46 or 52, 0, 0)
+ConfirmTitleGroup.BackgroundTransparency = 1
+ConfirmTitleGroup.ZIndex = 405
+
+ConfirmTitle = Instance.new("TextLabel", ConfirmTitleGroup)
+ConfirmTitle.Size = UDim2.new(1, 0, 0, IsMobile and 20 or 22)
+ConfirmTitle.Position = UDim2.new(0, 0, 0, 1)
+ConfirmTitle.BackgroundTransparency = 1
+ConfirmTitle.Text = "Execute Script"
+ConfirmTitle.TextColor3 = Theme.TextPrimary
+ConfirmTitle.Font = Enum.Font.GothamBold
+ConfirmTitle.TextSize = IsMobile and 14 or 16
+ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Left
+ConfirmTitle.ZIndex = 406
+
+ConfirmSubtitle = Instance.new("TextLabel", ConfirmTitleGroup)
+ConfirmSubtitle.Size = UDim2.new(1, 0, 0, IsMobile and 16 or 18)
+ConfirmSubtitle.Position = UDim2.new(0, 0, 0, IsMobile and 21 or 23)
+ConfirmSubtitle.BackgroundTransparency = 1
+ConfirmSubtitle.Text = "Review this action before running it"
+ConfirmSubtitle.TextColor3 = Theme.TextSecondary
+ConfirmSubtitle.Font = Enum.Font.Gotham
+ConfirmSubtitle.TextSize = IsMobile and 10 or 11
+ConfirmSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+ConfirmSubtitle.ZIndex = 406
+
+ConfirmReviewCard = Instance.new("Frame", ConfirmContent)
+ConfirmReviewCard.Size = UDim2.new(1, 0, 0, IsMobile and 64 or 70)
+ConfirmReviewCard.BackgroundColor3 = Theme.Card
+ConfirmReviewCard.BorderSizePixel = 0
+ConfirmReviewCard.LayoutOrder = 2
+ConfirmReviewCard.ZIndex = 404
+Instance.new("UICorner", ConfirmReviewCard).CornerRadius = UDim.new(0, 9)
+ConfirmReviewStroke = Instance.new("UIStroke", ConfirmReviewCard)
+ConfirmReviewStroke.Color = Theme.Stroke
+ConfirmReviewStroke.Thickness = 1
+
+ConfirmReviewDot = Instance.new("Frame", ConfirmReviewCard)
+ConfirmReviewDot.Size = UDim2.new(0, 8, 0, 8)
+ConfirmReviewDot.Position = UDim2.new(0, 12, 0.5, 0)
+ConfirmReviewDot.AnchorPoint = Vector2.new(0, 0.5)
+ConfirmReviewDot.BackgroundColor3 = Theme.Success
+ConfirmReviewDot.BorderSizePixel = 0
+ConfirmReviewDot.ZIndex = 405
+Instance.new("UICorner", ConfirmReviewDot).CornerRadius = UDim.new(1, 0)
+
+ConfirmReviewLabel = Instance.new("TextLabel", ConfirmReviewCard)
+ConfirmReviewLabel.Size = UDim2.new(1, -34, 0, 16)
+ConfirmReviewLabel.Position = UDim2.new(0, 28, 0, 10)
+ConfirmReviewLabel.BackgroundTransparency = 1
+ConfirmReviewLabel.Text = "SCRIPT READY"
+ConfirmReviewLabel.TextColor3 = Theme.TextSecondary
+ConfirmReviewLabel.Font = Enum.Font.GothamBold
+ConfirmReviewLabel.TextSize = IsMobile and 9 or 10
+ConfirmReviewLabel.TextXAlignment = Enum.TextXAlignment.Left
+ConfirmReviewLabel.ZIndex = 405
+
+ConfirmScriptName = Instance.new("TextLabel", ConfirmReviewCard)
+ConfirmScriptName.Size = UDim2.new(1, -34, 0, IsMobile and 24 or 28)
+ConfirmScriptName.Position = UDim2.new(0, 28, 0, IsMobile and 28 or 30)
+ConfirmScriptName.BackgroundTransparency = 1
+ConfirmScriptName.Text = ""
+ConfirmScriptName.TextColor3 = Theme.Accent
+ConfirmScriptName.Font = Enum.Font.GothamBold
+ConfirmScriptName.TextSize = IsMobile and 12 or 13
+ConfirmScriptName.TextXAlignment = Enum.TextXAlignment.Left
+ConfirmScriptName.TextWrapped = true
+ConfirmScriptName.TextTruncate = Enum.TextTruncate.AtEnd
+ConfirmScriptName.ZIndex = 405
+
+ConfirmMessage = Instance.new("TextLabel", ConfirmContent)
+ConfirmMessage.Size = UDim2.new(1, 0, 0, IsMobile and 28 or 30)
+ConfirmMessage.BackgroundTransparency = 1
+ConfirmMessage.Text = "This will execute the selected script in your current session."
+ConfirmMessage.TextColor3 = Theme.TextSecondary
+ConfirmMessage.Font = Enum.Font.Gotham
+ConfirmMessage.TextSize = IsMobile and 10 or 11
+ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Left
+ConfirmMessage.TextWrapped = true
+ConfirmMessage.LayoutOrder = 3
+ConfirmMessage.ZIndex = 404
+
+ConfirmButtonRow = Instance.new("Frame", ConfirmContent)
+ConfirmButtonRow.Size = UDim2.new(1, 0, 0, IsMobile and 36 or 38)
+ConfirmButtonRow.BackgroundTransparency = 1
+ConfirmButtonRow.LayoutOrder = 4
+ConfirmButtonRow.ZIndex = 404
 ConfirmRowLayout = Instance.new("UIListLayout", ConfirmButtonRow)
 ConfirmRowLayout.FillDirection = Enum.FillDirection.Horizontal
 ConfirmRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 ConfirmRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-ConfirmRowLayout.SortOrder = Enum.SortOrder.LayoutOrder; ConfirmRowLayout.Padding = UDim.new(0, 12)
+ConfirmRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ConfirmRowLayout.Padding = UDim.new(0, 10)
+
 ConfirmCancelBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmCancelBtn.Size = UDim2.new(0.5, -6, 1, 0); ConfirmCancelBtn.BackgroundColor3 = Theme.CardHover
-ConfirmCancelBtn.Text = "Cancel"; ConfirmCancelBtn.TextColor3 = Theme.TextPrimary
-ConfirmCancelBtn.Font = Enum.Font.GothamBold; ConfirmCancelBtn.TextSize = IsMobile and 11 or 12
-ConfirmCancelBtn.AutoButtonColor = false; ConfirmCancelBtn.LayoutOrder = 1; ConfirmCancelBtn.ZIndex = 403
-Instance.new("UICorner", ConfirmCancelBtn).CornerRadius = UDim.new(0, 6)
-CancelStroke = Instance.new("UIStroke", ConfirmCancelBtn); CancelStroke.Color = Theme.Stroke
+ConfirmCancelBtn.Size = UDim2.new(0.5, -5, 1, 0)
+ConfirmCancelBtn.BackgroundColor3 = Theme.CardHover
+ConfirmCancelBtn.Text = "Cancel"
+ConfirmCancelBtn.TextColor3 = Theme.TextPrimary
+ConfirmCancelBtn.Font = Enum.Font.GothamBold
+ConfirmCancelBtn.TextSize = IsMobile and 11 or 12
+ConfirmCancelBtn.AutoButtonColor = false
+ConfirmCancelBtn.LayoutOrder = 1
+ConfirmCancelBtn.ZIndex = 405
+Instance.new("UICorner", ConfirmCancelBtn).CornerRadius = UDim.new(0, 7)
+CancelStroke = Instance.new("UIStroke", ConfirmCancelBtn)
+CancelStroke.Color = Theme.Stroke
+CancelStroke.Thickness = 1
+
 ConfirmExecuteBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmExecuteBtn.Size = UDim2.new(0.5, -6, 1, 0); ConfirmExecuteBtn.BackgroundColor3 = Theme.Accent
-ConfirmExecuteBtn.Text = "Execute"; ConfirmExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ConfirmExecuteBtn.Font = Enum.Font.GothamBold; ConfirmExecuteBtn.TextSize = IsMobile and 11 or 12
-ConfirmExecuteBtn.AutoButtonColor = false; ConfirmExecuteBtn.LayoutOrder = 2; ConfirmExecuteBtn.ZIndex = 403
-Instance.new("UICorner", ConfirmExecuteBtn).CornerRadius = UDim.new(0, 6)
-ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Color3.fromRGB(40, 53, 75), Color3.fromRGB(20, 29, 45), CancelStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Accent, Color3.fromRGB(120, 123, 245), Color3.fromRGB(79, 82, 221))
+ConfirmExecuteBtn.Size = UDim2.new(0.5, -5, 1, 0)
+ConfirmExecuteBtn.BackgroundColor3 = Theme.Execution or Theme.Accent
+ConfirmExecuteBtn.Text = "Execute  ›"
+ConfirmExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmExecuteBtn.Font = Enum.Font.GothamBold
+ConfirmExecuteBtn.TextSize = IsMobile and 11 or 12
+ConfirmExecuteBtn.AutoButtonColor = false
+ConfirmExecuteBtn.LayoutOrder = 2
+ConfirmExecuteBtn.ZIndex = 405
+Instance.new("UICorner", ConfirmExecuteBtn).CornerRadius = UDim.new(0, 7)
+ConfirmExecuteStroke = Instance.new("UIStroke", ConfirmExecuteBtn)
+ConfirmExecuteStroke.Color = Theme.Execution or Theme.Accent
+ConfirmExecuteStroke.Transparency = 0.35
+ConfirmExecuteStroke.Thickness = 1
+
+ConfirmShortcutRow = Instance.new("Frame", ConfirmContent)
+ConfirmShortcutRow.Size = UDim2.new(1, 0, 0, IsMobile and 13 or 15)
+ConfirmShortcutRow.BackgroundTransparency = 1
+ConfirmShortcutRow.LayoutOrder = 5
+ConfirmShortcutRow.ZIndex = 404
+
+ConfirmShortcut = Instance.new("TextLabel", ConfirmShortcutRow)
+ConfirmShortcut.Size = UDim2.new(1, 0, 1, 0)
+ConfirmShortcut.BackgroundTransparency = 1
+ConfirmShortcut.Text = IsMobile and "Tap outside to cancel" or "ESC  Cancel    •    ENTER  Execute"
+ConfirmShortcut.TextColor3 = Theme.TextSecondary
+ConfirmShortcut.TextTransparency = 0.2
+ConfirmShortcut.Font = Enum.Font.Gotham
+ConfirmShortcut.TextSize = IsMobile and 9 or 10
+ConfirmShortcut.TextXAlignment = Enum.TextXAlignment.Center
+ConfirmShortcut.ZIndex = 405
+
+ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Theme.BackgroundMain, Theme.TextSecondary, CancelStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Execution or Theme.Accent, Theme.Accent, Theme.BackgroundSecondary, ConfirmExecuteStroke, Theme.Execution or Theme.Accent, Theme.Accent)
+
 isConfirming = false
 pendingExecuteCallback = nil
 function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
-	ConfirmScriptName.Text = scriptName
+	ConfirmScriptName.Text = tostring(scriptName or "Selected script")
 	ConfirmExecuteBtn.Active = true
-	ConfirmExecuteBtn.AutoButtonColor = true
-	ConfirmExecuteBtn.Text = "Execute"
-	ConfirmOverlay.BackgroundTransparency = 0.5
+	ConfirmExecuteBtn.AutoButtonColor = false
+	ConfirmExecuteBtn.Text = "Execute  ›"
+	ConfirmReviewDot.BackgroundColor3 = Theme.Success
+	ConfirmAccentBar.BackgroundColor3 = Theme.Execution or Theme.Accent
+	ConfirmGlow.BackgroundColor3 = Theme.Accent
+	ConfirmIconHolder.BackgroundColor3 = Theme.Accent
+	ConfirmIconStroke.Color = Theme.Accent
+	ConfirmIcon.TextColor3 = Theme.Accent
+	ConfirmExecuteBtn.BackgroundColor3 = Theme.Execution or Theme.Accent
+	ConfirmExecuteStroke.Color = Theme.Execution or Theme.Accent
+	ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 18)
+	ConfirmBox.Size = IsMobile and UDim2.new(0, 312, 0, 228) or UDim2.new(0, 420, 0, 250)
+	ConfirmOverlay.BackgroundTransparency = 1
 	ConfirmOverlay.Visible = true
 	ConfirmOverlay.Active = true
+	_VH_SafeTween(ConfirmOverlay, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.34})
+	_VH_SafeTween(ConfirmBox, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.5, 0)})
 end
 function CloseConfirmDialog(shouldExecute)
 	if not isConfirming then return end
 	ConfirmExecuteBtn.Active = false
-	ConfirmOverlay.BackgroundTransparency = 1
-	ConfirmOverlay.Visible = false
-	ConfirmOverlay.Active = false
 	isConfirming = false
 	local cb = pendingExecuteCallback
 	pendingExecuteCallback = nil
-	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
+	local closeGeneration = CatalogGeneration
+	_VH_SafeTween(ConfirmOverlay, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
+	_VH_SafeTween(ConfirmBox, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0.5, 10)})
+	task.delay(0.13, function()
+		if isDestroying then return end
+		if closeGeneration ~= CatalogGeneration then return end
+		if ConfirmOverlay then
+			ConfirmOverlay.Visible = false
+			ConfirmOverlay.Active = false
+		end
+	end)
+	if shouldExecute and type(cb) == "function" then
+		task.spawn(function()
+			if not isDestroying then cb() end
+		end)
+	end
 end
 _VH_RegConn(ConfirmCancelBtn.Activated:Connect(_VH_CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
 _VH_RegConn(ConfirmExecuteBtn.Activated:Connect(function()
@@ -1431,9 +1619,9 @@ end))
 _VH_RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	if not isConfirming then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		pos = input.Position
-		bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
-		inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
+		local pos = input.Position
+		local bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
+		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
 		if not inside then CloseConfirmDialog(false) end
 	end
 end))
@@ -1459,9 +1647,16 @@ end
 BindToggleKey(ToggleKeybind)
 _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
-		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
-			CloseConfirmDialog(false)
-			return
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			if input.KeyCode == Enum.KeyCode.Escape then
+				CloseConfirmDialog(false)
+				return
+			elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
+				AttemptActionWithCooldown(function()
+					CloseConfirmDialog(true)
+				end)
+				return
+			end
 		end
 	end
 end))
