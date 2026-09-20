@@ -492,6 +492,15 @@ local function makeElementWrapper(actual, index, bucket, info)
             pcall(function() endedConnection:Disconnect() end)
         end)
 
+        if idx == "MenuKeybind" and _windWindow and _windWindow.SetToggleKey then
+            local code = Enum.KeyCode[defaultKey]
+            if code then
+                pcall(function()
+                    _windWindow:SetToggleKey(code)
+                end)
+            end
+        end
+
         return self
     end
 
@@ -656,6 +665,11 @@ function ContainerMethods:AddDropdown(idx, info)
             safeCall(info.Callback, value)
         end,
     })
+    pcall(function()
+        if type(actual.Close) == "function" then
+            actual:Close()
+        end
+    end)
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Dropdown",
         Default = defaultValue,
@@ -711,7 +725,7 @@ function ContainerMethods:AddGroupbox(info)
     local section = self._tab:Section({
         Title = title,
         Box = true,
-        Opened = true,
+        Opened = false,
     })
     local container = {_section = section, _tab = self._tab}
     return setmetatable(container, {__index = ContainerMethods})
@@ -726,7 +740,7 @@ function ContainerMethods:AddTabbox(info)
         local section = self._tab:Section({
             Title = tostring(name or "Section"),
             Box = true,
-            Opened = true,
+            Opened = false,
         })
         local child = {_section = section, _tab = self._tab}
         setmetatable(child, {__index = ContainerMethods})
@@ -778,6 +792,7 @@ function Library:CreateWindow(config)
     function _windowWrapper:AddTab(name)
         local key = string.lower(tostring(name))
         local tabs = {
+            changelog = {Title = "Changelog", Icon = "history", Desc = "Latest updates, fixes, and changes."},
             combat = {Title = "Combat", Icon = "crosshair", Desc = "Aim, targeting, and combat controls."},
             visuals = {Title = "Visuals", Icon = "eye", Desc = "Viewmodel, effects, and visual customization."},
             esp = {Title = "ESP", Icon = "scan", Desc = "Player information and ESP controls."},
@@ -939,6 +954,7 @@ getgenv().Library = Library;
 local Options = Library.Options;
 local Toggles = Library.Toggles;
 getgenv().silent_load = getgenv().silent_load or false;
+getgenv().auto_load_enable = getgenv().auto_load_enable or false;
 local Window = Library:CreateWindow({
     Title = 'VeloxHubRivals',
 });
@@ -1063,19 +1079,34 @@ local thisisforsubspace = {
 };
 
 local Tabs = {
-    Main = Window:AddTab('combat'),
-    visualstab = Window:AddTab('visuals'),
-    esptab = Window:AddTab('esp'),
-    worldtab = Window:AddTab('world'),
-    character_tab = Window:AddTab('character'),
-    optimizations = Window:AddTab('optimizations'),
-    misc_tab = Window:AddTab('misc'),
+    changelog = Window:AddTab('Changelog'),
+    Main = Window:AddTab('Combat'),
+    visualstab = Window:AddTab('Visuals'),
+    esptab = Window:AddTab('Esp'),
+    worldtab = Window:AddTab('World'),
+    character_tab = Window:AddTab('Character'),
+    optimizations = Window:AddTab('Optimizations'),
+    misc_tab = Window:AddTab('Misc'),
 };
+
+
+local changelog_tab = Tabs.changelog
+local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
+changelog_box:AddLabel('Version 2.0.4', true)
+changelog_box:AddLabel('Fixed the World tab build compile issue caused by the previous cleanup.', true)
+changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
+changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
+changelog_box:AddLabel('Groupbox and nested panel arrows now start collapsed instead of expanded.', true)
+
+local changelog_fix_box = changelog_tab:AddRightGroupbox('Fixes')
+changelog_fix_box:AddLabel('Restored all tab builders and removed stale references left by the previous removal pass.', true)
+changelog_fix_box:AddLabel('Kept the existing WindUI compatibility layer and AddDivider support.', true)
+changelog_fix_box:AddLabel('Scripts/Settings are no longer created or initialized anywhere in the UI setup.', true)
 
 pcall(function()
     Tabs.Main._tab:Paragraph({
         Title = "Velox Hub | Rivals",
-        Desc = "A clean, organized interface for combat, visuals, ESP, world, character, performance, and utilities.",
+        Desc = "A clean, organized interface for combat, visuals, ESP, world, character, performance, utilities, and updates.",
         Icon = "crosshair",
     })
 end)
@@ -5378,11 +5409,11 @@ end);
 local function buildLegitTab()
     local legit_tab = Tabs.Main; do
     local aim_tabs = legit_tab:AddLeftTabbox(); do
-        local silentaim_tab = aim_tabs:AddTab('silent aim'); do
+        local silentaim_tab = aim_tabs:AddTab('Silent aim'); do
             local keybind_silent_aim_enable = false;
 
             silentaim_tab:AddToggle('silent_aim_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     keybind_silent_aim_enable = v;
@@ -5392,7 +5423,7 @@ local function buildLegitTab()
                 end
             }):AddKeyPicker('silent_aim_keybind', {
                 Default = '...',
-                Text = 'silent aim',
+                Text = 'Silent aim',
                 NoUI = false,
                 EnableCheck = function()
                     return ELI.silent_aim.enable;
@@ -5404,7 +5435,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddToggle('closest_part_enable', {
-                Text = 'closest part',
+                Text = 'Closest part',
                 Default = false,
                 Callback = function(v)
                     ELI.silent_aim.closest_part = v;
@@ -5412,7 +5443,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddToggle('silent_aim_visualize', {
-                Text = 'visualize',
+                Text = 'Visualize',
                 Default = false,
                 Callback = function(v)
                     ELI.silent_aim.visualize = v;
@@ -5420,7 +5451,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddToggle('show_fov_enable', {
-                Text = 'show fov',
+                Text = 'Show fov',
                 Default = false,
                 Visible = false,
                 Callback = function(v)
@@ -5433,13 +5464,13 @@ local function buildLegitTab()
                     Toggles.show_fill_enable:SetVisible(v);
                 end
             }):AddColorPicker('fov_color', {
-                Title = 'fov color',
+                Title = 'Fov color',
                 Default = Color3.fromRGB(0, 30, 255),
                 Callback = function(v)
                     ELI.silent_aim.fov_color = v;
                 end
             }):AddColorPicker('fov_color2', {
-    Title = 'fov color 2',
+    Title = 'Fov color 2',
     Default = Color3.fromRGB(255, 255, 255),
     Callback = function(v)
         ELI.silent_aim.fov_color2 = v;
@@ -5447,7 +5478,7 @@ local function buildLegitTab()
 });
 
             silentaim_tab:AddToggle('silent_aim_follow_gunpoint', {
-                Text = 'follow gunpoint',
+                Text = 'Follow gunpoint',
                 Default = false,
                 Callback = function(v)
                     ELI.silent_aim.follow_gunpoint = v;
@@ -5455,7 +5486,7 @@ local function buildLegitTab()
             });
 
                         silentaim_tab:AddToggle('silent_aim_follow_target', {
-    Text = 'follow target',
+    Text = 'Follow target',
     Default = false,
     Callback = function(v)
         ELI.silent_aim.follow_target = v;
@@ -5463,7 +5494,7 @@ local function buildLegitTab()
 });
 
             silentaim_tab:AddToggle('show_fill_enable', {
-                Text = 'show fill',
+                Text = 'Show fill',
                 Default = false,
                 Visible = false,
                 Callback = function(v)
@@ -5471,13 +5502,13 @@ local function buildLegitTab()
                     Options.silent_aim_fill_transparency:SetVisible(v);
                 end
             }):AddColorPicker('fill_color_primary', {
-                Title = 'fill color',
+                Title = 'Fill color',
                 Default = Color3.fromRGB(0, 30, 255),
                 Callback = function(v)
                     ELI.silent_aim.fov_fill_color = v;
                 end
             }):AddColorPicker('fill_color_secondary', {
-                Title = 'fill color 2',
+                Title = 'Fill color 2',
                 Default = Color3.fromRGB(255, 255, 255),
                 Callback = function(v)
                     ELI.silent_aim.fov_fill_color2 = v;
@@ -5485,7 +5516,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_fov_radius', {
-                Text = 'radius',
+                Text = 'Radius',
                 Default = 180,
                 Suffix = 'px',
                 Min = 1,
@@ -5498,7 +5529,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_fill_transparency', {
-                Text = 'fill transparency',
+                Text = 'Fill transparency',
                 Default = 0.6,
                 Min = 0,
                 Max = 1,
@@ -5510,7 +5541,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_fov_transparency', {
-                Text = 'fov transparency',
+                Text = 'Fov transparency',
                 Default = 0.2,
                 Min = 0,
                 Max = 1,
@@ -5522,7 +5553,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_fov_thickness', {
-                Text = 'thickness',
+                Text = 'Thickness',
                 Default = 2,
                 Min = 1,
                 Max = 10,
@@ -5534,7 +5565,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_rotation_speed', {
-                Text = 'rotation speed',
+                Text = 'Rotation speed',
                 Default = 90,
                 Min = 0,
                 Max = 360,
@@ -5546,7 +5577,7 @@ local function buildLegitTab()
             });
 
             silentaim_tab:AddSlider('silent_aim_hit_chance', {
-                Text = 'hit chance',
+                Text = 'Hit chance',
                 Default = 100,
                 Min = 1,
                 Max = 100,
@@ -5557,7 +5588,7 @@ local function buildLegitTab()
             });
 
 silentaim_tab:AddSlider('silent_aim_lerp', {
-    Text = 'lerp',
+    Text = 'Lerp',
     Default = 0,
     Min = 0,
     Max = 1,
@@ -5568,11 +5599,11 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
 });
         end;
 
-        local aimbot_tab = aim_tabs:AddTab('aimbot'); do
+        local aimbot_tab = aim_tabs:AddTab('Aimbot'); do
             local keybind_aimbot_enable = false;
 
             aimbot_tab:AddToggle('aimbot_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     keybind_aimbot_enable = v;
@@ -5582,7 +5613,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                 end
             }):AddKeyPicker('aimbot_keybind', {
                 Default = '...',
-                Text = 'aimbot',
+                Text = 'Aimbot',
                 NoUI = false,
                 EnableCheck = function()
                     return ELI.aimbot.enable;
@@ -5594,7 +5625,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddToggle('aimbot_show_fov_enable', {
-                Text = 'show fov',
+                Text = 'Show fov',
                 Default = false,
                 Visible = false,
                 Callback = function(v)
@@ -5607,13 +5638,13 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                     Toggles.aimbot_show_fill_enable:SetVisible(v);
                 end
             }):AddColorPicker('aimbot_fov_color', {
-                Title = 'fov color',
+                Title = 'Fov color',
                 Default = Color3.fromRGB(0, 30, 255),
                 Callback = function(v)
                     ELI.aimbot.fov_color = v;
                 end
             }):AddColorPicker('aimbot_fov_color2', {
-    Title = 'fov color 2',
+    Title = 'Fov color 2',
     Default = Color3.fromRGB(255, 255, 255),
     Callback = function(v)
         ELI.aimbot.fov_color2 = v;
@@ -5621,14 +5652,14 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
 });
 
             aimbot_tab:AddToggle('aimbot_follow_gunpoint', {
-                Text = 'follow gunpoint',
+                Text = 'Follow gunpoint',
                 Default = false,
                 Callback = function(v)
                     ELI.aimbot.follow_gunpoint = v;
                 end
             });
             aimbot_tab:AddToggle('aimbot_follow_target', {
-    Text = 'follow target',
+    Text = 'Follow target',
     Default = false,
     Callback = function(v)
         ELI.aimbot.follow_target = v;
@@ -5636,7 +5667,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
 });
 
             aimbot_tab:AddToggle('aimbot_closest_part', {
-                Text = 'closest part',
+                Text = 'Closest part',
                 Default = false,
                 Callback = function(v)
                     ELI.aimbot.closest_part = v;
@@ -5644,7 +5675,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddToggle('aimbot_show_fill_enable', {
-                Text = 'show fill',
+                Text = 'Show fill',
                 Default = false,
                 Visible = false,
                 Callback = function(v)
@@ -5652,13 +5683,13 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                     Options.aimbot_fill_transparency:SetVisible(v);
                 end
             }):AddColorPicker('aimbot_fill_color_primary', {
-                Title = 'fill color',
+                Title = 'Fill color',
                 Default = Color3.fromRGB(0, 30, 255),
                 Callback = function(v)
                     ELI.aimbot.fov_fill_color = v;
                 end
             }):AddColorPicker('aimbot_fill_color_secondary', {
-                Title = 'fill color 2',
+                Title = 'Fill color 2',
                 Default = Color3.fromRGB(255, 255, 255),
                 Callback = function(v)
                     ELI.aimbot.fov_fill_color2 = v;
@@ -5666,7 +5697,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_fov_radius', {
-                Text = 'radius',
+                Text = 'Radius',
                 Default = 180,
                 Suffix = 'px',
                 Min = 1,
@@ -5679,7 +5710,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_fill_transparency', {
-                Text = 'fill transparency',
+                Text = 'Fill transparency',
                 Default = 0.6,
                 Min = 0,
                 Max = 1,
@@ -5691,7 +5722,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_fov_transparency', {
-                Text = 'fov transparency',
+                Text = 'Fov transparency',
                 Default = 0.2,
                 Min = 0,
                 Max = 1,
@@ -5703,7 +5734,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_fov_thickness', {
-                Text = 'thickness',
+                Text = 'Thickness',
                 Default = 2,
                 Min = 1,
                 Max = 10,
@@ -5715,7 +5746,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_rotation_speed', {
-                Text = 'rotation speed',
+                Text = 'Rotation speed',
                 Default = 90,
                 Min = 0,
                 Max = 360,
@@ -5727,7 +5758,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
             aimbot_tab:AddSlider('aimbot_smoothing', {
-                Text = 'smoothing',
+                Text = 'Smoothing',
                 Suffix = 's',
                 Default = 1,
                 Min = 0,
@@ -5739,7 +5770,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             });
 
  aimbot_tab:AddSlider('aimbot_lerp', {
-    Text = 'lerp',
+    Text = 'Lerp',
     Default = 0,
     Min = 0,
     Max = 1,
@@ -5751,11 +5782,11 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         end;
     end;
 
-    local triggerbot_tab = legit_tab:AddRightGroupbox('triggerbot'); do
+    local triggerbot_tab = legit_tab:AddRightGroupbox('Triggerbot'); do
         local keybind_triggerbot_enable = false;
 
         triggerbot_tab:AddToggle('triggerbot_enable', {
-            Text = 'enable',
+            Text = 'Enable',
             Default = false,
             Callback = function(v)
                 keybind_triggerbot_enable = v;
@@ -5763,7 +5794,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             end
         }):AddKeyPicker('triggerbot_keybind', {
             Default = '...',
-            Text = 'triggerbot',
+            Text = 'Triggerbot',
             NoUI = false,
             EnableCheck = function()
                 return ELI.triggerbot.enable;
@@ -5774,7 +5805,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         triggerbot_tab:AddToggle('triggerbot_team_check', {
-            Text = 'team check',
+            Text = 'Team check',
             Default = false,
             Callback = function(v)
                 ELI.triggerbot.team_check = v;
@@ -5782,7 +5813,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         triggerbot_tab:AddSlider('triggerbot_reaction_time', {
-            Text = 'reaction time',
+            Text = 'Reaction time',
             Default = 0.05,
             Min = 0,
             Max = 2,
@@ -5794,7 +5825,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         triggerbot_tab:AddSlider('triggerbot_shoot_delay', {
-            Text = 'shoot delay',
+            Text = 'Shoot delay',
             Default = 0.1,
             Min = 0,
             Max = 2,
@@ -5806,7 +5837,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         triggerbot_tab:AddSlider('triggerbot_max_distance', {
-            Text = 'max distance',
+            Text = 'Max distance',
             Default = 2500,
             Min = 1,
             Max = 2500,
@@ -5818,9 +5849,9 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
     end;
 
-    local guns_tab = legit_tab:AddRightGroupbox('guns'); do
+    local guns_tab = legit_tab:AddRightGroupbox('Guns'); do
         guns_tab:AddToggle('no_muzzle_flash_enable', {
-            Text = 'no muzzle flash',
+            Text = 'No muzzle flash',
             Default = false,
             Callback = function(v)
                 ELI.guns.no_muzzle_flash = v;
@@ -5828,7 +5859,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         guns_tab:AddToggle('no_spread_enable', {
-            Text = 'no spread',
+            Text = 'No spread',
             Default = false,
             Callback = function(v)
                 ELI.guns.no_spread = v;
@@ -5836,7 +5867,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         guns_tab:AddToggle('force_modifier_enable', {
-            Text = 'force modifier',
+            Text = 'Force modifier',
             Default = false,
             Callback = function(v)
                 ELI.guns.force_modifier_enable = v;
@@ -5867,9 +5898,9 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
     end;
 
-    local targeting_tab = legit_tab:AddLeftGroupbox('targeting'); do
+    local targeting_tab = legit_tab:AddLeftGroupbox('Targeting'); do
         targeting_tab:AddToggle('visible_only_enable', {
-            Text = 'visible only',
+            Text = 'Visible only',
             Default = false,
             Callback = function(v)
                 ELI.targeting.visible_only = v;
@@ -5877,7 +5908,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         });
 
         targeting_tab:AddToggle('auto_shoot_enable', {
-            Text = 'auto shoot',
+            Text = 'Auto shoot',
             Default = false,
             Callback = function(v)
                 ELI.targeting.auto_shoot = v;
@@ -5887,7 +5918,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         local keybind_anti_katana_enable = false;
 
         targeting_tab:AddToggle('anti_katana_enable', {
-            Text = 'anti katana',
+            Text = 'Anti katana',
             Default = false,
             Callback = function(v)
                 keybind_anti_katana_enable = v;
@@ -5895,7 +5926,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             end
         }):AddKeyPicker('anti_katana_keybind', {
             Default = '...',
-            Text = 'anti katana',
+            Text = 'Anti katana',
             NoUI = false,
             EnableCheck = function()
                 return ELI.targeting.anti_katana;
@@ -5908,7 +5939,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
         local keybind_anti_riot_shield_enable = false;
 
         targeting_tab:AddToggle('anti_riot_shield_enable', {
-            Text = 'anti riot shield',
+            Text = 'Anti riot shield',
             Default = false,
             Callback = function(v)
                 keybind_anti_riot_shield_enable = v;
@@ -5916,7 +5947,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             end
         }):AddKeyPicker('anti_riot_shield_keybind', {
             Default = '...',
-            Text = 'anti riot shield',
+            Text = 'Anti riot shield',
             NoUI = false,
             EnableCheck = function()
                 return ELI.silent_aim.riot_shield;
@@ -5930,14 +5961,14 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'},
             Default = 1,
             Multi = false,
-            Text = 'hit part',
+            Text = 'Hit part',
             Callback = function(v)
                 ELI.targeting.part = v;
             end
         });
 
         targeting_tab:AddSlider('max_distance', {
-            Text = 'max distance',
+            Text = 'Max distance',
             Default = 100,
             Min = 100,
             Max = 700,
@@ -6469,12 +6500,12 @@ end
 buildLegitTab()
 
 local function buildRagebotTab()
-    local ragebot_tab = Tabs.Main:AddRightGroupbox('ragebot') do
+    local ragebot_tab = Tabs.Main:AddRightGroupbox('Ragebot') do
 
-    ragebot_tab:AddLabel('warning: ragebot is detected - use at your own risk', true);
+    ragebot_tab:AddLabel('Warning: ragebot is detected - use at your own risk', true);
 
     ragebot_tab:AddToggle('ragebot_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.ragebot.enable = v;
@@ -6487,7 +6518,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddToggle('ragebot_ffa_mode', {
-        Text = 'ffa mode',
+        Text = 'Ffa mode',
         Default = false,
         Callback = function(v)
             ELI.ragebot.ffa_mode = v;
@@ -6495,7 +6526,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddSlider('ragebot_x', {
-        Text = 'x offset',
+        Text = 'X offset',
         Default = 7,
         Min = 1,
         Max = 10,
@@ -6506,7 +6537,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddSlider('ragebot_y', {
-        Text = 'y offset',
+        Text = 'Y offset',
         Default = 7,
         Min = 1,
         Max = 10,
@@ -6517,7 +6548,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddSlider('ragebot_z', {
-        Text = 'z offset',
+        Text = 'Z offset',
         Default = 7,
         Min = 1,
         Max = 10,
@@ -6528,7 +6559,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddToggle('ragebot_prediction', {
-        Text = 'prediction',
+        Text = 'Prediction',
         Default = true,
         Callback = function(v)
             ELI.ragebot.prediction = v;
@@ -6537,7 +6568,7 @@ local function buildRagebotTab()
     });
 
     ragebot_tab:AddSlider('ragebot_prediction_amount', {
-        Text = 'prediction strength',
+        Text = 'Prediction strength',
         Default = 1,
         Min = 0,
         Max = 3,
@@ -6552,10 +6583,10 @@ do
     local opt_tab = Tabs.optimizations;
     local function apply(kind) pcall(function() getgenv().VeloxHubRivals_apply_opt(kind) end) end;
 
-    local boost_box = opt_tab:AddLeftGroupbox('fps boost');
+    local boost_box = opt_tab:AddLeftGroupbox('Fps boost');
 
     boost_box:AddToggle('opt_no_particles', {
-        Text = 'remove particles & effects',
+        Text = 'Remove particles & effects',
         Default = false,
         Callback = function(v)
             ELI.optimizations.no_particles = v;
@@ -6564,7 +6595,7 @@ do
     });
 
     boost_box:AddToggle('opt_no_shadows', {
-        Text = 'disable shadows',
+        Text = 'Disable shadows',
         Default = false,
         Callback = function(v)
             ELI.optimizations.no_shadows = v;
@@ -6573,7 +6604,7 @@ do
     });
 
     boost_box:AddToggle('opt_no_postfx', {
-        Text = 'disable post processing',
+        Text = 'Disable post processing',
         Default = false,
         Callback = function(v)
             ELI.optimizations.no_postfx = v;
@@ -6582,7 +6613,7 @@ do
     });
 
     boost_box:AddToggle('opt_low_quality', {
-        Text = 'low render quality',
+        Text = 'Low render quality',
         Default = false,
         Callback = function(v)
             ELI.optimizations.low_quality = v;
@@ -6591,7 +6622,7 @@ do
     });
 
     boost_box:AddToggle('opt_no_atmosphere', {
-        Text = 'disable atmosphere & clouds',
+        Text = 'Disable atmosphere & clouds',
         Default = false,
         Callback = function(v)
             ELI.optimizations.no_atmosphere = v;
@@ -6600,7 +6631,7 @@ do
     });
 
     boost_box:AddToggle('opt_no_textures', {
-        Text = 'remove textures',
+        Text = 'Remove textures',
         Default = false,
         Callback = function(v)
             ELI.optimizations.no_textures = v;
@@ -6608,7 +6639,7 @@ do
         end
     });
 
-    boost_box:AddButton('quick boost (all)', function()
+    boost_box:AddButton('Quick boost (all)', function()
         Toggles.opt_no_particles:SetValue(true);
         Toggles.opt_no_shadows:SetValue(true);
         Toggles.opt_no_postfx:SetValue(true);
@@ -6617,10 +6648,10 @@ do
         Library:Notify('Applied fps boost', 3);
     end);
 
-    local fr_box = opt_tab:AddRightGroupbox('frame rate');
+    local fr_box = opt_tab:AddRightGroupbox('Frame rate');
 
     fr_box:AddToggle('opt_fps_cap_enable', {
-        Text = 'limit fps',
+        Text = 'Limit fps',
         Default = false,
         Callback = function(v)
             ELI.optimizations.fps_cap_enable = v;
@@ -6632,7 +6663,7 @@ do
     });
 
     fr_box:AddSlider('opt_fps_cap', {
-        Text = 'fps limit',
+        Text = 'Fps limit',
         Default = 60,
         Min = 30,
         Max = 240,
@@ -6643,19 +6674,19 @@ do
         end
     });
 
-    fr_box:AddLabel('this caps fps where setfpscap is supported, on mobile roblox is locked to 60 by the engine, raising this slider will not go past 60, to truly unlock use the fflags injector then fully rejoin', true);
+    fr_box:AddLabel('This caps fps where setfpscap is supported, on mobile roblox is locked to 60 by the engine, raising this slider will not go past 60, to truly unlock use the fflags injector then fully rejoin', true);
 
-    local ff_box = opt_tab:AddRightGroupbox('fflags injector');
+    local ff_box = opt_tab:AddRightGroupbox('Fflags injector');
 
-    ff_box:AddLabel('how to use', false);
-    ff_box:AddLabel('1 tap "inject fps boost fflags"', true);
-    ff_box:AddLabel('2 it applies live if your executor supports it and always saves them to the VeloxHubRivals fflags file', true);
-    ff_box:AddLabel('3 if it only saved, open your executor fastflags editor and import that file (or paste it in)', true);
-    ff_box:AddLabel('4 fully close and rejoin roblox to apply', true);
-    ff_box:AddLabel('this unlocks fps past 60 and forces low graphics for a big fps gain, paste your own flags in the box for custom ones', true);
+    ff_box:AddLabel('How to use', false);
+    ff_box:AddLabel('1 Tap "inject fps boost fflags"', true);
+    ff_box:AddLabel('2 It applies live if your executor supports it and always saves them to the VeloxHubRivals fflags file', true);
+    ff_box:AddLabel('3 If it only saved, open your executor fastflags editor and import that file (or paste it in)', true);
+    ff_box:AddLabel('4 Fully close and rejoin roblox to apply', true);
+    ff_box:AddLabel('This unlocks fps past 60 and forces low graphics for a big fps gain, paste your own flags in the box for custom ones', true);
     ff_box:AddDivider();
 
-    local exec_label = ff_box:AddLabel('detecting your executor', true)
+    local exec_label = ff_box:AddLabel('Detecting your executor', true)
     do
         local name = '';
         local fn = identifyexecutor or getexecutorname;
@@ -6721,22 +6752,22 @@ do
         end;
     end;
 
-    ff_box:AddButton('inject fps boost fflags', function()
+    ff_box:AddButton('Inject fps boost fflags', function()
         do_inject(nil);
     end);
 
     ff_box:AddInput('opt_fflag_custom', {
-        Text = 'custom fflags json',
+        Text = 'Custom fflags json',
         Default = '',
-        Placeholder = 'paste fflags json here',
+        Placeholder = 'Paste fflags json here',
     });
 
-    ff_box:AddButton('inject custom fflags', function()
+    ff_box:AddButton('Inject custom fflags', function()
         local v = Options.opt_fflag_custom and Options.opt_fflag_custom.Value or '';
         do_inject(v);
     end);
 
-    ff_box:AddButton('save preset to file', function()
+    ff_box:AddButton('Save preset to file', function()
         if not writefile then
             Library:Notify('no writefile support', 4);
             return
@@ -6755,7 +6786,7 @@ local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
 
     local viewmodel_thing = visuals_tab:AddLeftTabbox(); do
-        local viewmodel_tab = viewmodel_thing:AddTab('viewmodel'); do
+        local viewmodel_tab = viewmodel_thing:AddTab('Viewmodel'); do
 
             local vm_material_names = getgenv().VeloxHubRivals_materials.names;
 
@@ -6773,7 +6804,7 @@ local function buildVisualsTab()
                         if is_arms then Options[prefix .. '_chams_invisible']:SetVisible(v) end;
                     end;
                 }):AddColorPicker(prefix .. '_chams_color', {
-                    Title = 'color',
+                    Title = 'Color',
                     Default = Color3.fromRGB(255, 255, 255),
                     Callback = function(v)
                         vm[key .. '_chams'].color = v;
@@ -6781,7 +6812,7 @@ local function buildVisualsTab()
                 });
 
                 tab:AddDropdown(prefix .. '_chams_material', {
-                    Text = 'material',
+                    Text = 'Material',
                     Values = vm_material_names,
                     Default = 'Neon',
                     Visible = false,
@@ -6791,7 +6822,7 @@ local function buildVisualsTab()
                 });
 
                 tab:AddSlider(prefix .. '_chams_transparency', {
-                    Text = 'transparency',
+                    Text = 'Transparency',
                     Default = 0, Min = 0, Max = 1, Rounding = 2, Visible = false,
                     Callback = function(v)
                         vm[key .. '_chams'].transparency = v;
@@ -6800,7 +6831,7 @@ local function buildVisualsTab()
 
                 if is_arms then
                     tab:AddToggle(prefix .. '_chams_invisible', {
-                        Text = 'invisible arms',
+                        Text = 'Invisible arms',
                         Default = false,
                         Visible = false,
                         Callback = function(v)
@@ -6818,13 +6849,13 @@ local function buildVisualsTab()
                         Options[prefix .. '_highlight_outline']:SetVisible(v);
                     end;
                 }):AddColorPicker(prefix .. '_highlight_color', {
-                    Title = 'fill color',
+                    Title = 'Fill color',
                     Default = Color3.fromRGB(255, 255, 255),
                     Callback = function(v)
                         vm[key .. '_highlight'].color = v;
                     end;
                 }):AddColorPicker(prefix .. '_highlight_outline_color', {
-                    Title = 'outline color',
+                    Title = 'Outline color',
                     Default = Color3.fromRGB(255, 255, 255),
                     Callback = function(v)
                         vm[key .. '_highlight'].outline_color = v;
@@ -6832,7 +6863,7 @@ local function buildVisualsTab()
                 });
 
                 tab:AddSlider(prefix .. '_highlight_fill', {
-                    Text = 'fill transparency',
+                    Text = 'Fill transparency',
                     Default = 0.5, Min = 0, Max = 1, Rounding = 2, Visible = false,
                     Callback = function(v)
                         vm[key .. '_highlight'].transparency = v;
@@ -6840,7 +6871,7 @@ local function buildVisualsTab()
                 });
 
                 tab:AddSlider(prefix .. '_highlight_outline', {
-                    Text = 'outline transparency',
+                    Text = 'Outline transparency',
                     Default = 0, Min = 0, Max = 1, Rounding = 2, Visible = false,
                     Callback = function(v)
                         vm[key .. '_highlight'].outline_transparency = v;
@@ -6848,14 +6879,14 @@ local function buildVisualsTab()
                 });
             end;
 
-            local weapon_chams_tab = viewmodel_thing:AddTab('weapon');
+            local weapon_chams_tab = viewmodel_thing:AddTab('Weapon');
             build_vm_chams_section(weapon_chams_tab, 'weapon', 'weapon chams', false);
 
-            local arm_chams_tab = viewmodel_thing:AddTab('arms');
+            local arm_chams_tab = viewmodel_thing:AddTab('Arms');
             build_vm_chams_section(arm_chams_tab, 'arm', 'arm chams', true);
 
             viewmodel_tab:AddToggle('viewmodel_offsets', {
-                Text = 'viewmodel override',
+                Text = 'Viewmodel override',
                 Default = false,
                 Callback = function(v)
                     ELI.viewmodel_offsets.enable = v;
@@ -6880,7 +6911,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('viewmodel_offset_x', {
-                Text = 'x',
+                Text = 'X',
                 Default = 0,
                 Min = -5,
                 Max = 5,
@@ -6892,7 +6923,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('viewmodel_offset_y', {
-                Text = 'y',
+                Text = 'Y',
                 Default = 0,
                 Min = -5,
                 Max = 5,
@@ -6904,7 +6935,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('viewmodel_offset_z', {
-                Text = 'z',
+                Text = 'Z',
                 Default = 0,
                 Min = -5,
                 Max = 5,
@@ -6916,7 +6947,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddToggle('bullet_tracers_enable', {
-                Text = 'bullet tracers',
+                Text = 'Bullet tracers',
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.enable = v;
@@ -6931,13 +6962,13 @@ local function buildVisualsTab()
                     Options.bullet_tracers_expand_damper:SetVisible(v and ELI.bullet_tracers.spring_expand);
                 end;
             }):AddColorPicker('bullet_tracers_color_start', {
-                Title = 'color start',
+                Title = 'Color start',
                 Default = Color3.fromRGB(255, 255, 255),
                 Callback = function(v)
                     ELI.bullet_tracers.color_start = v;
                 end;
             }):AddColorPicker('bullet_tracers_color_end', {
-                Title = 'color end',
+                Title = 'Color end',
                 Default = Color3.fromRGB(255, 255, 255),
                 Callback = function(v)
                     ELI.bullet_tracers.color_end = v;
@@ -6945,7 +6976,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddToggle('bullet_tracers_curve', {
-                Text = 'curve around walls',
+                Text = 'Curve around walls',
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.curve_around = v;
@@ -6954,7 +6985,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddToggle('bullet_tracers_through_walls', {
-                Text = 'show through walls',
+                Text = 'Show through walls',
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.through_walls = v;
@@ -6962,7 +6993,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_curve_height', {
-                Text = 'curve height',
+                Text = 'Curve height',
                 Default = 14,
                 Min = 2,
                 Max = 60,
@@ -6977,7 +7008,7 @@ local function buildVisualsTab()
                 Values = {"beam", "lightning", "heartrate", "chain", "glitch", "swirl", "neon", "arrow1", "bullets1", "bullets2", "curve1", "curve2", "curve3", "curve4", "curve5", "curve6", "dna", "dna2", "dna3", "dna4", "dna5", "dna6", "dna7", "glow1", "laser1", "laser2", "laser3", "laser4", "laser5", "laser6", "line1", "line2", "line3", "line4", "line5", "none (solid)", "pattern1", "pattern2", "pattern3", "pattern4", "ray1", "ray2", "ray3"},
                 Default = 2,
                 Multi = false,
-                Text = 'texture',
+                Text = 'Texture',
                 Visible = false,
                 Callback = function(v)
                     ELI.bullet_tracers.texture = v;
@@ -6985,7 +7016,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_speed', {
-                Text = 'speed',
+                Text = 'Speed',
                 Default = 3,
                 Min = 0,
                 Max = 10,
@@ -6997,7 +7028,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_lifetime', {
-                Text = 'lifetime',
+                Text = 'Lifetime',
                 Default = 1.5,
                 Min = 0.10,
                 Max = 5,
@@ -7010,7 +7041,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_position_lerp_speed', {
-                Text = 'position lerp',
+                Text = 'Position lerp',
                 Default = 0,
                 Min = 0,
                 Max = 3,
@@ -7023,7 +7054,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_width0', {
-                Text = 'width start',
+                Text = 'Width start',
                 Default = 0.35,
                 Min = 0,
                 Max = 2,
@@ -7035,7 +7066,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_width1', {
-                Text = 'width end',
+                Text = 'Width end',
                 Default = 0.15,
                 Min = 0,
                 Max = 2,
@@ -7047,7 +7078,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddToggle('bullet_tracers_spring_expand', {
-                Text = 'spring expand',
+                Text = 'Spring expand',
                 Default = false,
                 Visible = false,
                 Callback = function(v)
@@ -7058,7 +7089,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_expand_speed', {
-                Text = 'expand speed',
+                Text = 'Expand speed',
                 Default = 12,
                 Min = 1,
                 Max = 40,
@@ -7070,7 +7101,7 @@ local function buildVisualsTab()
             });
 
             viewmodel_tab:AddSlider('bullet_tracers_expand_damper', {
-                Text = 'expand damper',
+                Text = 'Expand damper',
                 Default = 0.6,
                 Min = 0.1,
                 Max = 1,
@@ -7083,10 +7114,10 @@ local function buildVisualsTab()
 
         end;
 
-local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
+local target_hud_box = visuals_tab:AddLeftGroupbox('Target hud'); do
 
     target_hud_box:AddToggle('target_hud_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.target_hud.enable = v;
@@ -7098,7 +7129,7 @@ local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
         Values = {"silent aim", "aimbot"},
         Default = "",
         Multi = false,
-        Text = 'target method',
+        Text = 'Target method',
         Callback = function(v)
             ELI.target_hud.target_method = v;
         end;
@@ -7108,14 +7139,14 @@ local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
         Values = {"static", "center", "gunpoint", "target"},
         Default = "static",
         Multi = false,
-        Text = 'position',
+        Text = 'Position',
         Callback = function(v)
             ELI.target_hud.position_mode = v;
         end;
     });
 
     target_hud_box:AddSlider('target_hud_offset_x', {
-        Text = 'offset x',
+        Text = 'Offset x',
         Default = 0,
         Min = -500,
         Max = 500,
@@ -7126,7 +7157,7 @@ local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
     });
 
     target_hud_box:AddSlider('target_hud_offset_y', {
-        Text = 'offset y',
+        Text = 'Offset y',
         Default = 0,
         Min = -500,
         Max = 500,
@@ -7137,7 +7168,7 @@ local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
     });
 
     target_hud_box:AddSlider('target_hud_scale', {
-        Text = 'size',
+        Text = 'Size',
         Default = 1,
         Min = 0.5,
         Max = 2.5,
@@ -7149,9 +7180,9 @@ local target_hud_box = visuals_tab:AddLeftGroupbox('target hud'); do
 
 end;
 
-local disable_anims_tab = visuals_tab:AddLeftGroupbox('disable animation'); do
+local disable_anims_tab = visuals_tab:AddLeftGroupbox('Disable animation'); do
     disable_anims_tab:AddToggle('disable_anims_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.disable_anims.enable = v;
@@ -7162,7 +7193,7 @@ local disable_anims_tab = visuals_tab:AddLeftGroupbox('disable animation'); do
         Values = {"bobbing", "landing", "sway", "equip", "inspect", "sliding", "shoot", "impulse", "aim", "sprint", "attack", "charge", "reload", "throw"},
         Default = {},
         Multi = true,
-        Text = 'types',
+        Text = 'Types',
         Callback = function(v)
             local converted = {};
             for k, val in next, v do
@@ -7173,9 +7204,9 @@ local disable_anims_tab = visuals_tab:AddLeftGroupbox('disable animation'); do
     });
 end;
 
-local motion_blur_tab = visuals_tab:AddLeftGroupbox('motion blur'); do
+local motion_blur_tab = visuals_tab:AddLeftGroupbox('Motion blur'); do
     motion_blur_tab:AddToggle('motion_blur_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.motion_blur.enable = v;
@@ -7183,7 +7214,7 @@ local motion_blur_tab = visuals_tab:AddLeftGroupbox('motion blur'); do
     });
 
     motion_blur_tab:AddSlider('motion_blur_intensity', {
-        Text = 'intensity',
+        Text = 'Intensity',
         Default = 0.5,
         Min = 0,
         Max = 1,
@@ -7194,7 +7225,7 @@ local motion_blur_tab = visuals_tab:AddLeftGroupbox('motion blur'); do
     });
 
     motion_blur_tab:AddSlider('motion_blur_sensitivity', {
-        Text = 'sensitivity',
+        Text = 'Sensitivity',
         Default = 1,
         Min = 0.1,
         Max = 3,
@@ -7277,22 +7308,22 @@ do
     end;
     players.PlayerAdded:Connect(hookDeath);
 
-    local death_tab = visuals_tab:AddLeftGroupbox('death effects');
+    local death_tab = visuals_tab:AddLeftGroupbox('Death effects');
     death_tab:AddToggle('death_effects_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.death_effects.enable = v;
         end
     }):AddColorPicker('death_effects_color', {
-        Title = 'color',
+        Title = 'Color',
         Default = Color3.fromRGB(0, 30, 255),
         Callback = function(v)
             ELI.death_effects.color = v;
         end
     });
     death_tab:AddDropdown('death_effects_type', {
-        Text = 'effect',
+        Text = 'Effect',
         Default = 'Explosion',
         Values = { 'Explosion', 'Fire', 'Sparkles', 'Neon Burst' },
         Callback = function(v)
@@ -7300,35 +7331,35 @@ do
         end
     });
 
-    local dmg_tab = visuals_tab:AddRightGroupbox('damage numbers');
+    local dmg_tab = visuals_tab:AddRightGroupbox('Damage numbers');
     dmg_tab:AddToggle('damage_numbers_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.damage_numbers.enable = v;
         end
     }):AddColorPicker('damage_numbers_color1', {
-        Title = 'color 1',
+        Title = 'Color 1',
         Default = Color3.fromRGB(255, 80, 80),
         Callback = function(v)
             ELI.damage_numbers.color1 = v;
         end
     }):AddColorPicker('damage_numbers_color2', {
-        Title = 'color 2',
+        Title = 'Color 2',
         Default = Color3.fromRGB(255, 210, 90),
         Callback = function(v)
             ELI.damage_numbers.color2 = v;
         end
     });
     dmg_tab:AddToggle('damage_numbers_remove_ingame', {
-        Text = 'remove in game damage numbers',
+        Text = 'Remove in game damage numbers',
         Default = false,
         Callback = function(v)
             ELI.damage_numbers.remove_ingame = v;
         end
     });
     dmg_tab:AddDropdown('damage_numbers_color_type', {
-        Text = 'color type',
+        Text = 'Color type',
         Default = 'Gradient',
         Values = { 'Gradient', 'Solid', 'Rainbow' },
         Callback = function(v)
@@ -7336,7 +7367,7 @@ do
         end
     });
     dmg_tab:AddDropdown('damage_numbers_font', {
-        Text = 'font',
+        Text = 'Font',
         Default = 'GothamBold',
         Values = {
             'GothamBold', 'GothamBlack', 'GothamMedium', 'Gotham',
@@ -7353,7 +7384,7 @@ do
         end
     });
     dmg_tab:AddSlider('damage_numbers_text_size', {
-        Text = 'text size',
+        Text = 'Text size',
         Default = 18,
         Min = 10,
         Max = 40,
@@ -7363,7 +7394,7 @@ do
         end
     });
     dmg_tab:AddSlider('damage_numbers_rise', {
-        Text = 'rise',
+        Text = 'Rise',
         Default = 42,
         Min = 0,
         Max = 120,
@@ -7373,7 +7404,7 @@ do
         end
     });
     dmg_tab:AddSlider('damage_numbers_duration', {
-        Text = 'duration',
+        Text = 'Duration',
         Default = 0.8,
         Min = 0.2,
         Max = 3,
@@ -7384,29 +7415,29 @@ do
         end
     });
 
-    local traj_tab = visuals_tab:AddLeftGroupbox('trajectory');
+    local traj_tab = visuals_tab:AddLeftGroupbox('Trajectory');
     traj_tab:AddToggle('trajectory_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.trajectory.enable = v;
         end
     }):AddColorPicker('trajectory_color', {
-        Title = 'color',
+        Title = 'Color',
         Default = Color3.fromRGB(0, 30, 255),
         Callback = function(v)
             ELI.trajectory.color = v;
         end
     });
     traj_tab:AddToggle('trajectory_all_weapons', {
-        Text = 'all weapons',
+        Text = 'All weapons',
         Default = false,
         Callback = function(v)
             ELI.trajectory.all_weapons = v;
         end
     });
     traj_tab:AddSlider('trajectory_speed', {
-        Text = 'throw speed',
+        Text = 'Throw speed',
         Default = 90,
         Min = 20,
         Max = 300,
@@ -7416,7 +7447,7 @@ do
         end
     });
     traj_tab:AddSlider('trajectory_arc_up', {
-        Text = 'arc height',
+        Text = 'Arc height',
         Default = 10,
         Min = 0,
         Max = 60,
@@ -7430,9 +7461,9 @@ end;
 local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
     local base_material_names = { "ForceField", "Neon", "Plastic", "SmoothPlastic", "Wood", "WoodPlanks", "Marble", "Slate" };
 
-    local vmc_main = viewmodel_custom_box:AddTab('viewmodel'); do
+    local vmc_main = viewmodel_custom_box:AddTab('Viewmodel'); do
         vmc_main:AddToggle('vmc_enable', {
-            Text = 'enabled',
+            Text = 'Enabled',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.enable = v;
@@ -7440,9 +7471,9 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
     end;
 
-    local vmc_body = viewmodel_custom_box:AddTab('body'); do
+    local vmc_body = viewmodel_custom_box:AddTab('Body'); do
         vmc_body:AddToggle('vmc_appearance', {
-            Text = 'viewmodel appearance',
+            Text = 'Viewmodel appearance',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.appearance = v;
@@ -7450,7 +7481,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_body:AddToggle('vmc_body_color', {
-            Text = 'color',
+            Text = 'Color',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.body.color_enable = v;
@@ -7463,7 +7494,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_body:AddToggle('vmc_body_material', {
-            Text = 'material',
+            Text = 'Material',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.body.material_enable = v;
@@ -7472,7 +7503,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_body:AddDropdown('vmc_body_material_type', {
-            Text = 'material',
+            Text = 'Material',
             Values = base_material_names,
             Default = 'ForceField',
             Visible = false,
@@ -7482,7 +7513,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_body:AddToggle('vmc_body_disable_clothes', {
-            Text = 'disable clothes',
+            Text = 'Disable clothes',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.body.disable_clothes = v;
@@ -7490,7 +7521,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_body:AddSlider('vmc_body_transparency', {
-            Text = 'transparency',
+            Text = 'Transparency',
             Default = 0,
             Min = 0,
             Max = 100,
@@ -7502,9 +7533,9 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
     end;
 
-    local vmc_item = viewmodel_custom_box:AddTab('item'); do
+    local vmc_item = viewmodel_custom_box:AddTab('Item'); do
         vmc_item:AddToggle('vmc_item_color', {
-            Text = 'color',
+            Text = 'Color',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.item.color_enable = v;
@@ -7517,7 +7548,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_item:AddToggle('vmc_item_material', {
-            Text = 'material',
+            Text = 'Material',
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.item.material_enable = v;
@@ -7526,7 +7557,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_item:AddDropdown('vmc_item_material_type', {
-            Text = 'material',
+            Text = 'Material',
             Values = base_material_names,
             Default = 'ForceField',
             Visible = false,
@@ -7536,7 +7567,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
         });
 
         vmc_item:AddSlider('vmc_item_transparency', {
-            Text = 'transparency',
+            Text = 'Transparency',
             Default = 0,
             Min = 0,
             Max = 100,
@@ -7550,9 +7581,9 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
 end;
 
     local sound_tabs = Tabs.visualstab:AddRightTabbox(); do
-        local custom_hitsounds_tab = sound_tabs:AddTab('hitsounds'); do
+        local custom_hitsounds_tab = sound_tabs:AddTab('Hitsounds'); do
             custom_hitsounds_tab:AddToggle('hitsound_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.custom_hitsounds.enable = v;
@@ -7560,7 +7591,7 @@ end;
             });
 
             custom_hitsounds_tab:AddToggle('disable_default_hitsound_enable', {
-                Text = 'disable ingame hitsound',
+                Text = 'Disable ingame hitsound',
                 Default = false,
                 Callback = function(v)
                     ELI.custom_hitsounds.remove_default_hitsound = v;
@@ -7571,13 +7602,13 @@ end;
                 Values = {"windows xp", "minecraft bow", "neverlose", "steve", "among us", "bonk", "rust", "fatality", "hitmarker", "csgo", "minecraft success bow hit",
                 'gamesense',},
                 Default = "",
-                Text = 'types',
+                Text = 'Types',
                 Callback = function(v)
                     ELI.custom_hitsounds.selected = v;
                 end;
             });
             custom_hitsounds_tab:AddSlider('hitsound_volume', {
-                Text = 'volume',
+                Text = 'Volume',
                 Default = 3,
                 Min = 0,
                 Max = 5,
@@ -7588,7 +7619,7 @@ end;
                 end;
             });
             custom_hitsounds_tab:AddSlider('hitsound_pitch', {
-                Text = 'pitch',
+                Text = 'Pitch',
                 Default = 1,
                 Min = 0.5,
                 Max = 1.5,
@@ -7601,9 +7632,9 @@ end;
         end;
     end;
 
-    local notify_hit_tab = Tabs.visualstab:AddRightGroupbox('hit notify'); do
+    local notify_hit_tab = Tabs.visualstab:AddRightGroupbox('Hit notify'); do
         notify_hit_tab:AddToggle('hit_notify_enable', {
-            Text = 'enable',
+            Text = 'Enable',
             Default = false,
             Callback = function(v)
                 ELI.hit_notify.enable = v;
@@ -7611,7 +7642,7 @@ end;
         });
 
         notify_hit_tab:AddSlider('hit_notify_duration', {
-            Text = 'duration',
+            Text = 'Duration',
             Default = 3,
             Min = 1,
             Max = 5,
@@ -7624,7 +7655,7 @@ end;
         });
 
         notify_hit_tab:AddInput('hit_notify_msg', {
-            Text = 'message',
+            Text = 'Message',
             Default = ELI.hit_notify.msg,
             ClearTextOnFocus = false,
             Callback = function(v)
@@ -7634,12 +7665,12 @@ end;
 
         notify_hit_tab:AddDivider();
 
-        notify_hit_tab:AddLabel('hit_notify_formatting', {
-            Text = "available formats:"
+        notify_hit_tab:AddLabel('Hit_notify_formatting', {
+            Text = "Available formats:"
         });
 
-        notify_hit_tab:AddLabel('hit_notify_formatting', {
-            Text = "{target}, {damage}, {hitpart}",
+        notify_hit_tab:AddLabel('Hit_notify_formatting', {
+            Text = "{Target}, {damage}, {hitpart}",
             DoesWrap = true,
         });
     end;
@@ -7650,9 +7681,9 @@ buildVisualsTab()
 local function buildWorldTab()
     local world_tab = Tabs.worldtab; do
     local world_main_tab = world_tab:AddLeftTabbox(); do
-        local color_correction_tab = world_main_tab:AddTab('color correction'); do
+        local color_correction_tab = world_main_tab:AddTab('Color correction'); do
             color_correction_tab:AddToggle('world_fog', {
-                Text = 'fog',
+                Text = 'Fog',
                 Default = false,
                 Callback = function(v)
                     ELI.world.fog = v;
@@ -7670,7 +7701,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('fog_start', {
-                Text = 'fog start',
+                Text = 'Fog start',
                 Default = 150,
                 Min = 0,
                 Max = 10000,
@@ -7681,7 +7712,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('fog_end', {
-                Text = 'fog end',
+                Text = 'Fog end',
                 Default = 550,
                 Min = 0,
                 Max = 10000,
@@ -7694,7 +7725,7 @@ local function buildWorldTab()
             color_correction_tab:AddDivider();
 
             color_correction_tab:AddToggle('world_ambient', {
-                Text = 'ambient',
+                Text = 'Ambient',
                 Default = false,
                 Callback = function(v)
                     ELI.world.ambient = v;
@@ -7710,7 +7741,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_clock', {
-                Text = 'clock time',
+                Text = 'Clock time',
                 Default = false,
                 Callback = function(v)
                     ELI.world.clock = v;
@@ -7721,7 +7752,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('clock_time', {
-                Text = 'time',
+                Text = 'Time',
                 Default = 14,
                 Min = 0,
                 Max = 24,
@@ -7732,7 +7763,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_brightness', {
-                Text = 'brightness',
+                Text = 'Brightness',
                 Default = false,
                 Callback = function(v)
                     ELI.world.brightness = v;
@@ -7743,7 +7774,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('brightness_level', {
-                Text = 'level',
+                Text = 'Level',
                 Default = 1,
                 Min = 0,
                 Max = 10,
@@ -7754,7 +7785,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_exposure', {
-                Text = 'exposure',
+                Text = 'Exposure',
                 Default = false,
                 Callback = function(v)
                     ELI.world.exposure = v;
@@ -7765,7 +7796,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('exposure_level', {
-                Text = 'compensation',
+                Text = 'Compensation',
                 Default = 0,
                 Min = -10,
                 Max = 10,
@@ -7776,7 +7807,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_color_shift_top', {
-                Text = 'color shift top',
+                Text = 'Color shift top',
                 Default = false,
                 Callback = function(v)
                     ELI.world.color_shift_top = v;
@@ -7792,7 +7823,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_color_shift_bottom', {
-                Text = 'color shift bottom',
+                Text = 'Color shift bottom',
                 Default = false,
                 Callback = function(v)
                     ELI.world.color_shift_bottom = v;
@@ -7810,7 +7841,7 @@ local function buildWorldTab()
             color_correction_tab:AddDivider();
 
             color_correction_tab:AddToggle('world_skybox', {
-                Text = 'skybox',
+                Text = 'Skybox',
                 Default = false,
                 Callback = function(v)
                     ELI.world.skybox = v;
@@ -7822,7 +7853,7 @@ local function buildWorldTab()
                 Values = skybox_changer.elements,
                 Default = 'Deep Space',
                 Multi = false,
-                Text = 'selected',
+                Text = 'Selected',
                 Callback = function(v)
                     ELI.world.skybox_selected = v;
                     skybox_changer:update_skybox();
@@ -7830,7 +7861,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_skybox_rotate', {
-                Text = 'skybox rotator',
+                Text = 'Skybox rotator',
                 Default = false,
                 Callback = function(v)
                     ELI.world.skybox_rotate = v;
@@ -7838,7 +7869,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddSlider('world_skybox_rotate_speed', {
-                Text = 'rotation speed',
+                Text = 'Rotation speed',
                 Default = 1,
                 Min = 0,
                 Max = 100,
@@ -7849,7 +7880,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddDropdown('world_skybox_rotate_direction', {
-                Text = "direction",
+                Text = "Direction",
                 Values = {'Horizontal', 'Vertical', 'Diagonal'},
                 Default = "Horizontal",
                 Callback = function(v)
@@ -7858,7 +7889,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddDropdown('world_skybox_rotate_method', {
-                Text = "method",
+                Text = "Method",
                 Values = {'Spin', 'Wave', 'Alternate'},
                 Default = "Spin",
                 Callback = function(v)
@@ -7869,7 +7900,7 @@ local function buildWorldTab()
             color_correction_tab:AddDivider();
 
             color_correction_tab:AddToggle('world_skybox_remove_sun', {
-                Text = 'remove sun',
+                Text = 'Remove sun',
                 Default = false,
                 Callback = function(v)
                     ELI.world.skybox_remove_sun = v;
@@ -7878,7 +7909,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_skybox_remove_moon', {
-                Text = 'remove moon',
+                Text = 'Remove moon',
                 Default = false,
                 Callback = function(v)
                     ELI.world.skybox_remove_moon = v;
@@ -7887,7 +7918,7 @@ local function buildWorldTab()
             });
 
             color_correction_tab:AddToggle('world_skybox_remove_stars', {
-                Text = 'remove stars',
+                Text = 'Remove stars',
                 Default = false,
                 Callback = function(v)
                     ELI.world.skybox_remove_stars = v;
@@ -7896,9 +7927,9 @@ local function buildWorldTab()
             });
         end;
 
-        local weather_tab = world_tab:AddRightGroupbox('weather'); do
+        local weather_tab = world_tab:AddRightGroupbox('Weather'); do
             weather_tab:AddToggle('weather_enabled', {
-                Text = "enable",
+                Text = "Enable",
                 Default = false,
                 Callback = function(v)
                     ELI.weather.enable = v;
@@ -7911,7 +7942,7 @@ local function buildWorldTab()
             });
 
             weather_tab:AddDropdown('weather_type', {
-                Text = "type",
+                Text = "Type",
                 Values = {'snow', 'rain', 'light rain'},
                 Default = "snow",
                 Callback = function(v)
@@ -7920,7 +7951,7 @@ local function buildWorldTab()
             });
 
             weather_tab:AddSlider('weather_rate', {
-                Text = 'rate',
+                Text = 'Rate',
                 Default = 100,
                 Min = 100,
                 Max = 300,
@@ -7931,9 +7962,9 @@ local function buildWorldTab()
             });
         end;
 
-        local atmosphere_tab = world_main_tab:AddTab('atmosphere'); do
+        local atmosphere_tab = world_main_tab:AddTab('Atmosphere'); do
             atmosphere_tab:AddToggle('world_atmosphere', {
-                Text = 'atmosphere',
+                Text = 'Atmosphere',
                 Default = false,
                 Callback = function(v)
                     ELI.world.atmosphere = v;
@@ -7969,10 +8000,10 @@ local function buildWorldTab()
         end;
     end;
 
-    local removals_tab = world_tab:AddRightGroupbox('world removals'); do
+    local removals_tab = world_tab:AddRightGroupbox('World removals'); do
 
         removals_tab:AddToggle('anti_flashbang_enable', {
-            Text = 'anti flashbang',
+            Text = 'Anti flashbang',
             Default = false,
             Callback = function(v)
                     if v then
@@ -8141,9 +8172,9 @@ local function buildWorldTab()
         table.clear(texture_originals);
     end;
 
-    local textures_tab = world_tab:AddLeftGroupbox('world textures'); do
+    local textures_tab = world_tab:AddLeftGroupbox('World textures'); do
         textures_tab:AddToggle('textures_enable', {
-            Text = 'enable',
+            Text = 'Enable',
             Default = false,
             Callback = function(v)
                 ELI.textures.enable = v;
@@ -8159,7 +8190,7 @@ local function buildWorldTab()
             Values = {'Air', 'Asphalt', 'Basalt', 'Brick', 'Cardboard', 'Carpet', 'Ceramic Tiles', 'Clay Roof Tiles', 'Cobblestone', 'Concrete', 'Corroded Metal', 'Cracked Lava', 'Diamond Plate', 'Fabric', 'Foil', 'Forcefield', 'Glacier', 'Glass', 'Granite', 'Grass', 'Ground', 'Ice', 'Leafy Grass', 'Leather', 'Limestone', 'Marble', 'Metal', 'Minecraft', 'Mud', 'Neon', 'Pavement', 'Pebble', 'Plaster', 'Plastic', 'Rock', 'Roof Shingles', 'Rubber', 'Salt', 'Sand', 'Sandstone', 'Slate', 'Smooth Plastic', 'Snow', 'Water', 'Wood', 'Wood Planks'},
             Default = 'Brick',
             Multi = false,
-            Text = 'material',
+            Text = 'Material',
             Callback = function(v)
                 ELI.textures.material = v;
                 if ELI.textures.enable then
@@ -8168,7 +8199,7 @@ local function buildWorldTab()
             end
         });
 
-        textures_tab:AddLabel('texture color'):AddColorPicker('textures_color', {
+        textures_tab:AddLabel('Texture color'):AddColorPicker('textures_color', {
             Default = Color3.fromRGB(244, 244, 244),
             Callback = function(v)
                 ELI.textures.color = v;
@@ -8179,7 +8210,7 @@ local function buildWorldTab()
         });
 
         textures_tab:AddToggle('textures_apply_to_viewmodel', {
-            Text = 'apply to viewmodel',
+            Text = 'Apply to viewmodel',
             Default = false,
             Callback = function(v)
                 ELI.textures.apply_to_viewmodel = v;
@@ -8234,9 +8265,9 @@ local function buildWorldTab()
     shader_cc.Parent = lighting;
     trove:Add(shader_cc);
 
-    local shaders_tab = world_tab:AddLeftGroupbox('shaders'); do
+    local shaders_tab = world_tab:AddLeftGroupbox('Shaders'); do
         shaders_tab:AddToggle('shader_blur', {
-            Text = 'blur',
+            Text = 'Blur',
             Default = false,
             Callback = function(v)
                 ELI.world.blur = v;
@@ -8245,7 +8276,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_blur_size', {
-            Text = 'blur size',
+            Text = 'Blur size',
             Default = 12,
             Min = 0,
             Max = 56,
@@ -8257,7 +8288,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddToggle('shader_bloom', {
-            Text = 'bloom',
+            Text = 'Bloom',
             Default = false,
             Callback = function(v)
                 ELI.world.bloom = v;
@@ -8266,7 +8297,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_bloom_intensity', {
-            Text = 'bloom intensity',
+            Text = 'Bloom intensity',
             Default = 1,
             Min = 0,
             Max = 5,
@@ -8278,7 +8309,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_bloom_size', {
-            Text = 'bloom size',
+            Text = 'Bloom size',
             Default = 24,
             Min = 0,
             Max = 56,
@@ -8290,7 +8321,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_bloom_threshold', {
-            Text = 'bloom threshold',
+            Text = 'Bloom threshold',
             Default = 0.9,
             Min = 0,
             Max = 2,
@@ -8302,7 +8333,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddToggle('shader_dof', {
-            Text = 'depth of field',
+            Text = 'Depth of field',
             Default = false,
             Callback = function(v)
                 ELI.world.depth_of_field = v;
@@ -8311,7 +8342,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_dof_focus', {
-            Text = 'focus distance',
+            Text = 'Focus distance',
             Default = 25,
             Min = 0,
             Max = 500,
@@ -8323,7 +8354,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_dof_intensity', {
-            Text = 'blur intensity',
+            Text = 'Blur intensity',
             Default = 0.15,
             Min = 0,
             Max = 1,
@@ -8336,7 +8367,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddToggle('shader_sun_rays', {
-            Text = 'sun rays',
+            Text = 'Sun rays',
             Default = false,
             Callback = function(v)
                 ELI.world.sun_rays = v;
@@ -8345,7 +8376,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_sun_rays_intensity', {
-            Text = 'rays intensity',
+            Text = 'Rays intensity',
             Default = 0.25,
             Min = 0,
             Max = 1,
@@ -8357,7 +8388,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_sun_rays_spread', {
-            Text = 'rays spread',
+            Text = 'Rays spread',
             Default = 1,
             Min = 0,
             Max = 1,
@@ -8369,7 +8400,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddToggle('shader_saturation', {
-            Text = 'color grading',
+            Text = 'Color grading',
             Default = false,
             Callback = function(v)
                 ELI.world.saturation = v;
@@ -8384,7 +8415,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_saturation_level', {
-            Text = 'saturation',
+            Text = 'Saturation',
             Default = 0,
             Min = -1,
             Max = 5,
@@ -8396,7 +8427,7 @@ local function buildWorldTab()
         });
 
         shaders_tab:AddSlider('shader_contrast_level', {
-            Text = 'contrast',
+            Text = 'Contrast',
             Default = 0,
             Min = -1,
             Max = 1,
@@ -8408,7 +8439,7 @@ local function buildWorldTab()
         });
     end;
 
-    local quality_tab = world_tab:AddLeftGroupbox('quality'); do
+    local quality_tab = world_tab:AddLeftGroupbox('Quality'); do
         local default_technology = lighting.Technology;
         local default_global_shadows = lighting.GlobalShadows;
         local default_env_diffuse = lighting.EnvironmentDiffuseScale;
@@ -8416,7 +8447,7 @@ local function buildWorldTab()
         local default_outdoor_ambient = lighting.OutdoorAmbient;
 
         quality_tab:AddDropdown('world_lighting_technology_mode', {
-            Text = 'lighting technology',
+            Text = 'Lighting technology',
             Values = { 'Legacy', 'Voxel', 'ShadowMap', 'Future' },
             Default = 'Future',
             Callback = function(v)
@@ -8430,7 +8461,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddToggle('world_lighting_technology', {
-            Text = 'apply lighting technology',
+            Text = 'Apply lighting technology',
             Default = false,
             Callback = function(v)
                 ELI.world.lighting_technology = v;
@@ -8445,7 +8476,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddToggle('world_global_shadows', {
-            Text = 'global shadows',
+            Text = 'Global shadows',
             Default = true,
             Callback = function(v)
                 ELI.world.global_shadows = v;
@@ -8456,7 +8487,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddToggle('world_env_diffuse', {
-            Text = 'environment diffuse',
+            Text = 'Environment diffuse',
             Default = false,
             Callback = function(v)
                 ELI.world.env_diffuse = v;
@@ -8467,7 +8498,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddSlider('world_env_diffuse_scale', {
-            Text = 'diffuse scale',
+            Text = 'Diffuse scale',
             Default = 1,
             Min = 0,
             Max = 1,
@@ -8483,7 +8514,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddToggle('world_env_specular', {
-            Text = 'environment specular',
+            Text = 'Environment specular',
             Default = false,
             Callback = function(v)
                 ELI.world.env_specular = v;
@@ -8494,7 +8525,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddSlider('world_env_specular_scale', {
-            Text = 'specular scale',
+            Text = 'Specular scale',
             Default = 1,
             Min = 0,
             Max = 1,
@@ -8510,7 +8541,7 @@ local function buildWorldTab()
         });
 
         quality_tab:AddToggle('world_outdoor_ambient', {
-            Text = 'outdoor ambient',
+            Text = 'Outdoor ambient',
             Default = false,
             Callback = function(v)
                 ELI.world.outdoor_ambient = v;
@@ -8531,10 +8562,10 @@ local function buildWorldTab()
         });
     end;
 
-local camera_tab = world_tab:AddRightGroupbox('camera'); do
+local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     local keybind_third_person_enable = false;
     camera_tab:AddToggle('third_person_enable', {
-        Text = 'third person',
+        Text = 'Third person',
         Default = false,
         Callback = function(v)
             keybind_third_person_enable = v;
@@ -8543,7 +8574,7 @@ local camera_tab = world_tab:AddRightGroupbox('camera'); do
         end;
     }):AddKeyPicker('third_person_keybind', {
         Default = '...',
-        Text = 'third person',
+        Text = 'Third person',
         NoUI = false,
         EnableCheck = function()
             return ELI.third_person.enable;
@@ -8555,7 +8586,7 @@ local camera_tab = world_tab:AddRightGroupbox('camera'); do
     });
     local old_camera_stretched_res = camera.CFrame;
     camera_tab:AddToggle('stretched_res_enable', {
-        Text = 'stretched res',
+        Text = 'Stretched res',
         Default = false,
         Callback = function(v)
             ELI.stretched_res.enable = v;
@@ -8565,7 +8596,7 @@ local camera_tab = world_tab:AddRightGroupbox('camera'); do
         end;
     });
     camera_tab:AddSlider('stretched_res_amount', {
-        Text = 'amount',
+        Text = 'Amount',
         Default = 0.20,
         Min = 0.1,
         Max = 1,
@@ -8576,7 +8607,7 @@ local camera_tab = world_tab:AddRightGroupbox('camera'); do
     });
     local old_camera_fov = camera.FieldOfView;
     camera_tab:AddToggle('fov_changer_enable', {
-        Text = 'fov changer',
+        Text = 'Fov changer',
         Default = false,
         Callback = function(v)
             ELI.fov_changer.enable = v;
@@ -8586,7 +8617,7 @@ local camera_tab = world_tab:AddRightGroupbox('camera'); do
         end;
     });
     camera_tab:AddSlider('fov_changer_fov', {
-        Text = 'fov',
+        Text = 'Fov',
         Default = 80,
         Min = 10,
         Max = 140,
@@ -8601,9 +8632,9 @@ buildWorldTab()
 
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
-    local esp_groupbox = esp_tab:AddLeftGroupbox('esp'); do
+    local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
         esp_groupbox:AddToggle('esp_enable', {
-            Text = 'enable',
+            Text = 'Enable',
             Default = false,
             Callback = function(v)
                 ELI.esp.enable = v;
@@ -8611,7 +8642,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_team_check', {
-            Text = 'team check',
+            Text = 'Team check',
             Default = true,
             Callback = function(v)
                 ELI.esp.team_check = v;
@@ -8619,7 +8650,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_box_enable', {
-            Text = 'box',
+            Text = 'Box',
             Default = false,
             Callback = function(v)
                 ELI.esp.box.enable = v;
@@ -8627,19 +8658,19 @@ local function buildEspTab()
                 Toggles.esp_glow_enable:SetVisible(v);
             end
         }):AddColorPicker('esp_box_color', {
-            Title = 'box color',
+            Title = 'Box color',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.box.color = v;
             end
         }):AddColorPicker('esp_box_outline_color', {
-            Title = 'outline color',
+            Title = 'Outline color',
             Default = Color3.new(0, 0, 0),
             Callback = function(v)
                 ELI.esp.box.outline = v;
             end
         }):AddColorPicker('esp_box_inline_color', {
-            Title = 'inline color',
+            Title = 'Inline color',
             Default = Color3.new(0, 0, 0),
             Callback = function(v)
                 ELI.esp.box.inline = v;
@@ -8647,7 +8678,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_glow_enable', {
-            Text = 'glow box',
+            Text = 'Glow box',
             Default = false,
             Visible = false,
             Callback = function(v)
@@ -8655,13 +8686,13 @@ local function buildEspTab()
                 Options.esp_glow_transparency:SetVisible(v);
             end
         }):AddColorPicker('esp_glow_color_start', {
-            Title = 'glow start',
+            Title = 'Glow start',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.glow.color_start = v;
             end
         }):AddColorPicker('esp_glow_color_end', {
-            Title = 'glow end',
+            Title = 'Glow end',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.glow.color_end = v;
@@ -8669,7 +8700,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_glow_transparency', {
-            Text = 'glow transparency',
+            Text = 'Glow transparency',
             Default = 1,
             Min = 0,
             Max = 1,
@@ -8681,7 +8712,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_box_thickness', {
-            Text = 'box thickness',
+            Text = 'Box thickness',
             Default = 1,
             Min = 1,
             Max = 5,
@@ -8693,13 +8724,13 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_name_enable', {
-            Text = 'name',
+            Text = 'Name',
             Default = false,
             Callback = function(v)
                 ELI.esp.text.name.enable = v;
             end
         }):AddColorPicker('esp_name_color', {
-            Title = 'name color',
+            Title = 'Name color',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.text.name.color = v;
@@ -8707,13 +8738,13 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_studs_enable', {
-            Text = 'distance',
+            Text = 'Distance',
             Default = false,
             Callback = function(v)
                 ELI.esp.text.studs.enable = v;
             end
         }):AddColorPicker('esp_studs_color', {
-            Title = 'distance color',
+            Title = 'Distance color',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.text.studs.color = v;
@@ -8721,13 +8752,13 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_tool_enable', {
-            Text = 'weapon',
+            Text = 'Weapon',
             Default = false,
             Callback = function(v)
                 ELI.esp.text.tool.enable = v;
             end
         }):AddColorPicker('esp_tool_color', {
-            Title = 'weapon color',
+            Title = 'Weapon color',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.text.tool.color = v;
@@ -8735,7 +8766,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddDropdown('esp_tool_position', {
-            Text = 'weapon position',
+            Text = 'Weapon position',
             Default = 'right',
             Values = { 'top', 'bottom', 'right' },
             Callback = function(v)
@@ -8744,20 +8775,20 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_filled_enable', {
-            Text = 'filled',
+            Text = 'Filled',
             Default = false,
             Callback = function(v)
                 ELI.esp.filled.enable = v;
                 Options.esp_filled_transparency:SetVisible(v);
             end
         }):AddColorPicker('esp_filled_color_start', {
-            Title = 'fill start',
+            Title = 'Fill start',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.filled.color_start = v;
             end
         }):AddColorPicker('esp_filled_color_end', {
-            Title = 'fill end',
+            Title = 'Fill end',
             Default = Color3.new(1, 1, 1),
             Callback = function(v)
                 ELI.esp.filled.color_end = v;
@@ -8765,13 +8796,13 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_filled_hitflash', {
-            Text = 'hit flash',
+            Text = 'Hit flash',
             Default = false,
             Callback = function(v)
                 ELI.esp.filled.hit_flash = v;
             end
         }):AddColorPicker('esp_filled_hitcolor', {
-            Title = 'hit color',
+            Title = 'Hit color',
             Default = Color3.fromRGB(255, 40, 40),
             Callback = function(v)
                 ELI.esp.filled.hit_color = v;
@@ -8779,13 +8810,13 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_visible_enable', {
-            Text = 'visible color',
+            Text = 'Visible color',
             Default = false,
             Callback = function(v)
                 ELI.esp.visible.enable = v;
             end
         }):AddColorPicker('esp_visible_color', {
-            Title = 'visible color',
+            Title = 'Visible color',
             Default = Color3.fromRGB(60, 255, 90),
             Callback = function(v)
                 ELI.esp.visible.color = v;
@@ -8793,19 +8824,19 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_highlight_enable', {
-            Text = 'highlight',
+            Text = 'Highlight',
             Default = false,
             Callback = function(v)
                 ELI.esp.highlight.enable = v;
             end
         }):AddColorPicker('esp_highlight_fill', {
-            Title = 'fill color',
+            Title = 'Fill color',
             Default = Color3.fromRGB(0, 30, 255),
             Callback = function(v)
                 ELI.esp.highlight.fill_color = v;
             end
         }):AddColorPicker('esp_highlight_outline', {
-            Title = 'outline color',
+            Title = 'Outline color',
             Default = Color3.fromRGB(255, 255, 255),
             Callback = function(v)
                 ELI.esp.highlight.outline_color = v;
@@ -8813,7 +8844,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_highlight_fill_transparency', {
-            Text = 'highlight fill transparency',
+            Text = 'Highlight fill transparency',
             Default = 0.55,
             Min = 0,
             Max = 1,
@@ -8824,7 +8855,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_highlight_outline_transparency', {
-            Text = 'highlight outline transparency',
+            Text = 'Highlight outline transparency',
             Default = 0,
             Min = 0,
             Max = 1,
@@ -8835,7 +8866,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_filled_transparency', {
-            Text = 'fill transparency',
+            Text = 'Fill transparency',
             Default = 0.75,
             Min = 0,
             Max = 1,
@@ -8847,7 +8878,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_filled_animated', {
-            Text = 'animated fill',
+            Text = 'Animated fill',
             Default = false,
             Callback = function(v)
                 ELI.esp.filled.animated = v;
@@ -8857,7 +8888,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_filled_rotation', {
-            Text = 'fill rotation',
+            Text = 'Fill rotation',
             Default = 90,
             Min = 0,
             Max = 360,
@@ -8869,7 +8900,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_filled_speed', {
-            Text = 'fill speed',
+            Text = 'Fill speed',
             Default = 2,
             Min = 0,
             Max = 10,
@@ -8881,7 +8912,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_health_enable', {
-            Text = 'health bar',
+            Text = 'Health bar',
             Default = false,
             Callback = function(v)
                 ELI.esp.health.enable = v;
@@ -8889,19 +8920,19 @@ local function buildEspTab()
                 Options.esp_health_gap:SetVisible(v);
             end
         }):AddColorPicker('esp_health_color_high', {
-            Title = 'health top',
+            Title = 'Health top',
             Default = Color3.fromRGB(0, 255, 0),
             Callback = function(v)
                 ELI.esp.health.color_high = v;
             end
         }):AddColorPicker('esp_health_color_mid', {
-            Title = 'health mid',
+            Title = 'Health mid',
             Default = Color3.fromRGB(255, 255, 0),
             Callback = function(v)
                 ELI.esp.health.color_mid = v;
             end
         }):AddColorPicker('esp_health_color_low', {
-            Title = 'health bot',
+            Title = 'Health bot',
             Default = Color3.fromRGB(255, 0, 0),
             Callback = function(v)
                 ELI.esp.health.color_low = v;
@@ -8909,7 +8940,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_health_width', {
-            Text = 'bar width',
+            Text = 'Bar width',
             Default = 3,
             Min = 1,
             Max = 10,
@@ -8921,7 +8952,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_health_gap', {
-            Text = 'bar gap',
+            Text = 'Bar gap',
             Default = 5,
             Min = 1,
             Max = 20,
@@ -8933,7 +8964,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_text_size', {
-            Text = 'text size',
+            Text = 'Text size',
             Default = 9,
             Min = 6,
             Max = 16,
@@ -8944,27 +8975,27 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddToggle('esp_text_gradient', {
-            Text = 'gradient text',
+            Text = 'Gradient text',
             Default = false,
             Callback = function(v)
                 ELI.esp.text.gradient = v;
             end
         }):AddColorPicker('esp_text_gradient_color1', {
             Default = Color3.fromRGB(0, 30, 255),
-            Title = 'color 1',
+            Title = 'Color 1',
             Callback = function(v)
                 ELI.esp.text.gradient_color1 = v;
             end
         }):AddColorPicker('esp_text_gradient_color2', {
             Default = Color3.fromRGB(255, 255, 255),
-            Title = 'color 2',
+            Title = 'Color 2',
             Callback = function(v)
                 ELI.esp.text.gradient_color2 = v;
             end
         });
 
         esp_groupbox:AddToggle('esp_text_flow', {
-            Text = 'flow animation',
+            Text = 'Flow animation',
             Default = false,
             Callback = function(v)
                 ELI.esp.text.flow = v;
@@ -8972,7 +9003,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_text_flow_speed', {
-            Text = 'flow speed',
+            Text = 'Flow speed',
             Default = 1,
             Min = 0.1,
             Max = 5,
@@ -8983,7 +9014,7 @@ local function buildEspTab()
         });
 
         esp_groupbox:AddSlider('esp_max_dist', {
-            Text = 'max distance',
+            Text = 'Max distance',
             Default = 25000,
             Min = 100,
             Max = 25000,
@@ -8996,9 +9027,9 @@ local function buildEspTab()
     end;
 end;
 
-local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
+local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
     esp_throwable_tab:AddToggle('thrower_esp_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.thrower_esp.enable = v;
@@ -9011,7 +9042,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddToggle('thrower_esp_name', {
-        Text = 'name',
+        Text = 'Name',
         Default = false,
         Visible = false,
         Callback = function(v)
@@ -9019,7 +9050,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
             Options.thrower_esp_name_size:SetVisible(v);
         end;
     }):AddColorPicker('thrower_esp_name_color', {
-        Title = 'name color',
+        Title = 'Name color',
         Default = Color3.fromRGB(255, 255, 255),
         Callback = function(v)
             ELI.thrower_esp.name_color = v;
@@ -9027,7 +9058,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddSlider('thrower_esp_name_size', {
-        Text = 'name size',
+        Text = 'Name size',
         Default = 14,
         Min = 6,
         Max = 32,
@@ -9039,7 +9070,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddToggle('thrower_esp_distance', {
-        Text = 'distance',
+        Text = 'Distance',
         Default = false,
         Visible = false,
         Callback = function(v)
@@ -9047,7 +9078,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
             Options.thrower_esp_distance_size:SetVisible(v);
         end;
     }):AddColorPicker('thrower_esp_distance_color', {
-        Title = 'distance color',
+        Title = 'Distance color',
         Default = Color3.fromRGB(255, 255, 255),
         Callback = function(v)
             ELI.thrower_esp.distance_color = v;
@@ -9055,7 +9086,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddSlider('thrower_esp_distance_size', {
-        Text = 'distance size',
+        Text = 'Distance size',
         Default = 12,
         Min = 6,
         Max = 32,
@@ -9067,7 +9098,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddToggle('thrower_esp_image', {
-        Text = 'image',
+        Text = 'Image',
         Default = false,
         Visible = false,
         Callback = function(v)
@@ -9076,7 +9107,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddDropdown('thrower_esp_select', {
-        Text = 'throwable whitelist',
+        Text = 'Throwable whitelist',
         Values = { 'Grenade', 'Flashbang', 'Molotov', 'Satchel', 'Smoke Grenade', 'Subspace Tripmine' },
         Default = {},
         Multi = true,
@@ -9087,7 +9118,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('throwable esp'); do
     });
 
     esp_throwable_tab:AddDropdown('thrower_esp_font', {
-        Text = 'font',
+        Text = 'Font',
         Values = font_indexes,
         Default = 'ProggyTiny',
         Visible = false,
@@ -9109,9 +9140,9 @@ buildEspTab()
 local function buildMiscTab()
     local misc_tab = Tabs.misc_tab; do
     local auto_tabbox = Tabs.misc_tab:AddRightTabbox(); do
-        local auto_vote_map = auto_tabbox:AddTab('auto vote map'); do
+        local auto_vote_map = auto_tabbox:AddTab('Auto vote map'); do
             auto_vote_map:AddToggle('auto_vote_map_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.auto_vote_map.enable = v;
@@ -9122,7 +9153,7 @@ local function buildMiscTab()
                 Values = {"Arena", "Big Graveyard", "Docks", "Splash", "Bridge", "Crossroads", "Big Crossroads", "Big Backrooms", "Battleground", "Big Arena", "Construction", "Playground", "Onyx", "Graveyard", "Big Splash", "Big Onyx", "Backrooms", "Station", "Dimension",},
                 Default = "",
                 Multi = false,
-                Text = 'map',
+                Text = 'Map',
                 Callback = function(v)
                     ELI.auto_vote_map.map = v;
                 end;
@@ -9131,9 +9162,9 @@ local function buildMiscTab()
     end;
 
     local troll_tab = Tabs.misc_tab:AddLeftTabbox(); do
-        local device_spoof_tab = troll_tab:AddTab('device spoof'); do
+        local device_spoof_tab = troll_tab:AddTab('Device spoof'); do
             device_spoof_tab:AddToggle('device_spoof_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.device_spoof.enable = v;
@@ -9144,16 +9175,16 @@ local function buildMiscTab()
                 Values = {'Touch', 'MouseKeyboard', 'Gamepad', 'VR'},
                 Default = 2,
                 Multi = false,
-                Text = 'type',
+                Text = 'Type',
                 Callback = function(v)
                     ELI.device_spoof.type = v;
                 end;
             });
         end;
 
-        local sound_spammer_tab = troll_tab:AddTab('sound spammer'); do
+        local sound_spammer_tab = troll_tab:AddTab('Sound spammer'); do
             sound_spammer_tab:AddToggle('sound_spammer_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.sound_spammer.enable = v;
@@ -9164,7 +9195,7 @@ local function buildMiscTab()
                 Values = {'DoubleJump', 'Slide'},
                 Default = 1,
                 Multi = false,
-                Text = 'sound type',
+                Text = 'Sound type',
                 Callback = function(v)
                     ELI.sound_spammer.type = v;
                 end;
@@ -9173,10 +9204,10 @@ local function buildMiscTab()
     end;
 
     local spooftabthing = Tabs.misc_tab:AddRightTabbox(); do
-        local streak_spoof = spooftabthing:AddTab('streak');
+        local streak_spoof = spooftabthing:AddTab('Streak');
 
         streak_spoof:AddToggle('streak_spoof_enable', {
-            Text = 'spoof',
+            Text = 'Spoof',
             Default = false,
             Callback = function(v)
             ELI.spoof.streak.enable = v;
@@ -9190,7 +9221,7 @@ local function buildMiscTab()
     Default = '9',
     Numeric = true,
 
-    Text = 'spoof',
+    Text = 'Spoof',
 
     Callback = function(v)
         local n = tonumber(v);
@@ -9200,9 +9231,9 @@ local function buildMiscTab()
     end
    });
 
-     local level_spoof = spooftabthing:AddTab('level');
+     local level_spoof = spooftabthing:AddTab('Level');
              level_spoof:AddToggle('level_spoof_enable', {
-            Text = 'spoof',
+            Text = 'Spoof',
             Default = false,
             Callback = function(v)
             ELI.spoof.level.enable = v;
@@ -9216,7 +9247,7 @@ local function buildMiscTab()
     Default = '9',
     Numeric = true,
 
-    Text = 'spoof',
+    Text = 'Spoof',
 
     Callback = function(v)
         local n = tonumber(v);
@@ -9226,9 +9257,9 @@ local function buildMiscTab()
     end
    });
 
-    local rank_spoof = spooftabthing:AddTab('rank');
+    local rank_spoof = spooftabthing:AddTab('Rank');
     rank_spoof:AddToggle('rank_spoof_enable', {
-        Text = 'spoof (not working)';
+        Text = 'Spoof (not working)';
         Default = false;
         Callback = function(v)
             ELI.rank_spoof.enable = v;
@@ -9238,15 +9269,15 @@ local function buildMiscTab()
         Values = { 'Bronze', 'Silver', 'Gold', 'Diamond', 'Onyx', 'Nemesis', 'Arch Nemesis' };
         Default = 7;
         Multi = false;
-        Text = 'rank';
+        Text = 'Rank';
         Callback = function(v)
             ELI.rank_spoof.rank = v;
         end;
     });
 
-    local elo_spoof = spooftabthing:AddTab('elo');
+    local elo_spoof = spooftabthing:AddTab('Elo');
     elo_spoof:AddToggle('elo_spoof_enable', {
-        Text = 'spoof (not working)';
+        Text = 'Spoof (not working)';
         Default = false;
         Callback = function(v)
             ELI.elo_spoof.enable = v;
@@ -9258,16 +9289,16 @@ local function buildMiscTab()
     elo_spoof:AddInput('elo_spoof_text', {
         Default = '60000';
         Numeric = true;
-        Text = 'spoof';
+        Text = 'Spoof';
         Callback = function(v)
             local n = tonumber(v);
             if n then ELI.elo_spoof.value = n; end;
         end;
     });
 
-    local name_spoof = spooftabthing:AddTab('name');
+    local name_spoof = spooftabthing:AddTab('Name');
     name_spoof:AddToggle('name_spoof_enable', {
-        Text = 'spoof';
+        Text = 'Spoof';
         Default = false;
         Callback = function(v)
             ELI.name_spoof.enable = v;
@@ -9275,16 +9306,16 @@ local function buildMiscTab()
     });
     name_spoof:AddInput('name_spoof_display', {
         Default = '';
-        Text = 'display name';
-        Placeholder = 'display name';
+        Text = 'Display name';
+        Placeholder = 'Display name';
         Callback = function(v)
             ELI.name_spoof.display = v or "";
         end;
     });
     name_spoof:AddInput('name_spoof_username', {
         Default = '';
-        Text = 'username';
-        Placeholder = 'username';
+        Text = 'Username';
+        Placeholder = 'Username';
         Callback = function(v)
             ELI.name_spoof.username = v or "";
         end;
@@ -9292,9 +9323,9 @@ local function buildMiscTab()
     end;
 
     local utility_tab = Tabs.misc_tab:AddLeftTabbox(); do
-        local auto_loadout_tab = utility_tab:AddTab('auto loadout'); do
+        local auto_loadout_tab = utility_tab:AddTab('Auto loadout'); do
             auto_loadout_tab:AddToggle('auto_loadout_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.auto_loadout.enable = v;
@@ -9318,9 +9349,9 @@ local function buildMiscTab()
             end;
         end;
 
-        local auto_queue_tab = utility_tab:AddTab('auto queue'); do
+        local auto_queue_tab = utility_tab:AddTab('Auto queue'); do
             auto_queue_tab:AddToggle('auto_queue_enable', {
-                Text = 'enable',
+                Text = 'Enable',
                 Default = false,
                 Callback = function(v)
                     ELI.auto_queue.enable = v;
@@ -9335,7 +9366,7 @@ local function buildMiscTab()
                 Values = {"1v1", "2v2", "3v3", "4v4", "5v5", "2v2_beginner",},
                 Default = "",
                 Multi = false,
-                Text = 'queue mode',
+                Text = 'Queue mode',
                 Callback = function(v)
                     ELI.auto_queue.queue_mode = v;
                 end;
@@ -9343,9 +9374,9 @@ local function buildMiscTab()
         end;
     end;
 
-    local arcade_server_tab = Tabs.misc_tab:AddRightGroupbox('arcade server'); do
+    local arcade_server_tab = Tabs.misc_tab:AddRightGroupbox('Arcade server'); do
         arcade_server_tab:AddToggle('grab_drops_enable', {
-            Text = 'grab drops',
+            Text = 'Grab drops',
             Default = false,
             Callback = function(v)
                 ELI.arcade_server.grab_drops = v;
@@ -9353,7 +9384,7 @@ local function buildMiscTab()
         });
 
         arcade_server_tab:AddToggle('auto_respawn_enable', {
-            Text = 'auto respawn',
+            Text = 'Auto respawn',
             Default = false,
             Callback = function(v)
                 ELI.arcade_server.auto_respawn = v;
@@ -9366,8 +9397,8 @@ buildMiscTab();
 
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
-    local localTab = spoof_box:AddTab("local");
-    local otherTab = spoof_box:AddTab("other");
+    local localTab = spoof_box:AddTab("Local");
+    local otherTab = spoof_box:AddTab("Other");
 
     local http = game:GetService("HttpService");
 
@@ -9522,7 +9553,7 @@ do
     end;
 
     localTab:AddToggle("SpoofLocal", {
-        Text = "local",
+        Text = "Local",
         Default = false,
         Callback = function(val)
             prof.spoof_local = val;
@@ -9532,9 +9563,9 @@ do
 
     local localNameStamp = 0;
     localTab:AddInput("SpoofLocalName", {
-        Text = "name",
+        Text = "Name",
         Default = "",
-        Placeholder = "username...",
+        Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_local_name = val or "";
             localNameStamp = tick();
@@ -9548,7 +9579,7 @@ do
     });
 
     otherTab:AddToggle("SpoofOther", {
-        Text = "other",
+        Text = "Other",
         Default = false,
         Callback = function(val)
             prof.spoof_other = val;
@@ -9558,9 +9589,9 @@ do
 
     local otherNameStamp = 0;
     otherTab:AddInput("SpoofOtherName", {
-        Text = "name",
+        Text = "Name",
         Default = "",
-        Placeholder = "username...",
+        Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_other_name = val or "";
             otherNameStamp = tick();
@@ -9619,7 +9650,7 @@ do
     local material_presets = getgenv().VeloxHubRivals_materials.presets;
     local material_preset_names = getgenv().VeloxHubRivals_materials.names;
     local enhance_box = Tabs.visualstab:AddLeftTabbox();
-    local chams_tab = enhance_box:AddTab("chams");
+    local chams_tab = enhance_box:AddTab("Chams");
     local crosshair_tab = Tabs.visualstab:AddRightTabbox();
 
     local highlights = {};
@@ -9763,7 +9794,7 @@ do
     end;
 
     chams_tab:AddToggle("ChamsEnable", {
-        Text = "enable",
+        Text = "Enable",
         Default = false,
         Callback = function(v)
             cfg.chams.enable = v;
@@ -9772,7 +9803,7 @@ do
     });
 
     chams_tab:AddToggle("ChamsTeamCheck", {
-        Text = "team check",
+        Text = "Team check",
         Default = false,
         Callback = function(v)
             cfg.chams.team_check = v;
@@ -9780,7 +9811,7 @@ do
     });
 
     chams_tab:AddDropdown("ChamsMode", {
-        Text = "type",
+        Text = "Type",
         Default = "highlight",
         Values = { "highlight", "chams" },
         Callback = function(v)
@@ -9790,7 +9821,7 @@ do
         end
     });
 
-    chams_tab:AddLabel("fill"):AddColorPicker("ChamsFill", {
+    chams_tab:AddLabel("Fill"):AddColorPicker("ChamsFill", {
         Default = Color3.fromRGB(0, 170, 255),
         Transparency = 0.5,
         Callback = function(color, transparency)
@@ -9799,7 +9830,7 @@ do
         end
     });
 
-    chams_tab:AddLabel("outline"):AddColorPicker("ChamsOutline", {
+    chams_tab:AddLabel("Outline"):AddColorPicker("ChamsOutline", {
         Default = Color3.fromRGB(255, 255, 255),
         Transparency = 0,
         Callback = function(color, transparency)
@@ -9809,7 +9840,7 @@ do
     });
 
     chams_tab:AddDropdown("ChamsMaterial", {
-        Text = "material",
+        Text = "Material",
         Default = "Neon",
         Values = material_preset_names,
         Visible = false,
@@ -9819,7 +9850,7 @@ do
     });
 
     chams_tab:AddToggle("ChamsStripTextures", {
-        Text = "strip textures",
+        Text = "Strip textures",
         Default = false,
         Visible = false,
         Callback = function(v)
@@ -9828,7 +9859,7 @@ do
     });
 
     chams_tab:AddToggle("ChamsGhost", {
-        Text = "ghost",
+        Text = "Ghost",
         Default = false,
         Visible = false,
         Callback = function(v)
@@ -10136,9 +10167,9 @@ do
         pcall(function() ch_text_gui:Destroy() end);
     end);
 
-    local crosshair_box = crosshair_tab:AddTab("crosshair"); do
+    local crosshair_box = crosshair_tab:AddTab("Crosshair"); do
         crosshair_box:AddToggle("CrosshairEnable", {
-            Text = "enabled",
+            Text = "Enabled",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.enable = v;
@@ -10151,7 +10182,7 @@ do
         });
 
         crosshair_box:AddDropdown("CrosshairStyle", {
-            Text = "style",
+            Text = "Style",
             Default = "cross",
             Values = { "cross", "t", "x", "circle", "dot" },
             Callback = function(v)
@@ -10160,7 +10191,7 @@ do
         });
 
         crosshair_box:AddToggle("CrosshairLines", {
-            Text = "lines",
+            Text = "Lines",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.lines = v;
@@ -10168,7 +10199,7 @@ do
         });
 
         crosshair_box:AddSlider("CrosshairRotation", {
-            Text = "rotation",
+            Text = "Rotation",
             Default = 0,
             Min = 0,
             Max = 360,
@@ -10180,7 +10211,7 @@ do
         });
 
         crosshair_box:AddSlider("CrosshairLength", {
-            Text = "length",
+            Text = "Length",
             Default = 6,
             Min = 0,
             Max = 40,
@@ -10191,7 +10222,7 @@ do
         });
 
         crosshair_box:AddSlider("CrosshairThickness", {
-            Text = "thickness",
+            Text = "Thickness",
             Default = 1,
             Min = 1,
             Max = 6,
@@ -10202,7 +10233,7 @@ do
         });
 
         crosshair_box:AddSlider("CrosshairGap", {
-            Text = "gap",
+            Text = "Gap",
             Default = 3,
             Min = 0,
             Max = 20,
@@ -10213,7 +10244,7 @@ do
         });
 
         crosshair_box:AddToggle("CrosshairOutline", {
-            Text = "outline",
+            Text = "Outline",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.outline = v;
@@ -10226,7 +10257,7 @@ do
         });
 
         crosshair_box:AddToggle("CrosshairTopLine", {
-            Text = "top line",
+            Text = "Top line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.top_line = v;
@@ -10234,7 +10265,7 @@ do
         });
 
         crosshair_box:AddToggle("CrosshairBottomLine", {
-            Text = "bottom line",
+            Text = "Bottom line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.bottom_line = v;
@@ -10242,9 +10273,9 @@ do
         });
     end;
 
-    local lines_box = crosshair_tab:AddTab("lines"); do
+    local lines_box = crosshair_tab:AddTab("Lines"); do
         lines_box:AddToggle("CrosshairDot", {
-            Text = "center dot",
+            Text = "Center dot",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.dot = v;
@@ -10252,7 +10283,7 @@ do
         });
 
         lines_box:AddToggle("CrosshairLineOutline", {
-            Text = "outline",
+            Text = "Outline",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.outline = v;
@@ -10260,7 +10291,7 @@ do
         });
 
         lines_box:AddToggle("CrosshairTop", {
-            Text = "top line",
+            Text = "Top line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.top_line = v;
@@ -10268,7 +10299,7 @@ do
         });
 
         lines_box:AddToggle("CrosshairBottom", {
-            Text = "bottom line",
+            Text = "Bottom line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.bottom_line = v;
@@ -10276,7 +10307,7 @@ do
         });
 
         lines_box:AddToggle("CrosshairLeft", {
-            Text = "left line",
+            Text = "Left line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.left_line = v;
@@ -10284,7 +10315,7 @@ do
         });
 
         lines_box:AddToggle("CrosshairRight", {
-            Text = "right line",
+            Text = "Right line",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.right_line = v;
@@ -10292,9 +10323,9 @@ do
         });
     end;
 
-    local effects_box = crosshair_tab:AddTab("effects"); do
+    local effects_box = crosshair_tab:AddTab("Effects"); do
         effects_box:AddToggle("CrosshairRotating", {
-            Text = "rotating",
+            Text = "Rotating",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.rotating = v;
@@ -10302,7 +10333,7 @@ do
         });
 
         effects_box:AddSlider("CrosshairRotatingSpeed", {
-            Text = "speed",
+            Text = "Speed",
             Default = 120,
             Min = 0,
             Max = 720,
@@ -10314,7 +10345,7 @@ do
         });
 
         effects_box:AddToggle("CrosshairSpread", {
-            Text = "spread",
+            Text = "Spread",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.spread = v;
@@ -10322,7 +10353,7 @@ do
         });
 
         effects_box:AddSlider("CrosshairSpreadScale", {
-            Text = "spread scale",
+            Text = "Spread scale",
             Default = 1,
             Min = 0,
             Max = 4,
@@ -10333,7 +10364,7 @@ do
         });
 
         effects_box:AddToggle("CrosshairAnimation", {
-            Text = "animation",
+            Text = "Animation",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.animation = v;
@@ -10341,7 +10372,7 @@ do
         });
 
         effects_box:AddDropdown("CrosshairAnimationMode", {
-            Text = "mode",
+            Text = "Mode",
             Default = "pulse",
             Values = { "pulse", "breathe" },
             Callback = function(v)
@@ -10350,7 +10381,7 @@ do
         });
 
         effects_box:AddSlider("CrosshairAnimationSpeed", {
-            Text = "speed",
+            Text = "Speed",
             Default = 3,
             Min = 0.1,
             Max = 12,
@@ -10361,7 +10392,7 @@ do
         });
 
         effects_box:AddToggle("CrosshairFade", {
-            Text = "fade color",
+            Text = "Fade color",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.fade = v;
@@ -10374,7 +10405,7 @@ do
         });
 
         effects_box:AddToggle("CrosshairFollowTarget", {
-            Text = "follow target",
+            Text = "Follow target",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.follow_target = v;
@@ -10382,7 +10413,7 @@ do
         });
 
         effects_box:AddDropdown("CrosshairFollowSource", {
-            Text = "follow source",
+            Text = "Follow source",
             Default = "target",
             Values = { "target", "gunpoint" },
             Callback = function(v)
@@ -10391,7 +10422,7 @@ do
         });
 
         effects_box:AddToggle("CrosshairShimmer", {
-            Text = "shimmer",
+            Text = "Shimmer",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.shimmer = v;
@@ -10399,7 +10430,7 @@ do
         });
 
         effects_box:AddSlider("CrosshairShimmerSpeed", {
-            Text = "shimmer speed",
+            Text = "Shimmer speed",
             Default = 4,
             Min = 0.1,
             Max = 12,
@@ -10410,9 +10441,9 @@ do
         });
     end;
 
-    local text_box = crosshair_tab:AddTab("text"); do
+    local text_box = crosshair_tab:AddTab("Text"); do
         text_box:AddToggle("CrosshairTextEnable", {
-            Text = "enabled",
+            Text = "Enabled",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.text_enable = v;
@@ -10425,7 +10456,7 @@ do
         });
 
         text_box:AddInput("CrosshairTextContent", {
-            Text = "content",
+            Text = "Content",
             Default = "VeloxHubRivals",
             ClearTextOnFocus = false,
             Callback = function(v)
@@ -10434,7 +10465,7 @@ do
         });
 
         text_box:AddDropdown("CrosshairTextFont", {
-            Text = "font",
+            Text = "Font",
             Default = "Plex",
             Values = { "UI", "System", "Plex", "Monospace", "Inconsolata" },
             Callback = function(v)
@@ -10443,7 +10474,7 @@ do
         });
 
         text_box:AddSlider("CrosshairTextSize", {
-            Text = "size",
+            Text = "Size",
             Default = 16,
             Min = 8,
             Max = 48,
@@ -10454,7 +10485,7 @@ do
         });
 
         text_box:AddSlider("CrosshairTextOffset", {
-            Text = "offset",
+            Text = "Offset",
             Default = 18,
             Min = 0,
             Max = 120,
@@ -10465,7 +10496,7 @@ do
         });
 
         text_box:AddToggle("CrosshairTextOutline", {
-            Text = "outline",
+            Text = "Outline",
             Default = true,
             Callback = function(v)
                 cfg.crosshair.text_outline = v;
@@ -10473,7 +10504,7 @@ do
         });
 
         text_box:AddToggle("CrosshairTextAnimation", {
-            Text = "animation",
+            Text = "Animation",
             Default = false,
             Callback = function(v)
                 cfg.crosshair.text_animation = v;
@@ -10484,13 +10515,13 @@ end
 
 local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
-    local movement_tab = Tabs.character_tab:AddRightGroupbox('movement'); do
+    local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
         keybind_infinite_double_jump_enable = false;
 
         keybind_walkspeed_enable = false;
         movement_tab:AddToggle('walkspeed_enable', {
-            Text = 'walkspeed',
+            Text = 'Walkspeed',
             Default = false,
             Callback = function(v)
                 keybind_walkspeed_enable = v;
@@ -10498,7 +10529,7 @@ local function buildCharacterTab()
             end;
         }):AddKeyPicker('walkspeed_keybind', {
             Default = '',
-            Text = 'walkspeed',
+            Text = 'Walkspeed',
             NoUI = false,
             EnableCheck = function()
                 return ELI.walkspeed.enable;
@@ -10509,7 +10540,7 @@ local function buildCharacterTab()
         });
 
         movement_tab:AddSlider('walkspeed_multiplier', {
-            Text = 'multiplier',
+            Text = 'Multiplier',
             Default = 1.5,
             Min = 1,
             Max = 10,
@@ -10521,7 +10552,7 @@ local function buildCharacterTab()
         });
 
         movement_tab:AddToggle('infinite_double_jump_enable', {
-            Text = 'infinite double jump',
+            Text = 'Infinite double jump',
             Default = false,
             Callback = function(v)
                 keybind_infinite_double_jump_enable = v;
@@ -10529,7 +10560,7 @@ local function buildCharacterTab()
             end;
         }):AddKeyPicker('infinite_double_jump_keybind', {
             Default = '',
-            Text = 'infinite double jump',
+            Text = 'Infinite double jump',
             NoUI = false,
             EnableCheck = function()
                 return ELI.infinite_double_jump.enable;
@@ -10540,7 +10571,7 @@ local function buildCharacterTab()
         });
 
         movement_tab:AddToggle('slide_boost_enable', {
-            Text = 'slide boost',
+            Text = 'Slide boost',
             Default = false,
             Callback = function(v)
                 keybind_slide_boost_enable = v;
@@ -10548,7 +10579,7 @@ local function buildCharacterTab()
             end;
         }):AddKeyPicker('slide_boost_keybind', {
             Default = '',
-            Text = 'slide boost',
+            Text = 'Slide boost',
             NoUI = false,
             EnableCheck = function()
                 return ELI.slide_boost.enable;
@@ -10559,7 +10590,7 @@ local function buildCharacterTab()
         });
 
         movement_tab:AddToggle('double_jump_height_enable', {
-            Text = 'double jump height',
+            Text = 'Double jump height',
             Default = false,
             Callback = function(v)
                 ELI.double_jump_height.enable = v;
@@ -10569,7 +10600,7 @@ local function buildCharacterTab()
             end;
         });
         movement_tab:AddSlider('slide_boost_spped', {
-            Text = 'height',
+            Text = 'Height',
             Default = 50,
             Min = 1,
             Max = 150,
@@ -10580,7 +10611,7 @@ local function buildCharacterTab()
         });
 
         movement_tab:AddToggle('auto_slide_enable', {
-            Text = 'auto slide',
+            Text = 'Auto slide',
             Default = false,
             Callback = function(v)
                 ELI.auto_slide.enable = v;
@@ -10589,10 +10620,10 @@ local function buildCharacterTab()
     end;
 end;
 
-local character_tab1 = Tabs.character_tab:AddLeftGroupbox('character');
+local character_tab1 = Tabs.character_tab:AddLeftGroupbox('Character');
 
 character_tab1:AddToggle('fly_enable', {
-    Text = 'fly',
+    Text = 'Fly',
     Default = false,
     Callback = function(v)
         keybind_fly_enable = v;
@@ -10600,7 +10631,7 @@ character_tab1:AddToggle('fly_enable', {
     end;
 }):AddKeyPicker('fly_keybind', {
     Default = '',
-    Text = 'fly',
+    Text = 'Fly',
     NoUI = false,
     EnableCheck = function()
         return ELI.fly.enable;
@@ -10611,7 +10642,7 @@ character_tab1:AddToggle('fly_enable', {
 });
 
 character_tab1:AddSlider('fly_speed_value', {
-    Text = 'fly speed',
+    Text = 'Fly speed',
     Default = 50,
     Min = 10,
     Max = 200,
@@ -10622,7 +10653,7 @@ character_tab1:AddSlider('fly_speed_value', {
 });
 
 character_tab1:AddToggle('slide_boost_enable', {
-        Text = 'slide boost',
+        Text = 'Slide boost',
         Default = false,
         Callback = function(v)
             keybind_slide_boost_enable = v;
@@ -10630,7 +10661,7 @@ character_tab1:AddToggle('slide_boost_enable', {
         end;
         }):AddKeyPicker('slide_boost_keybind', {
             Default = '',
-            Text = 'slide boost',
+            Text = 'Slide boost',
             NoUI = false,
             EnableCheck = function()
                 return ELI.slide_boost.enable;
@@ -10641,7 +10672,7 @@ character_tab1:AddToggle('slide_boost_enable', {
         });
 
                 character_tab1:AddSlider('slide_boost_spped', {
-            Text = 'speed',
+            Text = 'Speed',
             Default = 60,
             Min = 1,
             Max = 100,
@@ -10651,9 +10682,9 @@ character_tab1:AddToggle('slide_boost_enable', {
             end;
         });
 
-local anim_tab = Tabs.character_tab:AddLeftGroupbox('emote player'); do
+local anim_tab = Tabs.character_tab:AddLeftGroupbox('Emote player'); do
     anim_tab:AddToggle('animation_enable', {
-        Text = 'enable',
+        Text = 'Enable',
         Default = false,
         Callback = function(v)
             ELI.animation.enable = v;
@@ -10661,7 +10692,7 @@ local anim_tab = Tabs.character_tab:AddLeftGroupbox('emote player'); do
     });
 
     anim_tab:AddDropdown('animation_droadsa', {
-        Text = 'emote',
+        Text = 'Emote',
         Values = {'Meditate','Orbit','Floss','OJ','Kicking Feet','Take the L','Hype',},
         Default = 1,
         Callback = function(v)
@@ -10670,16 +10701,16 @@ local anim_tab = Tabs.character_tab:AddLeftGroupbox('emote player'); do
     });
 
     anim_tab:AddInput('animation_custom_id', {
-        Text = 'custom id',
+        Text = 'Custom id',
         Default = '',
-        Placeholder = 'id..',
+        Placeholder = 'Id..',
         Callback = function(v)
             ELI.animation.custom_id = v;
         end
     });
 
     anim_tab:AddSlider('animation_speed', {
-        Text = 'speed',
+        Text = 'Speed',
         Default = 2,
         Min = 0.1,
         Max = 10,
