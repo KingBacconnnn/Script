@@ -1092,8 +1092,8 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.4', true)
-changelog_box:AddLabel('Fixed the World tab build compile issue caused by the previous cleanup.', true)
+changelog_box:AddLabel('Version 2.0.5', true)
+changelog_box:AddLabel('Fixed the remaining Character tab function closure that caused the compiler to reject the script.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
 changelog_box:AddLabel('Groupbox and nested panel arrows now start collapsed instead of expanded.', true)
@@ -10798,4 +10798,5 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end));
 end
+end;
 buildCharacterTab()
