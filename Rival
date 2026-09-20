@@ -514,15 +514,34 @@ local ContainerMethods = {}
 
 function ContainerMethods:AddBlank(_) return self end
 
+function ContainerMethods:AddDivider()
+    local tab = self._tab
+    if tab and type(tab.Divider) == "function" then
+        pcall(function()
+            tab:Divider()
+        end)
+    end
+    return self
+end
+
 function ContainerMethods:AddLabel(text, doesWrap)
+    local labelText = text
+    local wrap = doesWrap == true
+
+    if type(doesWrap) == "table" then
+        local info = doesWrap
+        labelText = info.Text or info.Title or text
+        wrap = info.DoesWrap == true or info.TextWrapped == true
+    end
+
     local section = self._section or self._tab
     local actual = section:Paragraph({
-        Title = tostring(text or ""),
-        Desc = doesWrap and "" or nil,
+        Title = tostring(labelText or ""),
+        Desc = wrap and "" or nil,
     })
     local wrapper = makeElementWrapper(actual, nil, nil, {
         Type = "Label",
-        Default = text,
+        Default = labelText,
     })
     wrapper._section = section
     wrapper._holder = section
@@ -742,10 +761,9 @@ end
 function Library:CreateWindow(config)
     config = config or {}
     local touch = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").MouseEnabled
-    local uiName = "Velox Hub | Rivals"
 
     _windWindow = WindUI:CreateWindow({
-        Title = uiName,
+        Title = "Velox Hub | Rivals",
         Icon = "crosshair",
         Author = "VeloxHub",
         Folder = "VeloxHubRivals",
@@ -769,23 +787,31 @@ function Library:CreateWindow(config)
     function _windowWrapper:AddTab(name)
         local key = string.lower(tostring(name))
         local tabs = {
-            combat = { Icon = "crosshair", Desc = "Aim, targeting, and combat controls." },
-            visuals = { Icon = "eye", Desc = "Viewmodel, effects, and visual customization." },
-            esp = { Icon = "scan", Desc = "Player information and ESP controls." },
-            world = { Icon = "globe", Desc = "World, environment, and map controls." },
-            character = { Icon = "user", Desc = "Movement and character controls." },
-            performance = { Icon = "gauge", Desc = "FPS, rendering, and performance settings." },
-            misc = { Icon = "package", Desc = "Utility, spoofing, and miscellaneous tools." },
-            scripts = { Icon = "code", Desc = "Lua tools and script utilities." },
-            settings = { Icon = "settings", Desc = "Configuration, appearance, and UI settings." },
+            combat = {Title = "Combat", Icon = "crosshair", Desc = "Aim, targeting, and combat controls."},
+            visuals = {Title = "Visuals", Icon = "eye", Desc = "Viewmodel, effects, and visual customization."},
+            esp = {Title = "ESP", Icon = "scan", Desc = "Player information and ESP controls."},
+            world = {Title = "World", Icon = "globe", Desc = "World, environment, and map controls."},
+            character = {Title = "Character", Icon = "user", Desc = "Movement and character controls."},
+            optimizations = {Title = "Performance", Icon = "gauge", Desc = "FPS, rendering, and performance settings."},
+            misc = {Title = "Misc", Icon = "package", Desc = "Utility, spoofing, and miscellaneous tools."},
+            lua = {Title = "Scripts", Icon = "code", Desc = "Lua tools and script utilities."},
+            settings = {Title = "Settings", Icon = "settings", Desc = "Configuration, appearance, and UI settings."},
         }
-        local meta = tabs[key] or { Icon = "layout-dashboard", Desc = nil }
-        local actual = _windWindow:Tab({
+
+        local meta = tabs[key] or {
             Title = tostring(name),
+            Icon = "layout-dashboard",
+            Desc = nil,
+        }
+
+        local actual = _windWindow:Tab({
+            Title = meta.Title,
             Desc = meta.Desc,
             Icon = meta.Icon,
         })
+
         local wrapped = wrapTab(actual)
+        self.Tabs[key] = wrapped
         self.Tabs[name] = wrapped
         return wrapped
     end
@@ -1186,21 +1212,21 @@ local thisisforsubspace = {
 };
 
 local Tabs = {
-    Main = Window:AddTab('Combat'),
-    visualstab = Window:AddTab('Visuals'),
-    esptab = Window:AddTab('ESP'),
-    worldtab = Window:AddTab('World'),
-    character_tab = Window:AddTab('Character'),
-    optimizations = Window:AddTab('Performance'),
-    misc_tab = Window:AddTab('Misc'),
-    lua = Window:AddTab('Scripts'),
-    ['UI Settings'] = Window:AddTab('Settings'),
+    Main = Window:AddTab('combat'),
+    visualstab = Window:AddTab('visuals'),
+    esptab = Window:AddTab('esp'),
+    worldtab = Window:AddTab('world'),
+    character_tab = Window:AddTab('character'),
+    optimizations = Window:AddTab('optimizations'),
+    misc_tab = Window:AddTab('misc'),
+    lua = Window:AddTab('lua'),
+    ['UI Settings'] = Window:AddTab('settings'),
 };
 
 pcall(function()
     Tabs.Main._tab:Paragraph({
         Title = "Velox Hub | Rivals",
-        Desc = "A clean, organized interface with dedicated sections for combat, visuals, ESP, world, character, performance, utilities, scripts, and settings.",
+        Desc = "A clean, organized interface for combat, visuals, ESP, world, character, performance, utilities, scripts, and settings.",
         Icon = "crosshair",
     })
 end)
