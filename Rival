@@ -228,12 +228,37 @@ local _windowWrapper
 local _windWindow
 local _creating = true
 
+local _uiDiagnostics = {}
+
+local function reportUiError(context, err)
+    local message = "[VeloxHub UI] " .. tostring(context) .. ": " .. tostring(err)
+    table.insert(_uiDiagnostics, message)
+    warn(message)
+    return message
+end
+
 local function safeCall(fn, ...)
     if type(fn) ~= "function" then
         return nil
     end
     local ok, result = pcall(fn, ...)
     if ok then return result end
+    reportUiError("Callback failed", result)
+    return nil
+end
+
+local function safeVisible(bucket, key, value)
+    local obj = bucket and bucket[key]
+    if not obj or type(obj.SetVisible) ~= "function" then
+        return false
+    end
+    local ok, err = pcall(function()
+        obj:SetVisible(value)
+    end)
+    if not ok then
+        reportUiError("SetVisible(" .. tostring(key) .. ") failed", err)
+    end
+    return ok
 end
 
 local function trySet(actual, value)
@@ -278,22 +303,38 @@ local function normalizeKey(key)
 end
 
 local function normalizeDropdownDefault(values, defaultValue, allowNull, multi)
+    values = type(values) == "table" and values or {}
     if multi then
-        return defaultValue
+        if type(defaultValue) == "table" then
+            local filtered = {}
+            for _, item in ipairs(defaultValue) do
+                for _, value in ipairs(values) do
+                    if value == item then
+                        table.insert(filtered, item)
+                        break
+                    end
+                end
+            end
+            return filtered
+        end
+        return {}
     end
     if type(defaultValue) == "number" then
-        return values[defaultValue]
+        defaultValue = values[defaultValue]
+    elseif type(defaultValue) == "table" then
+        defaultValue = defaultValue[1]
     end
-    if type(defaultValue) == "table" then
-        if #defaultValue > 0 then
-            return defaultValue[1]
+    if defaultValue ~= nil and defaultValue ~= "" then
+        for _, value in ipairs(values) do
+            if value == defaultValue then
+                return defaultValue
+            end
         end
-        return allowNull and nil or values[1]
     end
-    if defaultValue == nil or defaultValue == "" and allowNull then
-        return allowNull and nil or values[1]
+    if allowNull then
+        return nil
     end
-    return defaultValue
+    return values[1]
 end
 
 local function makeElementWrapper(actual, index, bucket, info)
@@ -364,16 +405,19 @@ local function makeElementWrapper(actual, index, bucket, info)
         local holder = self._holder or self._section or self._tab
         if not holder then return self end
         local opt
-        local actualColor = holder:Colorpicker({
-            Title = ci.Title or ci.Text or idx,
-            Desc = ci.Desc,
-            Default = ci.Default or Color3.fromRGB(255,255,255),
-            Transparency = ci.Transparency or 0,
-            Callback = function(color)
-                if opt then opt.Value = color end
-                if ci.Callback then safeCall(ci.Callback, color) end
-            end,
-        })
+        local actualColor
+        pcall(function()
+            actualColor = holder:Colorpicker({
+                Title = ci.Title or ci.Text or idx,
+                Desc = ci.Desc,
+                Default = ci.Default or Color3.fromRGB(255,255,255),
+                Transparency = ci.Transparency or 0,
+                Callback = function(color)
+                    if opt then opt.Value = color end
+                    if ci.Callback then safeCall(ci.Callback, color) end
+                end,
+            })
+        end)
         opt = makeElementWrapper(actualColor, idx, Options, {
             Type = "Colorpicker",
             Default = ci.Default or Color3.fromRGB(255,255,255),
@@ -426,17 +470,18 @@ local function makeElementWrapper(actual, index, bucket, info)
                 and input.KeyCode.Name == value
         end
 
-        actualKey = holder:Keybind({
-            Title = ki.Text or ki.Title or idx,
-            Desc = ki.Desc,
-            Value = defaultKey,
-            Callback = function(value)
-                if keyObj then
-                    keyObj.Value = normalizePressedKey(value)
-                end
-
-            end,
-        })
+        pcall(function()
+            actualKey = holder:Keybind({
+                Title = ki.Text or ki.Title or idx,
+                Desc = ki.Desc,
+                Value = defaultKey,
+                Callback = function(value)
+                    if keyObj then
+                        keyObj.Value = normalizePressedKey(value)
+                    end
+                end,
+            })
+        end)
 
         keyObj = makeElementWrapper(actualKey, idx, Options, {
             Type = "Keybind",
@@ -535,10 +580,13 @@ function ContainerMethods:AddLabel(text, doesWrap)
     end
 
     local section = self._section or self._tab
-    local actual = section:Paragraph({
-        Title = tostring(labelText or ""),
-        Desc = wrap and "" or nil,
-    })
+    local actual
+    pcall(function()
+        actual = section:Paragraph({
+            Title = tostring(labelText or ""),
+            Desc = wrap and "" or nil,
+        })
+    end)
     local wrapper = makeElementWrapper(actual, nil, nil, {
         Type = "Label",
         Default = labelText,
@@ -568,13 +616,16 @@ function ContainerMethods:AddButton(idxOrText, infoOrCallback)
         end
     end
     local host = self._section or self._tab
-    local actual = host:Button({
-        Title = title,
-        Desc = nil,
-        Callback = function()
-            safeCall(callback)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Button({
+            Title = title,
+            Desc = nil,
+            Callback = function()
+                safeCall(callback)
+            end,
+        })
+    end)
     local wrapper = makeElementWrapper(actual, nil, nil, { Type = "Button" })
     wrapper._holder = self._section
     wrapper._section = self._section
@@ -592,15 +643,19 @@ function ContainerMethods:AddToggle(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Toggle({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Value = info.Default == true,
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    local createOk, createErr = pcall(function()
+        actual = host:Toggle({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Value = info.Default == true,
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
+    if not createOk then reportUiError("Toggle " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Toggles, {
         Type = "Toggle",
         Default = info.Default == true,
@@ -619,20 +674,24 @@ function ContainerMethods:AddSlider(idx, info)
     local step = 1 / (10 ^ math.max(0, rounding))
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Slider({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Step = step,
-        Value = {
-            Min = info.Min,
-            Max = info.Max,
-            Default = info.Default,
-        },
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    local createOk, createErr = pcall(function()
+        actual = host:Slider({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Step = step,
+            Value = {
+                Min = info.Min,
+                Max = info.Max,
+                Default = info.Default,
+            },
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
+    if not createOk then reportUiError("Slider " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Slider",
         Default = info.Default,
@@ -653,20 +712,24 @@ function ContainerMethods:AddDropdown(idx, info)
     local values = info.Values or {}
     local defaultValue = normalizeDropdownDefault(values, info.Default, info.AllowNull == true, info.Multi == true)
     local wrapper
-    local actual = host:Dropdown({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Values = values,
-        Value = defaultValue,
-        AllowNone = info.AllowNull == true,
-        Multi = info.Multi == true,
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    local createOk, createErr = pcall(function()
+        actual = host:Dropdown({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Values = values,
+            Value = defaultValue,
+            AllowNone = info.AllowNull == true,
+            Multi = info.Multi == true,
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
+    if not createOk then reportUiError("Dropdown " .. tostring(idx) .. " failed", createErr) end
     pcall(function()
-        if type(actual.Close) == "function" then
+        if actual and type(actual.Close) == "function" then
             actual:Close()
         end
     end)
@@ -688,17 +751,21 @@ function ContainerMethods:AddInput(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Input({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Value = info.Default or "",
-        Placeholder = info.Placeholder,
-        Type = info.Type or (info.TextBox and "Textarea" or "Input"),
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    local createOk, createErr = pcall(function()
+        actual = host:Input({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Value = info.Default or "",
+            Placeholder = info.Placeholder,
+            Type = info.Type or (info.TextBox and "Textarea" or "Input"),
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
+    if not createOk then reportUiError("Input " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Input",
         Default = info.Default or "",
@@ -722,11 +789,16 @@ end
 
 function ContainerMethods:AddGroupbox(info)
     local title = type(info) == "table" and info.Name or tostring(info or "Section")
-    local section = self._tab:Section({
-        Title = title,
-        Box = true,
-        Opened = false,
-    })
+    local section
+    local createOk, createErr = pcall(function()
+        section = self._tab:Section({
+            Title = title,
+            Box = true,
+            Opened = false,
+        })
+    end)
+    if not createOk then reportUiError("Groupbox " .. tostring(title) .. " failed", createErr) end
+    section = section or self._tab
     local container = {_section = section, _tab = self._tab}
     return setmetatable(container, {__index = ContainerMethods})
 end
@@ -737,11 +809,16 @@ function ContainerMethods:AddTabbox(info)
         _baseTitle = type(info) == "table" and info.Name or nil,
     }
     function tabbox:AddTab(name)
-        local section = self._tab:Section({
-            Title = tostring(name or "Section"),
-            Box = true,
-            Opened = false,
-        })
+        local section
+        local createOk, createErr = pcall(function()
+            section = self._tab:Section({
+                Title = tostring(name or "Section"),
+                Box = true,
+                Opened = false,
+            })
+        end)
+        if not createOk then reportUiError("Tabbox section " .. tostring(name) .. " failed", createErr) end
+        section = section or self._tab
         local child = {_section = section, _tab = self._tab}
         setmetatable(child, {__index = ContainerMethods})
         return child
@@ -796,7 +873,6 @@ function Library:CreateWindow(config)
             combat = {Title = "Combat", Icon = "crosshair", Desc = "Aim, targeting, and combat controls."},
             visuals = {Title = "Visuals", Icon = "eye", Desc = "Viewmodel, effects, and visual customization."},
             optimizations = {Title = "Performance", Icon = "gauge", Desc = "FPS, rendering, and performance settings."},
-            misc = {Title = "Misc", Icon = "package", Desc = "Utility, spoofing, and miscellaneous tools."},
         }
 
         local meta = tabs[key] or {
@@ -1079,25 +1155,26 @@ local Tabs = {
     changelog = Window:AddTab('Changelog'),
     Main = Window:AddTab('Combat'),
     visualstab = Window:AddTab('Visuals'),
+    optimizations = Window:AddTab('Performance'),
 };
-
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.5', true)
+changelog_box:AddLabel('Version 2.0.6', true)
+changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
 changelog_box:AddLabel('Groupbox and nested panel arrows now start collapsed instead of expanded.', true)
 
 local changelog_fix_box = changelog_tab:AddRightGroupbox('Fixes')
-changelog_fix_box:AddLabel('Restored all tab builders and removed stale references left by the previous removal pass.', true)
+changelog_fix_box:AddLabel('Protected dropdown defaults, color pickers, keybinds, and sections against invalid runtime values.', true)
 changelog_fix_box:AddLabel('Kept the existing WindUI compatibility layer and AddDivider support.', true)
 changelog_fix_box:AddLabel('Scripts/Settings are no longer created or initialized anywhere in the UI setup.', true)
 
 pcall(function()
     Tabs.Main._tab:Paragraph({
         Title = "Velox Hub | Rivals",
-        Desc = "A clean, organized interface for combat, visuals, performance, utilities, and updates.",
+        Desc = "A clean, organized interface for combat, visuals, ESP, world, character, performance, utilities, and updates.",
         Icon = "crosshair",
     })
 end)
@@ -1214,6 +1291,15 @@ getgenv().VeloxHubRivals = {
         closest_part = false,
     },
 
+    auto_vote_map = {
+        enable = false,
+        map = "",
+    },
+    animation = {
+        enable = false,
+        select_animation = "",
+        speed = 2,
+    },
 
     triggerbot = {
         enable = false,
@@ -1221,6 +1307,75 @@ getgenv().VeloxHubRivals = {
         reaction_time = 0.05,
         shoot_delay = 0.1,
         max_distance = 500,
+    },
+    weather = {
+        enable = false,
+        color = Color3.fromRGB(255, 255, 255),
+        rate = 100,
+        type = "snow",
+    },
+    esp = {
+        enable = false,
+        team_check = true,
+        box = {
+            enable = false,
+            color = Color3.new(1, 1, 1),
+            outline = Color3.new(0, 0, 0),
+            inline = Color3.new(0, 0, 0),
+            thickness = 1,
+        },
+        glow = {
+            enable = false,
+            color_start = Color3.new(1, 1, 1),
+            color_end = Color3.new(1, 1, 1),
+            transparency = 1,
+            rotation = 90,
+            speed = 2,
+            animated = false,
+        },
+        filled = {
+            enable = false,
+            color_start = Color3.new(1, 1, 1),
+            color_end = Color3.new(1, 1, 1),
+            transparency = 0.75,
+            rotation = 90,
+            speed = 2,
+            animated = false,
+            hit_flash = false,
+            hit_color = Color3.fromRGB(255, 40, 40),
+            hit_time = 0.3,
+        },
+        visible = {
+            enable = false,
+            color = Color3.fromRGB(60, 255, 90),
+        },
+        highlight = {
+            enable = false,
+            fill_color = Color3.fromRGB(0, 30, 255),
+            outline_color = Color3.fromRGB(255, 255, 255),
+            fill_transparency = 0.55,
+            outline_transparency = 0,
+        },
+        health = {
+            enable = false,
+            color_high = Color3.fromRGB(0, 255, 0),
+            color_mid = Color3.fromRGB(255, 255, 0),
+            color_low = Color3.fromRGB(255, 0, 0),
+            width = 3,
+            gap = 5,
+        },
+        text = {
+            name = { enable = false, color = Color3.new(1, 1, 1) },
+            studs = { enable = false, color = Color3.new(1, 1, 1) },
+            tool = { enable = false, color = Color3.new(1, 1, 1), position = "right" },
+            size = 9,
+            gradient = false,
+            gradient_color1 = Color3.fromRGB(0, 30, 255),
+            gradient_color2 = Color3.fromRGB(255, 255, 255),
+            flow = false,
+            flow_speed = 1,
+        },
+        max_dist = 25000,
     },
     death_effects = {
         enable = false,
@@ -1254,9 +1409,75 @@ getgenv().VeloxHubRivals = {
         scale = 1,
     },
 
+    world = {
+        fog = false,
+        fog_color = Color3.fromRGB(255, 255, 255),
+        fog_start = 150,
+        fog_end = 550,
+        ambient = false,
+        ambient_color = Color3.fromRGB(255, 255, 255),
+        clock = false,
+        clock_time = 14,
+        brightness = false,
+        brightness_level = 1,
+        exposure = false,
+        exposure_level = 0,
+        color_shift_top = false,
+        color_shift_top_color = Color3.fromRGB(255, 255, 255),
+        color_shift_bottom = false,
+        color_shift_bottom_color = Color3.fromRGB(255, 255, 255),
+        skybox = false,
+        skybox_selected = 'Deep Space',
+        skybox_rotate = false,
+        skybox_rotate_speed = 1,
+        skybox_rotate_direction = 'Horizontal',
+        skybox_rotate_method = 'Spin',
+        skybox_remove_sun = false,
+        skybox_remove_moon = false,
+        skybox_remove_stars = false,
+        atmosphere = false,
+        atmosphere_glare = 1.5,
+        atmosphere_haze = 10,
+        atmosphere_offset = 0.4,
+        atmosphere_density = 0.5,
+        atmosphere_color = Color3.fromRGB(255, 255, 255),
+        atmosphere_decay = Color3.fromRGB(90, 60, 30),
+        blur = false,
+        blur_size = 12,
+        bloom = false,
+        bloom_intensity = 1,
+        bloom_size = 24,
+        bloom_threshold = 0.9,
+        depth_of_field = false,
+        dof_focus = 25,
+        dof_intensity = 0.15,
+        sun_rays = false,
+        sun_rays_intensity = 0.25,
+        sun_rays_spread = 1,
+        saturation = false,
+        saturation_level = 0,
+        contrast_level = 0,
+        tint_color = Color3.fromRGB(255, 255, 255),
+        lighting_technology = false,
+        lighting_technology_mode = 'Future',
+        global_shadows = true,
+        env_diffuse = false,
+        env_diffuse_scale = 1,
+        env_specular = false,
+        env_specular_scale = 1,
+        outdoor_ambient = false,
+        outdoor_ambient_color = Color3.fromRGB(70, 70, 70),
+    },
     disable_anims = {
         enable = false,
         select = {},
+    },
+    fov_changer = {
+        enable = false,
+        fov = 80,
+    },
+    auto_slide = {
+        enable = false,
     },
     guns = {
         no_muzzle_flash = false,
@@ -1271,6 +1492,10 @@ getgenv().VeloxHubRivals = {
         anti_katana = false,
         riot_shield = false,
         auto_shoot = false,
+    },
+    device_spoof = {
+        enable = false,
+        type = "MouseKeyboard",
     },
     textures = {
         enable = false,
@@ -1297,8 +1522,35 @@ getgenv().VeloxHubRivals = {
     phase_hide = {
         enable = false,
     },
+    profile = {
+        spoof_local = false,
+        spoof_local_name = "",
+        spoof_other = false,
+        spoof_other_name = "",
+    },
+    infinite_double_jump = {
+        enable = false,
+    },
+    double_jump_height = {
+        enable = false,
+        height = 50,
+    },
+    sound_spammer = {
+        enable = false,
+        type = "DoubleJump",
+    },
+    auto_loadout = {
+        enable = false,
+        loadout = {
+            'Assault Rifle', 'Handgun', 'Fists', 'Grenade'
+        }
+    },
     third_person = {
         enable = false,
+    },
+    arcade_server = {
+        grab_drops = false,
+        auto_respawn = false,
     },
     removals = {
         no_freeze_effect = false,
@@ -1359,6 +1611,10 @@ getgenv().VeloxHubRivals = {
             transparency = 0,
         },
     },
+    stretched_res = {
+        enable = false,
+        stretched_res_amount = 0.20
+    },
     hit_notify = {
         enable = false,
         duration = 3,
@@ -1393,14 +1649,235 @@ getgenv().VeloxHubRivals = {
         curve_height = 14,
         through_walls = false,
     },
+    auto_queue = {
+        enable = false,
+        queue_mode = "",
+    },
+    thrower_esp = {
+        enable = false,
+        name = false,
+        image = false,
+        name_color = Color3.fromRGB(255, 255, 255),
+        name_size = 14,
+        distance = false,
+        distance_color = Color3.fromRGB(255, 255, 255),
+        distance_size = 12,
+        thrower_select = "",
+        font = "ProggyTiny",
+    },
+    fly = {
+        enable = false,
+        speed = 50,
+    },
+    walkspeed = {
+        enable = false,
+        multiplier = 1.5,
+    },
     motion_blur = {
         enable = false,
         intensity = 0.5,
         sensitivity = 1,
     },
+    slide_boost = {
+        enable = false,
+        speed = 60,
+    },
+    spoof = {
+        level = {
+            enable = false,
+            value = 9,
+        },
+        streak = {
+            enable = false,
+            value = 9,
+        },
+    },
+    player_status_spoof = {
+        enable = false,
+        select = "",
+    },
+    rank_spoof = {
+        enable = false,
+        rank = "Arch Nemesis",
+    },
+    elo_spoof = {
+        enable = false,
+        value = 60000,
+    },
+    name_spoof = {
+        enable = false,
+        display = "",
+        username = "",
+    },
 };
 local ELI = getgenv().VeloxHubRivals;
 
+local spoof_old = {
+    level = local_player:GetAttribute("Level") ,
+    streak = local_player:GetAttribute("StatisticDuelsWinStreak"),
+    playerstatus = local_player:GetAttribute("PlayerStatus"),
+    elo = local_player:GetAttribute("DisplayELO"),
+};
+
+run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.spoof.level.enable then
+        local_player:SetAttribute("Level", ELI.spoof.level.value);
+    end;
+    if ELI.spoof.streak.enable then
+        local_player:SetAttribute("StatisticDuelsWinStreak", ELI.spoof.streak.value);
+    end;
+    if ELI.player_status_spoof.enable then
+        local_player:SetAttribute("PlayerStatus", ELI.player_status_spoof.select);
+    end;
+    if ELI.elo_spoof.enable then
+        local_player:SetAttribute("DisplayELO", ELI.elo_spoof.value);
+    end;
+end));
+
+do
+    local RANK_ICONS = {
+        ["Bronze"]       = "rbxassetid://111599878354131",
+        ["Silver"]       = "rbxassetid://82834564754747",
+        ["Gold"]         = "rbxassetid://80716950169934",
+        ["Diamond"]      = "rbxassetid://131795064007344",
+        ["Onyx"]         = "rbxassetid://114166096331502",
+        ["Nemesis"]      = "rbxassetid://133903971285645",
+        ["Arch Nemesis"] = "rbxassetid://134520747948636",
+    };
+    local function commas(n)
+        local s = tostring(n);
+        while true do
+            local r;
+            s, r = string.gsub(s, "^(-?%d+)(%d%d%d)", "%1,%2");
+            if r == 0 then break end;
+        end;
+        return s;
+    end;
+    local function rankIconFor(rank)
+        if RANK_ICONS[rank] then return RANK_ICONS[rank] end;
+        local base = rank:gsub("%s*%d+%s*$", ""):gsub("^%s+", ""):gsub("%s+$", "");
+        return RANK_ICONS[base] or "";
+    end;
+
+    local held = setmetatable({}, { __mode = "k" });
+    local function anySpoofOn()
+        return ELI.rank_spoof.enable or ELI.elo_spoof.enable or ELI.name_spoof.enable;
+    end;
+    local function lockText(label, value)
+        if not label or not label:IsA("TextLabel") then return end;
+        if label.Text ~= value then label.Text = value end;
+        if held[label] then return end;
+        held[label] = true;
+        label:GetPropertyChangedSignal("Text"):Connect(function()
+            if not anySpoofOn() then return end;
+            if label.Text ~= value then label.Text = value end;
+        end);
+    end;
+    local function lockImage(img, value)
+        if not img or not (img:IsA("ImageLabel") or img:IsA("ImageButton")) then return end;
+        if img.Image ~= value then img.Image = value end;
+        if held[img] then return end;
+        held[img] = true;
+        img:GetPropertyChangedSignal("Image"):Connect(function()
+            if not ELI.rank_spoof.enable then return end;
+            if img.Image ~= value then img.Image = value end;
+        end);
+    end;
+
+    local function nameMatches()
+        local real = local_player.Name;
+        local disp = local_player.DisplayName;
+        return {
+            [disp] = "display",
+            [real] = "name",
+            ["@" .. real] = "atname",
+        };
+    end;
+
+    local function spoofNameLabel(label)
+        if not ELI.name_spoof.enable then return end;
+        local t = label.Text;
+        if t == "" then return end;
+        local disp = ELI.name_spoof.display ~= "" and ELI.name_spoof.display or local_player.DisplayName;
+        local user = ELI.name_spoof.username ~= "" and ELI.name_spoof.username or local_player.Name;
+        local m = nameMatches();
+        local kind = m[t];
+        if kind == "display" then
+            lockText(label, disp);
+        elseif kind == "name" then
+            lockText(label, user);
+        elseif kind == "atname" then
+            lockText(label, "@" .. user);
+        end;
+    end;
+
+    local function isMyRow(slot)
+        local playerFrame = slot:FindFirstChild("Player");
+        if not playerFrame then return false end;
+        local m = nameMatches();
+        for _, node in eli_ipairs(playerFrame:GetDescendants()) do
+            if node:IsA("TextLabel") and m[node.Text] then
+                return true;
+            end;
+        end;
+        return false;
+    end;
+
+    local scan = LPH_NO_VIRTUALIZE(function()
+        if not anySpoofOn() then return end;
+        local gui = local_player:FindFirstChild("PlayerGui");
+        if not gui then return end;
+        local mainGui = gui:FindFirstChild("MainGui");
+        local rankOn = ELI.rank_spoof.enable;
+        local eloOn = ELI.elo_spoof.enable;
+        local nameOn = ELI.name_spoof.enable;
+        local rankText = ELI.rank_spoof.rank or "";
+        local rankIcon = rankOn and rankIconFor(rankText) or "";
+        local eloText = eloOn and commas(ELI.elo_spoof.value) or nil;
+
+        local roots = { mainGui, gui:FindFirstChild("PlayerList") };
+        for _, root in eli_ipairs(roots) do
+            if root then
+                for _, d in eli_ipairs(root:GetDescendants()) do
+                    if d:IsA("TextLabel") then
+                        if nameOn then spoofNameLabel(d); end;
+                        if d.Name == "CurrentELO" and eloText and d:FindFirstAncestor("ELOBar") then
+                            lockText(d, eloText);
+                        elseif (d.Name == "LeftRank" or d.Name == "RightRank") and rankOn and rankText ~= "" and d:FindFirstAncestor("ELOBar") then
+                            lockText(d, rankText);
+                        end;
+                    end;
+                end;
+            end;
+        end;
+
+        if rankOn and rankIcon ~= "" then
+            local list = gui:FindFirstChild("PlayerList") or (mainGui and mainGui:FindFirstChild("PlayerList"));
+            if list then
+                for _, slot in eli_ipairs(list:GetDescendants()) do
+                    if slot.Name == "PlayerListSlot" and isMyRow(slot) then
+                        local stat = slot:FindFirstChild("Leaderstat");
+                        local container = stat and stat:FindFirstChild("RankContainer");
+                        if container then
+                            for _, ic in eli_ipairs(container:GetDescendants()) do
+                                if ic.Name == "Icon" and (ic:IsA("ImageLabel") or ic:IsA("ImageButton")) then
+                                    lockImage(ic, rankIcon);
+                                end;
+                            end;
+                        end;
+                    end;
+                end;
+            end;
+        end;
+    end);
+
+    task.spawn(function()
+        while true do
+            pcall(scan);
+            task.wait(0.5);
+        end;
+    end);
+end;
 
 do
     local opt = ELI.optimizations;
@@ -1714,9 +2191,99 @@ getgenv().VeloxHubRivals_materials = {
     },
 };
 
+local theanimationsd = {
+    ["Meditate"] = "96579993895076",
+    ["Orbit"] = "133811691098518",
+    ["Floss"] = "72174079036035",
+    ["OJ"] = "110064349530772",
+    ["Kicking Feet"] = "131879764029003",
+    ["Take the L"] = "112884830175040",
+    ["Hype"] = "80055417516516",
+};
 
+local world = {
+    fog_color = lighting.FogColor,
+    fog_start = lighting.FogStart,
+    fog_end = lighting.FogEnd,
+    ambient = lighting.Ambient,
+    clock_time = lighting.ClockTime,
+    brightness = lighting.Brightness,
+    exposure = lighting.ExposureCompensation,
+    color_shift_top = lighting.ColorShift_Top,
+    color_shift_bottom = lighting.ColorShift_Bottom,
+};
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.world.fog then
+        lighting.FogColor = ELI.world.fog_color;
+        lighting.FogStart = ELI.world.fog_start;
+        lighting.FogEnd = ELI.world.fog_end;
+    end;
+    if ELI.world.ambient then
+        lighting.Ambient = ELI.world.ambient_color;
+    end;
+    if ELI.world.clock then
+        lighting.ClockTime = ELI.world.clock_time;
+    end;
+    if ELI.world.brightness then
+        lighting.Brightness = ELI.world.brightness_level;
+    end;
+    if ELI.world.exposure then
+        lighting.ExposureCompensation = ELI.world.exposure_level;
+    end;
+    if ELI.world.color_shift_top then
+        lighting.ColorShift_Top = ELI.world.color_shift_top_color;
+    end;
+    if ELI.world.color_shift_bottom then
+        lighting.ColorShift_Bottom = ELI.world.color_shift_bottom_color;
+    end;
+end)));
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.double_jump_height.enable then
+        mechanics_controller._original_jump_power = ELI.double_jump_height.height;
+    end;
+end)));
+
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.auto_slide.enable then
+        if mechanics_controller.IsSprinting then
+            mechanics_controller:Slide();
+        end;
+    end;
+end)));
+
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.fly.enable and local_player.Character and local_player.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = local_player.Character.HumanoidRootPart;
+        local move_vector = Vector3.new(0, 0, 0);
+        if uis:IsKeyDown(Enum.KeyCode.W) then
+            move_vector += camera.CFrame.LookVector;
+        end;
+        if uis:IsKeyDown(Enum.KeyCode.S) then
+            move_vector -= camera.CFrame.LookVector;
+        end;
+        if uis:IsKeyDown(Enum.KeyCode.A) then
+            move_vector -= camera.CFrame.RightVector;
+        end;
+        if uis:IsKeyDown(Enum.KeyCode.D) then
+            move_vector += camera.CFrame.RightVector;
+        end;
+        if uis:IsKeyDown(Enum.KeyCode.Space) then
+            move_vector += Vector3.new(0, 1, 0);
+        end;
+        if uis:IsKeyDown(Enum.KeyCode.LeftShift) then
+            move_vector -= Vector3.new(0, 1, 0);
+        end;
+        if move_vector.Magnitude > 0 then
+            hrp.CFrame += move_vector.Unit * ELI.fly.speed * run_service.Heartbeat:Wait();
+        else
+            hrp.CFrame = CFrame.new(hrp.Position) * (hrp.CFrame - hrp.CFrame.Position);
+        end;
+        hrp.AssemblyLinearVelocity = Vector3.zero;
+        hrp.AssemblyAngularVelocity = Vector3.zero;
+    end;
+end)))
 
 do
     local motion_blur = Instance.new("BlurEffect");
@@ -1745,6 +2312,62 @@ do
         motion_blur.Size = motion_blur.Size + (target - motion_blur.Size) * math.min(dt * 20, 1);
     end)));
 
+    local walkspeed_base = 16;
+    local walkspeed_applying = false;
+    local walkspeed_conn = nil;
+
+    local function walkspeed_apply(humanoid)
+        if not ELI.walkspeed.enable then return end;
+        walkspeed_applying = true;
+        humanoid.WalkSpeed = walkspeed_base * ELI.walkspeed.multiplier;
+        walkspeed_applying = false;
+    end;
+
+    local function walkspeed_bind(humanoid)
+        if walkspeed_conn then
+            walkspeed_conn:Disconnect();
+            walkspeed_conn = nil;
+        end;
+        walkspeed_base = humanoid.WalkSpeed;
+        walkspeed_conn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(LPH_NO_VIRTUALIZE(function()
+            if walkspeed_applying then return end;
+            walkspeed_base = humanoid.WalkSpeed;
+            walkspeed_apply(humanoid);
+        end));
+        trove:Add(walkspeed_conn);
+        walkspeed_apply(humanoid);
+    end;
+
+    local function walkspeed_on_character(character)
+        local humanoid = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 5);
+        if humanoid then walkspeed_bind(humanoid) end;
+    end;
+
+    if local_player.Character then
+        walkspeed_on_character(local_player.Character);
+    end;
+    trove:Add(local_player.CharacterAdded:Connect(walkspeed_on_character));
+
+    local walkspeed_active = false;
+    trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+        local character = local_player.Character;
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid");
+        if not humanoid then return end;
+        if ELI.walkspeed.enable then
+            walkspeed_active = true;
+            local desired = walkspeed_base * ELI.walkspeed.multiplier;
+            if math.abs(humanoid.WalkSpeed - desired) > 0.05 then
+                walkspeed_applying = true;
+                humanoid.WalkSpeed = desired;
+                walkspeed_applying = false;
+            end;
+        elseif walkspeed_active then
+            walkspeed_active = false;
+            walkspeed_applying = true;
+            humanoid.WalkSpeed = walkspeed_base;
+            walkspeed_applying = false;
+        end;
+    end)));
 end
 
 do
@@ -2240,9 +2863,586 @@ trove:Add(function()
     G2L["1"]:Destroy();
 end);
 
+local esp = {};
+local cache = {};
+
+local espgui = Instance.new("ScreenGui");
+espgui.Name = "ESP";
+espgui.DisplayOrder = 9e9;
+espgui.ResetOnSpawn = false;
+espgui.IgnoreGuiInset = true;
+espgui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+espgui.Parent = gethui();
+
+local mainfont = Font.fromEnum(Enum.Font.Code);
+local fontid = "esp_font.ttf";
+pcall(function()
+	if not isfile(fontid) then
+		writefile(fontid, game:HttpGet("https://github.com/i77lhm/storage/raw/refs/heads/main/fonts/smallest_pixel-7.ttf"));
+	end;
+	if isfile("esp_font.font") then delfile("esp_font.font") end;
+	local fontdata = {
+		name  = "ESPFont",
+		faces = {{ name = "Regular", weight = 400, style = "normal", assetId = getcustomasset(fontid) }}
+	};
+	writefile("esp_font.font", http_service:JSONEncode(fontdata));
+	mainfont = Font.new(getcustomasset("esp_font.font"));
+end);
+
+local aligncenter = Enum.TextXAlignment.Center;
+local alignleft   = Enum.TextXAlignment.Left;
+local alignmid    = Enum.TextYAlignment.Center;
+local udim2offset = UDim2.fromOffset;
+local v2new       = Vector2.new;
+local v3new       = Vector3.new;
+local csnew       = ColorSequence.new;
+local cskp        = ColorSequenceKeypoint.new;
+local nsnew       = NumberSequence.new;
+local nskp        = NumberSequenceKeypoint.new;
+local mfloor      = math.floor;
+local mceil       = math.ceil;
+local mclamp      = math.clamp;
+local msin        = math.sin;
+local mmax        = math.max;
+local sfmt        = string.format;
+
+local function makelabel(xalign)
+	local lbl = Instance.new("TextLabel");
+	lbl.BackgroundTransparency = 1;
+	lbl.TextColor3 = Color3.new(1, 1, 1);
+	lbl.TextStrokeTransparency = 0;
+	lbl.TextStrokeColor3 = Color3.new(0, 0, 0);
+	lbl.TextScaled = false;
+	lbl.TextSize = 9;
+	lbl.FontFace = mainfont;
+	lbl.TextXAlignment = xalign or aligncenter;
+	lbl.TextYAlignment = alignmid;
+	lbl.Size = udim2offset(60, 12);
+	lbl.Visible = false;
+	lbl.Parent = espgui;
+	local grad = Instance.new("UIGradient");
+	grad.Enabled = false;
+	grad.Parent = lbl;
+	return lbl;
+end;
+
+applyTextGrad = function(lbl, seq, offset)
+	local g = lbl:FindFirstChildOfClass("UIGradient");
+	if not g then return end;
+	if seq then
+		g.Color = seq;
+		g.Offset = offset;
+		g.Enabled = true;
+	else
+		if g.Enabled then g.Enabled = false end;
+	end;
+end;
+
+esp.getweapon = function(player)
+	local viewmodels = workspace:FindFirstChild("ViewModels");
+	if not viewmodels then return "None" end;
+
+	local pname = player.Name;
+
+	for _, child in viewmodels:GetChildren() do
+		local parts = {};
+		for part in child.Name:gmatch("[^-]+") do
+			parts[#parts + 1] = part:match("^%s*(.-)%s*$");
+		end;
+		if #parts >= 2 and parts[1] == pname then
+			return parts[2];
+		end;
+	end;
+
+	local firstperson = viewmodels:FindFirstChild("FirstPerson");
+	if firstperson then
+		for _, child in firstperson:GetChildren() do
+			local parts = {};
+			for part in child.Name:gmatch("[^-]+") do
+				parts[#parts + 1] = part:match("^%s*(.-)%s*$");
+			end;
+			if #parts >= 2 and parts[1] == pname then
+				return parts[2];
+			end;
+		end;
+	end;
+
+	return "none";
+end;
+
+esp.getbounds = LPH_NO_VIRTUALIZE(function(root, dist)
+	local hrp2d    = camera:WorldToViewportPoint(root.Position);
+	local clamped  = math.min(dist, 535);
+	local refpos   = root.Position + (camera.CFrame.Position - root.Position).Unit * (dist - clamped);
+	local rootpos  = root.Position;
+
+	local chartop    = camera:WorldToViewportPoint(refpos + v3new(0, 3, 0));
+	local charbottom = camera:WorldToViewportPoint(refpos - v3new(0, 1, 0));
+	local charsize   = (charbottom.Y - chartop.Y) / 2;
+
+	local w = mfloor(charsize * 1.5);
+	local h = mfloor(charsize * 3.2);
+
+	local actualtop = camera:WorldToViewportPoint(rootpos + v3new(0, 3, 0));
+	local left = mfloor(hrp2d.X - charsize * 0.75);
+	local top  = mfloor(actualtop.Y);
+
+	if w < 4 or h < 4 then return nil end;
+
+	return left, top, w, h;
+end);
+
+esp.add = function(player)
+	local cfg = ELI.esp;
+	cache[player] = { box = {}, text = {}, bars = {} };
+	local c = cache[player];
+
+	c.box.filled = Instance.new("Frame");
+	c.box.filled.BackgroundColor3 = Color3.new(1, 1, 1);
+	c.box.filled.BackgroundTransparency = cfg.filled.transparency;
+	c.box.filled.BorderSizePixel = 0;
+	c.box.filled.Visible = false;
+	c.box.filled.ZIndex = 2;
+	c.box.filled.Parent = espgui;
+
+	c.box.filledgradient = Instance.new("UIGradient");
+	c.box.filledgradient.Color = csnew({ cskp(0, cfg.filled.color_start), cskp(1, cfg.filled.color_end) });
+	c.box.filledgradient.Rotation = cfg.filled.rotation;
+	c.box.filledgradient.Parent = c.box.filled;
+
+	c.highlight = Instance.new("Highlight");
+	c.highlight.Name = "\0";
+	c.highlight.Enabled = false;
+	c.highlight.Adornee = nil;
+	pcall(function() c.highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end);
+	c.highlight.FillColor = cfg.highlight.fill_color;
+	c.highlight.OutlineColor = cfg.highlight.outline_color;
+	c.highlight.FillTransparency = cfg.highlight.fill_transparency;
+	c.highlight.OutlineTransparency = cfg.highlight.outline_transparency;
+	pcall(function() c.highlight.Parent = core_gui end);
+
+	c.box.outline = Drawing.new("Square");
+	c.box.outline.Color = cfg.box.outline;
+	c.box.outline.Thickness = 1;
+	c.box.outline.Filled = false;
+	c.box.outline.Visible = false;
+
+	c.box.square = Drawing.new("Square");
+	c.box.square.Color = cfg.box.color;
+	c.box.square.Thickness = cfg.box.thickness;
+	c.box.square.Filled = false;
+	c.box.square.Visible = false;
+
+	c.box.inline = Drawing.new("Square");
+	c.box.inline.Color = cfg.box.inline;
+	c.box.inline.Thickness = 1;
+	c.box.inline.Filled = false;
+	c.box.inline.Visible = false;
+
+	c.box.glow = Instance.new("ImageLabel");
+	c.box.glow.Image = "rbxassetid://110204605000367";
+	c.box.glow.ScaleType = Enum.ScaleType.Slice;
+	c.box.glow.SliceCenter = Rect.new(v2new(21, 21), v2new(79, 79));
+	c.box.glow.AutomaticSize = Enum.AutomaticSize.XY;
+	c.box.glow.ImageTransparency = cfg.glow.transparency;
+	c.box.glow.ResampleMode = Enum.ResamplerMode.Pixelated;
+	c.box.glow.Visible = false;
+	c.box.glow.BackgroundTransparency = 1;
+	c.box.glow.Position = udim2offset(-21, -21);
+	c.box.glow.BorderColor3 = Color3.fromRGB(0, 0, 0);
+	c.box.glow.Size = udim2offset(0, 0);
+	c.box.glow.BorderSizePixel = 0;
+	c.box.glow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	c.box.glow.ZIndex = 1;
+	c.box.glow.Parent = espgui;
+
+	c.box.glowgradient = Instance.new("UIGradient");
+	c.box.glowgradient.Rotation = cfg.glow.rotation;
+	c.box.glowgradient.Color = csnew({ cskp(0, cfg.glow.color_start), cskp(1, cfg.glow.color_end) });
+	c.box.glowgradient.Transparency = nsnew({ nskp(0, 0), nskp(1, 0) });
+	c.box.glowgradient.Parent = c.box.glow;
+
+	local glowpad = Instance.new("UIPadding");
+	glowpad.PaddingTop    = UDim.new(0, 21);
+	glowpad.PaddingBottom = UDim.new(0, 20);
+	glowpad.PaddingLeft   = UDim.new(0, 21);
+	glowpad.PaddingRight  = UDim.new(0, 20);
+	glowpad.Parent = c.box.glow;
+
+	c.text.name  = makelabel(aligncenter);
+	c.text.studs = makelabel(aligncenter);
+	c.text.tool  = makelabel(alignleft);
+
+	c.bars.hp = {};
+	c.bars.hp.lasthp = 1;
+	c.bars.hp.lastdist = -1;
+	c.bars.hp.lastdiststr = "";
+
+	c.bars.hp.bg = Instance.new("Frame");
+	c.bars.hp.bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20);
+	c.bars.hp.bg.BackgroundTransparency = 0.3;
+	c.bars.hp.bg.BorderSizePixel = 0;
+	c.bars.hp.bg.Visible = false;
+	c.bars.hp.bg.ZIndex = 3;
+	c.bars.hp.bg.Parent = espgui;
+
+	local hpcorner = Instance.new("UICorner");
+	hpcorner.CornerRadius = UDim.new(0, 2);
+	hpcorner.Parent = c.bars.hp.bg;
+
+	local hpstroke = Instance.new("UIStroke");
+	hpstroke.Color = Color3.new(0, 0, 0);
+	hpstroke.Thickness = 1;
+	hpstroke.LineJoinMode = Enum.LineJoinMode.Round;
+	hpstroke.Parent = c.bars.hp.bg;
+
+	c.bars.hp.fill = Instance.new("Frame");
+	c.bars.hp.fill.BackgroundColor3 = Color3.new(1, 1, 1);
+	c.bars.hp.fill.BackgroundTransparency = 0;
+	c.bars.hp.fill.BorderSizePixel = 0;
+	c.bars.hp.fill.ZIndex = 4;
+	c.bars.hp.fill.Parent = espgui;
+
+	local hpfillcorner = Instance.new("UICorner");
+	hpfillcorner.CornerRadius = UDim.new(0, 2);
+	hpfillcorner.Parent = c.bars.hp.fill;
+
+	c.bars.hp.gradient = Instance.new("UIGradient");
+	c.bars.hp.gradient.Color = csnew({
+		cskp(0,   cfg.health.color_high),
+		cskp(0.5, cfg.health.color_mid),
+		cskp(1,   cfg.health.color_low)
+	});
+	c.bars.hp.gradient.Rotation = 90;
+	c.bars.hp.gradient.Parent = c.bars.hp.fill;
+end;
+
+esp.remove = function(player)
+	if not cache[player] then return end;
+	local c = cache[player];
+
+	if c.box then
+		if c.box.filled   then c.box.filled:Destroy()   end;
+		if c.box.square   then c.box.square:Remove()    end;
+		if c.box.outline  then c.box.outline:Remove()   end;
+		if c.box.inline   then c.box.inline:Remove()    end;
+		if c.box.glow     then c.box.glow:Destroy()     end;
+	end;
+
+	if c.text then
+		if c.text.name  then c.text.name:Destroy()  end;
+		if c.text.studs then c.text.studs:Destroy() end;
+		if c.text.tool  then c.text.tool:Destroy()  end;
+	end;
+
+	if c.bars and c.bars.hp then
+		if c.bars.hp.bg   then c.bars.hp.bg:Destroy()   end;
+		if c.bars.hp.fill then c.bars.hp.fill:Destroy() end;
+	end;
+
+	if c.highlight then pcall(function() c.highlight:Destroy() end) end;
+
+	cache[player] = nil;
+end;
+
+esp.hide = function(player)
+	if not cache[player] then return end;
+	local c = cache[player];
+
+	if c.box then
+		if c.box.filled  then c.box.filled.Visible  = false end;
+		if c.box.square  then c.box.square.Visible  = false end;
+		if c.box.outline then c.box.outline.Visible = false end;
+		if c.box.inline  then c.box.inline.Visible  = false end;
+		if c.box.glow    then c.box.glow.Visible    = false end;
+	end;
+
+	if c.text then
+		if c.text.name  then c.text.name.Visible  = false end;
+		if c.text.studs then c.text.studs.Visible = false end;
+		if c.text.tool  then c.text.tool.Visible  = false end;
+	end;
+
+	if c.bars and c.bars.hp then
+		if c.bars.hp.bg   then c.bars.hp.bg.Visible   = false end;
+		if c.bars.hp.fill then c.bars.hp.fill.Visible = false end;
+	end;
+
+	if c.highlight and c.highlight.Enabled then c.highlight.Enabled = false end;
+end;
+
+local tickval = 0;
+
+esp.update = LPH_NO_VIRTUALIZE(function(player)
+	if not cache[player] then return end;
+
+	local character = player.Character;
+	if not character or not character.Parent then esp.hide(player) return end;
+
+	local root = character:FindFirstChild("HumanoidRootPart");
+	local hum  = character:FindFirstChildWhichIsA("Humanoid");
+
+	if not root or not hum          then esp.hide(player) return end;
+	if hum.Health <= 0              then esp.hide(player) return end;
+
+	local cfg = ELI.esp;
+
+	if cfg.team_check and player:GetAttribute("TeamID") ~= nil
+		and player:GetAttribute("TeamID") == local_player:GetAttribute("TeamID") then
+		esp.hide(player);
+		return
+	end;
+
+	local rootpos = root.Position;
+	local camcf   = camera.CFrame.Position;
+	local dist    = (camcf - rootpos).Magnitude;
+
+	if dist > cfg.max_dist then esp.hide(player) return end;
+
+	local _, onscreen = camera:WorldToViewportPoint(rootpos);
+	if not onscreen then esp.hide(player) return end;
+
+	local left, top, w, h = esp.getbounds(root, dist);
+	if not left then esp.hide(player) return end;
+
+	local c        = cache[player];
+	local cbox     = c.box;
+	local ctext    = c.text;
+	local chp      = c.bars.hp;
+
+	local espVisible = false;
+	if cfg.visible.enable then
+		if (tickval - (c.visT or 0)) >= 0.05 then
+			local ok, seen = pcall(check_wall, root);
+			c.vis = ok and seen == true;
+			c.visT = tickval;
+		end;
+		espVisible = c.vis == true;
+	end;
+	local flashing = cfg.filled.hit_flash and (tickval - (c.hitFlash or 0)) < (cfg.filled.hit_time or 0.3);
+
+	local cfgfill  = cfg.filled;
+	local cfgbox   = cfg.box;
+	local cfgglow  = cfg.glow;
+	local cfghp    = cfg.health;
+	local cfgtxt   = cfg.text;
+
+	if cfgfill.enable then
+		local fb = cbox.filled;
+		fb.Visible = true;
+		fb.BackgroundTransparency = cfgfill.transparency;
+		fb.Position = udim2offset(left, top);
+		fb.Size = udim2offset(w, h);
+		local fc1, fc2;
+		if flashing then
+			fc1, fc2 = cfg.filled.hit_color, cfg.filled.hit_color;
+		elseif espVisible then
+			fc1, fc2 = cfg.visible.color, cfg.visible.color;
+		else
+			fc1, fc2 = cfgfill.color_start, cfgfill.color_end;
+		end;
+		if cbox.fillC1 ~= fc1 or cbox.fillC2 ~= fc2 then
+			cbox.fillC1, cbox.fillC2 = fc1, fc2;
+			cbox.filledgradient.Color = csnew({ cskp(0, fc1), cskp(1, fc2) });
+		end;
+		cbox.filledgradient.Rotation = cfgfill.animated and (msin(tickval * cfgfill.speed) * 90) + cfgfill.rotation or cfgfill.rotation;
+	else
+		cbox.filled.Visible = false;
+	end;
+
+	if cfg.highlight.enable and c.highlight then
+		local hl = c.highlight;
+		if hl.Adornee ~= character then hl.Adornee = character end;
+		local hfill;
+		if flashing then
+			hfill = cfg.filled.hit_color;
+		elseif espVisible then
+			hfill = cfg.visible.color;
+		else
+			hfill = cfg.highlight.fill_color;
+		end;
+		if hl.FillColor ~= hfill then hl.FillColor = hfill end;
+		if hl.OutlineColor ~= cfg.highlight.outline_color then hl.OutlineColor = cfg.highlight.outline_color end;
+		hl.FillTransparency = cfg.highlight.fill_transparency;
+		hl.OutlineTransparency = cfg.highlight.outline_transparency;
+		if not hl.Enabled then hl.Enabled = true end;
+	elseif c.highlight and c.highlight.Enabled then
+		c.highlight.Enabled = false;
+	end;
+
+	if cfgbox.enable then
+		local sq  = cbox.square;
+		local ol  = cbox.outline;
+		local il  = cbox.inline;
+
+		ol.Visible   = true;
+		ol.Color     = cfgbox.outline;
+		ol.Position  = v2new(left - 1, top - 1);
+		ol.Size      = v2new(w + 2, h + 2);
+
+		sq.Visible   = true;
+		sq.Color     = espVisible and cfg.visible.color or cfgbox.color;
+		sq.Thickness = cfgbox.thickness;
+		sq.Position  = v2new(left, top);
+		sq.Size      = v2new(w, h);
+
+		il.Visible   = true;
+		il.Color     = cfgbox.inline;
+		il.Position  = v2new(left + 1, top + 1);
+		il.Size      = v2new(w - 2, h - 2);
+	else
+		cbox.outline.Visible = false;
+		cbox.square.Visible  = false;
+		cbox.inline.Visible  = false;
+	end;
+
+	if cfgglow.enable and cfgbox.enable then
+		local gl = cbox.glow;
+		gl.Visible          = true;
+		gl.ImageTransparency = cfgglow.transparency;
+		gl.ImageColor3      = cfgglow.color_start;
+		gl.Position         = udim2offset(left - 21, top - 21);
+		gl.Size             = udim2offset(w + 42, h + 42);
+		if cbox.glowC1 ~= cfgglow.color_start or cbox.glowC2 ~= cfgglow.color_end then
+			cbox.glowC1, cbox.glowC2 = cfgglow.color_start, cfgglow.color_end;
+			cbox.glowgradient.Color = csnew({ cskp(0, cfgglow.color_start), cskp(1, cfgglow.color_end) });
+		end;
+	else
+		cbox.glow.Visible = false;
+	end;
+
+	if cfghp.enable then
+		local hptarget = mclamp(hum.Health / mmax(hum.MaxHealth, 1), 0, 1);
+		local hplerp   = chp.lasthp + (hptarget - chp.lasthp) * 0.1;
+
+		if math.abs(hplerp - chp.lasthp) > 0.001 then
+			chp.lasthp = hplerp;
+		end;
+
+		local fillh = mceil(h * chp.lasthp);
+		local barx  = left - cfghp.width - cfghp.gap;
+
+		local bg   = chp.bg;
+		local fill = chp.fill;
+
+		bg.Visible  = true;
+		bg.Position = udim2offset(barx, top);
+		bg.Size     = udim2offset(cfghp.width, h);
+
+		fill.Visible  = true;
+		fill.Position = udim2offset(barx, top + h - fillh);
+		fill.Size     = udim2offset(cfghp.width, fillh);
+
+		chp.gradient.Color = csnew({
+			cskp(0,   cfghp.color_high),
+			cskp(0.5, cfghp.color_mid),
+			cskp(1,   cfghp.color_low)
+		});
+	else
+		chp.bg.Visible   = false;
+		chp.fill.Visible = false;
+	end;
+
+	local txtsize = cfgtxt.size;
+
+	local textGradSeq, textFlow;
+	if cfgtxt.gradient then
+		textGradSeq = csnew({ cskp(0, cfgtxt.gradient_color1), cskp(0.5, cfgtxt.gradient_color2), cskp(1, cfgtxt.gradient_color1) });
+		textFlow = cfgtxt.flow and v2new((tickval * (cfgtxt.flow_speed or 1)) % 2 - 1, 0) or v2new(0, 0);
+	end;
+
+	local lname = ctext.name;
+	lname.Visible    = cfgtxt.name.enable;
+	lname.Text       = player.Name;
+	lname.TextColor3 = textGradSeq and Color3.new(1, 1, 1) or cfgtxt.name.color;
+	lname.TextSize   = txtsize;
+	lname.Position   = udim2offset(left, top - 13);
+	lname.Size       = udim2offset(w, 12);
+	applyTextGrad(lname, textGradSeq, textFlow);
+
+	local distm = mfloor(dist * 0.28);
+	if distm ~= chp.lastdist then
+		chp.lastdist    = distm;
+		chp.lastdiststr = sfmt("%dM", distm);
+	end;
+
+	local lstuds = ctext.studs;
+	lstuds.Visible    = cfgtxt.studs.enable;
+	lstuds.Text       = chp.lastdiststr;
+	lstuds.TextColor3 = textGradSeq and Color3.new(1, 1, 1) or cfgtxt.studs.color;
+	lstuds.TextSize   = txtsize;
+	lstuds.Position   = udim2offset(left, top + h + 2);
+	lstuds.Size       = udim2offset(w, 12);
+	applyTextGrad(lstuds, textGradSeq, textFlow);
+
+	local ltool = ctext.tool;
+	if cfgtxt.tool.enable then
+		ltool.Visible    = true;
+		ltool.Text       = esp.getweapon(player);
+		ltool.TextColor3 = textGradSeq and Color3.new(1, 1, 1) or cfgtxt.tool.color;
+		applyTextGrad(ltool, textGradSeq, textFlow);
+				ltool.TextSize   = txtsize;
+		local tpos = cfgtxt.tool.position;
+		if tpos == "top" then
+			local ty = cfgtxt.name.enable and (top - 26) or (top - 13);
+			ltool.TextXAlignment = aligncenter;
+			ltool.Position = udim2offset(left, ty);
+			ltool.Size     = udim2offset(w, 12);
+		elseif tpos == "bottom" then
+			local ty = top + h + 2;
+			if cfgtxt.studs.enable then ty = ty + 13 end;
+			ltool.TextXAlignment = aligncenter;
+			ltool.Position = udim2offset(left, ty);
+			ltool.Size     = udim2offset(w, 12);
+		else
+			ltool.TextXAlignment = alignleft;
+			ltool.Position = udim2offset(left + w + cfghp.width + cfghp.gap + 2, top);
+			ltool.Size     = udim2offset(50, 12);
+		end;
+	else
+		ltool.Visible = false;
+	end;
+end);
+
+for _, player in players:GetPlayers() do
+	if player ~= local_player then esp.add(player) end;
+end;
+
+players.PlayerAdded:Connect(function(player)
+	if player ~= local_player then esp.add(player) end;
+end);
+
+players.PlayerRemoving:Connect(function(player)
+	esp.remove(player);
+end);
+
+local VeloxHubRivals_state = { esp_hidden = false, vm_chams_last = 0 };
+
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+	tickval = tick();
+
+	if not ELI.esp.enable then
+		if not VeloxHubRivals_state.esp_hidden then
+			VeloxHubRivals_state.esp_hidden = true;
+			for _, player in players:GetPlayers() do
+				if player ~= local_player then esp.hide(player) end;
+			end;
+		end;
+		return
+	end;
+
+	VeloxHubRivals_state.esp_hidden = false;
+	for _, player in players:GetPlayers() do
+		if player ~= local_player then esp.update(player) end;
+	end;
+end)));
+
+trove:Add(function()
+	for _, player in players:GetPlayers() do esp.remove(player) end;
+	espgui:Destroy();
+end)
 
 do
-local VeloxHubRivals_state = { vm_chams_last = 0 };
     VeloxHubRivals_state.dmgCallbacks = {};
     VeloxHubRivals_state.dmgQueue = {};
     VeloxHubRivals_state.onDamage = function(fn) VeloxHubRivals_state.dmgCallbacks[#VeloxHubRivals_state.dmgCallbacks + 1] = fn end;
@@ -2340,7 +3540,266 @@ do
     end);
 end;
 
+local thrower = {};
 
+workspace.ChildRemoved:Connect(function(obj)
+    if not thrower[obj] then return end;
+    thrower[obj].name:Destroy();
+    thrower[obj].dist:Destroy();
+    thrower[obj].icon:Destroy();
+    thrower[obj] = nil;
+end);
+
+function get_skin_thumb(weapon_name)
+    if weapon_name == "SubspaceTripmineHitbox" then
+        local viewmodel_data = item_lib.ViewModels["Subspace Tripmine"];
+        return viewmodel_data and (viewmodel_data.ImageHighResolution or viewmodel_data.Image) or "";
+    end;
+
+    local cosmetic_data = cosmetic_lib.Cosmetics[weapon_name];
+    if cosmetic_data then
+        return cosmetic_data.ImageHighResolution or cosmetic_data.Image or "";
+    end;
+
+    local viewmodel_data = item_lib.ViewModels[weapon_name];
+    if viewmodel_data then
+        return viewmodel_data.ImageHighResolution or viewmodel_data.Image or "";
+    end;
+
+    return "";
+end;
+
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    local active = {};
+    local current_font = getgenv().fonts[ELI.thrower_esp.font];
+
+    if not current_font then return end;
+
+    if not ELI.thrower_esp.enable then
+        for _, v in next, thrower do
+            v.name.Visible = false;
+            v.dist.Visible = false;
+            v.icon.Visible = false;
+        end;
+        return;
+    end;
+
+    for _, v in next, workspace:GetChildren() do
+        local sel = ELI.thrower_esp.thrower_select;
+        if type(sel) ~= "table" then continue end;
+
+        local selected = false;
+        local display_name = v.Name;
+
+        for display, enabled in next, sel do
+            if not enabled then continue end;
+
+            local target_name = thisisforsubspace[display] or display;
+            local actual_weapon = v.Name;
+
+            local cosmetic_data = cosmetic_lib.Cosmetics[v.Name];
+            if cosmetic_data and cosmetic_data.ItemName then
+                actual_weapon = cosmetic_data.ItemName;
+            end;
+
+            if target_name == v.Name or target_name == actual_weapon then
+                selected = true;
+                display_name = display;
+                break;
+            end;
+        end;
+
+        if not selected then
+            if thrower[v] then
+                thrower[v].name:Destroy();
+                thrower[v].dist:Destroy();
+                thrower[v].icon:Destroy();
+                thrower[v] = nil;
+            end;
+            continue;
+        end;
+
+        local root = v:FindFirstChildWhichIsA("BasePart");
+        if not root then continue end;
+
+        active[v] = true;
+
+        if not thrower[v] then
+            local thumb = get_skin_thumb(v.Name);
+
+            local icon_label = Instance.new("ImageLabel");
+            icon_label.BackgroundTransparency = 1;
+            icon_label.Size = UDim2.fromOffset(140, 140);
+            icon_label.Image = thumb;
+            icon_label.Visible = false;
+            icon_label.Parent = espgui;
+
+            local name_label = Instance.new("TextLabel");
+            name_label.BackgroundTransparency = 1;
+            name_label.TextStrokeTransparency = 0;
+            name_label.TextStrokeColor3 = Color3.new(0, 0, 0);
+            name_label.TextScaled = false;
+            name_label.FontFace = current_font;
+            name_label.TextXAlignment = Enum.TextXAlignment.Center;
+            name_label.Size = UDim2.fromOffset(80, 14);
+            name_label.Visible = false;
+            name_label.Parent = espgui;
+
+            local dist_label = Instance.new("TextLabel");
+            dist_label.BackgroundTransparency = 1;
+            dist_label.TextStrokeTransparency = 0;
+            dist_label.TextStrokeColor3 = Color3.new(0, 0, 0);
+            dist_label.TextScaled = false;
+            dist_label.FontFace = current_font;
+            dist_label.TextXAlignment = Enum.TextXAlignment.Center;
+            dist_label.Size = UDim2.fromOffset(80, 12);
+            dist_label.Visible = false;
+            dist_label.Parent = espgui;
+
+            thrower[v] = { name = name_label, dist = dist_label, icon = icon_label };
+        end;
+
+        thrower[v].name.FontFace = current_font;
+        thrower[v].dist.FontFace = current_font;
+        thrower[v].icon.Image = get_skin_thumb(v.Name);
+
+        local pos, on_screen = camera:WorldToViewportPoint(root.Position);
+
+        thrower[v].icon.Visible = on_screen and ELI.thrower_esp.image == true;
+        thrower[v].name.Visible = on_screen and ELI.thrower_esp.name == true;
+        thrower[v].name.TextColor3 = ELI.thrower_esp.name_color;
+        thrower[v].name.TextSize = ELI.thrower_esp.name_size;
+        thrower[v].dist.Visible = on_screen and ELI.thrower_esp.distance == true;
+        thrower[v].dist.TextColor3 = ELI.thrower_esp.distance_color;
+        thrower[v].dist.TextSize = ELI.thrower_esp.distance_size;
+
+        if on_screen then
+            thrower[v].icon.Position = UDim2.fromOffset(pos.X - 70, pos.Y - 110);
+            thrower[v].name.Position = UDim2.fromOffset(pos.X - 40, pos.Y - 7);
+            thrower[v].name.Text = display_name;
+            thrower[v].dist.Position = UDim2.fromOffset(pos.X - 40, pos.Y + 7);
+            thrower[v].dist.Text = string.format("%.0fm", (camera.CFrame.Position - root.Position).Magnitude * 0.28);
+        end;
+    end;
+
+    for obj, labels in next, thrower do
+        if not active[obj] then
+            labels.name:Destroy();
+            labels.dist:Destroy();
+            labels.icon:Destroy();
+            thrower[obj] = nil;
+        end;
+    end;
+end)));
+local weather_types = {
+    ["snow"] = {
+        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7374999523162842), NumberSequenceKeypoint.new(0.973, 0.768750011920929), NumberSequenceKeypoint.new(1, 1) }),
+        Texture = "http://www.roblox.com/asset/?id=99851851",
+        SpreadAngle = Vector2.new(50, 50),
+        Speed = NumberRange.new(30, 30),
+        LightEmission = 10,
+        Rate = 1000,
+        EmissionDirection = Enum.NormalId.Bottom,
+        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.33096909523010254), NumberSequenceKeypoint.new(0.551, 0.40189146995544434), NumberSequenceKeypoint.new(1, 0.33096909523010254) }),
+    },
+    ["rain"] = {
+        Speed = NumberRange.new(60, 60),
+        LockedToPart = true,
+        Rate = 600,
+        Texture = "rbxassetid://1822883048",
+        EmissionDirection = Enum.NormalId.Bottom,
+        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.25, 0.7842668294906616), NumberSequenceKeypoint.new(0.75, 0.7842668294906616), NumberSequenceKeypoint.new(1, 1) }),
+        Lifetime = NumberRange.new(0.800000011920929, 0.800000011920929),
+        LightEmission = 0.05000000074505806,
+        LightInfluence = 0.8999999761581421,
+        Orientation = Enum.ParticleOrientation.FacingCameraWorldUp,
+        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 10), NumberSequenceKeypoint.new(1, 10) }),
+    },
+    ["light rain"] = {
+        LockedToPart = true,
+        Rate = 500,
+        Squash = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3) }),
+        LightInfluence = 0.30000001192092896,
+        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.435, 0), NumberSequenceKeypoint.new(1, 0) }),
+        Texture = "rbxasset://textures/particles/sparkles_main.dds",
+        Speed = NumberRange.new(30, 50),
+        Lifetime = NumberRange.new(9, 9),
+        LightEmission = 0.5,
+        Brightness = 2,
+        EmissionDirection = Enum.NormalId.Bottom,
+        Orientation = Enum.ParticleOrientation.FacingCameraWorldUp,
+        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.20000000298023224), NumberSequenceKeypoint.new(1, 0.20000000298023224) }),
+    },
+};
+
+local weather = {} do
+    local part = Instance.new("Part");
+    part.Size = Vector3.new(40, 40, 85);
+    part.CanCollide = false;
+    part.Massless = true;
+    part.CastShadow = false;
+    part.Transparency = 1;
+    part.Anchored = true;
+    part.Name = "weather";
+    part.Parent = workspace;
+
+    local emitter = Instance.new("ParticleEmitter");
+    for prop, val in next, weather_types[ELI.weather.type] do
+        emitter[prop] = val;
+    end;
+    emitter.Color = ColorSequence.new(ELI.weather.color);
+    emitter.Enabled = false;
+    emitter.Parent = part;
+
+    weather.part = part;
+    weather.emitter = emitter;
+    weather.last_type = ELI.weather.type;
+
+    trove:Add(part);
+end;
+
+function rebuild_emitter()
+    weather.emitter:Destroy();
+
+    local emitter = Instance.new("ParticleEmitter");
+    for prop,val in next, weather_types[ELI.weather.type] do
+        emitter[prop] = val;
+    end;
+    emitter.Color = ColorSequence.new(ELI.weather.color);
+    emitter.Enabled = true;
+    emitter.Parent = weather.part;
+
+    weather.emitter = emitter;
+    weather.last_type = ELI.weather.type;
+end;
+
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    if not ELI.weather.enable then
+        weather.emitter.Enabled = false;
+        return;
+    end;
+
+    if weather.last_type ~= ELI.weather.type then
+        rebuild_emitter();
+    end;
+
+    weather.emitter.Enabled = true;
+    weather.emitter.Rate = ELI.weather.rate;
+    weather.emitter.Color = ColorSequence.new(ELI.weather.color);
+    weather.part.CFrame = CFrame.new(camera.CFrame.Position + Vector3.new(0, 20, 0));
+end)));
+
+run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.stretched_res.enable then
+    camera.CFrame = camera.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, ELI.stretched_res.stretched_res_amount, 0, 0, 0, 1);
+    end;
+end));
+
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.infinite_double_jump.enable then
+    mechanics_controller._double_jumps_used = {};
+    end;
+end)));
 
 do
 local active_tracers = 0;
@@ -2869,6 +4328,13 @@ trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end)));
 
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.slide_boost.enable then
+        if mechanics_controller.IsSliding then
+            mechanics_controller._sliding_velocity.Velocity = mechanics_controller._sliding_velocity.Velocity.Unit * ELI.slide_boost.speed;
+        end;
+    end;
+end)));
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     if ELI.third_person.enable then
@@ -3203,6 +4669,352 @@ do
     end);
 end;
 
+local skybox_changer = {};
+do
+    function skybox_changer:init()
+        self.sky_object = lighting:FindFirstChildOfClass("Sky");
+        if not self.sky_object then
+            self.sky_object = Instance.new("Sky");
+            self.sky_object.Parent = lighting;
+        end;
+
+        self.default_skybox = lighting:FindFirstChildOfClass("Sky") and lighting:FindFirstChildOfClass("Sky"):Clone() or nil;
+
+        self.list = {
+            ["SpongeBob"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=15962101128",
+                SkyboxDn = "http://www.roblox.com/asset/?id=15970246218",
+                SkyboxFt = "http://www.roblox.com/asset/?id=15962101128",
+                SkyboxLf = "http://www.roblox.com/asset/?id=15962101128",
+                SkyboxRt = "http://www.roblox.com/asset/?id=15962101128",
+                SkyboxUp = "http://www.roblox.com/asset/?id=15962901054"
+            },
+            ["Deep Space"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=159248188",
+                SkyboxDn = "http://www.roblox.com/asset/?id=159248183",
+                SkyboxFt = "http://www.roblox.com/asset/?id=159248187",
+                SkyboxLf = "http://www.roblox.com/asset/?id=159248173",
+                SkyboxRt = "http://www.roblox.com/asset/?id=159248192",
+                SkyboxUp = "http://www.roblox.com/asset/?id=159248176"
+            },
+            ["Crazy Hello City"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=5487778646",
+                SkyboxDn = "http://www.roblox.com/asset/?id=5487764867",
+                SkyboxFt = "http://www.roblox.com/asset/?id=5487778646",
+                SkyboxLf = "http://www.roblox.com/asset/?id=5487778646",
+                SkyboxRt = "http://www.roblox.com/asset/?id=5487778646",
+                SkyboxUp = "http://www.roblox.com/asset/?id=5487762943"
+            },
+            ["One Piece"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=158516797",
+                SkyboxDn = "http://www.roblox.com/asset/?id=158516788",
+                SkyboxFt = "http://www.roblox.com/asset/?id=158516797",
+                SkyboxLf = "http://www.roblox.com/asset/?id=158516797",
+                SkyboxRt = "http://www.roblox.com/asset/?id=158516797",
+                SkyboxUp = "http://www.roblox.com/asset/?id=158516792"
+            },
+            ["Matcha"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=151165214",
+                SkyboxDn = "http://www.roblox.com/asset/?id=151165197",
+                SkyboxFt = "http://www.roblox.com/asset/?id=151165224",
+                SkyboxLf = "http://www.roblox.com/asset/?id=151165191",
+                SkyboxRt = "http://www.roblox.com/asset/?id=151165206",
+                SkyboxUp = "http://www.roblox.com/asset/?id=151165227"
+            },
+            ["Abyssal Blues"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=16269815885",
+                SkyboxDn = "http://www.roblox.com/asset/?id=16269839652",
+                SkyboxFt = "http://www.roblox.com/asset/?id=16269798011",
+                SkyboxLf = "http://www.roblox.com/asset/?id=16269813852",
+                SkyboxRt = "http://www.roblox.com/asset/?id=16269814948",
+                SkyboxUp = "http://www.roblox.com/asset/?id=16269829700"
+            },
+            ["Pink Sky"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=271042516",
+                SkyboxDn = "http://www.roblox.com/asset/?id=271077243",
+                SkyboxFt = "http://www.roblox.com/asset/?id=271042556",
+                SkyboxLf = "http://www.roblox.com/asset/?id=271042310",
+                SkyboxRt = "http://www.roblox.com/asset/?id=271042467",
+                SkyboxUp = "http://www.roblox.com/asset/?id=271077958"
+            },
+            ["Green Sky"] = {
+                SkyboxBk = "rbxassetid://921882045",
+                SkyboxDn = "rbxassetid://921881907",
+                SkyboxFt = "rbxassetid://921882121",
+                SkyboxLf = "rbxassetid://921881811",
+                SkyboxRt = "rbxassetid://921881989",
+                SkyboxUp = "rbxassetid://921882259"
+            },
+            ["Purple Nebula"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=159454299",
+                SkyboxDn = "http://www.roblox.com/asset/?id=159454296",
+                SkyboxFt = "http://www.roblox.com/asset/?id=159454299",
+                SkyboxLf = "http://www.roblox.com/asset/?id=159454299",
+                SkyboxRt = "http://www.roblox.com/asset/?id=159454299",
+                SkyboxUp = "http://www.roblox.com/asset/?id=159454288"
+            },
+            ["Vaporwave"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=1417494030",
+                SkyboxDn = "http://www.roblox.com/asset/?id=1417494146",
+                SkyboxFt = "http://www.roblox.com/asset/?id=1417494030",
+                SkyboxLf = "http://www.roblox.com/asset/?id=1417494030",
+                SkyboxRt = "http://www.roblox.com/asset/?id=1417494030",
+                SkyboxUp = "http://www.roblox.com/asset/?id=1417494643"
+            },
+            ["Redshift"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=2670643365",
+                SkyboxDn = "http://www.roblox.com/asset/?id=2670643365",
+                SkyboxFt = "http://www.roblox.com/asset/?id=2670643365",
+                SkyboxLf = "http://www.roblox.com/asset/?id=2670643365",
+                SkyboxRt = "http://www.roblox.com/asset/?id=2670643365",
+                SkyboxUp = "http://www.roblox.com/asset/?id=2670643365"
+            },
+            ["Minecraft"] = { SkyboxBk = "rbxassetid://1876545003", SkyboxDn = "rbxassetid://1876544331", SkyboxFt = "rbxassetid://1876542941", SkyboxLf = "rbxassetid://1876543392", SkyboxRt = "rbxassetid://1876543764", SkyboxUp = "rbxassetid://1876544642" },
+            ["PurpleDay"] = { SkyboxBk = "rbxassetid://296908715", SkyboxDn = "rbxassetid://296908724", SkyboxFt = "rbxassetid://296908740", SkyboxLf = "rbxassetid://296908755", SkyboxRt = "rbxassetid://296908764", SkyboxUp = "rbxassetid://296908769" },
+            ["RedNight"] = { SkyboxBk = "rbxassetid://401664839", SkyboxDn = "rbxassetid://401664862", SkyboxFt = "rbxassetid://401664960", SkyboxLf = "rbxassetid://401664881", SkyboxRt = "rbxassetid://401664901", SkyboxUp = "rbxassetid://401664936" },
+            ["Trollge"] = { SkyboxBk = "rbxassetid://6155393905", SkyboxDn = "rbxassetid://6155393905", SkyboxFt = "rbxassetid://6155393905", SkyboxLf = "rbxassetid://6155393905", SkyboxRt = "rbxassetid://6155393905", SkyboxUp = "rbxassetid://6155393905" },
+            ["Night"] = { SkyboxBk = "rbxassetid://48020371", SkyboxDn = "rbxassetid://48020144", SkyboxFt = "rbxassetid://48020234", SkyboxLf = "rbxassetid://48020211", SkyboxRt = "rbxassetid://48020254", SkyboxUp = "rbxassetid://48020383" },
+            ["Space"] = { SkyboxBk = "rbxassetid://149397692", SkyboxDn = "rbxassetid://149397686", SkyboxFt = "rbxassetid://149397697", SkyboxLf = "rbxassetid://149397684", SkyboxRt = "rbxassetid://149397688", SkyboxUp = "rbxassetid://149397702" },
+            ["Default"] = { SkyboxBk = "rbxassetid://6444884337", SkyboxDn = "rbxassetid://6444884785", SkyboxFt = "rbxassetid://6444884337", SkyboxLf = "rbxassetid://6444884337", SkyboxRt = "rbxassetid://6444884337", SkyboxUp = "rbxassetid://6412503613" },
+            ["VibeMorning"] = { SkyboxBk = "rbxassetid://1417494030", SkyboxDn = "rbxassetid://1417494146", SkyboxFt = "rbxassetid://1417494253", SkyboxLf = "rbxassetid://1417494402", SkyboxRt = "rbxassetid://1417494499", SkyboxUp = "rbxassetid://1417494643" },
+            ["VibeNight"] = { SkyboxBk = "rbxassetid://5084575798", SkyboxDn = "rbxassetid://5084575916", SkyboxFt = "rbxassetid://5103949679", SkyboxLf = "rbxassetid://5103948542", SkyboxRt = "rbxassetid://5103948784", SkyboxUp = "rbxassetid://5084576400" },
+            ["PurpleSplash"] = { SkyboxBk = "rbxassetid://8539982183", SkyboxDn = "rbxassetid://8539981943", SkyboxFt = "rbxassetid://8539981721", SkyboxLf = "rbxassetid://8539981424", SkyboxRt = "rbxassetid://8539980766", SkyboxUp = "rbxassetid://8539981085" },
+            ["GreenSpace"] = { SkyboxBk = "rbxassetid://159248188", SkyboxDn = "rbxassetid://159248183", SkyboxFt = "rbxassetid://159248187", SkyboxLf = "rbxassetid://159248173", SkyboxRt = "rbxassetid://159248192", SkyboxUp = "rbxassetid://159248176" },
+            ["Snowy"] = { SkyboxBk = "rbxassetid://155657655", SkyboxDn = "rbxassetid://155674246", SkyboxFt = "rbxassetid://155657609", SkyboxLf = "rbxassetid://155657671", SkyboxRt = "rbxassetid://155657619", SkyboxUp = "rbxassetid://155674931" },
+            ["Spongebob"] = { SkyboxBk = "rbxassetid://10287764626", SkyboxDn = "rbxassetid://10287766382", SkyboxFt = "rbxassetid://10287764626", SkyboxLf = "rbxassetid://10287763421", SkyboxRt = "rbxassetid://10287764626", SkyboxUp = "rbxassetid://10287767597" },
+            ["PinkDay"] = { SkyboxBk = "rbxassetid://271042516", SkyboxDn = "rbxassetid://271077243", SkyboxFt = "rbxassetid://271042556", SkyboxLf = "rbxassetid://271042310", SkyboxRt = "rbxassetid://271042467", SkyboxUp = "rbxassetid://271077958" },
+            ["AlienRed"] = { SkyboxBk = "rbxassetid://1012890", SkyboxDn = "rbxassetid://1012891", SkyboxFt = "rbxassetid://1012887", SkyboxLf = "rbxassetid://1012889", SkyboxRt = "rbxassetid://1012888", SkyboxUp = "rbxassetid://1014449" },
+            ["WallsOfAutumn"] = { SkyboxBk = "rbxassetid://7123244709", SkyboxDn = "rbxassetid://7123246497", SkyboxFt = "rbxassetid://7123255895", SkyboxLf = "rbxassetid://7123257992", SkyboxRt = "rbxassetid://7123279103", SkyboxUp = "rbxassetid://7123281828" },
+            ["ColdWinterness"] = { SkyboxBk = "rbxassetid://7123754562", SkyboxDn = "rbxassetid://7123756028", SkyboxFt = "rbxassetid://7123757422", SkyboxLf = "rbxassetid://7123758897", SkyboxRt = "rbxassetid://7123760563", SkyboxUp = "rbxassetid://7123762364" },
+            ["Oblivion"] = { SkyboxBk = "rbxassetid://7123654189", SkyboxDn = "rbxassetid://7123657455", SkyboxFt = "rbxassetid://7123662047", SkyboxLf = "rbxassetid://7123664533", SkyboxRt = "rbxassetid://7123666598", SkyboxUp = "rbxassetid://7123668994" },
+            ["ClassicSky"] = { SkyboxBk = "rbxassetid://672345740", SkyboxDn = "rbxassetid://672345828", SkyboxFt = "rbxassetid://672345879", SkyboxLf = "rbxassetid://672345927", SkyboxRt = "rbxassetid://672346006", SkyboxUp = "rbxassetid://672346072" },
+            ["PurpleNight"] = { SkyboxBk = "rbxassetid://5084575798", SkyboxDn = "rbxassetid://5084575916", SkyboxFt = "rbxassetid://5103949679", SkyboxLf = "rbxassetid://5103948542", SkyboxRt = "rbxassetid://5103948784", SkyboxUp = "rbxassetid://5084576400" },
+            ["PurpleDayClear"] = { SkyboxBk = "rbxassetid://6847607535", SkyboxDn = "rbxassetid://6847607977", SkyboxFt = "rbxassetid://6847608302", SkyboxLf = "rbxassetid://6847608608", SkyboxRt = "rbxassetid://6847608986", SkyboxUp = "rbxassetid://6847609323" },
+            ["YellowDay"] = { SkyboxBk = "rbxassetid://2651432901", SkyboxDn = "rbxassetid://2651434974", SkyboxFt = "rbxassetid://2651435990", SkyboxLf = "rbxassetid://2651436494", SkyboxRt = "rbxassetid://2651436979", SkyboxUp = "rbxassetid://2651437350" },
+            ["MinecraftSky"] = { SkyboxBk = "rbxassetid://8735166756", SkyboxDn = "rbxassetid://8735166707", SkyboxFt = "rbxassetid://8735231668", SkyboxLf = "rbxassetid://8735166755", SkyboxRt = "rbxassetid://8735166751", SkyboxUp = "rbxassetid://8735166729" },
+            ["Sunset"] = { SkyboxBk = "rbxassetid://150939022", SkyboxDn = "rbxassetid://150939038", SkyboxFt = "rbxassetid://150939047", SkyboxLf = "rbxassetid://150939056", SkyboxRt = "rbxassetid://150939063", SkyboxUp = "rbxassetid://150939082" },
+            ["CartoonSky"] = { SkyboxBk = "rbxassetid://6778646360", SkyboxDn = "rbxassetid://6778658683", SkyboxFt = "rbxassetid://6778648039", SkyboxLf = "rbxassetid://6778649136", SkyboxRt = "rbxassetid://6778650519", SkyboxUp = "rbxassetid://6778658364" },
+            ["Anime"] = { SkyboxBk = "rbxassetid://7643700666", SkyboxDn = "rbxassetid://7643743687", SkyboxFt = "rbxassetid://7644304186", SkyboxLf = "rbxassetid://7644288724", SkyboxRt = "rbxassetid://7643700819", SkyboxUp = "rbxassetid://7643757404" },
+            ["HellSky"] = { SkyboxBk = "rbxassetid://437430787", SkyboxDn = "rbxassetid://437430804", SkyboxFt = "rbxassetid://437430543", SkyboxLf = "rbxassetid://437430732", SkyboxRt = "rbxassetid://437430747", SkyboxUp = "rbxassetid://437430771" },
+            ["StarryNight"] = { SkyboxBk = "rbxassetid://8291078911", SkyboxDn = "rbxassetid://8291077403", SkyboxFt = "rbxassetid://8291081613", SkyboxLf = "rbxassetid://8291074004", SkyboxRt = "rbxassetid://8291080353", SkyboxUp = "rbxassetid://8291075054" },
+            ["Omori"] = { SkyboxBk = "rbxassetid://8767416629", SkyboxDn = "rbxassetid://8767416629", SkyboxFt = "rbxassetid://8767416629", SkyboxLf = "rbxassetid://8767416629", SkyboxRt = "rbxassetid://8767416629", SkyboxUp = "rbxassetid://8767416629" },
+            ["c00lkidd"] = { SkyboxBk = "rbxassetid://433381097", SkyboxDn = "rbxassetid://433381097", SkyboxFt = "rbxassetid://433381097", SkyboxLf = "rbxassetid://433381097", SkyboxRt = "rbxassetid://433381097", SkyboxUp = "rbxassetid://433381097" },
+            ["ClearDay"] = { SkyboxBk = "rbxassetid://591058823", SkyboxDn = "rbxassetid://591059876", SkyboxFt = "rbxassetid://591058104", SkyboxLf = "rbxassetid://591057861", SkyboxRt = "rbxassetid://591057625", SkyboxUp = "rbxassetid://591059642" },
+            ["Mountains"] = { SkyboxBk = "http://www.roblox.com/asset/?id=324014980", SkyboxDn = "http://www.roblox.com/asset/?id=324015477", SkyboxFt = "http://www.roblox.com/asset/?id=324014995", SkyboxLf = "http://www.roblox.com/asset/?id=324014679", SkyboxRt = "http://www.roblox.com/asset/?id=324015013", SkyboxUp = "http://www.roblox.com/asset/?id=324015409" },
+            ["Forest"] = { SkyboxBk = "http://www.roblox.com/asset/?id=70945545", SkyboxDn = "http://www.roblox.com/asset/?id=70945449", SkyboxFt = "http://www.roblox.com/asset/?id=70945487", SkyboxLf = "http://www.roblox.com/asset/?id=70945523", SkyboxRt = "http://www.roblox.com/asset/?id=70945508", SkyboxUp = "http://www.roblox.com/asset/?id=70945531" },
+            ["LargeForest"] = { SkyboxBk = "rbxassetid://17428978603", SkyboxDn = "rbxassetid://17428977445", SkyboxFt = "rbxassetid://17428977114", SkyboxLf = "rbxassetid://17428978399", SkyboxRt = "rbxassetid://17428976828", SkyboxUp = "rbxassetid://17428976669" },
+            ["Crimson"] = { SkyboxBk = "rbxassetid://15832429892", SkyboxDn = "rbxassetid://15832430998", SkyboxFt = "rbxassetid://15832430210", SkyboxLf = "rbxassetid://15832430671", SkyboxRt = "rbxassetid://15832431198", SkyboxUp = "rbxassetid://15832429401" },
+            ["PumpkinHill"] = { SkyboxBk = "rbxassetid://11202510597", SkyboxDn = "rbxassetid://11202510255", SkyboxFt = "rbxassetid://11202509993", SkyboxLf = "rbxassetid://11202510806", SkyboxRt = "rbxassetid://11202511066", SkyboxUp = "rbxassetid://11202509704" },
+            ["AnimeIsland"] = { SkyboxBk = "http://www.roblox.com/asset/?id=14753804949", SkyboxDn = "http://www.roblox.com/asset/?id=14753795573", SkyboxFt = "http://www.roblox.com/asset/?id=14753807625", SkyboxLf = "http://www.roblox.com/asset/?id=14753797417", SkyboxRt = "http://www.roblox.com/asset/?id=14753799966", SkyboxUp = "http://www.roblox.com/asset/?id=14753810287" },
+            ["SnowyMountains"] = { SkyboxBk = "http://www.roblox.com/asset/?id=368385273", SkyboxDn = "http://www.roblox.com/asset/?id=48015300", SkyboxFt = "http://www.roblox.com/asset/?id=368388290", SkyboxLf = "http://www.roblox.com/asset/?id=368390615", SkyboxRt = "http://www.roblox.com/asset/?id=368385190", SkyboxUp = "http://www.roblox.com/asset/?id=48015387" },
+            ["Desert"] = { SkyboxBk = "rbxassetid://161319957", SkyboxDn = "rbxassetid://161319965", SkyboxFt = "rbxassetid://161319970", SkyboxLf = "rbxassetid://161319983", SkyboxRt = "rbxassetid://161319989", SkyboxUp = "rbxassetid://161319996" },
+            ["Cloudy"] = { SkyboxBk = "http://www.roblox.com/asset/?id=225469345", SkyboxDn = "http://www.roblox.com/asset/?id=225469349", SkyboxFt = "http://www.roblox.com/asset/?id=225469359", SkyboxLf = "http://www.roblox.com/asset/?id=225469364", SkyboxRt = "http://www.roblox.com/asset/?id=225469372", SkyboxUp = "http://www.roblox.com/asset/?id=225469380" },
+            ["Island"] = { SkyboxBk = "http://www.roblox.com/asset/?id=319343577", SkyboxDn = "http://www.roblox.com/asset/?id=319343653", SkyboxFt = "http://www.roblox.com/asset/?id=319343666", SkyboxLf = "http://www.roblox.com/asset/?id=319343686", SkyboxRt = "http://www.roblox.com/asset/?id=319343631", SkyboxUp = "http://www.roblox.com/asset/?id=319343614" },
+            ["OrangeFog"] = { SkyboxBk = "http://www.roblox.com/asset/?id=458016711", SkyboxDn = "http://www.roblox.com/asset/?id=458016826", SkyboxFt = "http://www.roblox.com/asset/?id=458016532", SkyboxLf = "http://www.roblox.com/asset/?id=458016655", SkyboxRt = "http://www.roblox.com/asset/?id=458016782", SkyboxUp = "http://www.roblox.com/asset/?id=458016792" },
+            ["FadeNight"] = { SkyboxBk = "http://www.roblox.com/asset/?id=16888843486", SkyboxDn = "http://www.roblox.com/asset/?id=16888845693", SkyboxFt = "http://www.roblox.com/asset/?id=16888848245", SkyboxLf = "http://www.roblox.com/asset/?id=16888850949", SkyboxRt = "http://www.roblox.com/asset/?id=16888854243", SkyboxUp = "http://www.roblox.com/asset/?id=16888857144" },
+            ["Office"] = { SkyboxBk = "rbxassetid://658623433", SkyboxDn = "rbxassetid://316342560", SkyboxFt = "rbxassetid://658625205", SkyboxLf = "rbxassetid://658627155", SkyboxRt = "rbxassetid://658628504", SkyboxUp = "rbxassetid://658632701" },
+            ["Spongebob2"] = { SkyboxBk = "rbxassetid://12049872454", SkyboxDn = "rbxassetid://12049872284", SkyboxFt = "rbxassetid://12049872181", SkyboxLf = "rbxassetid://12049872074", SkyboxRt = "rbxassetid://12049871884", SkyboxUp = "rbxassetid://12049871774" },
+            ["PurpleFog"] = { SkyboxBk = "http://www.roblox.com/asset/?id=17279854976", SkyboxDn = "http://www.roblox.com/asset/?id=17279856318", SkyboxFt = "http://www.roblox.com/asset/?id=17279858447", SkyboxLf = "http://www.roblox.com/asset/?id=17279860360", SkyboxRt = "http://www.roblox.com/asset/?id=17279862234", SkyboxUp = "http://www.roblox.com/asset/?id=17279864507" },
+            ["EarthSpace"] = { SkyboxBk = "rbxassetid://15753305495", SkyboxDn = "rbxassetid://15753362674", SkyboxFt = "rbxassetid://15753305823", SkyboxLf = "rbxassetid://15753310707", SkyboxRt = "rbxassetid://15753304774", SkyboxUp = "rbxassetid://15753304473" },
+            ["GreenCloudy"] = { SkyboxBk = "rbxassetid://921882045", SkyboxDn = "rbxassetid://921881907", SkyboxFt = "rbxassetid://921882121", SkyboxLf = "rbxassetid://921881811", SkyboxRt = "rbxassetid://921881989", SkyboxUp = "rbxassetid://921882259" },
+            ["SummerDay"] = { SkyboxBk = "http://www.roblox.com/asset/?version=1&id=135483466", SkyboxDn = "http://www.roblox.com/asset/?version=1&id=135483484", SkyboxFt = "http://www.roblox.com/asset/?version=1&id=135483461", SkyboxLf = "http://www.roblox.com/asset/?version=1&id=135483495", SkyboxRt = "http://www.roblox.com/asset/?version=1&id=135483499", SkyboxUp = "http://www.roblox.com/asset/?version=1&id=135483475" },
+            ["SnowyPlains"] = { SkyboxBk = "http://www.roblox.com/asset/?id=155657655", SkyboxDn = "http://www.roblox.com/asset/?id=155674246", SkyboxFt = "http://www.roblox.com/asset/?id=155657609", SkyboxLf = "http://www.roblox.com/asset/?id=155657671", SkyboxRt = "http://www.roblox.com/asset/?id=155657619", SkyboxUp = "http://www.roblox.com/asset/?id=155674931" },
+            ["Underwater"] = { SkyboxBk = "http://www.roblox.com/asset/?id=227635868", SkyboxDn = "http://www.roblox.com/asset/?id=227635921", SkyboxFt = "http://www.roblox.com/asset/?id=227635954", SkyboxLf = "http://www.roblox.com/asset/?id=227635974", SkyboxRt = "http://www.roblox.com/asset/?id=227635990", SkyboxUp = "http://www.roblox.com/asset/?id=227636031" },
+            ["BlueAbyss"] = { SkyboxBk = "rbxassetid://16269815885", SkyboxDn = "rbxassetid://16269839652", SkyboxFt = "rbxassetid://16269798011", SkyboxLf = "rbxassetid://16269813852", SkyboxRt = "rbxassetid://16269814948", SkyboxUp = "rbxassetid://16269829700" },
+            ["Poison"] = { SkyboxBk = "rbxassetid://1370716695", SkyboxDn = "rbxassetid://1370716766", SkyboxFt = "rbxassetid://1370716833", SkyboxLf = "rbxassetid://1370716898", SkyboxRt = "rbxassetid://1370716955", SkyboxUp = "rbxassetid://1370717024" },
+            ["BlueSpace"] = { SkyboxBk = "rbxassetid://1127563035", SkyboxDn = "rbxassetid://1127563006", SkyboxFt = "rbxassetid://1127563026", SkyboxLf = "rbxassetid://1127563216", SkyboxRt = "rbxassetid://1127563115", SkyboxUp = "rbxassetid://1127562999" },
+            ["AnimeMountains"] = { SkyboxBk = "http://www.roblox.com/asset/?id=12849370744", SkyboxDn = "http://www.roblox.com/asset/?id=12849378890", SkyboxFt = "http://www.roblox.com/asset/?id=12849390276", SkyboxLf = "http://www.roblox.com/asset/?id=12849405549", SkyboxRt = "http://www.roblox.com/asset/?id=12849398428", SkyboxUp = "http://www.roblox.com/asset/?id=12849426002" },
+            ["PinkGradient"] = { SkyboxBk = "http://www.roblox.com/asset/?id=5371541816", SkyboxDn = "http://www.roblox.com/asset/?id=5371541154", SkyboxFt = "http://www.roblox.com/asset/?id=5371541816", SkyboxLf = "http://www.roblox.com/asset/?id=5371541816", SkyboxRt = "http://www.roblox.com/asset/?id=5371541816", SkyboxUp = "http://www.roblox.com/asset/?id=5371540604" },
+            ["YellowGradient"] = { SkyboxBk = "http://www.roblox.com/asset/?id=159005370", SkyboxDn = "rbxassetid://858422412", SkyboxFt = "http://www.roblox.com/asset/?id=159005370", SkyboxLf = "http://www.roblox.com/asset/?id=159005370", SkyboxRt = "http://www.roblox.com/asset/?id=159005370", SkyboxUp = "http://www.roblox.com/asset/?id=159006363" },
+            ["BlueGradient"] = { SkyboxBk = "http://www.roblox.com/asset/?id=4628466090", SkyboxDn = "http://www.roblox.com/asset/?id=4628471901", SkyboxFt = "http://www.roblox.com/asset/?id=4628466090", SkyboxLf = "http://www.roblox.com/asset/?id=4628466090", SkyboxRt = "http://www.roblox.com/asset/?id=4628466090", SkyboxUp = "http://www.roblox.com/asset/?id=4628472152" },
+            ["GreenNebula"] = { SkyboxBk = "http://www.roblox.com/asset/?id=47974894", SkyboxDn = "http://www.roblox.com/asset/?id=47974690", SkyboxFt = "http://www.roblox.com/asset/?id=47974821", SkyboxLf = "http://www.roblox.com/asset/?id=47974776", SkyboxRt = "http://www.roblox.com/asset/?id=47974859", SkyboxUp = "http://www.roblox.com/asset/?id=47974909" },
+            ["OrangeGradient"] = { SkyboxBk = "rbxassetid://6902754982", SkyboxDn = "rbxassetid://6902795826", SkyboxFt = "rbxassetid://6902754982", SkyboxLf = "rbxassetid://6902754982", SkyboxRt = "rbxassetid://6902754982", SkyboxUp = "rbxassetid://6902796078" },
+            ["GreenAurora"] = { SkyboxBk = "http://www.roblox.com/asset/?id=16563478983", SkyboxDn = "http://www.roblox.com/asset/?id=16563481302", SkyboxFt = "http://www.roblox.com/asset/?id=16563484084", SkyboxLf = "http://www.roblox.com/asset/?id=16563485362", SkyboxRt = "http://www.roblox.com/asset/?id=16563487078", SkyboxUp = "http://www.roblox.com/asset/?id=16563489821" },
+            ["Blank"] = { SkyboxBk = "http://www.roblox.com/asset/?ID=1361097", SkyboxDn = "http://www.roblox.com/asset/?ID=1361097", SkyboxFt = "http://www.roblox.com/asset/?ID=1361097", SkyboxLf = "http://www.roblox.com/asset/?ID=1361097", SkyboxRt = "http://www.roblox.com/asset/?ID=1361097", SkyboxUp = "http://www.roblox.com/asset/?ID=1361097" },
+            ["Clouds"] = { SkyboxBk = "rbxassetid://570557514", SkyboxDn = "rbxassetid://570557775", SkyboxFt = "rbxassetid://570557559", SkyboxLf = "rbxassetid://570557620", SkyboxRt = "rbxassetid://570557672", SkyboxUp = "rbxassetid://570557727" },
+            ["Cloudy Skies"] = { SkyboxBk = "rbxassetid://151165214", SkyboxDn = "rbxassetid://151165197", SkyboxFt = "rbxassetid://151165224", SkyboxLf = "rbxassetid://151165191", SkyboxRt = "rbxassetid://151165206", SkyboxUp = "rbxassetid://151165227" },
+            ["Elegant Morning"] = { SkyboxBk = "rbxassetid://153767241", SkyboxDn = "rbxassetid://153767216", SkyboxFt = "rbxassetid://153767266", SkyboxLf = "rbxassetid://153767200", SkyboxRt = "rbxassetid://153767231", SkyboxUp = "rbxassetid://153767288" },
+            ["Fade Blue"] = { SkyboxBk = "rbxassetid://153695414", SkyboxDn = "rbxassetid://153695352", SkyboxFt = "rbxassetid://153695452", SkyboxLf = "rbxassetid://153695320", SkyboxRt = "rbxassetid://153695383", SkyboxUp = "rbxassetid://153695471" },
+            ["Neptune"] = { SkyboxBk = "rbxassetid://218955819", SkyboxDn = "rbxassetid://218953419", SkyboxFt = "rbxassetid://218954524", SkyboxLf = "rbxassetid://218958493", SkyboxRt = "rbxassetid://218957134", SkyboxUp = "rbxassetid://218950090" },
+            ["Night Sky"] = { SkyboxBk = "rbxassetid://12064107", SkyboxDn = "rbxassetid://12064152", SkyboxFt = "rbxassetid://12064121", SkyboxLf = "rbxassetid://12063984", SkyboxRt = "rbxassetid://12064115", SkyboxUp = "rbxassetid://12064131" },
+            ["Purple And Blue"] = { SkyboxBk = "rbxassetid://149397692", SkyboxDn = "rbxassetid://149397686", SkyboxFt = "rbxassetid://149397697", SkyboxLf = "rbxassetid://149397684", SkyboxRt = "rbxassetid://149397688", SkyboxUp = "rbxassetid://149397702" },
+            ["Purple Clouds"] = { SkyboxBk = "rbxassetid://151165214", SkyboxDn = "rbxassetid://151165197", SkyboxFt = "rbxassetid://151165224", SkyboxLf = "rbxassetid://151165191", SkyboxRt = "rbxassetid://151165206", SkyboxUp = "rbxassetid://151165227" },
+            ["Purple Galaxy"] = { SkyboxBk = "http://www.roblox.com/Asset/?ID=14543264135", SkyboxDn = "http://www.roblox.com/asset/?ID=14543358958", SkyboxFt = "http://www.roblox.com/asset/?ID=14543257810", SkyboxLf = "http://www.roblox.com/asset/?ID=14543275895", SkyboxRt = "http://www.roblox.com/asset/?ID=14543280890", SkyboxUp = "http://www.roblox.com/asset/?ID=14543371676" },
+            ["Purple Nebula"] = { SkyboxBk = "rbxassetid://159454299", SkyboxDn = "rbxassetid://159454296", SkyboxFt = "rbxassetid://159454293", SkyboxLf = "rbxassetid://159454286", SkyboxRt = "rbxassetid://159454300", SkyboxUp = "rbxassetid://159454288" },
+            ["Red Night Sky"] = { SkyboxBk = "http://www.roblox.com/Asset/?ID=401664839", SkyboxDn = "http://www.roblox.com/asset/?ID=401664862", SkyboxFt = "http://www.roblox.com/asset/?ID=401664960", SkyboxLf = "http://www.roblox.com/asset/?ID=401664881", SkyboxRt = "http://www.roblox.com/asset/?ID=401664901", SkyboxUp = "http://www.roblox.com/asset/?ID=401664936" },
+            ["Redshift"] = { SkyboxBk = "rbxassetid://401664839", SkyboxDn = "rbxassetid://401664862", SkyboxFt = "rbxassetid://401664960", SkyboxLf = "rbxassetid://401664881", SkyboxRt = "rbxassetid://401664901", SkyboxUp = "rbxassetid://401664936" },
+            ["Setting Sun"] = { SkyboxBk = "rbxassetid://626460377", SkyboxDn = "rbxassetid://626460216", SkyboxFt = "rbxassetid://626460513", SkyboxLf = "rbxassetid://626473032", SkyboxRt = "rbxassetid://626458639", SkyboxUp = "rbxassetid://626460625" },
+            ["Twighlight"] = { SkyboxBk = "rbxassetid://264908339", SkyboxDn = "rbxassetid://264907909", SkyboxFt = "rbxassetid://264909420", SkyboxLf = "rbxassetid://264909758", SkyboxRt = "rbxassetid://264908886", SkyboxUp = "rbxassetid://264907379" },
+            ["Vaporwave"] = { SkyboxBk = "rbxassetid://1417494030", SkyboxDn = "rbxassetid://1417494146", SkyboxFt = "rbxassetid://1417494253", SkyboxLf = "rbxassetid://1417494402", SkyboxRt = "rbxassetid://1417494499", SkyboxUp = "rbxassetid://1417494643" },
+            ["Vivid Skies"] = { SkyboxBk = "rbxassetid://271042516", SkyboxDn = "rbxassetid://271077243", SkyboxFt = "rbxassetid://271042556", SkyboxLf = "rbxassetid://271042310", SkyboxRt = "rbxassetid://271042467", SkyboxUp = "rbxassetid://271077958" },
+            ["VeloxHubRivals Sky"] = { SkyboxBk = "rbxassetid://1898724755", SkyboxDn = "rbxassetid://1898727189", SkyboxFt = "rbxassetid://1898722814", SkyboxLf = "rbxassetid://1898729298", SkyboxRt = "rbxassetid://1898741025", SkyboxUp = "rbxassetid://1898736761" },
+        };
+
+        self.elements = {};
+        for skybox_name, _ in next, self.list do
+            table.insert(self.elements, skybox_name);
+        end;
+
+        self.selected = ELI.world.skybox_selected;
+    end;
+
+    function skybox_changer:update_skybox()
+        self.last_apply = os.clock();
+
+        for _, v in next, lighting:GetChildren() do
+            if v:IsA("Sky") then
+                v:Destroy();
+            end;
+        end;
+
+        local world_cfg = ELI.world;
+        local Sky;
+
+        if not world_cfg.skybox then
+            if self.default_skybox then
+                Sky = self.default_skybox:Clone();
+                Sky.Parent = lighting;
+            end;
+        else
+            local skybox_data = self.list[world_cfg.skybox_selected or ""];
+            if not skybox_data then return end;
+
+            Sky = Instance.new("Sky");
+            Sky.SkyboxBk = skybox_data.SkyboxBk;
+            Sky.SkyboxDn = skybox_data.SkyboxDn;
+            Sky.SkyboxFt = skybox_data.SkyboxFt;
+            Sky.SkyboxLf = skybox_data.SkyboxLf;
+            Sky.SkyboxRt = skybox_data.SkyboxRt;
+            Sky.SkyboxUp = skybox_data.SkyboxUp;
+            Sky.Parent = lighting;
+        end;
+
+        if Sky then
+            if world_cfg.skybox_remove_sun then Sky.SunTextureId = "" end;
+            if world_cfg.skybox_remove_moon then Sky.MoonTextureId = "" end;
+            if world_cfg.skybox_remove_stars then Sky.StarCount = 0 end;
+        end;
+    end;
+
+    skybox_changer:init();
+    skybox_changer.last_apply = 0;
+
+    local function skybox_reapply()
+        local world_cfg = ELI.world;
+        if not (world_cfg.skybox or world_cfg.skybox_remove_sun or world_cfg.skybox_remove_moon or world_cfg.skybox_remove_stars) then
+            return;
+        end;
+        if os.clock() - skybox_changer.last_apply < 0.25 then
+            return;
+        end;
+        skybox_changer:update_skybox();
+    end;
+
+    trove:Add(lighting.ChildRemoved:Connect(function(child)
+        if child:IsA("Sky") then
+            task.defer(skybox_reapply);
+        end;
+    end));
+
+    trove:Add(lighting.ChildAdded:Connect(function(child)
+        if child:IsA("Sky") then
+            task.defer(skybox_reapply);
+        end;
+    end));
+
+    trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function(dt)
+        local world_cfg = ELI.world;
+        local sky = lighting:FindFirstChildOfClass("Sky");
+        if world_cfg.skybox_rotate and sky then
+            if not skybox_changer.original_orientation then
+                skybox_changer.original_orientation = sky.SkyboxOrientation;
+            end;
+            skybox_changer.rotation_tick = (skybox_changer.rotation_tick or 0) + (dt * world_cfg.skybox_rotate_speed * 0.5);
+            local rotation_angle = 0;
+            if world_cfg.skybox_rotate_method == 'Spin' then
+                rotation_angle = (skybox_changer.rotation_tick * 20) % 360;
+            elseif world_cfg.skybox_rotate_method == 'Wave' then
+                rotation_angle = math.sin(skybox_changer.rotation_tick) * 180;
+            elseif world_cfg.skybox_rotate_method == 'Alternate' then
+                rotation_angle = math.abs((skybox_changer.rotation_tick * 40 % 720) - 360) - 180;
+            end;
+            local rot_v3 = Vector3.new(0, 0, 0);
+            if world_cfg.skybox_rotate_direction == 'Horizontal' then
+                rot_v3 = Vector3.new(0, rotation_angle, 0);
+            elseif world_cfg.skybox_rotate_direction == 'Vertical' then
+                rot_v3 = Vector3.new(rotation_angle, 0, 0);
+            elseif world_cfg.skybox_rotate_direction == 'Diagonal' then
+                rot_v3 = Vector3.new(rotation_angle, rotation_angle, rotation_angle);
+            end;
+            local success = pcall(function()
+                sky.SkyboxOrientation = rot_v3;
+            end);
+            if not success and world_cfg.skybox_rotate_direction == 'Horizontal' then
+                lighting.GeographicLatitude = rotation_angle;
+            end;
+        elseif not world_cfg.skybox_rotate and sky and skybox_changer.original_orientation then
+            pcall(function()
+                sky.SkyboxOrientation = skybox_changer.original_orientation;
+            end);
+            skybox_changer.original_orientation = nil;
+            skybox_changer.rotation_tick = 0;
+        end;
+    end)));
+end;
+
+local atmosphere_changer = {};
+do
+    function atmosphere_changer:init()
+        self.atmosphere_object = lighting:FindFirstChildOfClass("Atmosphere");
+        if not self.atmosphere_object then
+            self.atmosphere_object = Instance.new("Atmosphere");
+            self.atmosphere_object.Parent = lighting;
+        end;
+
+        self.default_atmosphere = self.atmosphere_object:Clone();
+        self.default_atmosphere.Parent = nil;
+
+        self.properties = {};
+        self.properties_list = {"glare", "haze", "offset", "density"};
+
+        for _, property in next, self.properties_list do
+            self.properties[property] = ELI.world["atmosphere_" .. property];
+        end;
+
+        if not ELI.world.atmosphere then
+            self.atmosphere_object.Parent = nil;
+        end;
+    end;
+
+    function atmosphere_changer:update_atmosphere()
+        if not ELI.world.atmosphere then
+            self.atmosphere_object.Parent = nil;
+
+            if self.default_atmosphere then
+                local Restored = self.default_atmosphere:Clone();
+                Restored.Parent = lighting;
+                self.atmosphere_object = Restored;
+            end;
+
+            return;
+        end;
+
+        if not self.atmosphere_object.Parent then
+            self.atmosphere_object.Parent = lighting;
+        end;
+
+        for _, property in next, self.properties_list do
+            local value = ELI.world["atmosphere_" .. property];
+            if value == nil then continue end;
+            self.atmosphere_object[property:sub(1, 1):upper() .. property:sub(2, #property)] = value;
+        end;
+
+        self.atmosphere_object.Color = ELI.world.atmosphere_color;
+        self.atmosphere_object.Decay = ELI.world.atmosphere_decay;
+    end;
+
+    atmosphere_changer:init();
+end;
 
 local hooked = {};
 function hookanim(vm)
@@ -3294,7 +5106,95 @@ local old_update = client_viewmodel.Update; client_viewmodel.Update = function(c
     return old_update(c, dt, movement_state, render_data);
 end;
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.auto_vote_map.enable then
+    replicated_storage.Remotes.Duels.Vote:FireServer(ELI.auto_vote_map.map);
+    end;
+end)));
 
+do
+local function fire_gui_button(btn)
+    local fired = false;
+    if firesignal then
+        for _, sname in eli_ipairs({ "MouseButton1Click", "MouseButton1Down", "Activated" }) do
+            local ok, sig = pcall(function() return btn[sname] end);
+            if ok and sig then
+                if pcall(firesignal, sig) then fired = true end;
+            end;
+        end;
+    end;
+    if not fired and getconnections then
+        for _, sname in eli_ipairs({ "MouseButton1Click", "MouseButton1Down", "Activated" }) do
+            local ok, sig = pcall(function() return btn[sname] end);
+            if ok and sig then
+                local good, cons = pcall(getconnections, sig);
+                if good and cons then
+                    for _, con in eli_ipairs(cons) do
+                        pcall(function()
+                            if con.Fire then con:Fire() elseif con.Function then con.Function() end;
+                        end);
+                        fired = true;
+                    end;
+                end;
+            end;
+        end;
+    end;
+    return fired;
+end;
+
+local function button_is_shown(gui)
+    local cur = gui;
+    while cur do
+        if cur:IsA("ScreenGui") then return cur.Enabled == true end;
+        if cur:IsA("GuiObject") and not cur.Visible then return false end;
+        cur = cur.Parent;
+    end;
+    return false;
+end;
+
+local leave_words = { ["leave"] = true, ["leave match"] = true, ["leave duel"] = true, ["leave game"] = true, ["back to lobby"] = true, ["return to lobby"] = true, ["lobby"] = true };
+
+local function try_auto_leave()
+    local pg = local_player:FindFirstChildOfClass("PlayerGui");
+    if not pg then return false end;
+    for _, d in eli_ipairs(pg:GetDescendants()) do
+        if d:IsA("TextButton") then
+            local t = string.lower((d.Text or ""):gsub("^%s*(.-)%s*$", "%1"));
+            if leave_words[t] and button_is_shown(d) then
+                if fire_gui_button(d) then return true end;
+            end;
+        end;
+    end;
+    return false;
+end;
+
+trove:Add(task.spawn(function()
+    while wait(1) do
+        if ELI.auto_queue.enable and ELI.auto_queue.queue_mode ~= "" then
+            local fighter = fighter_controller.LocalFighter;
+            local currently_in_match = false;
+            pcall(function()
+                currently_in_match = fighter ~= nil and fighter:Get("IsInDuel") == true;
+            end);
+            if currently_in_match then
+                clickedontheremote = false;
+            else
+                local pressed_leave = false;
+                pcall(function() pressed_leave = try_auto_leave() end);
+                if pressed_leave then
+                    clickedontheremote = false;
+                elseif not clickedontheremote then
+                    pcall(function()
+                        replicated_storage.Remotes.Matchmaking.JoinQueue:InvokeServer(ELI.auto_queue.queue_mode);
+                    end);
+                    clickedontheremote = true;
+                end;
+            end;
+            was_i_in_a_match = currently_in_match;
+        end;
+    end;
+end));
+end;
 
 local sorted_item_list = {};
 local class_dir = {
@@ -3312,9 +5212,48 @@ for _, item in next, item_lib.Items do
     table.insert(sorted_item_list[key], item.Name);
 end;
 
+local pick_weapons = replicated_storage.Remotes.Replication.Fighter.PickWeapons;
+trove:Add(task.spawn(LPH_NO_VIRTUALIZE(function()
+    while task.wait() do
+        if not ELI.auto_loadout.enable then
+            continue;
+        end;
+        local loadout = ELI.auto_loadout.loadout;
+        local current_page = pages.PageSystem.CurrentPage;
+        if local_fighter and local_fighter:Get('CanPickWeapons') == true then
+            if not current_page then continue end;
+            if current_page.Name ~= 'PickWeapons' then continue end;
+            local payload = {};
+            for i = 1, local_fighter:GetMaxEquippableWeapons() do
+                payload[i] = loadout[i];
+            end;
+            pick_weapons:FireServer(payload);
+        end;
+    end;
+end)));
 
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.arcade_server.grab_drops then
+        for _,v in next, workspace:GetChildren() do
+            if v.Name == "_drop" and v:IsA("BasePart") and local_player.Character:FindFirstChildWhichIsA("HumanoidRootPart") then
+                firetouchinterest(local_player.Character.HumanoidRootPart, v, 0);
+                firetouchinterest(local_player.Character.HumanoidRootPart, v, 1);
+            end;
+        end;
+    end;
+end)));
 
+trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.fov_changer.enable then
+        camera.FieldOfView = ELI.fov_changer.fov;
+    end;
+end)));
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.arcade_server.auto_respawn then
+        replicated_storage.Remotes.Duels.RespawnNow:FireServer();
+    end;
+end)));
 
 local triggerbot_handler = {};
 triggerbot_handler.is_shooting = false;
@@ -3375,6 +5314,10 @@ local replicate_from_server = local_fighter.ReplicateFromServer; local_fighter.R
             return replicate_from_server(controller, _type, ...);
         end;
 
+        if ELI.esp.filled.hit_flash then
+            local hp = players:GetPlayerFromCharacter(hit_character);
+            if hp and cache[hp] then cache[hp].hitFlash = tick() end;
+        end;
 
         if ELI.hit_notify.enable then
             local part = is_headshot and "Head" or "Body";
@@ -3427,7 +5370,17 @@ local play_hitmarker_sound = client_viewmodel.PlayHitmarkerSound; client_viewmod
     return play_hitmarker_sound(controller, critical, pitch);
 end;
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.device_spoof.enable then
+        replicated_storage.Remotes.Replication.Fighter.SetControls:FireServer(ELI.device_spoof.type);
+    end;
+end)));
 
+trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+    if ELI.sound_spammer.enable then
+        mechanics_controller:PlayMechanicsSound(ELI.sound_spammer.type);
+    end;
+end)));
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     if ELI.targeting.auto_shoot then
@@ -3534,7 +5487,7 @@ local function buildLegitTab()
                     keybind_silent_aim_enable = v;
                     ELI.silent_aim.enable = v;
                     sfov.Visible = v and ELI.silent_aim.show_fov or false;
-                    Toggles.show_fov_enable:SetVisible(v);
+                    safeVisible(Toggles, "show_fov_enable", v);
                 end
             }):AddKeyPicker('silent_aim_keybind', {
                 Default = '...',
@@ -3572,11 +5525,11 @@ local function buildLegitTab()
                 Callback = function(v)
                     ELI.silent_aim.show_fov = v;
                     sfov.Visible = v and ELI.silent_aim.enable or false;
-                    Options.silent_aim_fov_radius:SetVisible(v);
-                    Options.silent_aim_fov_transparency:SetVisible(v);
-                    Options.silent_aim_fov_thickness:SetVisible(v);
-                    Options.silent_aim_rotation_speed:SetVisible(v);
-                    Toggles.show_fill_enable:SetVisible(v);
+                    safeVisible(Options, "silent_aim_fov_radius", v);
+                    safeVisible(Options, "silent_aim_fov_transparency", v);
+                    safeVisible(Options, "silent_aim_fov_thickness", v);
+                    safeVisible(Options, "silent_aim_rotation_speed", v);
+                    safeVisible(Toggles, "show_fill_enable", v);
                 end
             }):AddColorPicker('fov_color', {
                 Title = 'Fov color',
@@ -3614,7 +5567,7 @@ local function buildLegitTab()
                 Visible = false,
                 Callback = function(v)
                     ELI.silent_aim.show_fill = v;
-                    Options.silent_aim_fill_transparency:SetVisible(v);
+                    safeVisible(Options, "silent_aim_fill_transparency", v);
                 end
             }):AddColorPicker('fill_color_primary', {
                 Title = 'Fill color',
@@ -3724,7 +5677,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                     keybind_aimbot_enable = v;
                     ELI.aimbot.enable = v;
                     afov.Visible = v and ELI.aimbot.show_fov or false;
-                    Toggles.aimbot_show_fov_enable:SetVisible(v);
+                    safeVisible(Toggles, "aimbot_show_fov_enable", v);
                 end
             }):AddKeyPicker('aimbot_keybind', {
                 Default = '...',
@@ -3746,11 +5699,11 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                 Callback = function(v)
                     ELI.aimbot.show_fov = v;
                     afov.Visible = v and ELI.aimbot.enable or false;
-                    Options.aimbot_fov_radius:SetVisible(v);
-                    Options.aimbot_fov_transparency:SetVisible(v);
-                    Options.aimbot_fov_thickness:SetVisible(v);
-                    Options.aimbot_rotation_speed:SetVisible(v);
-                    Toggles.aimbot_show_fill_enable:SetVisible(v);
+                    safeVisible(Options, "aimbot_fov_radius", v);
+                    safeVisible(Options, "aimbot_fov_transparency", v);
+                    safeVisible(Options, "aimbot_fov_thickness", v);
+                    safeVisible(Options, "aimbot_rotation_speed", v);
+                    safeVisible(Toggles, "aimbot_show_fill_enable", v);
                 end
             }):AddColorPicker('aimbot_fov_color', {
                 Title = 'Fov color',
@@ -3795,7 +5748,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                 Visible = false,
                 Callback = function(v)
                     ELI.aimbot.show_fill = v;
-                    Options.aimbot_fill_transparency:SetVisible(v);
+                    safeVisible(Options, "aimbot_fill_transparency", v);
                 end
             }):AddColorPicker('aimbot_fill_color_primary', {
                 Title = 'Fill color',
@@ -3986,7 +5939,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             Default = false,
             Callback = function(v)
                 ELI.guns.force_modifier_enable = v;
-                Options.force_modifier_value:SetVisible(v);
+                safeVisible(Options, "force_modifier_value", v);
                 if v then
                     for i, item in next, item_lib.Items do
                         old_force_auto[i] = item.InputSpammingEnabled.StartShooting;
@@ -4678,7 +6631,7 @@ local function buildRagebotTab()
         Default = true,
         Callback = function(v)
             ELI.ragebot.prediction = v;
-            Options.ragebot_prediction_amount:SetVisible(v);
+            safeVisible(Options, "ragebot_prediction_amount", v);
         end
     });
 
@@ -4897,6 +6850,20 @@ end;
 end
 buildRagebotTab()
 
+local function runTabBuilder(name, builder, tab)
+    local ok, err = pcall(builder)
+    if not ok then
+        reportUiError(tostring(name) .. " builder failed", err)
+        if tab then
+            local holder = tab
+            pcall(function()
+                holder:AddLeftGroupbox('Load Status'):AddLabel(tostring(name) .. ' skipped: ' .. tostring(err), true)
+            end)
+        end
+    end
+    return ok, err
+end
+
 local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
 
@@ -5005,9 +6972,9 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.viewmodel_offsets.enable = v;
-                    Options.viewmodel_offset_x:SetVisible(v);
-                    Options.viewmodel_offset_y:SetVisible(v);
-                    Options.viewmodel_offset_z:SetVisible(v);
+                    safeVisible(Options, "viewmodel_offset_x", v);
+                    safeVisible(Options, "viewmodel_offset_y", v);
+                    safeVisible(Options, "viewmodel_offset_z", v);
                     if v then
                         for i, vm in next, item_lib.ViewModels do
                             if vm.RootPartOffset then
@@ -5066,15 +7033,15 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.enable = v;
-                    Options.bullet_tracers_texture:SetVisible(v);
-                    Options.bullet_tracers_speed:SetVisible(v);
-                    Options.bullet_tracers_lifetime:SetVisible(v);
-                    Options.bullet_tracers_width0:SetVisible(v);
-                    Options.bullet_tracers_width1:SetVisible(v);
-                    Options.bullet_tracers_position_lerp_speed:SetVisible(v);
-                    Options.bullet_tracers_spring_expand:SetVisible(v);
-                    Options.bullet_tracers_expand_speed:SetVisible(v and ELI.bullet_tracers.spring_expand);
-                    Options.bullet_tracers_expand_damper:SetVisible(v and ELI.bullet_tracers.spring_expand);
+                    safeVisible(Options, "bullet_tracers_texture", v);
+                    safeVisible(Options, "bullet_tracers_speed", v);
+                    safeVisible(Options, "bullet_tracers_lifetime", v);
+                    safeVisible(Options, "bullet_tracers_width0", v);
+                    safeVisible(Options, "bullet_tracers_width1", v);
+                    safeVisible(Options, "bullet_tracers_position_lerp_speed", v);
+                    safeVisible(Options, "bullet_tracers_spring_expand", v);
+                    safeVisible(Options, "bullet_tracers_expand_speed", v and ELI.bullet_tracers.spring_expand);
+                    safeVisible(Options, "bullet_tracers_expand_damper", v and ELI.bullet_tracers.spring_expand);
                 end;
             }):AddColorPicker('bullet_tracers_color_start', {
                 Title = 'Color start',
@@ -5095,7 +7062,7 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.curve_around = v;
-                    Options.bullet_tracers_curve_height:SetVisible(v);
+                    safeVisible(Options, "bullet_tracers_curve_height", v);
                 end
             });
 
@@ -5198,8 +7165,8 @@ local function buildVisualsTab()
                 Visible = false,
                 Callback = function(v)
                     ELI.bullet_tracers.spring_expand = v;
-                    Options.bullet_tracers_expand_speed:SetVisible(v);
-                    Options.bullet_tracers_expand_damper:SetVisible(v);
+                    safeVisible(Options, "bullet_tracers_expand_speed", v);
+                    safeVisible(Options, "bullet_tracers_expand_damper", v);
                 end;
             });
 
@@ -5613,7 +7580,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.body.material_enable = v;
-                Options.vmc_body_material_type:SetVisible(v);
+                safeVisible(Options, "vmc_body_material_type", v);
             end;
         });
 
@@ -5667,7 +7634,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.item.material_enable = v;
-                Options.vmc_item_material_type:SetVisible(v);
+                safeVisible(Options, "vmc_item_material_type", v);
             end;
         });
 
@@ -5792,5 +7759,4 @@ end;
 end;
 end
 end
-buildVisualsTab()
-
+runTabBuilder("Visuals", buildVisualsTab, Tabs.visualstab)
