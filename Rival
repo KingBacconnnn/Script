@@ -1171,7 +1171,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.10', true)
+changelog_box:AddLabel('Version 2.0.11', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -3216,14 +3216,6 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 	local dist    = (camcf - rootpos).Magnitude;
 
 	if dist > cfg.max_dist then esp.hide(player) return end;
-
-	if cfg.wall_check then
-		local ok, seen = pcall(check_wall, root);
-		if not ok or not seen then
-			esp.hide(player);
-			return;
-		end;
-	end;
 
 	local _, onscreen = camera:WorldToViewportPoint(rootpos);
 	if not onscreen then esp.hide(player) return end;
