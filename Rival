@@ -227,19 +227,53 @@ local _unloadCallbacks = {}
 local _windowWrapper
 local _windWindow
 local _creating = true
+local _uiBuilding = true
+local _deferredUICallbacks = {}
 
 local function safeCall(fn, ...)
     if type(fn) ~= "function" then
         return nil
     end
-    local packed = table.pack(xpcall(fn, function(err)
-        return debug.traceback(tostring(err), 2)
-    end, ...))
-    if not packed[1] then
-        warn("[VeloxHub] Runtime callback error:\n" .. tostring(packed[2]))
+
+    local args = table.pack(...)
+    if _uiBuilding then
+        _deferredUICallbacks[#_deferredUICallbacks + 1] = {
+            fn = fn,
+            args = args,
+        }
         return nil
     end
-    return table.unpack(packed, 2, packed.n)
+
+    local ok, result = pcall(function()
+        return fn(table.unpack(args, 1, args.n))
+    end)
+
+    if ok then
+        return result
+    end
+
+    warn("[VeloxHub] UI callback failed:
+" .. tostring(result))
+end
+
+local function flushDeferredUICallbacks()
+    _uiBuilding = false
+
+    local queued = _deferredUICallbacks
+    _deferredUICallbacks = {}
+
+    for i = 1, #queued do
+        local item = queued[i]
+        local ok, err = pcall(function()
+            return item.fn(table.unpack(item.args, 1, item.args.n))
+        end)
+
+        if not ok then
+            warn("[VeloxHub] Deferred UI callback failed:
+" .. tostring(err))
+        end
+    end
+end
 
 local function trySet(actual, value)
     if not actual then return false end
@@ -376,7 +410,7 @@ local function makeElementWrapper(actual, index, bucket, info)
             Transparency = ci.Transparency or 0,
             Callback = function(color)
                 if opt then opt.Value = color end
-                if not _creating and ci.Callback then safeCall(ci.Callback, color) end
+                if ci.Callback then safeCall(ci.Callback, color) end
             end,
         })
         opt = makeElementWrapper(actualColor, idx, Options, {
@@ -603,9 +637,7 @@ function ContainerMethods:AddToggle(idx, info)
         Value = info.Default == true,
         Callback = function(value)
             if wrapper then wrapper.Value = value end
-            if not _creating then
-                safeCall(info.Callback, value)
-            end
+            safeCall(info.Callback, value)
         end,
     })
     wrapper = makeElementWrapper(actual, idx, Toggles, {
@@ -637,9 +669,7 @@ function ContainerMethods:AddSlider(idx, info)
         },
         Callback = function(value)
             if wrapper then wrapper.Value = value end
-            if not _creating then
-                safeCall(info.Callback, value)
-            end
+            safeCall(info.Callback, value)
         end,
     })
     wrapper = makeElementWrapper(actual, idx, Options, {
@@ -671,9 +701,7 @@ function ContainerMethods:AddDropdown(idx, info)
         Multi = info.Multi == true,
         Callback = function(value)
             if wrapper then wrapper.Value = value end
-            if not _creating then
-                safeCall(info.Callback, value)
-            end
+            safeCall(info.Callback, value)
         end,
     })
     pcall(function()
@@ -707,9 +735,7 @@ function ContainerMethods:AddInput(idx, info)
         Type = info.Type or (info.TextBox and "Textarea" or "Input"),
         Callback = function(value)
             if wrapper then wrapper.Value = value end
-            if not _creating then
-                safeCall(info.Callback, value)
-            end
+            safeCall(info.Callback, value)
         end,
     })
     wrapper = makeElementWrapper(actual, idx, Options, {
@@ -738,7 +764,7 @@ function ContainerMethods:AddGroupbox(info)
     local section = self._tab:Section({
         Title = title,
         Box = true,
-        Opened = true,
+        Opened = false,
     })
     local container = {_section = section, _tab = self._tab}
     return setmetatable(container, {__index = ContainerMethods})
@@ -753,7 +779,7 @@ function ContainerMethods:AddTabbox(info)
         local section = self._tab:Section({
             Title = tostring(name or "Section"),
             Box = true,
-            Opened = true,
+            Opened = false,
         })
         local child = {_section = section, _tab = self._tab}
         setmetatable(child, {__index = ContainerMethods})
@@ -5420,17 +5446,9 @@ trove:Add(function()
 end);
 
 local function runTabBuilder(name, builder, tab)
-    local ok, err = xpcall(builder, function(e)
-        return debug.traceback(tostring(e), 2)
-    end)
+    local ok, err = xpcall(builder, debug.traceback)
     if not ok then
-        local message = "Builder failed: " .. tostring(name) .. "\n" .. tostring(err)
-        warn("[VeloxHub] " .. message)
-        pcall(function()
-            local box = tab:AddLeftGroupbox("Runtime status")
-            box:AddLabel("This tab hit a runtime error during UI creation.", true)
-            box:AddLabel(tostring(err), true)
-        end)
+        warn("[VeloxHub] " .. tostring(name) .. " UI builder failed:\n" .. tostring(err))
     end
     return ok
 end
@@ -6809,7 +6827,7 @@ do
     end);
 end;
 end
-runTabBuilder("Performance", buildRagebotTab, Tabs.optimizations)
+runTabBuilder("Ragebot", buildRagebotTab, Tabs.Main)
 
 local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
@@ -9425,6 +9443,7 @@ end
 end
 runTabBuilder("Misc", buildMiscTab, Tabs.misc_tab)
 
+local function buildMiscProfileTab()
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
@@ -10543,6 +10562,10 @@ do
     end;
 end
 
+end
+
+runTabBuilder("Misc Profile", buildMiscProfileTab, Tabs.misc_tab)
+
 local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
@@ -10600,14 +10623,14 @@ local function buildCharacterTab()
             end;
         });
 
-        movement_tab:AddToggle('movement_slide_boost_enable', {
+        movement_tab:AddToggle('slide_boost_enable', {
             Text = 'Slide boost',
             Default = false,
             Callback = function(v)
                 keybind_slide_boost_enable = v;
                 ELI.slide_boost.enable = v;
             end;
-        }):AddKeyPicker('movement_slide_boost_keybind', {
+        }):AddKeyPicker('slide_boost_keybind', {
             Default = '',
             Text = 'Slide boost',
             NoUI = false,
@@ -10629,7 +10652,7 @@ local function buildCharacterTab()
                 end;
             end;
         });
-        movement_tab:AddSlider('movement_slide_boost_speed', {
+        movement_tab:AddSlider('slide_boost_spped', {
             Text = 'Height',
             Default = 50,
             Min = 1,
@@ -10764,7 +10787,7 @@ local function stopCustomAnimation()
 end;
 
 run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    local ok, err = xpcall(function()
+    local ok = pcall(function()
         if not ELI.animation.enable then
             stopCustomAnimation();
             return;
@@ -10822,16 +10845,13 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
             pcall(function() animasdads:AdjustSpeed(speed) end);
             anim_last_speed = speed;
         end;
-    end, function(e)
-        return debug.traceback(tostring(e), 2)
-    end)
+    end);
     if not ok then
-        warn("[VeloxHub] Character animation runtime error:\n" .. tostring(err))
         anim_last_id = "";
-    end
+    end;
 end));
 end
 end;
 runTabBuilder("Character", buildCharacterTab, Tabs.character_tab)
 
-_creating = false
+flushDeferredUICallbacks()
