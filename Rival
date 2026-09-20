@@ -1171,7 +1171,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.7', true)
+changelog_box:AddLabel('Version 2.0.8', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -1326,13 +1326,13 @@ getgenv().VeloxHubRivals = {
         type = "snow",
     },
     esp = {
-        enable = false,
-        team_check = true,
+        enable = true,
+        team_check = false,
         box = {
-            enable = false,
-            color = Color3.new(1, 1, 1),
-            outline = Color3.new(0, 0, 0),
-            inline = Color3.new(0, 0, 0),
+            enable = true,
+            color = Color3.fromRGB(0, 210, 255),
+            outline = Color3.fromRGB(0, 0, 0),
+            inline = Color3.fromRGB(255, 255, 255),
             thickness = 1,
         },
         glow = {
@@ -1361,14 +1361,14 @@ getgenv().VeloxHubRivals = {
             color = Color3.fromRGB(60, 255, 90),
         },
         highlight = {
-            enable = false,
+            enable = true,
             fill_color = Color3.fromRGB(0, 30, 255),
             outline_color = Color3.fromRGB(255, 255, 255),
             fill_transparency = 0.55,
             outline_transparency = 0,
         },
         health = {
-            enable = false,
+            enable = true,
             color_high = Color3.fromRGB(0, 255, 0),
             color_mid = Color3.fromRGB(255, 255, 0),
             color_low = Color3.fromRGB(255, 0, 0),
@@ -1376,10 +1376,10 @@ getgenv().VeloxHubRivals = {
             gap = 5,
         },
         text = {
-            name = { enable = false, color = Color3.new(1, 1, 1) },
-            studs = { enable = false, color = Color3.new(1, 1, 1) },
+            name = { enable = true, color = Color3.fromRGB(240, 245, 255) },
+            studs = { enable = true, color = Color3.fromRGB(240, 245, 255) },
             tool = { enable = false, color = Color3.new(1, 1, 1), position = "right" },
-            size = 9,
+            size = 13,
             gradient = false,
             gradient_color1 = Color3.fromRGB(0, 30, 255),
             gradient_color2 = Color3.fromRGB(255, 255, 255),
@@ -1719,26 +1719,6 @@ getgenv().VeloxHubRivals = {
         enable = false,
         display = "",
         username = "",
-    },
-    esp = {
-        enable = true,
-        box = true,
-        health = true,
-        name = true,
-        distance = true,
-        tracer = false,
-        highlight = true,
-        offscreen_arrow = false,
-        team_check = false,
-        show_local_player = false,
-        visible_only = false,
-        max_dist = 1000,
-        team_color = true,
-        box_color = Color3.fromRGB(0, 210, 255),
-        text_color = Color3.fromRGB(240, 245, 255),
-        text_size = 13,
-        text_outline = true,
-        highlight_fill = 0.5,
     },
 };
 local ELI = getgenv().VeloxHubRivals;
@@ -3217,6 +3197,12 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 	if hum.Health <= 0              then esp.hide(player) return end;
 
 	local cfg = ELI.esp;
+	if type(cfg) ~= "table" or type(cfg.box) ~= "table" or type(cfg.filled) ~= "table"
+		or type(cfg.highlight) ~= "table" or type(cfg.health) ~= "table"
+		or type(cfg.text) ~= "table" then
+		warn("[VeloxHub][ESP] Invalid ESP configuration; skipping update")
+		return
+	end;
 
 	if cfg.team_check and player:GetAttribute("TeamID") ~= nil
 		and player:GetAttribute("TeamID") == local_player:GetAttribute("TeamID") then
@@ -7796,6 +7782,7 @@ local function buildEspTab()
     local esp_tab = Tabs.esptab
 
     local master = esp_tab:AddLeftGroupbox("ESP")
+
     master:AddToggle("esp_enable", {
         Text = "Enable ESP",
         Default = ELI.esp.enable,
@@ -7803,55 +7790,36 @@ local function buildEspTab()
     })
     master:AddToggle("esp_box_enable", {
         Text = "Box",
-        Default = ELI.esp.box,
-        Callback = function(v) ELI.esp.box = v end,
+        Default = ELI.esp.box.enable,
+        Callback = function(v) ELI.esp.box.enable = v end,
     })
     master:AddToggle("esp_health_enable", {
         Text = "Health Bar",
-        Default = ELI.esp.health,
-        Callback = function(v) ELI.esp.health = v end,
+        Default = ELI.esp.health.enable,
+        Callback = function(v) ELI.esp.health.enable = v end,
     })
     master:AddToggle("esp_name_enable", {
         Text = "Name",
-        Default = ELI.esp.name,
-        Callback = function(v) ELI.esp.name = v end,
+        Default = ELI.esp.text.name.enable,
+        Callback = function(v) ELI.esp.text.name.enable = v end,
     })
     master:AddToggle("esp_distance_enable", {
         Text = "Distance",
-        Default = ELI.esp.distance,
-        Callback = function(v) ELI.esp.distance = v end,
-    })
-    master:AddToggle("esp_tracer_enable", {
-        Text = "Tracer",
-        Default = ELI.esp.tracer,
-        Callback = function(v) ELI.esp.tracer = v end,
+        Default = ELI.esp.text.studs.enable,
+        Callback = function(v) ELI.esp.text.studs.enable = v end,
     })
     master:AddToggle("esp_highlight_enable", {
         Text = "Highlight",
-        Default = ELI.esp.highlight,
-        Callback = function(v) ELI.esp.highlight = v end,
-    })
-    master:AddToggle("esp_offscreen_arrow", {
-        Text = "Offscreen Arrow",
-        Default = ELI.esp.offscreen_arrow,
-        Callback = function(v) ELI.esp.offscreen_arrow = v end,
+        Default = ELI.esp.highlight.enable,
+        Callback = function(v) ELI.esp.highlight.enable = v end,
     })
 
     local filters = esp_tab:AddRightGroupbox("Filters")
+
     filters:AddToggle("esp_team_check", {
         Text = "Team Check",
         Default = ELI.esp.team_check,
         Callback = function(v) ELI.esp.team_check = v end,
-    })
-    filters:AddToggle("esp_show_local", {
-        Text = "Show Local Player",
-        Default = ELI.esp.show_local_player,
-        Callback = function(v) ELI.esp.show_local_player = v end,
-    })
-    filters:AddToggle("esp_visible_only", {
-        Text = "Visible Only",
-        Default = ELI.esp.visible_only,
-        Callback = function(v) ELI.esp.visible_only = v end,
     })
     filters:AddSlider("esp_max_distance", {
         Text = "Max Distance",
@@ -7863,41 +7831,38 @@ local function buildEspTab()
     })
 
     local style = esp_tab:AddLeftGroupbox("Style")
-    style:AddToggle("esp_team_colors", {
-        Text = "Use Team Colors",
-        Default = ELI.esp.team_color,
-        Callback = function(v) ELI.esp.team_color = v end,
-    })
-    style:AddToggle("esp_text_outline", {
-        Text = "Text Outline",
-        Default = ELI.esp.text_outline,
-        Callback = function(v) ELI.esp.text_outline = v end,
-    })
+
     style:AddColorPicker("esp_box_color", {
         Text = "Box Color",
-        Default = ELI.esp.box_color,
-        Callback = function(v) ELI.esp.box_color = v end,
+        Default = ELI.esp.box.color,
+        Callback = function(v)
+            ELI.esp.box.color = v
+        end,
     })
     style:AddColorPicker("esp_text_color", {
         Text = "Text Color",
-        Default = ELI.esp.text_color,
-        Callback = function(v) ELI.esp.text_color = v end,
+        Default = ELI.esp.text.name.color,
+        Callback = function(v)
+            ELI.esp.text.name.color = v
+            ELI.esp.text.studs.color = v
+            ELI.esp.text.tool.color = v
+        end,
     })
     style:AddSlider("esp_text_size", {
         Text = "Text Size",
         Min = 8,
         Max = 24,
-        Default = ELI.esp.text_size,
+        Default = ELI.esp.text.size,
         Rounding = 0,
-        Callback = function(v) ELI.esp.text_size = v end,
+        Callback = function(v) ELI.esp.text.size = v end,
     })
     style:AddSlider("esp_highlight_fill", {
         Text = "Highlight Fill",
         Min = 0,
         Max = 1,
-        Default = ELI.esp.highlight_fill,
+        Default = ELI.esp.highlight.fill_transparency,
         Rounding = 2,
-        Callback = function(v) ELI.esp.highlight_fill = v end,
+        Callback = function(v) ELI.esp.highlight.fill_transparency = v end,
     })
 end
 
