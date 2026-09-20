@@ -6782,70 +6782,6 @@ end;
 end
 buildRagebotTab()
 
-
---// EARLY TAB DEBUG: this must execute before Visuals so later builders can be diagnosed.
-local EDBG = {
-    started = os.clock(),
-    stage = "BOOT",
-    history = {},
-    errors = {},
-}
-
-local function EDBG_STAGE(name)
-    EDBG.stage = name
-    EDBG.history[#EDBG.history + 1] = {name = name, t = os.clock() - EDBG.started}
-    print("[EARLYTABDBG][STAGE]", name)
-end
-
-local function EDBG_CALL(name, fn)
-    EDBG_STAGE(name .. "_START")
-    if type(fn) ~= "function" then
-        local err = "expected function, got " .. type(fn)
-        EDBG.errors[#EDBG.errors + 1] = {name = name, error = err}
-        warn("[EARLYTABDBG][ERROR][" .. name .. "]", err)
-        return false
-    end
-    local ok, err = xpcall(fn, function(e)
-        return debug.traceback(tostring(e), 2)
-    end)
-    if not ok then
-        EDBG.errors[#EDBG.errors + 1] = {name = name, error = err}
-        warn("[EARLYTABDBG][ERROR][" .. name .. "]\n" .. tostring(err))
-        EDBG_STAGE(name .. "_FAILED")
-        return false
-    end
-    EDBG_STAGE(name .. "_DONE")
-    return true
-end
-
-getgenv().VeloxHubEarlyTabDebug = {
-    report = function()
-        print("========== EARLY TAB DEBUG ==========")
-        print("Stage:", EDBG.stage)
-        print("Uptime:", math.floor(os.clock() - EDBG.started) .. "s")
-        for i, v in ipairs(EDBG.history) do
-            print(i, v.name, string.format("%.2fs", v.t))
-        end
-        print("Errors:", #EDBG.errors)
-        for i, e in ipairs(EDBG.errors) do
-            warn("#" .. i, e.name, e.error)
-        end
-        print("=====================================")
-        return EDBG
-    end
-}
-
-EDBG_STAGE("DEBUG_READY")
-
-task.spawn(function()
-    while true do
-        task.wait(3)
-        print("[EARLYTABDBG][WATCHDOG]", "stage=" .. tostring(EDBG.stage),
-            "uptime=" .. math.floor(os.clock() - EDBG.started) .. "s")
-    end
-end)
-
-EDBG_STAGE("BEFORE_VISUALS_DEFINITION")
 local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
 
@@ -7741,111 +7677,10 @@ end;
 end;
 end
 end
-EDBG_STAGE("BEFORE_VISUALS_CALL")
-EDBG_CALL("VISUALS", buildVisualsTab)
-EDBG_STAGE("AFTER_VISUALS_CALL")
---// Full diagnostics for World / ESP / Character tab construction.
-local TABDBG = {
-    started = os.clock(),
-    stages = {},
-    counts = {},
-    errors = {},
-}
+buildVisualsTab()
 
-local function TABDBG_LOG(...)
-    print("[TABDBG]", ...)
-end
-
-local function TABDBG_STAGE(name)
-    TABDBG.stages[#TABDBG.stages + 1] = {
-        name = name,
-        t = os.clock() - TABDBG.started,
-    }
-    TABDBG_LOG("STAGE ->", name)
-end
-
-local function TABDBG_COUNT(name)
-    TABDBG.counts[name] = (TABDBG.counts[name] or 0) + 1
-end
-
-local function TABDBG_CALL(name, fn)
-    TABDBG_STAGE(name .. "_START")
-    TABDBG_COUNT(name .. "_CALL")
-
-    if type(fn) ~= "function" then
-        local msg = "builder is " .. type(fn)
-        TABDBG.errors[#TABDBG.errors + 1] = {name = name, error = msg}
-        warn("[TABDBG][ERROR][" .. name .. "] " .. msg)
-        return false
-    end
-
-    local ok, err = xpcall(fn, function(e)
-        return debug.traceback(tostring(e), 2)
-    end)
-
-    if not ok then
-        TABDBG_COUNT(name .. "_FAILED")
-        TABDBG.errors[#TABDBG.errors + 1] = {name = name, error = err}
-        warn("[TABDBG][ERROR][" .. name .. "]\n" .. tostring(err))
-        TABDBG_STAGE(name .. "_FAILED")
-        return false
-    end
-
-    TABDBG_COUNT(name .. "_OK")
-    TABDBG_STAGE(name .. "_DONE")
-    return true
-end
-
-local function TABDBG_CHECK_TAB(name, tab)
-    TABDBG_LOG(
-        name,
-        "tabType=", type(tab),
-        "AddLeftGroupbox=", type(tab and tab.AddLeftGroupbox),
-        "AddRightGroupbox=", type(tab and tab.AddRightGroupbox),
-        "AddLeftTabbox=", type(tab and tab.AddLeftTabbox),
-        "AddRightTabbox=", type(tab and tab.AddRightTabbox),
-        "AddTab=", type(tab and tab.AddTab)
-    )
-end
-
-getgenv().VeloxHubTabDebug = {
-    report = function()
-        print("========== TAB DEBUG REPORT ==========")
-        print("Uptime:", math.floor(os.clock() - TABDBG.started), "s")
-        print("Counts:")
-        for k, v in pairs(TABDBG.counts) do
-            print("  ", k, v)
-        end
-        print("Stages:")
-        for i, v in ipairs(TABDBG.stages) do
-            print("  ", i, v.name, string.format("%.2fs", v.t))
-        end
-        print("Errors:", #TABDBG.errors)
-        for i, e in ipairs(TABDBG.errors) do
-            warn("  #" .. i, e.name, e.error)
-        end
-        print("======================================")
-        return TABDBG
-    end,
-}
-
-TABDBG_STAGE("FRAMEWORK_READY")
-
-task.spawn(function()
-    while true do
-        task.wait(5)
-        local last = TABDBG.stages[#TABDBG.stages]
-        TABDBG_LOG(
-            "WATCHDOG",
-            "lastStage=" .. tostring(last and last.name or "none"),
-            "uptime=" .. math.floor(os.clock() - TABDBG.started) .. "s"
-        )
-    end
-end)
-
-EDBG_STAGE("BEFORE_WORLD_DEFINITION")
-EDBG_STAGE("WORLD_DEFINITION_SPLIT")
-local function buildWorldCore(world_tab)
+local function buildWorldTab()
+    local world_tab = Tabs.worldtab; do
     local world_main_tab = world_tab:AddLeftTabbox(); do
         local color_correction_tab = world_main_tab:AddTab('Color correction'); do
             color_correction_tab:AddToggle('world_fog', {
@@ -8165,9 +8000,7 @@ local function buildWorldCore(world_tab)
             end;
         end;
     end;
-end
 
-local function buildWorldRemovals(world_tab)
     local removals_tab = world_tab:AddRightGroupbox('World removals'); do
 
         removals_tab:AddToggle('anti_flashbang_enable', {
@@ -8192,9 +8025,7 @@ local function buildWorldRemovals(world_tab)
             end;
         });
     end;
-end
 
-local function buildWorldTextures(world_tab)
     local texture_connection = nil;
     local texture_originals = {};
     local minecraft_textures = {};
@@ -8391,9 +8222,7 @@ local function buildWorldTextures(world_tab)
             end
         });
     end;
-end
 
-local function buildWorldShaders(world_tab)
     local shader_blur = Instance.new('BlurEffect');
     shader_blur.Name = 'VeloxHubRivals_blur';
     shader_blur.Enabled = false;
@@ -8610,9 +8439,7 @@ local function buildWorldShaders(world_tab)
             end
         });
     end;
-end
 
-local function buildWorldQuality(world_tab)
     local quality_tab = world_tab:AddLeftGroupbox('Quality'); do
         local default_technology = lighting.Technology;
         local default_global_shadows = lighting.GlobalShadows;
@@ -8735,9 +8562,7 @@ local function buildWorldQuality(world_tab)
             end
         });
     end;
-end
 
-local function buildWorldCamera(world_tab)
 local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     local keybind_third_person_enable = false;
     camera_tab:AddToggle('third_person_enable', {
@@ -8804,20 +8629,10 @@ local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     });
 end;
 end
-
-EDBG_STAGE("WORLD_BUILD_START")
-TABDBG_CALL("WORLD_CORE", function() buildWorldCore(Tabs.worldtab) end)
-TABDBG_CALL("WORLD_REMOVALS", function() buildWorldRemovals(Tabs.worldtab) end)
-TABDBG_CALL("WORLD_TEXTURES", function() buildWorldTextures(Tabs.worldtab) end)
-TABDBG_CALL("WORLD_SHADERS", function() buildWorldShaders(Tabs.worldtab) end)
-TABDBG_CALL("WORLD_QUALITY", function() buildWorldQuality(Tabs.worldtab) end)
-TABDBG_CALL("WORLD_CAMERA", function() buildWorldCamera(Tabs.worldtab) end)
-EDBG_STAGE("WORLD_BUILD_DONE")
+buildWorldTab()
 
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
-    TABDBG_CHECK_TAB("ESP", esp_tab);
-    TABDBG_STAGE("ESP_BUILDER_ENTER");
     local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
         esp_groupbox:AddToggle('esp_enable', {
             Text = 'Enable',
@@ -9322,7 +9137,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
     });
 end;
 end
-TABDBG_CALL("ESP", buildEspTab)
+buildEspTab()
 local function buildMiscTab()
     local misc_tab = Tabs.misc_tab; do
     local auto_tabbox = Tabs.misc_tab:AddRightTabbox(); do
@@ -9581,9 +9396,7 @@ end
 end
 buildMiscTab();
 
-local buildCharacterTab;
-
-local function buildSpoofSection()
+do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
     local otherTab = spoof_box:AddTab("Other");
@@ -9775,16 +9588,17 @@ local function buildSpoofSection()
         end
     });
 
-    ELI._otherNameStamp = 0;
+    local otherNameStamp = 0;
     otherTab:AddInput("SpoofOtherName", {
         Text = "Name",
         Default = "",
         Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_other_name = val or "";
-            ELI._otherNameStamp = tick();
+            otherNameStamp = tick();
+            local stamp = otherNameStamp;
             task.delay(0.6, function()
-                if ELI._otherNameStamp and prof.spoof_other then
+                if stamp == otherNameStamp and prof.spoof_other then
                     doOtherAll();
                 end;
             end);
@@ -10699,12 +10513,9 @@ do
         });
     end;
 end
-buildSpoofSection()
 
-buildCharacterTab = function()
+local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
-    TABDBG_CHECK_TAB("CHARACTER", character_tab);
-    TABDBG_STAGE("CHARACTER_BUILDER_ENTER");
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
         keybind_infinite_double_jump_enable = false;
@@ -10987,6 +10798,6 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
         anim_last_id = "";
     end;
 end));
+end
+buildCharacterTab();
 end;
-print("[VeloxDBG] buildCharacterTab:", type(buildCharacterTab));
-TABDBG_CALL("CHARACTER", buildCharacterTab);
