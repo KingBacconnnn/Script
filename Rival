@@ -9385,7 +9385,7 @@ end
 end
 buildMiscTab();
 
-(function()
+do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("local");
     local otherTab = spoof_box:AddTab("other");
@@ -9633,9 +9633,9 @@ buildMiscTab();
             end;
         end;
     end)));
-end)();
+end
 
-(function()
+do
     local cfg = ELI;
     local material_presets = getgenv().VeloxHubRivals_materials.presets;
     local material_preset_names = getgenv().VeloxHubRivals_materials.names;
@@ -10501,7 +10501,7 @@ end)();
             end
         });
     end;
-end)();
+end
 
 local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
@@ -11078,7 +11078,7 @@ SaveManager:SetFolder('VeloxHubRivals/rivals');
 SaveManager:BuildConfigSection(Tabs['UI Settings']);
 SaveManager:BuildAppearanceSection(Tabs['UI Settings']);
 
-(function()
+do
     local lua_tab = Tabs.lua;
     local base_folder = SaveManager.Folder or 'VeloxHubRivals/rivals';
     local lua_folder = base_folder .. '/luas';
@@ -11229,7 +11229,7 @@ SaveManager:BuildAppearanceSection(Tabs['UI Settings']);
             end;
         end);
     end);
-end)();
+end
 
 pcall(function() SaveManager:LoadAutoloadConfig() end);
 
