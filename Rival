@@ -7679,8 +7679,110 @@ end
 end
 buildVisualsTab()
 
+
+--// Full diagnostics for World / ESP / Character tab construction.
+local TABDBG = {
+    started = os.clock(),
+    stages = {},
+    counts = {},
+    errors = {},
+}
+
+local function TABDBG_LOG(...)
+    print("[TABDBG]", ...)
+end
+
+local function TABDBG_STAGE(name)
+    TABDBG.stages[#TABDBG.stages + 1] = {
+        name = name,
+        t = os.clock() - TABDBG.started,
+    }
+    TABDBG_LOG("STAGE ->", name)
+end
+
+local function TABDBG_COUNT(name)
+    TABDBG.counts[name] = (TABDBG.counts[name] or 0) + 1
+end
+
+local function TABDBG_CALL(name, fn)
+    TABDBG_STAGE(name .. "_START")
+    TABDBG_COUNT(name .. "_CALL")
+
+    if type(fn) ~= "function" then
+        local msg = "builder is " .. type(fn)
+        TABDBG.errors[#TABDBG.errors + 1] = {name = name, error = msg}
+        warn("[TABDBG][ERROR][" .. name .. "] " .. msg)
+        return false
+    end
+
+    local ok, err = xpcall(fn, function(e)
+        return debug.traceback(tostring(e), 2)
+    end)
+
+    if not ok then
+        TABDBG_COUNT(name .. "_FAILED")
+        TABDBG.errors[#TABDBG.errors + 1] = {name = name, error = err}
+        warn("[TABDBG][ERROR][" .. name .. "]\n" .. tostring(err))
+        TABDBG_STAGE(name .. "_FAILED")
+        return false
+    end
+
+    TABDBG_COUNT(name .. "_OK")
+    TABDBG_STAGE(name .. "_DONE")
+    return true
+end
+
+local function TABDBG_CHECK_TAB(name, tab)
+    TABDBG_LOG(
+        name,
+        "tabType=", type(tab),
+        "AddLeftGroupbox=", type(tab and tab.AddLeftGroupbox),
+        "AddRightGroupbox=", type(tab and tab.AddRightGroupbox),
+        "AddLeftTabbox=", type(tab and tab.AddLeftTabbox),
+        "AddRightTabbox=", type(tab and tab.AddRightTabbox),
+        "AddTab=", type(tab and tab.AddTab)
+    )
+end
+
+getgenv().VeloxHubTabDebug = {
+    report = function()
+        print("========== TAB DEBUG REPORT ==========")
+        print("Uptime:", math.floor(os.clock() - TABDBG.started), "s")
+        print("Counts:")
+        for k, v in pairs(TABDBG.counts) do
+            print("  ", k, v)
+        end
+        print("Stages:")
+        for i, v in ipairs(TABDBG.stages) do
+            print("  ", i, v.name, string.format("%.2fs", v.t))
+        end
+        print("Errors:", #TABDBG.errors)
+        for i, e in ipairs(TABDBG.errors) do
+            warn("  #" .. i, e.name, e.error)
+        end
+        print("======================================")
+        return TABDBG
+    end,
+}
+
+TABDBG_STAGE("FRAMEWORK_READY")
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        local last = TABDBG.stages[#TABDBG.stages]
+        TABDBG_LOG(
+            "WATCHDOG",
+            "lastStage=" .. tostring(last and last.name or "none"),
+            "uptime=" .. math.floor(os.clock() - TABDBG.started) .. "s"
+        )
+    end
+end)
+
 local function buildWorldTab()
     local world_tab = Tabs.worldtab; do
+    TABDBG_CHECK_TAB("WORLD", world_tab);
+    TABDBG_STAGE("WORLD_BUILDER_ENTER");
     local world_main_tab = world_tab:AddLeftTabbox(); do
         local color_correction_tab = world_main_tab:AddTab('Color correction'); do
             color_correction_tab:AddToggle('world_fog', {
@@ -8629,10 +8731,12 @@ local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     });
 end;
 end
-buildWorldTab()
+TABDBG_CALL("WORLD", buildWorldTab)
 
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
+    TABDBG_CHECK_TAB("ESP", esp_tab);
+    TABDBG_STAGE("ESP_BUILDER_ENTER");
     local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
         esp_groupbox:AddToggle('esp_enable', {
             Text = 'Enable',
@@ -9137,7 +9241,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
     });
 end;
 end
-buildEspTab()
+TABDBG_CALL("ESP", buildEspTab)
 local function buildMiscTab()
     local misc_tab = Tabs.misc_tab; do
     local auto_tabbox = Tabs.misc_tab:AddRightTabbox(); do
@@ -10518,6 +10622,8 @@ end
 
 buildCharacterTab = function()
     local character_tab = Tabs.character_tab; do
+    TABDBG_CHECK_TAB("CHARACTER", character_tab);
+    TABDBG_STAGE("CHARACTER_BUILDER_ENTER");
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
         keybind_infinite_double_jump_enable = false;
@@ -10802,5 +10908,5 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
 end));
 end;
 print("[VeloxDBG] buildCharacterTab:", type(buildCharacterTab));
-buildCharacterTab();
+TABDBG_CALL("CHARACTER", buildCharacterTab);
 end;
