@@ -224,6 +224,8 @@ local Library = {
 getgenv().Library = Library
 
 local _unloadCallbacks = {}
+local _unloadCallbacksRan = false
+local _unloadHooked = false
 local _windowWrapper
 local _windWindow
 local _creating = true
@@ -840,21 +842,16 @@ local function wrapTab(actualTab)
     return tab
 end
 
-function Library:CreateWindow(config)
-    config = config or {}
-    local touch = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").MouseEnabled
-
+function Library:CreateWindow()
     _windWindow = WindUI:CreateWindow({
         Title = "Velox Hub | Rivals",
         Icon = "crosshair",
         Author = "VeloxHub",
         Folder = "VeloxHubRivals",
-        Size = touch and UDim2.fromOffset(410, 520) or UDim2.fromOffset(820, 650),
-        MinSize = Vector2.new(touch and 330 or 560, touch and 360 or 420),
-        MaxSize = Vector2.new(1000, 760),
+        Size = UDim2.fromOffset(410, 520),
         Theme = "VeloxDark",
         ToggleKey = Enum.KeyCode.RightShift,
-        Resizable = true,
+        Resizable = false,
         HideSearchBar = false,
         ScrollBarEnabled = true,
         User = { Enabled = false },
@@ -922,12 +919,27 @@ function Library:CreateWindow(config)
     return _windowWrapper
 end
 
+local function runUnloadCallbacks()
+    if _unloadCallbacksRan then return end
+    _unloadCallbacksRan = true
+
+    for _, callback in ipairs(_unloadCallbacks) do
+        safeCall(callback)
+    end
+end
+
 function Library:OnUnload(callback)
-    if type(callback) == "function" then
-        table.insert(_unloadCallbacks, callback)
-        if _windWindow and type(_windWindow.OnDestroy) == "function" then
-            pcall(function() _windWindow:OnDestroy(callback) end)
-        end
+    if type(callback) ~= "function" then
+        return
+    end
+
+    _unloadCallbacks[#_unloadCallbacks + 1] = callback
+
+    if not _unloadHooked and _windWindow and type(_windWindow.OnDestroy) == "function" then
+        _unloadHooked = true
+        pcall(function()
+            _windWindow:OnDestroy(runUnloadCallbacks)
+        end)
     end
 end
 
@@ -951,12 +963,12 @@ end
 function Library:Unload()
     if self.Unloaded then return end
     self.Unloaded = true
-    for _, callback in ipairs(_unloadCallbacks) do
-        safeCall(callback)
-    end
+    runUnloadCallbacks()
+
     if _windWindow and type(_windWindow.Close) == "function" then
         pcall(function() _windWindow:Close() end)
     end
+
     if _windWindow and type(_windWindow.Destroy) == "function" then
         pcall(function() _windWindow:Destroy() end)
     end
@@ -1028,9 +1040,7 @@ local Options = Library.Options;
 local Toggles = Library.Toggles;
 getgenv().silent_load = getgenv().silent_load or false;
 getgenv().auto_load_enable = getgenv().auto_load_enable or false;
-local Window = Library:CreateWindow({
-    Title = 'VeloxHubRivals',
-});
+local Window = Library:CreateWindow();
 
 if GLOBAL_TROVE then
     pcall(function()
