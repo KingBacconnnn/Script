@@ -228,12 +228,37 @@ local _windowWrapper
 local _windWindow
 local _creating = true
 
+local _uiDiagnostics = {}
+
+local function reportUiError(context, err)
+    local message = "[VeloxHub UI] " .. tostring(context) .. ": " .. tostring(err)
+    table.insert(_uiDiagnostics, message)
+    warn(message)
+    return message
+end
+
 local function safeCall(fn, ...)
     if type(fn) ~= "function" then
         return nil
     end
     local ok, result = pcall(fn, ...)
     if ok then return result end
+    reportUiError("Callback failed", result)
+    return nil
+end
+
+local function safeVisible(bucket, key, value)
+    local obj = bucket and bucket[key]
+    if not obj or type(obj.SetVisible) ~= "function" then
+        return false
+    end
+    local ok, err = pcall(function()
+        obj:SetVisible(value)
+    end)
+    if not ok then
+        reportUiError("SetVisible(" .. tostring(key) .. ") failed", err)
+    end
+    return ok
 end
 
 local function trySet(actual, value)
@@ -619,7 +644,7 @@ function ContainerMethods:AddToggle(idx, info)
     local host = self._section or self._tab
     local wrapper
     local actual
-    pcall(function()
+    local createOk, createErr = pcall(function()
         actual = host:Toggle({
             Title = info.Text or idx,
             Desc = info.Desc,
@@ -630,6 +655,7 @@ function ContainerMethods:AddToggle(idx, info)
             end,
         })
     end)
+    if not createOk then reportUiError("Toggle " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Toggles, {
         Type = "Toggle",
         Default = info.Default == true,
@@ -649,7 +675,7 @@ function ContainerMethods:AddSlider(idx, info)
     local host = self._section or self._tab
     local wrapper
     local actual
-    pcall(function()
+    local createOk, createErr = pcall(function()
         actual = host:Slider({
             Title = info.Text or idx,
             Desc = info.Desc,
@@ -665,6 +691,7 @@ function ContainerMethods:AddSlider(idx, info)
             end,
         })
     end)
+    if not createOk then reportUiError("Slider " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Slider",
         Default = info.Default,
@@ -686,7 +713,7 @@ function ContainerMethods:AddDropdown(idx, info)
     local defaultValue = normalizeDropdownDefault(values, info.Default, info.AllowNull == true, info.Multi == true)
     local wrapper
     local actual
-    pcall(function()
+    local createOk, createErr = pcall(function()
         actual = host:Dropdown({
             Title = info.Text or idx,
             Desc = info.Desc,
@@ -700,8 +727,9 @@ function ContainerMethods:AddDropdown(idx, info)
             end,
         })
     end)
+    if not createOk then reportUiError("Dropdown " .. tostring(idx) .. " failed", createErr) end
     pcall(function()
-        if type(actual.Close) == "function" then
+        if actual and type(actual.Close) == "function" then
             actual:Close()
         end
     end)
@@ -724,7 +752,7 @@ function ContainerMethods:AddInput(idx, info)
     local host = self._section or self._tab
     local wrapper
     local actual
-    pcall(function()
+    local createOk, createErr = pcall(function()
         actual = host:Input({
             Title = info.Text or idx,
             Desc = info.Desc,
@@ -737,6 +765,7 @@ function ContainerMethods:AddInput(idx, info)
             end,
         })
     end)
+    if not createOk then reportUiError("Input " .. tostring(idx) .. " failed", createErr) end
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Input",
         Default = info.Default or "",
@@ -761,13 +790,14 @@ end
 function ContainerMethods:AddGroupbox(info)
     local title = type(info) == "table" and info.Name or tostring(info or "Section")
     local section
-    pcall(function()
+    local createOk, createErr = pcall(function()
         section = self._tab:Section({
             Title = title,
             Box = true,
-            Opened = false,
+            Opened = true,
         })
     end)
+    if not createOk then reportUiError("Groupbox " .. tostring(title) .. " failed", createErr) end
     section = section or self._tab
     local container = {_section = section, _tab = self._tab}
     return setmetatable(container, {__index = ContainerMethods})
@@ -780,13 +810,14 @@ function ContainerMethods:AddTabbox(info)
     }
     function tabbox:AddTab(name)
         local section
-        pcall(function()
+        local createOk, createErr = pcall(function()
             section = self._tab:Section({
                 Title = tostring(name or "Section"),
                 Box = true,
-                Opened = false,
+                Opened = true,
             })
         end)
+        if not createOk then reportUiError("Tabbox section " .. tostring(name) .. " failed", createErr) end
         section = section or self._tab
         local child = {_section = section, _tab = self._tab}
         setmetatable(child, {__index = ContainerMethods})
@@ -5465,7 +5496,7 @@ local function buildLegitTab()
                     keybind_silent_aim_enable = v;
                     ELI.silent_aim.enable = v;
                     sfov.Visible = v and ELI.silent_aim.show_fov or false;
-                    Toggles.show_fov_enable:SetVisible(v);
+                    safeVisible(Toggles, "show_fov_enable", v);
                 end
             }):AddKeyPicker('silent_aim_keybind', {
                 Default = '...',
@@ -5503,11 +5534,11 @@ local function buildLegitTab()
                 Callback = function(v)
                     ELI.silent_aim.show_fov = v;
                     sfov.Visible = v and ELI.silent_aim.enable or false;
-                    Options.silent_aim_fov_radius:SetVisible(v);
-                    Options.silent_aim_fov_transparency:SetVisible(v);
-                    Options.silent_aim_fov_thickness:SetVisible(v);
-                    Options.silent_aim_rotation_speed:SetVisible(v);
-                    Toggles.show_fill_enable:SetVisible(v);
+                    safeVisible(Options, "silent_aim_fov_radius", v);
+                    safeVisible(Options, "silent_aim_fov_transparency", v);
+                    safeVisible(Options, "silent_aim_fov_thickness", v);
+                    safeVisible(Options, "silent_aim_rotation_speed", v);
+                    safeVisible(Toggles, "show_fill_enable", v);
                 end
             }):AddColorPicker('fov_color', {
                 Title = 'Fov color',
@@ -5545,7 +5576,7 @@ local function buildLegitTab()
                 Visible = false,
                 Callback = function(v)
                     ELI.silent_aim.show_fill = v;
-                    Options.silent_aim_fill_transparency:SetVisible(v);
+                    safeVisible(Options, "silent_aim_fill_transparency", v);
                 end
             }):AddColorPicker('fill_color_primary', {
                 Title = 'Fill color',
@@ -5655,7 +5686,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                     keybind_aimbot_enable = v;
                     ELI.aimbot.enable = v;
                     afov.Visible = v and ELI.aimbot.show_fov or false;
-                    Toggles.aimbot_show_fov_enable:SetVisible(v);
+                    safeVisible(Toggles, "aimbot_show_fov_enable", v);
                 end
             }):AddKeyPicker('aimbot_keybind', {
                 Default = '...',
@@ -5677,11 +5708,11 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                 Callback = function(v)
                     ELI.aimbot.show_fov = v;
                     afov.Visible = v and ELI.aimbot.enable or false;
-                    Options.aimbot_fov_radius:SetVisible(v);
-                    Options.aimbot_fov_transparency:SetVisible(v);
-                    Options.aimbot_fov_thickness:SetVisible(v);
-                    Options.aimbot_rotation_speed:SetVisible(v);
-                    Toggles.aimbot_show_fill_enable:SetVisible(v);
+                    safeVisible(Options, "aimbot_fov_radius", v);
+                    safeVisible(Options, "aimbot_fov_transparency", v);
+                    safeVisible(Options, "aimbot_fov_thickness", v);
+                    safeVisible(Options, "aimbot_rotation_speed", v);
+                    safeVisible(Toggles, "aimbot_show_fill_enable", v);
                 end
             }):AddColorPicker('aimbot_fov_color', {
                 Title = 'Fov color',
@@ -5726,7 +5757,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
                 Visible = false,
                 Callback = function(v)
                     ELI.aimbot.show_fill = v;
-                    Options.aimbot_fill_transparency:SetVisible(v);
+                    safeVisible(Options, "aimbot_fill_transparency", v);
                 end
             }):AddColorPicker('aimbot_fill_color_primary', {
                 Title = 'Fill color',
@@ -5917,7 +5948,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
             Default = false,
             Callback = function(v)
                 ELI.guns.force_modifier_enable = v;
-                Options.force_modifier_value:SetVisible(v);
+                safeVisible(Options, "force_modifier_value", v);
                 if v then
                     for i, item in next, item_lib.Items do
                         old_force_auto[i] = item.InputSpammingEnabled.StartShooting;
@@ -6609,7 +6640,7 @@ local function buildRagebotTab()
         Default = true,
         Callback = function(v)
             ELI.ragebot.prediction = v;
-            Options.ragebot_prediction_amount:SetVisible(v);
+            safeVisible(Options, "ragebot_prediction_amount", v);
         end
     });
 
@@ -6830,11 +6861,14 @@ buildRagebotTab()
 
 local function runTabBuilder(name, builder, tab)
     local ok, err = pcall(builder)
-    if not ok and tab then
-        local holder = tab
-        pcall(function()
-            holder:AddLeftGroupbox('Load status'):AddLabel(tostring(name) .. ' loaded with a skipped component.', true)
-        end)
+    if not ok then
+        reportUiError(tostring(name) .. " builder failed", err)
+        if tab then
+            local holder = tab
+            pcall(function()
+                holder:AddLeftGroupbox('Load Status'):AddLabel(tostring(name) .. ' skipped: ' .. tostring(err), true)
+            end)
+        end
     end
     return ok, err
 end
@@ -6947,9 +6981,9 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.viewmodel_offsets.enable = v;
-                    Options.viewmodel_offset_x:SetVisible(v);
-                    Options.viewmodel_offset_y:SetVisible(v);
-                    Options.viewmodel_offset_z:SetVisible(v);
+                    safeVisible(Options, "viewmodel_offset_x", v);
+                    safeVisible(Options, "viewmodel_offset_y", v);
+                    safeVisible(Options, "viewmodel_offset_z", v);
                     if v then
                         for i, vm in next, item_lib.ViewModels do
                             if vm.RootPartOffset then
@@ -7008,15 +7042,15 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.enable = v;
-                    Options.bullet_tracers_texture:SetVisible(v);
-                    Options.bullet_tracers_speed:SetVisible(v);
-                    Options.bullet_tracers_lifetime:SetVisible(v);
-                    Options.bullet_tracers_width0:SetVisible(v);
-                    Options.bullet_tracers_width1:SetVisible(v);
-                    Options.bullet_tracers_position_lerp_speed:SetVisible(v);
-                    Options.bullet_tracers_spring_expand:SetVisible(v);
-                    Options.bullet_tracers_expand_speed:SetVisible(v and ELI.bullet_tracers.spring_expand);
-                    Options.bullet_tracers_expand_damper:SetVisible(v and ELI.bullet_tracers.spring_expand);
+                    safeVisible(Options, "bullet_tracers_texture", v);
+                    safeVisible(Options, "bullet_tracers_speed", v);
+                    safeVisible(Options, "bullet_tracers_lifetime", v);
+                    safeVisible(Options, "bullet_tracers_width0", v);
+                    safeVisible(Options, "bullet_tracers_width1", v);
+                    safeVisible(Options, "bullet_tracers_position_lerp_speed", v);
+                    safeVisible(Options, "bullet_tracers_spring_expand", v);
+                    safeVisible(Options, "bullet_tracers_expand_speed", v and ELI.bullet_tracers.spring_expand);
+                    safeVisible(Options, "bullet_tracers_expand_damper", v and ELI.bullet_tracers.spring_expand);
                 end;
             }):AddColorPicker('bullet_tracers_color_start', {
                 Title = 'Color start',
@@ -7037,7 +7071,7 @@ local function buildVisualsTab()
                 Default = false,
                 Callback = function(v)
                     ELI.bullet_tracers.curve_around = v;
-                    Options.bullet_tracers_curve_height:SetVisible(v);
+                    safeVisible(Options, "bullet_tracers_curve_height", v);
                 end
             });
 
@@ -7140,8 +7174,8 @@ local function buildVisualsTab()
                 Visible = false,
                 Callback = function(v)
                     ELI.bullet_tracers.spring_expand = v;
-                    Options.bullet_tracers_expand_speed:SetVisible(v);
-                    Options.bullet_tracers_expand_damper:SetVisible(v);
+                    safeVisible(Options, "bullet_tracers_expand_speed", v);
+                    safeVisible(Options, "bullet_tracers_expand_damper", v);
                 end;
             });
 
@@ -7555,7 +7589,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.body.material_enable = v;
-                Options.vmc_body_material_type:SetVisible(v);
+                safeVisible(Options, "vmc_body_material_type", v);
             end;
         });
 
@@ -7609,7 +7643,7 @@ local viewmodel_custom_box = visuals_tab:AddLeftTabbox(); do
             Default = false,
             Callback = function(v)
                 ELI.viewmodel_custom.item.material_enable = v;
-                Options.vmc_item_material_type:SetVisible(v);
+                safeVisible(Options, "vmc_item_material_type", v);
             end;
         });
 
@@ -8710,8 +8744,8 @@ local function buildEspTab()
             Default = false,
             Callback = function(v)
                 ELI.esp.box.enable = v;
-                Options.esp_box_thickness:SetVisible(v);
-                Toggles.esp_glow_enable:SetVisible(v);
+                safeVisible(Options, "esp_box_thickness", v);
+                safeVisible(Toggles, "esp_glow_enable", v);
             end
         }):AddColorPicker('esp_box_color', {
             Title = 'Box color',
@@ -8739,7 +8773,7 @@ local function buildEspTab()
             Visible = false,
             Callback = function(v)
                 ELI.esp.glow.enable = v;
-                Options.esp_glow_transparency:SetVisible(v);
+                safeVisible(Options, "esp_glow_transparency", v);
             end
         }):AddColorPicker('esp_glow_color_start', {
             Title = 'Glow start',
@@ -8835,7 +8869,7 @@ local function buildEspTab()
             Default = false,
             Callback = function(v)
                 ELI.esp.filled.enable = v;
-                Options.esp_filled_transparency:SetVisible(v);
+                safeVisible(Options, "esp_filled_transparency", v);
             end
         }):AddColorPicker('esp_filled_color_start', {
             Title = 'Fill start',
@@ -8938,8 +8972,8 @@ local function buildEspTab()
             Default = false,
             Callback = function(v)
                 ELI.esp.filled.animated = v;
-                Options.esp_filled_rotation:SetVisible(v);
-                Options.esp_filled_speed:SetVisible(v);
+                safeVisible(Options, "esp_filled_rotation", v);
+                safeVisible(Options, "esp_filled_speed", v);
             end
         });
 
@@ -8972,8 +9006,8 @@ local function buildEspTab()
             Default = false,
             Callback = function(v)
                 ELI.esp.health.enable = v;
-                Options.esp_health_width:SetVisible(v);
-                Options.esp_health_gap:SetVisible(v);
+                safeVisible(Options, "esp_health_width", v);
+                safeVisible(Options, "esp_health_gap", v);
             end
         }):AddColorPicker('esp_health_color_high', {
             Title = 'Health top',
@@ -9089,11 +9123,11 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
         Default = false,
         Callback = function(v)
             ELI.thrower_esp.enable = v;
-            Options.thrower_esp_select:SetVisible(v);
-            Options.thrower_esp_font:SetVisible(v);
-            Toggles.thrower_esp_name:SetVisible(v);
-            Toggles.thrower_esp_distance:SetVisible(v);
-            Toggles.thrower_esp_image:SetVisible(v);
+            safeVisible(Options, "thrower_esp_select", v);
+            safeVisible(Options, "thrower_esp_font", v);
+            safeVisible(Toggles, "thrower_esp_name", v);
+            safeVisible(Toggles, "thrower_esp_distance", v);
+            safeVisible(Toggles, "thrower_esp_image", v);
         end;
     });
 
@@ -9103,7 +9137,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
         Visible = false,
         Callback = function(v)
             ELI.thrower_esp.name = v;
-            Options.thrower_esp_name_size:SetVisible(v);
+            safeVisible(Options, "thrower_esp_name_size", v);
         end;
     }):AddColorPicker('thrower_esp_name_color', {
         Title = 'Name color',
@@ -9131,7 +9165,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
         Visible = false,
         Callback = function(v)
             ELI.thrower_esp.distance = v;
-            Options.thrower_esp_distance_size:SetVisible(v);
+            safeVisible(Options, "thrower_esp_distance_size", v);
         end;
     }):AddColorPicker('thrower_esp_distance_color', {
         Title = 'Distance color',
@@ -9843,9 +9877,9 @@ do
 
     local function sync_chams_visibility()
         local body_mode = cfg.chams.mode == "chams";
-        Options.ChamsMaterial:SetVisible(body_mode);
-        Options.ChamsStripTextures:SetVisible(body_mode);
-        Options.ChamsGhost:SetVisible(body_mode);
+        safeVisible(Options, "ChamsMaterial", body_mode);
+        safeVisible(Options, "ChamsStripTextures", body_mode);
+        safeVisible(Options, "ChamsGhost", body_mode);
     end;
 
     chams_tab:AddToggle("ChamsEnable", {
@@ -10707,14 +10741,14 @@ character_tab1:AddSlider('fly_speed_value', {
     end;
 });
 
-character_tab1:AddToggle('slide_boost_enable', {
+character_tab1:AddToggle('slide_boost_character_enable', {
         Text = 'Slide boost',
         Default = false,
         Callback = function(v)
             keybind_slide_boost_enable = v;
             ELI.slide_boost.enable = v;
         end;
-        }):AddKeyPicker('slide_boost_keybind', {
+        }):AddKeyPicker('slide_boost_character_keybind', {
             Default = '',
             Text = 'Slide boost',
             NoUI = false,
@@ -10726,7 +10760,7 @@ character_tab1:AddToggle('slide_boost_enable', {
             end;
         });
 
-                character_tab1:AddSlider('slide_boost_spped', {
+                character_tab1:AddSlider('slide_boost_character_speed', {
             Text = 'Speed',
             Default = 60,
             Min = 1,
