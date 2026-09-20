@@ -9383,7 +9383,7 @@ local function buildMiscTab()
     end;
 end
 end
-buildMiscTab()
+buildMiscTab();
 
 (function()
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
