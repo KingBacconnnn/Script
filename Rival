@@ -185,7 +185,6 @@ repeat task.wait() until not game:GetService("Players").LocalPlayer.PlayerGui:Fi
 
 getgenv().silent_load = false;
 
-
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
 
 pcall(function()
@@ -389,30 +388,119 @@ local function makeElementWrapper(actual, index, bucket, info)
         local ki = keyInfo or {}
         local holder = self._holder or self._section or self._tab
         if not holder then return self end
+
         local defaultKey = normalizeKey(ki.Default)
+        local mode = ki.Mode or "Toggle"
         local keyObj
-        local actualKey = holder:Keybind({
+        local actualKey
+
+        local function normalizePressedKey(value)
+            if typeof(value) == "EnumItem" then
+                return value.Name
+            end
+            if type(value) ~= "string" then
+                return "None"
+            end
+            if value == "MouseButton1" then
+                return "MB1"
+            elseif value == "MouseButton2" then
+                return "MB2"
+            end
+            return value
+        end
+
+        local function matchesInput(value, input)
+            value = normalizePressedKey(value)
+
+            if value == "None" or value == "" then
+                return false
+            end
+
+            if value == "MB1" then
+                return input.UserInputType == Enum.UserInputType.MouseButton1
+            elseif value == "MB2" then
+                return input.UserInputType == Enum.UserInputType.MouseButton2
+            end
+
+            return input.UserInputType == Enum.UserInputType.Keyboard
+                and input.KeyCode.Name == value
+        end
+
+        actualKey = holder:Keybind({
             Title = ki.Text or ki.Title or idx,
             Desc = ki.Desc,
             Value = defaultKey,
             Callback = function(value)
-                if keyObj then keyObj.Value = value end
-                if ki.Callback then
-                    safeCall(ki.Callback, value)
+                if keyObj then
+                    keyObj.Value = normalizePressedKey(value)
                 end
+
             end,
         })
+
         keyObj = makeElementWrapper(actualKey, idx, Options, {
             Type = "Keybind",
             Default = defaultKey,
             Callback = ki.Callback,
         })
         keyObj.Value = defaultKey
+        keyObj.Mode = mode
+        keyObj.Toggled = false
+        keyObj.EnableCheck = ki.EnableCheck
         Options[idx] = keyObj
+
+        local inputService = game:GetService("UserInputService")
+        local endedConnection
+
+        local beganConnection = inputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then
+                return
+            end
+
+            if not matchesInput(keyObj.Value, input) then
+                return
+            end
+
+            if keyObj.Mode == "Hold" then
+                keyObj.Toggled = true
+            elseif keyObj.Mode == "Always" then
+                keyObj.Toggled = true
+            else
+                keyObj.Toggled = not keyObj.Toggled
+            end
+
+            if ki.Callback then
+                safeCall(ki.Callback, keyObj.Toggled)
+            end
+        end)
+
+        endedConnection = inputService.InputEnded:Connect(function(input)
+            if not matchesInput(keyObj.Value, input) then
+                return
+            end
+
+            if keyObj.Mode == "Hold" then
+                keyObj.Toggled = false
+                if ki.Callback then
+                    safeCall(ki.Callback, false)
+                end
+            end
+        end)
+
+        table.insert(_unloadCallbacks, function()
+            pcall(function() beganConnection:Disconnect() end)
+            pcall(function() endedConnection:Disconnect() end)
+        end)
+
         if idx == "MenuKeybind" and _windWindow and _windWindow.SetToggleKey then
             local code = Enum.KeyCode[defaultKey]
-            if code then pcall(function() _windWindow:SetToggleKey(code) end) end
+            if code then
+                pcall(function()
+                    _windWindow:SetToggleKey(code)
+                end)
+            end
         end
+
         return self
     end
 
@@ -654,8 +742,10 @@ end
 function Library:CreateWindow(config)
     config = config or {}
     local touch = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").MouseEnabled
+    local uiName = "Velox Hub | Rivals"
+
     _windWindow = WindUI:CreateWindow({
-        Title = "VeloxHubRivals",
+        Title = uiName,
         Icon = "crosshair",
         Author = "VeloxHub",
         Folder = "VeloxHubRivals",
@@ -677,18 +767,24 @@ function Library:CreateWindow(config)
     }
 
     function _windowWrapper:AddTab(name)
-        local icons = {
-            combat = "crosshair",
-            visuals = "eye",
-            esp = "scan",
-            world = "globe",
-            character = "user",
-            misc = "package",
-            optimizations = "gauge",
-            lua = "code",
-            settings = "settings",
+        local key = string.lower(tostring(name))
+        local tabs = {
+            combat = { Icon = "crosshair", Desc = "Aim, targeting, and combat controls." },
+            visuals = { Icon = "eye", Desc = "Viewmodel, effects, and visual customization." },
+            esp = { Icon = "scan", Desc = "Player information and ESP controls." },
+            world = { Icon = "globe", Desc = "World, environment, and map controls." },
+            character = { Icon = "user", Desc = "Movement and character controls." },
+            performance = { Icon = "gauge", Desc = "FPS, rendering, and performance settings." },
+            misc = { Icon = "package", Desc = "Utility, spoofing, and miscellaneous tools." },
+            scripts = { Icon = "code", Desc = "Lua tools and script utilities." },
+            settings = { Icon = "settings", Desc = "Configuration, appearance, and UI settings." },
         }
-        local actual = _windWindow:Tab({Title = tostring(name), Icon = icons[string.lower(tostring(name))] or "layout-dashboard"})
+        local meta = tabs[key] or { Icon = "layout-dashboard", Desc = nil }
+        local actual = _windWindow:Tab({
+            Title = tostring(name),
+            Desc = meta.Desc,
+            Icon = meta.Icon,
+        })
         local wrapped = wrapTab(actual)
         self.Tabs[name] = wrapped
         return wrapped
@@ -740,7 +836,7 @@ function Library:Notify(message, duration)
     local d = tonumber(duration) or 3
     local ok, result = pcall(function()
         return WindUI:Notify({
-            Title = "VeloxHubRivals",
+            Title = "Velox Hub | Rivals",
             Content = text,
             Duration = d,
             Icon = "info",
@@ -909,7 +1005,7 @@ end
 
 function SaveManager:BuildAppearanceSection(tab)
     local box = tab:AddRightGroupbox("appearance")
-    box:AddLabel("VeloxHubRivals uses the VeloxDark WindUI theme.", true)
+    box:AddLabel("Velox Hub | Rivals uses the VeloxDark WindUI theme.", true)
     box:AddButton("reset window", function()
         if _windWindow and type(_windWindow.Open) == "function" then
             pcall(function() _windWindow:Open() end)
@@ -1090,16 +1186,24 @@ local thisisforsubspace = {
 };
 
 local Tabs = {
-    Main = Window:AddTab('combat'),
-    visualstab = Window:AddTab('visuals'),
-    esptab = Window:AddTab('esp'),
-    worldtab = Window:AddTab('world'),
-    character_tab = Window:AddTab('character'),
-    misc_tab = Window:AddTab('misc'),
-    optimizations = Window:AddTab('optimizations'),
-    lua = Window:AddTab('lua'),
-    ['UI Settings'] = Window:AddTab('settings'),
+    Main = Window:AddTab('Combat'),
+    visualstab = Window:AddTab('Visuals'),
+    esptab = Window:AddTab('ESP'),
+    worldtab = Window:AddTab('World'),
+    character_tab = Window:AddTab('Character'),
+    optimizations = Window:AddTab('Performance'),
+    misc_tab = Window:AddTab('Misc'),
+    lua = Window:AddTab('Scripts'),
+    ['UI Settings'] = Window:AddTab('Settings'),
 };
+
+pcall(function()
+    Tabs.Main._tab:Paragraph({
+        Title = "Velox Hub | Rivals",
+        Desc = "A clean, organized interface with dedicated sections for combat, visuals, ESP, world, character, performance, utilities, scripts, and settings.",
+        Icon = "crosshair",
+    })
+end)
 
 getgenv().VeloxHubRivals = {
     optimizations = {
