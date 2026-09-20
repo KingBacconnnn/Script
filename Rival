@@ -1171,7 +1171,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.9', true)
+changelog_box:AddLabel('Version 2.0.10', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -1327,16 +1327,17 @@ getgenv().VeloxHubRivals = {
     },
     esp = {
         enable = false,
-        team_check = false,
+        team_check = true,
+        wall_check = true,
         box = {
-            enable = false,
+            enable = true,
             color = Color3.fromRGB(0, 210, 255),
             outline = Color3.fromRGB(0, 0, 0),
             inline = Color3.fromRGB(255, 255, 255),
             thickness = 1,
         },
         glow = {
-            enable = false,
+            enable = true,
             color_start = Color3.new(1, 1, 1),
             color_end = Color3.new(1, 1, 1),
             transparency = 1,
@@ -1345,7 +1346,7 @@ getgenv().VeloxHubRivals = {
             animated = false,
         },
         filled = {
-            enable = false,
+            enable = true,
             color_start = Color3.new(1, 1, 1),
             color_end = Color3.new(1, 1, 1),
             transparency = 0.75,
@@ -1357,18 +1358,18 @@ getgenv().VeloxHubRivals = {
             hit_time = 0.3,
         },
         visible = {
-            enable = false,
+            enable = true,
             color = Color3.fromRGB(60, 255, 90),
         },
         highlight = {
-            enable = false,
+            enable = true,
             fill_color = Color3.fromRGB(0, 30, 255),
             outline_color = Color3.fromRGB(255, 255, 255),
             fill_transparency = 0.55,
             outline_transparency = 0,
         },
         health = {
-            enable = false,
+            enable = true,
             color_high = Color3.fromRGB(0, 255, 0),
             color_mid = Color3.fromRGB(255, 255, 0),
             color_low = Color3.fromRGB(255, 0, 0),
@@ -1376,9 +1377,9 @@ getgenv().VeloxHubRivals = {
             gap = 5,
         },
         text = {
-            name = { enable = false, color = Color3.fromRGB(240, 245, 255) },
-            studs = { enable = false, color = Color3.fromRGB(240, 245, 255) },
-            tool = { enable = false, color = Color3.new(1, 1, 1), position = "right" },
+            name = { enable = true, color = Color3.fromRGB(240, 245, 255) },
+            studs = { enable = true, color = Color3.fromRGB(240, 245, 255) },
+            tool = { enable = true, color = Color3.new(1, 1, 1), position = "right" },
             size = 13,
             gradient = false,
             gradient_color1 = Color3.fromRGB(0, 30, 255),
@@ -1386,7 +1387,7 @@ getgenv().VeloxHubRivals = {
             flow = false,
             flow_speed = 1,
         },
-        max_dist = 25000,
+        max_dist = 1000,
     },
     death_effects = {
         enable = false,
@@ -3216,6 +3217,14 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 
 	if dist > cfg.max_dist then esp.hide(player) return end;
 
+	if cfg.wall_check then
+		local ok, seen = pcall(check_wall, root);
+		if not ok or not seen then
+			esp.hide(player);
+			return;
+		end;
+	end;
+
 	local _, onscreen = camera:WorldToViewportPoint(rootpos);
 	if not onscreen then esp.hide(player) return end;
 
@@ -4242,9 +4251,18 @@ has_riot = LPH_NO_VIRTUALIZE(function(plr)
 end);
 
 check_wall = LPH_NO_VIRTUALIZE(function(part)
-    local ray = Ray.new(camera.CFrame.Position, part.Position - camera.CFrame.Position);
-    local hit_part = workspace:FindPartOnRayWithIgnoreList(ray, {local_player.Character, part.Parent});
-    return not hit_part;
+    if not part or not part.Parent then return false end;
+
+    local origin = camera.CFrame.Position;
+    local direction = part.Position - origin;
+
+    local params = RaycastParams.new();
+    params.FilterType = Enum.RaycastFilterType.Exclude;
+    params.FilterDescendantsInstances = { local_player.Character, part.Parent };
+    params.IgnoreWater = true;
+
+    local result = workspace:Raycast(origin, direction, params);
+    return result == nil;
 end);
 
 closest_part = LPH_NO_VIRTUALIZE(function(plr)
@@ -5986,7 +6004,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
     local targeting_tab = legit_tab:AddLeftGroupbox('Targeting'); do
         targeting_tab:AddToggle('visible_only_enable', {
             Text = 'Visible only',
-            Default = false,
+            Default = true,
             Callback = function(v)
                 ELI.targeting.visible_only = v;
             end
@@ -7779,32 +7797,32 @@ local function buildEspTab()
 
     master:AddToggle("esp_enable", {
         Text = "Enable ESP",
-        Default = ELI.esp.enable,
+        Default = false,
         Callback = function(v) ELI.esp.enable = v end,
     })
     master:AddToggle("esp_box_enable", {
         Text = "Box",
-        Default = ELI.esp.box.enable,
+        Default = true,
         Callback = function(v) ELI.esp.box.enable = v end,
     })
     master:AddToggle("esp_health_enable", {
         Text = "Health Bar",
-        Default = ELI.esp.health.enable,
+        Default = true,
         Callback = function(v) ELI.esp.health.enable = v end,
     })
     master:AddToggle("esp_name_enable", {
         Text = "Name",
-        Default = ELI.esp.text.name.enable,
+        Default = true,
         Callback = function(v) ELI.esp.text.name.enable = v end,
     })
     master:AddToggle("esp_distance_enable", {
         Text = "Distance",
-        Default = ELI.esp.text.studs.enable,
+        Default = true,
         Callback = function(v) ELI.esp.text.studs.enable = v end,
     })
     master:AddToggle("esp_highlight_enable", {
         Text = "Highlight",
-        Default = ELI.esp.highlight.enable,
+        Default = true,
         Callback = function(v) ELI.esp.highlight.enable = v end,
     })
 
@@ -7817,16 +7835,19 @@ local function buildEspTab()
     })
     filters:AddSlider("esp_max_distance", {
         Text = "Max Distance",
-        Min = 50,
+        Min = 100,
         Max = 5000,
-        Default = ELI.esp.max_dist,
+        Default = 1000,
         Rounding = 0,
         Callback = function(v) ELI.esp.max_dist = v end,
     })
     filters:AddToggle("esp_wall_check", {
         Text = "Wall Check",
-        Default = ELI.esp.visible.enable,
-        Callback = function(v) ELI.esp.visible.enable = v end,
+        Default = true,
+        Callback = function(v)
+            ELI.esp.wall_check = v
+            ELI.targeting.visible_only = v
+        end,
     })
 
 
