@@ -1790,7 +1790,7 @@ local spoof_old = {
     elo = local_player:GetAttribute("DisplayELO"),
 };
 
-run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
+run_service.Heartbeat:Connect((LPH_NO_VIRTUALIZE or function(f) return f end)(function()
     if ELI.spoof.level.enable then
         local_player:SetAttribute("Level", ELI.spoof.level.value);
     end;
@@ -10704,9 +10704,44 @@ end
 
 runTabBuilder("Misc Profile", buildMiscProfileTab, Tabs.misc_tab)
 
+local function makeCharacterSection(tab, title)
+    if not tab then
+        local err = "Character tab reference is nil while creating section " .. tostring(title)
+        warn("[VeloxHub][CHARACTER SECTION ERROR] " .. err)
+        error(err)
+    end
+
+    local rawTab = tab._tab or tab._wind or tab
+    if not rawTab or type(rawTab.Section) ~= "function" then
+        local err = "WindUI Tab:Section is unavailable while creating Character section " .. tostring(title)
+        warn("[VeloxHub][CHARACTER SECTION ERROR] " .. err)
+        error(err)
+    end
+
+    local ok, section = pcall(function()
+        return rawTab:Section({
+            Title = tostring(title or "Section"),
+            Box = true,
+            Opened = false,
+        })
+    end)
+
+    if not ok or not section then
+        local err = tostring(section)
+        warn("[VeloxHub][CHARACTER SECTION ERROR] " .. tostring(title) .. ": " .. err)
+        error(err)
+    end
+
+    print("[VeloxHub][CHARACTER SECTION OK] " .. tostring(title))
+    return setmetatable({
+        _section = section,
+        _tab = rawTab,
+    }, {__index = ContainerMethods})
+end
+
 local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
-    local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
+    local movement_tab = makeCharacterSection(Tabs.character_tab, 'Movement'); do
         keybind_slide_boost_enable = false;
         keybind_infinite_double_jump_enable = false;
 
@@ -10811,7 +10846,7 @@ local function buildCharacterTab()
     end;
 end;
 
-local character_tab1 = Tabs.character_tab:AddLeftGroupbox('Character');
+local character_tab1 = makeCharacterSection(Tabs.character_tab, 'Character');
 
 character_tab1:AddToggle('fly_enable', {
     Text = 'Fly',
@@ -10850,7 +10885,7 @@ character_tab1:AddToggle('character_slide_boost_enable', {
             keybind_slide_boost_enable = v;
             ELI.slide_boost.enable = v;
         end;
-        }):AddKeyPicker('slide_boost_keybind', {
+        }):AddKeyPicker('character_slide_boost_keybind', {
             Default = '',
             Text = 'Slide boost',
             NoUI = false,
@@ -10873,7 +10908,7 @@ character_tab1:AddToggle('character_slide_boost_enable', {
             end;
         });
 
-local anim_tab = Tabs.character_tab:AddLeftGroupbox('Emote player'); do
+local anim_tab = makeCharacterSection(Tabs.character_tab, 'Emote player'); do
     anim_tab:AddToggle('animation_enable', {
         Text = 'Enable',
         Default = false,
@@ -10988,6 +11023,7 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
         anim_last_id = "";
     end;
 end));
+print("[VeloxHub][CHARACTER BUILDER] UI controls finished constructing.")
 end
 end;
 runTabBuilder("Character", buildCharacterTab, Tabs.character_tab)
