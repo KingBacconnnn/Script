@@ -9396,7 +9396,7 @@ end
 end
 buildMiscTab();
 
-do
+local function buildSpoofSection()
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
     local otherTab = spoof_box:AddTab("Other");
@@ -9562,17 +9562,17 @@ do
         end
     });
 
-    local localNameStamp = 0;
+    prof._localNameStamp = 0;
     localTab:AddInput("SpoofLocalName", {
         Text = "Name",
         Default = "",
         Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_local_name = val or "";
-            localNameStamp = tick();
-            local stamp = localNameStamp;
+            prof._localNameStamp = tick();
+            local stamp = prof._localNameStamp;
             task.delay(0.6, function()
-                if stamp == localNameStamp and prof.spoof_local then
+                if stamp == prof._localNameStamp and prof.spoof_local then
                     doLocal();
                 end;
             end);
@@ -9588,17 +9588,17 @@ do
         end
     });
 
-    local otherNameStamp = 0;
+    prof._otherNameStamp = 0;
     otherTab:AddInput("SpoofOtherName", {
         Text = "Name",
         Default = "",
         Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_other_name = val or "";
-            otherNameStamp = tick();
-            local stamp = otherNameStamp;
+            prof._otherNameStamp = tick();
+            local stamp = prof._otherNameStamp;
             task.delay(0.6, function()
-                if stamp == otherNameStamp and prof.spoof_other then
+                if stamp == prof._otherNameStamp and prof.spoof_other then
                     doOtherAll();
                 end;
             end);
@@ -10513,6 +10513,8 @@ do
         });
     end;
 end
+
+buildSpoofSection()
 
 local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
