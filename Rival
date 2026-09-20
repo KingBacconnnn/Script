@@ -869,6 +869,7 @@ function Library:CreateWindow()
             changelog = {Title = "Changelog", Icon = "history", Desc = "Latest updates, fixes, and changes."},
             combat = {Title = "Combat", Icon = "crosshair", Desc = "Aim, targeting, and combat controls."},
             visuals = {Title = "Visuals", Icon = "eye", Desc = "Viewmodel, effects, and visual customization."},
+            esp = {Title = "ESP", Icon = "radar", Desc = "ESP display and filtering controls."},
             optimizations = {Title = "Performance", Icon = "gauge", Desc = "FPS, rendering, and performance settings."},
         }
 
@@ -1171,7 +1172,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.12', true)
+changelog_box:AddLabel('Version 2.0.13', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -3228,8 +3229,8 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 	local ctext    = c.text;
 	local chp      = c.bars.hp;
 
-	local espVisible = false;
-	if cfg.visible.enable then
+	local espVisible = true;
+	if cfg.wall_check then
 		if (tickval - (c.visT or 0)) >= 0.05 then
 			local ok, seen = pcall(check_wall, root);
 			c.vis = ok and seen == true;
@@ -7790,31 +7791,40 @@ local function buildEspTab()
     master:AddToggle("esp_enable", {
         Text = "Enable ESP",
         Default = false,
-        Callback = function(v) ELI.esp.enable = v end,
+        Callback = function(v)
+            ELI.esp.enable = v
+            if not v then
+                for _, player in players:GetPlayers() do
+                    if player ~= local_player then
+                        esp.hide(player)
+                    end
+                end
+            end
+        end,
     })
     master:AddToggle("esp_box_enable", {
         Text = "Box",
-        Default = true,
+        Default = ELI.esp.box.enable,
         Callback = function(v) ELI.esp.box.enable = v end,
     })
     master:AddToggle("esp_health_enable", {
         Text = "Health Bar",
-        Default = true,
+        Default = ELI.esp.health.enable,
         Callback = function(v) ELI.esp.health.enable = v end,
     })
     master:AddToggle("esp_name_enable", {
         Text = "Name",
-        Default = true,
+        Default = ELI.esp.text.name.enable,
         Callback = function(v) ELI.esp.text.name.enable = v end,
     })
     master:AddToggle("esp_distance_enable", {
         Text = "Distance",
-        Default = true,
+        Default = ELI.esp.text.studs.enable,
         Callback = function(v) ELI.esp.text.studs.enable = v end,
     })
     master:AddToggle("esp_highlight_enable", {
         Text = "Highlight",
-        Default = true,
+        Default = ELI.esp.highlight.enable,
         Callback = function(v) ELI.esp.highlight.enable = v end,
     })
 
@@ -7822,7 +7832,7 @@ local function buildEspTab()
 
     filters:AddToggle("esp_team_check", {
         Text = "Team Check",
-        Default = false,
+        Default = ELI.esp.team_check,
         Callback = function(v)
             ELI.esp.team_check = v
         end,
@@ -7831,13 +7841,13 @@ local function buildEspTab()
         Text = "Max Distance",
         Min = 100,
         Max = 5000,
-        Default = 1000,
+        Default = ELI.esp.max_dist,
         Rounding = 0,
         Callback = function(v) ELI.esp.max_dist = v end,
     })
     filters:AddToggle("esp_wall_check", {
         Text = "Wall Check",
-        Default = false,
+        Default = ELI.esp.wall_check,
         Callback = function(v)
             ELI.esp.wall_check = v
         end,
