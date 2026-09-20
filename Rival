@@ -7844,10 +7844,8 @@ task.spawn(function()
 end)
 
 EDBG_STAGE("BEFORE_WORLD_DEFINITION")
-local function buildWorldTab()
-    local world_tab = Tabs.worldtab; do
-    TABDBG_CHECK_TAB("WORLD", world_tab);
-    TABDBG_STAGE("WORLD_BUILDER_ENTER");
+EDBG_STAGE("WORLD_DEFINITION_SPLIT")
+local function buildWorldCore(world_tab)
     local world_main_tab = world_tab:AddLeftTabbox(); do
         local color_correction_tab = world_main_tab:AddTab('Color correction'); do
             color_correction_tab:AddToggle('world_fog', {
@@ -8167,7 +8165,9 @@ local function buildWorldTab()
             end;
         end;
     end;
+end
 
+local function buildWorldRemovals(world_tab)
     local removals_tab = world_tab:AddRightGroupbox('World removals'); do
 
         removals_tab:AddToggle('anti_flashbang_enable', {
@@ -8192,7 +8192,9 @@ local function buildWorldTab()
             end;
         });
     end;
+end
 
+local function buildWorldTextures(world_tab)
     local texture_connection = nil;
     local texture_originals = {};
     local minecraft_textures = {};
@@ -8389,7 +8391,9 @@ local function buildWorldTab()
             end
         });
     end;
+end
 
+local function buildWorldShaders(world_tab)
     local shader_blur = Instance.new('BlurEffect');
     shader_blur.Name = 'VeloxHubRivals_blur';
     shader_blur.Enabled = false;
@@ -8606,7 +8610,9 @@ local function buildWorldTab()
             end
         });
     end;
+end
 
+local function buildWorldQuality(world_tab)
     local quality_tab = world_tab:AddLeftGroupbox('Quality'); do
         local default_technology = lighting.Technology;
         local default_global_shadows = lighting.GlobalShadows;
@@ -8729,7 +8735,9 @@ local function buildWorldTab()
             end
         });
     end;
+end
 
+local function buildWorldCamera(world_tab)
 local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     local keybind_third_person_enable = false;
     camera_tab:AddToggle('third_person_enable', {
@@ -8796,9 +8804,15 @@ local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     });
 end;
 end
-EDBG_STAGE("BEFORE_WORLD_CALL")
-TABDBG_CALL("WORLD", buildWorldTab)
-EDBG_STAGE("AFTER_WORLD_CALL")
+
+EDBG_STAGE("WORLD_BUILD_START")
+TABDBG_CALL("WORLD_CORE", function() buildWorldCore(Tabs.worldtab) end)
+TABDBG_CALL("WORLD_REMOVALS", function() buildWorldRemovals(Tabs.worldtab) end)
+TABDBG_CALL("WORLD_TEXTURES", function() buildWorldTextures(Tabs.worldtab) end)
+TABDBG_CALL("WORLD_SHADERS", function() buildWorldShaders(Tabs.worldtab) end)
+TABDBG_CALL("WORLD_QUALITY", function() buildWorldQuality(Tabs.worldtab) end)
+TABDBG_CALL("WORLD_CAMERA", function() buildWorldCamera(Tabs.worldtab) end)
+EDBG_STAGE("WORLD_BUILD_DONE")
 
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
