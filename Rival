@@ -410,7 +410,7 @@ local function makeElementWrapper(actual, index, bucket, info)
         local holder = self._holder or self._section or self._tab
         if not holder then return self end
         local opt
-        local actualColor = holder:Colorpicker({
+        local actualColor = callElement(self, "Colorpicker", idx, {
             Title = ci.Title or ci.Text or idx,
             Desc = ci.Desc,
             Default = ci.Default or Color3.fromRGB(255,255,255),
@@ -472,7 +472,7 @@ local function makeElementWrapper(actual, index, bucket, info)
                 and input.KeyCode.Name == value
         end
 
-        actualKey = holder:Keybind({
+        actualKey = callElement(self, "Keybind", idx, {
             Title = ki.Text or ki.Title or idx,
             Desc = ki.Desc,
             Value = defaultKey,
@@ -556,6 +556,82 @@ local function makeElementWrapper(actual, index, bucket, info)
     return wrapper
 end
 
+
+local function reportUIControlError(tabName, methodName, controlName, err)
+    warn(
+        "[VeloxHub][UI CONTROL ERROR] "
+        .. tostring(tabName)
+        .. " | "
+        .. tostring(methodName)
+        .. " | "
+        .. tostring(controlName)
+        .. ": "
+        .. tostring(err)
+    )
+end
+
+local function resolveElementHost(container, methodName)
+    local section = container and container._section
+    local tab = container and container._tab
+
+    if section and type(section[methodName]) == "function" then
+        return section
+    end
+
+    if tab and type(tab[methodName]) == "function" then
+        return tab
+    end
+
+    return nil
+end
+
+local function callElement(container, methodName, controlName, config)
+    local tabName = _activeTabBuild or "Unknown"
+    local host = resolveElementHost(container, methodName)
+
+    if not host then
+        local err = "WindUI method " .. tostring(methodName) .. " is unavailable on both Section and Tab."
+        reportUIControlError(tabName, methodName, controlName, err)
+        error(err)
+    end
+
+    local ok, result = pcall(function()
+        return host[methodName](host, config)
+    end)
+
+    if ok then
+        return result
+    end
+
+    local section = container and container._section
+    local tab = container and container._tab
+
+    if section and host == section and tab and type(tab[methodName]) == "function" then
+        local fallbackOK, fallbackResult = pcall(function()
+            return tab[methodName](tab, config)
+        end)
+
+        if fallbackOK then
+            warn(
+                "[VeloxHub][UI FALLBACK] "
+                .. tostring(tabName)
+                .. " | "
+                .. tostring(controlName)
+                .. " used the Tab fallback for "
+                .. tostring(methodName)
+                .. "."
+            )
+            return fallbackResult
+        end
+
+        reportUIControlError(tabName, methodName, controlName, fallbackResult)
+        error(fallbackResult)
+    end
+
+    reportUIControlError(tabName, methodName, controlName, result)
+    error(result)
+end
+
 local ContainerMethods = {}
 
 function ContainerMethods:AddBlank(_) return self end
@@ -581,7 +657,7 @@ function ContainerMethods:AddLabel(text, doesWrap)
     end
 
     local section = self._section or self._tab
-    local actual = section:Paragraph({
+    local actual = callElement(self, "Paragraph", tostring(labelText or ""), {
         Title = tostring(labelText or ""),
         Desc = wrap and "" or nil,
     })
@@ -614,7 +690,7 @@ function ContainerMethods:AddButton(idxOrText, infoOrCallback)
         end
     end
     local host = self._section or self._tab
-    local actual = host:Button({
+    local actual = callElement(self, "Button", title, {
         Title = title,
         Desc = nil,
         Callback = function()
@@ -625,7 +701,7 @@ function ContainerMethods:AddButton(idxOrText, infoOrCallback)
     wrapper._holder = self._section
     wrapper._section = self._section
     function wrapper:AddButton(text, cb)
-        (self._holder or self._section or self._tab):Button({
+        callElement(self, "Button", tostring(text or "Button"), {
             Title = tostring(text or "Button"),
             Callback = function() safeCall(cb) end,
         })
@@ -638,7 +714,7 @@ function ContainerMethods:AddToggle(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Toggle({
+    local actual = callElement(self, "Toggle", idx, {
         Title = info.Text or idx,
         Desc = info.Desc,
         Value = info.Default == true,
@@ -665,7 +741,7 @@ function ContainerMethods:AddSlider(idx, info)
     local step = 1 / (10 ^ math.max(0, rounding))
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Slider({
+    local actual = callElement(self, "Slider", idx, {
         Title = info.Text or idx,
         Desc = info.Desc,
         Step = step,
@@ -699,7 +775,7 @@ function ContainerMethods:AddDropdown(idx, info)
     local values = info.Values or {}
     local defaultValue = normalizeDropdownDefault(values, info.Default, info.AllowNull == true, info.Multi == true)
     local wrapper
-    local actual = host:Dropdown({
+    local actual = callElement(self, "Dropdown", idx, {
         Title = info.Text or idx,
         Desc = info.Desc,
         Values = values,
@@ -734,7 +810,7 @@ function ContainerMethods:AddInput(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Input({
+    local actual = callElement(self, "Input", idx, {
         Title = info.Text or idx,
         Desc = info.Desc,
         Value = info.Default or "",
@@ -768,12 +844,29 @@ end
 
 function ContainerMethods:AddGroupbox(info)
     local title = type(info) == "table" and info.Name or tostring(info or "Section")
-    local section = self._tab:Section({
-        Title = title,
-        Box = true,
-        Opened = false,
-    })
-    local container = {_section = section, _tab = self._tab}
+    local tab = self._tab
+
+    if not tab or type(tab.Section) ~= "function" then
+        local err = "WindUI Section method is unavailable for groupbox " .. tostring(title)
+        reportUIControlError(_activeTabBuild or "Unknown", "Section", title, err)
+        error(err)
+    end
+
+    local ok, section = pcall(function()
+        return tab:Section({
+            Title = title,
+            Box = true,
+            Opened = false,
+        })
+    end)
+
+    if not ok or not section then
+        local err = tostring(section)
+        reportUIControlError(_activeTabBuild or "Unknown", "Section", title, err)
+        error(err)
+    end
+
+    local container = {_section = section, _tab = tab}
     return setmetatable(container, {__index = ContainerMethods})
 end
 
@@ -5464,7 +5557,14 @@ local function runTabBuilder(name, builder, tab)
     _tabBuildReports[report.name] = report
     _activeTabBuild = report.name
 
-    local ok, err = xpcall(builder, debug.traceback)
+    local tracebackHandler = function(err)
+        if debug and type(debug.traceback) == "function" then
+            return debug.traceback(tostring(err), 2)
+        end
+        return tostring(err)
+    end
+
+    local ok, err = xpcall(builder, tracebackHandler)
 
     _activeTabBuild = nil
 
@@ -10743,7 +10843,7 @@ character_tab1:AddSlider('fly_speed_value', {
     end;
 });
 
-character_tab1:AddToggle('slide_boost_enable', {
+character_tab1:AddToggle('character_slide_boost_enable', {
         Text = 'Slide boost',
         Default = false,
         Callback = function(v)
@@ -10762,7 +10862,7 @@ character_tab1:AddToggle('slide_boost_enable', {
             end;
         });
 
-                character_tab1:AddSlider('slide_boost_spped', {
+                character_tab1:AddSlider('character_slide_boost_speed', {
             Text = 'Speed',
             Default = 60,
             Min = 1,
@@ -10895,7 +10995,11 @@ runTabBuilder("Character", buildCharacterTab, Tabs.character_tab)
 flushDeferredUICallbacks()
 
 for reportName, report in next, _tabBuildReports do
-    if report.elements == 0 then
+    if report.failed then
+        warn("[VeloxHub][FINAL TAB REPORT] " .. tostring(reportName) .. " FAILED. See the UI BUILDER ERROR and UI CONTROL ERROR above.")
+    elseif report.elements == 0 then
         warn("[VeloxHub][FINAL TAB REPORT] " .. tostring(reportName) .. " is empty after initialization.")
+    else
+        warn("[VeloxHub][FINAL TAB REPORT] " .. tostring(reportName) .. " OK with " .. tostring(report.elements) .. " UI control(s).")
     end
 end
