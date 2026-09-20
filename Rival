@@ -43,9 +43,6 @@ do
         end);
     end;
 end;
-print("-");
-task.wait(6);
-
 pcall(function()
     if not (hookfunction and newcclosure and getrenv) then return end;
     local oldtable; oldtable = hookfunction(getrenv().setmetatable, newcclosure(function(Table, Metatable)
@@ -111,12 +108,6 @@ coroutine.wrap(function()
         end;
     end);
 end)();
-
-pcall(function()
-    local fake = Instance.new("RemoteEvent");
-    fake.Name = "ClientAlert";
-    fake.Parent = LocalPlayer;
-end);
 
 task.spawn(function()
     pcall(LPH_NO_VIRTUALIZE(function()
@@ -11101,7 +11092,7 @@ end
             end;
         end;
     end)));
-end)()
+end)();
 
 (function()
     local cfg = ELI;
@@ -12598,7 +12589,7 @@ SaveManager:BuildAppearanceSection(Tabs['UI Settings']);
     local editor = exec_box:AddInput('lua_editor', {
         Text = 'lua editor',
         Default = '',
-        Placeholder = '-- write or paste your lua here',
+        Placeholder = 'write or paste your lua here',
         Type = 'Textarea',
     });
 
@@ -12693,8 +12684,7 @@ SaveManager:BuildAppearanceSection(Tabs['UI Settings']);
             end;
         end);
     end);
-end)()
-
+end)();
 
 pcall(function() SaveManager:LoadAutoloadConfig() end);
 
