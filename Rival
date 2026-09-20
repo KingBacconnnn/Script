@@ -1644,128 +1644,6 @@ getgenv().VeloxHubRivals = {
 };
 local ELI = getgenv().VeloxHubRivals;
 
---[[
-    VeloxHub Rivals diagnostic layer.
-    This is intentionally diagnostic-only: it does not change feature values or callbacks.
-    Use:
-        getgenv().VeloxHubRivalsDebug.report()
-        getgenv().VeloxHubRivalsDebug.enabled = false
-]]
-local VeloxHubRivalsDebug = {
-    enabled = true,
-    started = os.clock(),
-    stage = "ELI_READY",
-    counters = {},
-    last_errors = {},
-    watched = {},
-    previous = {},
-};
-getgenv().VeloxHubRivalsDebug = VeloxHubRivalsDebug;
-
-local function VHDBlog(msg)
-    if not VeloxHubRivalsDebug.enabled then return end;
-    warn("[VeloxDBG] " .. tostring(msg));
-end;
-
-local function VHDBstage(name)
-    VeloxHubRivalsDebug.stage = name;
-    VHDBlog("STAGE -> " .. name);
-end;
-
-local function VHDBcount(name, amount)
-    local c = VeloxHubRivalsDebug.counters;
-    c[name] = (c[name] or 0) + (amount or 1);
-end;
-
-local function VHDBerror(section, err)
-    if not VeloxHubRivalsDebug.enabled then return end;
-    local key = tostring(section) .. "|" .. tostring(err);
-    local now = os.clock();
-    if now - (VeloxHubRivalsDebug.last_errors[key] or 0) >= 2 then
-        VeloxHubRivalsDebug.last_errors[key] = now;
-        warn("[VeloxDBG][ERROR][" .. tostring(section) .. "] " .. tostring(err));
-    end;
-end;
-
-local function VHDBguard(section, fn)
-    local ok, result = xpcall(fn, function(err)
-        return debug and debug.traceback and debug.traceback(tostring(err), 2) or tostring(err);
-    end);
-    if not ok then
-        VHDBerror(section, result);
-    end;
-    return ok, result;
-end;
-
-local function VHDBread(path)
-    local node = ELI;
-    for key in string.gmatch(path, "[^%.]+") do
-        if node == nil then return nil end;
-        node = node[key];
-    end;
-    return node;
-end;
-
-local function VHDBsnapshot(prefix, node, outtbl, depth)
-    if depth > 4 or type(node) ~= "table" then return end;
-    for k, v in pairs(node) do
-        local key = prefix ~= "" and (prefix .. "." .. tostring(k)) or tostring(k);
-        local tv = type(v);
-        if tv == "boolean" or tv == "number" or tv == "string" then
-            outtbl[key] = v;
-        elseif tv == "table" then
-            VHDBsnapshot(key, v, outtbl, depth + 1);
-        end;
-    end;
-end;
-
-function VeloxHubRivalsDebug.report()
-    local d = VeloxHubRivalsDebug;
-    warn("========== VeloxHub DEBUG REPORT ==========");
-    warn("Enabled:", d.enabled, "Stage:", d.stage, "Uptime:", math.floor(os.clock() - d.started) .. "s");
-    for k, v in pairs(d.counters) do
-        warn("[COUNT]", k, v);
-    end;
-    warn("[CONFIG] ESP enable=", VHDBread("esp.enable"), "World fog=", VHDBread("world.fog"), "World skybox=", VHDBread("world.skybox"));
-    warn("[CONFIG] Walkspeed=", VHDBread("walkspeed.enable"), "Fly=", VHDBread("fly.enable"), "DoubleJump=", VHDBread("double_jump_height.enable"));
-    warn("[CONFIG] AutoVote=", VHDBread("auto_vote_map.enable"), "AutoQueue=", VHDBread("auto_queue.enable"), "AutoLoadout=", VHDBread("auto_loadout.enable"), "GrabDrops=", VHDBread("arcade_server.grab_drops"), "AutoRespawn=", VHDBread("arcade_server.auto_respawn"));
-    warn("===========================================");
-end;
-
--- Watch scalar configuration changes without flooding the console.
-task.spawn(function()
-    while task.wait(0.5) do
-        if VeloxHubRivalsDebug.enabled then
-            local now = {};
-            local groups = {"esp", "world", "walkspeed", "fly", "double_jump_height", "auto_vote_map", "auto_queue", "auto_loadout", "arcade_server", "fov_changer", "weather", "animation"};
-            for _, group in ipairs(groups) do
-                local node = ELI[group];
-                if type(node) == "table" then
-                    VHDBsnapshot(group, node, now, 0);
-                end;
-            end;
-            for key, value in pairs(now) do
-                local old = VeloxHubRivalsDebug.previous[key];
-                if old ~= nil and old ~= value then
-                    VHDBlog("CONFIG CHANGE " .. key .. " = " .. tostring(value));
-                end;
-            end;
-            VeloxHubRivalsDebug.previous = now;
-        end;
-    end;
-end);
-
--- Independent watchdog: if the script stops later, this keeps reporting the last completed stage.
-task.spawn(function()
-    while task.wait(2) do
-        if VeloxHubRivalsDebug.enabled then
-            local d = VeloxHubRivalsDebug;
-            warn("[VeloxDBG][WATCHDOG] stage=" .. tostring(d.stage) .. " uptime=" .. math.floor(os.clock() - d.started) .. "s");
-        end;
-    end;
-end);
-
-
 local spoof_old = {
     level = local_player:GetAttribute("Level") ,
     streak = local_player:GetAttribute("StatisticDuelsWinStreak"),
@@ -2255,7 +2133,6 @@ local theanimationsd = {
     ["Hype"] = "80055417516516",
 };
 
-VHDBstage("WORLD_RUNTIME_REGISTERING");
 local world = {
     fog_color = lighting.FogColor,
     fog_start = lighting.FogStart,
@@ -2269,7 +2146,6 @@ local world = {
 };
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("world_heartbeat");
     if ELI.world.fog then
         lighting.FogColor = ELI.world.fog_color;
         lighting.FogStart = ELI.world.fog_start;
@@ -2294,10 +2170,8 @@ trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
         lighting.ColorShift_Bottom = ELI.world.color_shift_bottom_color;
     end;
 end)));
-VHDBstage("WORLD_RUNTIME_REGISTERED");
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("character_double_jump_heartbeat");
     if ELI.double_jump_height.enable then
         mechanics_controller._original_jump_power = ELI.double_jump_height.height;
     end;
@@ -2312,7 +2186,6 @@ trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
 end)));
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("character_fly_heartbeat");
     if ELI.fly.enable and local_player.Character and local_player.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = local_player.Character.HumanoidRootPart;
         local move_vector = Vector3.new(0, 0, 0);
@@ -2371,7 +2244,6 @@ do
         motion_blur.Size = motion_blur.Size + (target - motion_blur.Size) * math.min(dt * 20, 1);
     end)));
 
-    VHDBstage("CHARACTER_WALKSPEED_REGISTERING");
     local walkspeed_base = 16;
     local walkspeed_applying = false;
     local walkspeed_conn = nil;
@@ -2410,7 +2282,6 @@ do
 
     local walkspeed_active = false;
     trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-        VHDBcount("character_walkspeed_heartbeat");
         local character = local_player.Character;
         local humanoid = character and character:FindFirstChildOfClass("Humanoid");
         if not humanoid then return end;
@@ -2430,7 +2301,6 @@ do
         end;
     end)));
 end
-VHDBstage("CHARACTER_RUNTIME_REGISTERED");
 
 do
     local forced = false;
@@ -2925,7 +2795,6 @@ trove:Add(function()
     G2L["1"]:Destroy();
 end);
 
-VHDBstage("ESP_RUNTIME_REGISTERING");
 local esp = {};
 local cache = {};
 
@@ -3240,19 +3109,18 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 	if not cache[player] then return end;
 
 	local character = player.Character;
-	if not character or not character.Parent then VHDBcount("esp_skip_no_character"); esp.hide(player) return end;
+	if not character or not character.Parent then esp.hide(player) return end;
 
 	local root = character:FindFirstChild("HumanoidRootPart");
 	local hum  = character:FindFirstChildWhichIsA("Humanoid");
 
-	if not root or not hum          then VHDBcount("esp_skip_no_root_or_humanoid"); esp.hide(player) return end;
-	if hum.Health <= 0              then VHDBcount("esp_skip_dead"); esp.hide(player) return end;
+	if not root or not hum          then esp.hide(player) return end;
+	if hum.Health <= 0              then esp.hide(player) return end;
 
 	local cfg = ELI.esp;
 
 	if cfg.team_check and player:GetAttribute("TeamID") ~= nil
 		and player:GetAttribute("TeamID") == local_player:GetAttribute("TeamID") then
-		VHDBcount("esp_skip_team");
 		esp.hide(player);
 		return
 	end;
@@ -3261,13 +3129,13 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 	local camcf   = camera.CFrame.Position;
 	local dist    = (camcf - rootpos).Magnitude;
 
-	if dist > cfg.max_dist then VHDBcount("esp_skip_distance"); esp.hide(player) return end;
+	if dist > cfg.max_dist then esp.hide(player) return end;
 
 	local _, onscreen = camera:WorldToViewportPoint(rootpos);
-	if not onscreen then VHDBcount("esp_skip_offscreen"); esp.hide(player) return end;
+	if not onscreen then esp.hide(player) return end;
 
 	local left, top, w, h = esp.getbounds(root, dist);
-	if not left then VHDBcount("esp_skip_bounds"); esp.hide(player) return end;
+	if not left then esp.hide(player) return end;
 
 	local c        = cache[player];
 	local cbox     = c.box;
@@ -3469,19 +3337,11 @@ esp.update = LPH_NO_VIRTUALIZE(function(player)
 end);
 
 for _, player in players:GetPlayers() do
-	if player ~= local_player then
-		VHDBguard("ESP.add(" .. tostring(player.Name) .. ")", function()
-			esp.add(player);
-		end);
-	end;
+	if player ~= local_player then esp.add(player) end;
 end;
 
 players.PlayerAdded:Connect(function(player)
-	if player ~= local_player then
-		VHDBguard("ESP.add(PlayerAdded:" .. tostring(player.Name) .. ")", function()
-			esp.add(player);
-		end);
-	end;
+	if player ~= local_player then esp.add(player) end;
 end);
 
 players.PlayerRemoving:Connect(function(player)
@@ -3491,7 +3351,6 @@ end);
 local VeloxHubRivals_state = { esp_hidden = false, vm_chams_last = 0 };
 
 trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
-	VHDBcount("esp_render_stepped");
 	tickval = tick();
 
 	if not ELI.esp.enable then
@@ -3506,15 +3365,10 @@ trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
 
 	VeloxHubRivals_state.esp_hidden = false;
 	for _, player in players:GetPlayers() do
-		if player ~= local_player then
-			VHDBguard("ESP.update(" .. tostring(player.Name) .. ")", function()
-				esp.update(player);
-			end);
-		end;
+		if player ~= local_player then esp.update(player) end;
 	end;
 end)));
 
-VHDBstage("ESP_RUNTIME_REGISTERED");
 trove:Add(function()
 	for _, player in players:GetPlayers() do esp.remove(player) end;
 	espgui:Destroy();
@@ -5001,7 +4855,6 @@ do
     end));
 
     trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function(dt)
-        VHDBcount("world_skybox_heartbeat");
         local world_cfg = ELI.world;
         local sky = lighting:FindFirstChildOfClass("Sky");
         if world_cfg.skybox_rotate and sky then
@@ -5185,9 +5038,7 @@ local old_update = client_viewmodel.Update; client_viewmodel.Update = function(c
     return old_update(c, dt, movement_state, render_data);
 end;
 
-VHDBstage("MISC_RUNTIME_REGISTERING");
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("misc_auto_vote_heartbeat");
     if ELI.auto_vote_map.enable then
     replicated_storage.Remotes.Duels.Vote:FireServer(ELI.auto_vote_map.map);
     end;
@@ -5251,7 +5102,6 @@ end;
 
 trove:Add(task.spawn(function()
     while wait(1) do
-        VHDBcount("misc_auto_queue_loop");
         if ELI.auto_queue.enable and ELI.auto_queue.queue_mode ~= "" then
             local fighter = fighter_controller.LocalFighter;
             local currently_in_match = false;
@@ -5297,7 +5147,6 @@ end;
 local pick_weapons = replicated_storage.Remotes.Replication.Fighter.PickWeapons;
 trove:Add(task.spawn(LPH_NO_VIRTUALIZE(function()
     while task.wait() do
-        VHDBcount("misc_auto_loadout_loop");
         if not ELI.auto_loadout.enable then
             continue;
         end;
@@ -5316,7 +5165,6 @@ trove:Add(task.spawn(LPH_NO_VIRTUALIZE(function()
 end)));
 
 trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("misc_render_stepped");
     if ELI.arcade_server.grab_drops then
         for _,v in next, workspace:GetChildren() do
             if v.Name == "_drop" and v:IsA("BasePart") and local_player.Character:FindFirstChildWhichIsA("HumanoidRootPart") then
@@ -5328,20 +5176,17 @@ trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
 end)));
 
 trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("misc_fov_render_stepped");
     if ELI.fov_changer.enable then
         camera.FieldOfView = ELI.fov_changer.fov;
     end;
 end)));
 
 trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-    VHDBcount("misc_auto_respawn_heartbeat");
     if ELI.arcade_server.auto_respawn then
         replicated_storage.Remotes.Duels.RespawnNow:FireServer();
     end;
 end)));
 
-VHDBstage("MISC_RUNTIME_REGISTERED");
 local triggerbot_handler = {};
 triggerbot_handler.is_shooting = false;
 
@@ -9551,6 +9396,8 @@ end
 end
 buildMiscTab();
 
+local buildCharacterTab;
+
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
@@ -10669,7 +10516,7 @@ do
     end;
 end
 
-local function buildCharacterTab()
+buildCharacterTab = function()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -10956,5 +10803,3 @@ end));
 end
 end;
 buildCharacterTab()
-VHDBstage("SCRIPT_BUILD_COMPLETE");
-VeloxHubRivalsDebug.report();
