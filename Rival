@@ -1083,6 +1083,7 @@ local Tabs = {
     Main = Window:AddTab('Combat'),
     visualstab = Window:AddTab('Visuals'),
     esptab = Window:AddTab('Esp'),
+    worldtab = Window:AddTab('World'),
     character_tab = Window:AddTab('Character'),
     optimizations = Window:AddTab('Optimizations'),
     misc_tab = Window:AddTab('Misc'),
@@ -7678,6 +7679,958 @@ end
 end
 buildVisualsTab()
 
+local function buildWorldTab()
+    local world_tab = Tabs.worldtab; do
+    local world_main_tab = world_tab:AddLeftTabbox(); do
+        local color_correction_tab = world_main_tab:AddTab('Color correction'); do
+            color_correction_tab:AddToggle('world_fog', {
+                Text = 'Fog',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.fog = v;
+                    if not v then
+                        lighting.FogColor = world.fog_color;
+                        lighting.FogStart = world.fog_start;
+                        lighting.FogEnd = world.fog_end;
+                    end;
+                end
+            }):AddColorPicker('fog_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.fog_color = v;
+                end
+            });
+
+            color_correction_tab:AddSlider('fog_start', {
+                Text = 'Fog start',
+                Default = 150,
+                Min = 0,
+                Max = 10000,
+                Rounding = 0,
+                Callback = function(v)
+                    ELI.world.fog_start = v;
+                end
+            });
+
+            color_correction_tab:AddSlider('fog_end', {
+                Text = 'Fog end',
+                Default = 550,
+                Min = 0,
+                Max = 10000,
+                Rounding = 0,
+                Callback = function(v)
+                    ELI.world.fog_end = v;
+                end
+            });
+
+            color_correction_tab:AddDivider();
+
+            color_correction_tab:AddToggle('world_ambient', {
+                Text = 'Ambient',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.ambient = v;
+                    if not v then
+                        lighting.Ambient = world.ambient;
+                    end;
+                end
+            }):AddColorPicker('ambient_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.ambient_color = v;
+                end
+            });
+
+            color_correction_tab:AddToggle('world_clock', {
+                Text = 'Clock time',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.clock = v;
+                    if not v then
+                        lighting.ClockTime = world.clock_time;
+                    end;
+                end
+            });
+
+            color_correction_tab:AddSlider('clock_time', {
+                Text = 'Time',
+                Default = 14,
+                Min = 0,
+                Max = 24,
+                Rounding = 1,
+                Callback = function(v)
+                    ELI.world.clock_time = v;
+                end
+            });
+
+            color_correction_tab:AddToggle('world_brightness', {
+                Text = 'Brightness',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.brightness = v;
+                    if not v then
+                        lighting.Brightness = world.brightness;
+                    end;
+                end
+            });
+
+            color_correction_tab:AddSlider('brightness_level', {
+                Text = 'Level',
+                Default = 1,
+                Min = 0,
+                Max = 10,
+                Rounding = 1,
+                Callback = function(v)
+                    ELI.world.brightness_level = v;
+                end
+            });
+
+            color_correction_tab:AddToggle('world_exposure', {
+                Text = 'Exposure',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.exposure = v;
+                    if not v then
+                        lighting.ExposureCompensation = world.exposure;
+                    end;
+                end
+            });
+
+            color_correction_tab:AddSlider('exposure_level', {
+                Text = 'Compensation',
+                Default = 0,
+                Min = -10,
+                Max = 10,
+                Rounding = 1,
+                Callback = function(v)
+                    ELI.world.exposure_level = v;
+                end
+            });
+
+            color_correction_tab:AddToggle('world_color_shift_top', {
+                Text = 'Color shift top',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.color_shift_top = v;
+                    if not v then
+                        lighting.ColorShift_Top = world.color_shift_top;
+                    end;
+                end
+            }):AddColorPicker('color_shift_top_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.color_shift_top_color = v;
+                end
+            });
+
+            color_correction_tab:AddToggle('world_color_shift_bottom', {
+                Text = 'Color shift bottom',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.color_shift_bottom = v;
+                    if not v then
+                        lighting.ColorShift_Bottom = world.color_shift_bottom;
+                    end;
+                end
+            }):AddColorPicker('color_shift_bottom_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.color_shift_bottom_color = v;
+                end
+            });
+
+            color_correction_tab:AddDivider();
+
+            color_correction_tab:AddToggle('world_skybox', {
+                Text = 'Skybox',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.skybox = v;
+                    skybox_changer:update_skybox();
+                end
+            });
+
+            color_correction_tab:AddDropdown('world_skybox_selected', {
+                Values = skybox_changer.elements,
+                Default = 'Deep Space',
+                Multi = false,
+                Text = 'Selected',
+                Callback = function(v)
+                    ELI.world.skybox_selected = v;
+                    skybox_changer:update_skybox();
+                end;
+            });
+
+            color_correction_tab:AddToggle('world_skybox_rotate', {
+                Text = 'Skybox rotator',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.skybox_rotate = v;
+                end
+            });
+
+            color_correction_tab:AddSlider('world_skybox_rotate_speed', {
+                Text = 'Rotation speed',
+                Default = 1,
+                Min = 0,
+                Max = 100,
+                Rounding = 1,
+                Callback = function(v)
+                    ELI.world.skybox_rotate_speed = v;
+                end
+            });
+
+            color_correction_tab:AddDropdown('world_skybox_rotate_direction', {
+                Text = "Direction",
+                Values = {'Horizontal', 'Vertical', 'Diagonal'},
+                Default = "Horizontal",
+                Callback = function(v)
+                    ELI.world.skybox_rotate_direction = v;
+                end;
+            });
+
+            color_correction_tab:AddDropdown('world_skybox_rotate_method', {
+                Text = "Method",
+                Values = {'Spin', 'Wave', 'Alternate'},
+                Default = "Spin",
+                Callback = function(v)
+                    ELI.world.skybox_rotate_method = v;
+                end;
+            });
+
+            color_correction_tab:AddDivider();
+
+            color_correction_tab:AddToggle('world_skybox_remove_sun', {
+                Text = 'Remove sun',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.skybox_remove_sun = v;
+                    skybox_changer:update_skybox();
+                end
+            });
+
+            color_correction_tab:AddToggle('world_skybox_remove_moon', {
+                Text = 'Remove moon',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.skybox_remove_moon = v;
+                    skybox_changer:update_skybox();
+                end
+            });
+
+            color_correction_tab:AddToggle('world_skybox_remove_stars', {
+                Text = 'Remove stars',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.skybox_remove_stars = v;
+                    skybox_changer:update_skybox();
+                end
+            });
+        end;
+
+        local weather_tab = world_tab:AddRightGroupbox('Weather'); do
+            weather_tab:AddToggle('weather_enabled', {
+                Text = "Enable",
+                Default = false,
+                Callback = function(v)
+                    ELI.weather.enable = v;
+                end;
+            }):AddColorPicker('weather_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.weather.color = v;
+                end;
+            });
+
+            weather_tab:AddDropdown('weather_type', {
+                Text = "Type",
+                Values = {'snow', 'rain', 'light rain'},
+                Default = "snow",
+                Callback = function(v)
+                    ELI.weather.type = v;
+                end;
+            });
+
+            weather_tab:AddSlider('weather_rate', {
+                Text = 'Rate',
+                Default = 100,
+                Min = 100,
+                Max = 300,
+                Rounding = 0,
+                Callback = function(v)
+                    ELI.weather.rate = v;
+                end;
+            });
+        end;
+
+        local atmosphere_tab = world_main_tab:AddTab('Atmosphere'); do
+            atmosphere_tab:AddToggle('world_atmosphere', {
+                Text = 'Atmosphere',
+                Default = false,
+                Callback = function(v)
+                    ELI.world.atmosphere = v;
+                    atmosphere_changer:update_atmosphere();
+                end
+            }):AddColorPicker('world_atmosphere_color', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.atmosphere_color = v;
+                    atmosphere_changer:update_atmosphere();
+                end
+            }):AddColorPicker('world_atmosphere_decay', {
+                Default = Color3.fromRGB(255, 255, 255),
+                Callback = function(v)
+                    ELI.world.atmosphere_decay = v;
+                    atmosphere_changer:update_atmosphere();
+                end
+            });
+
+            for _, property in next, atmosphere_changer.properties_list do
+                atmosphere_tab:AddSlider('world_atmosphere_' .. property, {
+                    Text = property,
+                    Default = atmosphere_changer.properties[property],
+                    Min = 0,
+                    Max = property == 'density' and 1 or property == 'offset' and 1 or 10,
+                    Rounding = 2,
+                    Callback = function(v)
+                        ELI.world['atmosphere_' .. property] = v;
+                        atmosphere_changer:update_atmosphere();
+                    end
+                });
+            end;
+        end;
+    end;
+
+    local removals_tab = world_tab:AddRightGroupbox('World removals'); do
+
+        removals_tab:AddToggle('anti_flashbang_enable', {
+            Text = 'Anti flashbang',
+            Default = false,
+            Callback = function(v)
+                    if v then
+                        flash1 = workspace.ChildAdded:Connect(function(v)
+                            if v.Name == "FlashbangEffect" then
+                                v:Destroy();
+                            end;
+                        end);
+                        flash2 = local_player.PlayerGui.ChildAdded:Connect(function(v)
+                            if v.Name == "FlashbangGui" then
+                                v:Destroy();
+                            end;
+                        end);
+                    else
+                        if flash1 then flash1:Disconnect() end;
+                        if flash2 then flash2:Disconnect() end;
+                    end;
+            end;
+        });
+    end;
+
+    local texture_connection = nil;
+    local texture_originals = {};
+    local minecraft_textures = {};
+    local minecraft_faces = {'Front', 'Back', 'Bottom', 'Top', 'Right', 'Left'};
+    local minecraft_ids = {
+        [Enum.Material.Wood] = '3258599312',
+        [Enum.Material.WoodPlanks] = '8676581022',
+        [Enum.Material.Brick] = '8558400252',
+        [Enum.Material.Cobblestone] = '5003953441',
+        [Enum.Material.Concrete] = '7341687607',
+        [Enum.Material.DiamondPlate] = '6849247561',
+        [Enum.Material.Fabric] = '118776397',
+        [Enum.Material.Granite] = '4722586771',
+        [Enum.Material.Grass] = '4722588177',
+        [Enum.Material.Ice] = '3823766459',
+        [Enum.Material.Marble] = '62967586',
+        [Enum.Material.Metal] = '62967586',
+        [Enum.Material.Sand] = '152572215',
+    };
+
+    local material_lookup = {};
+    for _, material in eli_pairs(Enum.Material:GetEnumItems()) do
+        material_lookup[string.lower(material.Name)] = material;
+    end;
+
+    local function resolve_material(name)
+        return material_lookup[string.lower((name:gsub('%s+', '')))];
+    end;
+
+    local function is_texture_excluded(part)
+        if ELI.textures.apply_to_viewmodel then
+            return false;
+        end;
+        local node = part;
+        while node and node ~= workspace do
+            if node:IsA("Model") and node:FindFirstChildOfClass("Humanoid") then
+                return true;
+            end;
+            node = node.Parent;
+        end;
+        local viewmodels = workspace:FindFirstChild("ViewModels");
+        if viewmodels and part:IsDescendantOf(viewmodels) then
+            return true;
+        end;
+        if camera and part:IsDescendantOf(camera) then
+            return true;
+        end;
+        return false;
+    end;
+
+    local function clear_minecraft_texture(part)
+        if minecraft_textures[part] then
+            for _, tex in eli_pairs(minecraft_textures[part]) do
+                if tex and tex.Parent then
+                    tex:Destroy();
+                end;
+            end;
+            minecraft_textures[part] = nil;
+        end;
+    end;
+
+    local function apply_minecraft_texture(part, texture_id)
+        clear_minecraft_texture(part);
+        minecraft_textures[part] = {};
+        for _, face_name in eli_pairs(minecraft_faces) do
+            local texture = Instance.new('Texture');
+            texture.Texture = 'rbxassetid://' .. texture_id;
+            texture.Face = Enum.NormalId[face_name];
+            texture.Color3 = part.Color;
+            texture.Transparency = part.Transparency;
+            texture.StudsPerTileU = 3;
+            texture.StudsPerTileV = 3;
+            texture.Parent = part;
+            table.insert(minecraft_textures[part], texture);
+        end;
+    end;
+
+    local function apply_texture(part)
+        if not part:IsA('BasePart') then
+            return
+        end;
+        if is_texture_excluded(part) then
+            return
+        end;
+        if not texture_originals[part] then
+            texture_originals[part] = {
+                Material = part.Material,
+                Color = part.Color,
+            };
+        end;
+        local config = ELI.textures;
+        part.Color = config.color;
+        if config.material == 'Minecraft' then
+            local source = texture_originals[part].Material;
+            local id = minecraft_ids[source] or '5003953441';
+            apply_minecraft_texture(part, id);
+        else
+            clear_minecraft_texture(part);
+            local material = resolve_material(config.material);
+            if material then
+                part.Material = material;
+            end;
+        end;
+    end;
+
+    local function applyToExisting()
+        for part in eli_pairs(texture_originals) do
+            if part and part.Parent then
+                apply_texture(part);
+            end;
+        end;
+    end;
+
+    local function enableTextures()
+        for _, part in eli_pairs(workspace:GetDescendants()) do
+            apply_texture(part);
+        end;
+        if texture_connection then
+            texture_connection:Disconnect();
+        end;
+        texture_connection = workspace.DescendantAdded:Connect(function(part)
+            if ELI.textures.enable then
+                task.defer(apply_texture, part);
+            end;
+        end);
+        trove:Add(texture_connection);
+    end;
+
+    local function disableTextures()
+        if texture_connection then
+            texture_connection:Disconnect();
+            texture_connection = nil;
+        end;
+        for part, props in eli_pairs(texture_originals) do
+            if part and part.Parent then
+                pcall(function()
+                    part.Material = props.Material;
+                    part.Color = props.Color;
+                end);
+            end;
+        end;
+        for part in eli_pairs(minecraft_textures) do
+            clear_minecraft_texture(part);
+        end;
+        table.clear(texture_originals);
+    end;
+
+    local textures_tab = world_tab:AddLeftGroupbox('World textures'); do
+        textures_tab:AddToggle('textures_enable', {
+            Text = 'Enable',
+            Default = false,
+            Callback = function(v)
+                ELI.textures.enable = v;
+                if v then
+                    enableTextures();
+                else
+                    disableTextures();
+                end;
+            end
+        });
+
+        textures_tab:AddDropdown('textures_material', {
+            Values = {'Air', 'Asphalt', 'Basalt', 'Brick', 'Cardboard', 'Carpet', 'Ceramic Tiles', 'Clay Roof Tiles', 'Cobblestone', 'Concrete', 'Corroded Metal', 'Cracked Lava', 'Diamond Plate', 'Fabric', 'Foil', 'Forcefield', 'Glacier', 'Glass', 'Granite', 'Grass', 'Ground', 'Ice', 'Leafy Grass', 'Leather', 'Limestone', 'Marble', 'Metal', 'Minecraft', 'Mud', 'Neon', 'Pavement', 'Pebble', 'Plaster', 'Plastic', 'Rock', 'Roof Shingles', 'Rubber', 'Salt', 'Sand', 'Sandstone', 'Slate', 'Smooth Plastic', 'Snow', 'Water', 'Wood', 'Wood Planks'},
+            Default = 'Brick',
+            Multi = false,
+            Text = 'Material',
+            Callback = function(v)
+                ELI.textures.material = v;
+                if ELI.textures.enable then
+                    applyToExisting();
+                end;
+            end
+        });
+
+        textures_tab:AddLabel('Texture color'):AddColorPicker('textures_color', {
+            Default = Color3.fromRGB(244, 244, 244),
+            Callback = function(v)
+                ELI.textures.color = v;
+                if ELI.textures.enable then
+                    applyToExisting();
+                end;
+            end
+        });
+
+        textures_tab:AddToggle('textures_apply_to_viewmodel', {
+            Text = 'Apply to viewmodel',
+            Default = false,
+            Callback = function(v)
+                ELI.textures.apply_to_viewmodel = v;
+                if ELI.textures.enable then
+                    disableTextures();
+                    enableTextures();
+                end;
+            end
+        });
+    end;
+
+    local shader_blur = Instance.new('BlurEffect');
+    shader_blur.Name = 'VeloxHubRivals_blur';
+    shader_blur.Enabled = false;
+    shader_blur.Size = 12;
+    shader_blur.Parent = lighting;
+    trove:Add(shader_blur);
+
+    local shader_bloom = Instance.new('BloomEffect');
+    shader_bloom.Name = 'VeloxHubRivals_bloom';
+    shader_bloom.Enabled = false;
+    shader_bloom.Intensity = 1;
+    shader_bloom.Size = 24;
+    shader_bloom.Threshold = 0.9;
+    shader_bloom.Parent = lighting;
+    trove:Add(shader_bloom);
+
+    local shader_dof = Instance.new('DepthOfFieldEffect');
+    shader_dof.Name = 'VeloxHubRivals_dof';
+    shader_dof.Enabled = false;
+    shader_dof.FocusDistance = 25;
+    shader_dof.InFocusRadius = 10;
+    shader_dof.NearIntensity = 0.15;
+    shader_dof.FarIntensity = 0.15;
+    shader_dof.Parent = lighting;
+    trove:Add(shader_dof);
+
+    local shader_sunrays = Instance.new('SunRaysEffect');
+    shader_sunrays.Name = 'VeloxHubRivals_sunrays';
+    shader_sunrays.Enabled = false;
+    shader_sunrays.Intensity = 0.25;
+    shader_sunrays.Spread = 1;
+    shader_sunrays.Parent = lighting;
+    trove:Add(shader_sunrays);
+
+    local shader_cc = Instance.new('ColorCorrectionEffect');
+    shader_cc.Name = 'VeloxHubRivals_cc';
+    shader_cc.Enabled = false;
+    shader_cc.Saturation = 0;
+    shader_cc.Contrast = 0;
+    shader_cc.TintColor = Color3.fromRGB(255, 255, 255);
+    shader_cc.Parent = lighting;
+    trove:Add(shader_cc);
+
+    local shaders_tab = world_tab:AddLeftGroupbox('Shaders'); do
+        shaders_tab:AddToggle('shader_blur', {
+            Text = 'Blur',
+            Default = false,
+            Callback = function(v)
+                ELI.world.blur = v;
+                shader_blur.Enabled = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_blur_size', {
+            Text = 'Blur size',
+            Default = 12,
+            Min = 0,
+            Max = 56,
+            Rounding = 0,
+            Callback = function(v)
+                ELI.world.blur_size = v;
+                shader_blur.Size = v;
+            end
+        });
+
+        shaders_tab:AddToggle('shader_bloom', {
+            Text = 'Bloom',
+            Default = false,
+            Callback = function(v)
+                ELI.world.bloom = v;
+                shader_bloom.Enabled = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_bloom_intensity', {
+            Text = 'Bloom intensity',
+            Default = 1,
+            Min = 0,
+            Max = 5,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.bloom_intensity = v;
+                shader_bloom.Intensity = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_bloom_size', {
+            Text = 'Bloom size',
+            Default = 24,
+            Min = 0,
+            Max = 56,
+            Rounding = 0,
+            Callback = function(v)
+                ELI.world.bloom_size = v;
+                shader_bloom.Size = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_bloom_threshold', {
+            Text = 'Bloom threshold',
+            Default = 0.9,
+            Min = 0,
+            Max = 2,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.bloom_threshold = v;
+                shader_bloom.Threshold = v;
+            end
+        });
+
+        shaders_tab:AddToggle('shader_dof', {
+            Text = 'Depth of field',
+            Default = false,
+            Callback = function(v)
+                ELI.world.depth_of_field = v;
+                shader_dof.Enabled = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_dof_focus', {
+            Text = 'Focus distance',
+            Default = 25,
+            Min = 0,
+            Max = 500,
+            Rounding = 0,
+            Callback = function(v)
+                ELI.world.dof_focus = v;
+                shader_dof.FocusDistance = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_dof_intensity', {
+            Text = 'Blur intensity',
+            Default = 0.15,
+            Min = 0,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.dof_intensity = v;
+                shader_dof.NearIntensity = v;
+                shader_dof.FarIntensity = v;
+            end
+        });
+
+        shaders_tab:AddToggle('shader_sun_rays', {
+            Text = 'Sun rays',
+            Default = false,
+            Callback = function(v)
+                ELI.world.sun_rays = v;
+                shader_sunrays.Enabled = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_sun_rays_intensity', {
+            Text = 'Rays intensity',
+            Default = 0.25,
+            Min = 0,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.sun_rays_intensity = v;
+                shader_sunrays.Intensity = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_sun_rays_spread', {
+            Text = 'Rays spread',
+            Default = 1,
+            Min = 0,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.sun_rays_spread = v;
+                shader_sunrays.Spread = v;
+            end
+        });
+
+        shaders_tab:AddToggle('shader_saturation', {
+            Text = 'Color grading',
+            Default = false,
+            Callback = function(v)
+                ELI.world.saturation = v;
+                shader_cc.Enabled = v;
+            end
+        }):AddColorPicker('shader_tint', {
+            Default = Color3.fromRGB(255, 255, 255),
+            Callback = function(v)
+                ELI.world.tint_color = v;
+                shader_cc.TintColor = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_saturation_level', {
+            Text = 'Saturation',
+            Default = 0,
+            Min = -1,
+            Max = 5,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.saturation_level = v;
+                shader_cc.Saturation = v;
+            end
+        });
+
+        shaders_tab:AddSlider('shader_contrast_level', {
+            Text = 'Contrast',
+            Default = 0,
+            Min = -1,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.contrast_level = v;
+                shader_cc.Contrast = v;
+            end
+        });
+    end;
+
+    local quality_tab = world_tab:AddLeftGroupbox('Quality'); do
+        local default_technology = lighting.Technology;
+        local default_global_shadows = lighting.GlobalShadows;
+        local default_env_diffuse = lighting.EnvironmentDiffuseScale;
+        local default_env_specular = lighting.EnvironmentSpecularScale;
+        local default_outdoor_ambient = lighting.OutdoorAmbient;
+
+        quality_tab:AddDropdown('world_lighting_technology_mode', {
+            Text = 'Lighting technology',
+            Values = { 'Legacy', 'Voxel', 'ShadowMap', 'Future' },
+            Default = 'Future',
+            Callback = function(v)
+                ELI.world.lighting_technology_mode = v;
+                if ELI.world.lighting_technology then
+                    pcall(function()
+                        lighting.Technology = Enum.Technology[v];
+                    end);
+                end;
+            end
+        });
+
+        quality_tab:AddToggle('world_lighting_technology', {
+            Text = 'Apply lighting technology',
+            Default = false,
+            Callback = function(v)
+                ELI.world.lighting_technology = v;
+                pcall(function()
+                    if v then
+                        lighting.Technology = Enum.Technology[ELI.world.lighting_technology_mode];
+                    else
+                        lighting.Technology = default_technology;
+                    end;
+                end);
+            end
+        });
+
+        quality_tab:AddToggle('world_global_shadows', {
+            Text = 'Global shadows',
+            Default = true,
+            Callback = function(v)
+                ELI.world.global_shadows = v;
+                pcall(function()
+                    lighting.GlobalShadows = v;
+                end);
+            end
+        });
+
+        quality_tab:AddToggle('world_env_diffuse', {
+            Text = 'Environment diffuse',
+            Default = false,
+            Callback = function(v)
+                ELI.world.env_diffuse = v;
+                pcall(function()
+                    lighting.EnvironmentDiffuseScale = v and ELI.world.env_diffuse_scale or default_env_diffuse;
+                end);
+            end
+        });
+
+        quality_tab:AddSlider('world_env_diffuse_scale', {
+            Text = 'Diffuse scale',
+            Default = 1,
+            Min = 0,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.env_diffuse_scale = v;
+                if ELI.world.env_diffuse then
+                    pcall(function()
+                        lighting.EnvironmentDiffuseScale = v;
+                    end);
+                end;
+            end
+        });
+
+        quality_tab:AddToggle('world_env_specular', {
+            Text = 'Environment specular',
+            Default = false,
+            Callback = function(v)
+                ELI.world.env_specular = v;
+                pcall(function()
+                    lighting.EnvironmentSpecularScale = v and ELI.world.env_specular_scale or default_env_specular;
+                end);
+            end
+        });
+
+        quality_tab:AddSlider('world_env_specular_scale', {
+            Text = 'Specular scale',
+            Default = 1,
+            Min = 0,
+            Max = 1,
+            Rounding = 2,
+            Callback = function(v)
+                ELI.world.env_specular_scale = v;
+                if ELI.world.env_specular then
+                    pcall(function()
+                        lighting.EnvironmentSpecularScale = v;
+                    end);
+                end;
+            end
+        });
+
+        quality_tab:AddToggle('world_outdoor_ambient', {
+            Text = 'Outdoor ambient',
+            Default = false,
+            Callback = function(v)
+                ELI.world.outdoor_ambient = v;
+                pcall(function()
+                    lighting.OutdoorAmbient = v and ELI.world.outdoor_ambient_color or default_outdoor_ambient;
+                end);
+            end
+        }):AddColorPicker('world_outdoor_ambient_color', {
+            Default = Color3.fromRGB(70, 70, 70),
+            Callback = function(v)
+                ELI.world.outdoor_ambient_color = v;
+                if ELI.world.outdoor_ambient then
+                    pcall(function()
+                        lighting.OutdoorAmbient = v;
+                    end);
+                end;
+            end
+        });
+    end;
+
+local camera_tab = world_tab:AddRightGroupbox('Camera'); do
+    local keybind_third_person_enable = false;
+    camera_tab:AddToggle('third_person_enable', {
+        Text = 'Third person',
+        Default = false,
+        Callback = function(v)
+            keybind_third_person_enable = v;
+            ELI.third_person.enable = v;
+            camera_controller:SetThirdPersonOverride(v);
+        end;
+    }):AddKeyPicker('third_person_keybind', {
+        Default = '...',
+        Text = 'Third person',
+        NoUI = false,
+        EnableCheck = function()
+            return ELI.third_person.enable;
+        end,
+        Callback = function(v)
+            ELI.third_person.enable = keybind_third_person_enable and v or false;
+            camera_controller:SetThirdPersonOverride(ELI.third_person.enable);
+        end;
+    });
+    local old_camera_stretched_res = camera.CFrame;
+    camera_tab:AddToggle('stretched_res_enable', {
+        Text = 'Stretched res',
+        Default = false,
+        Callback = function(v)
+            ELI.stretched_res.enable = v;
+            if not v then
+                camera.CFrame = old_camera_stretched_res;
+            end;
+        end;
+    });
+    camera_tab:AddSlider('stretched_res_amount', {
+        Text = 'Amount',
+        Default = 0.20,
+        Min = 0.1,
+        Max = 1,
+        Rounding = 2,
+        Callback = function(v)
+            ELI.stretched_res.stretched_res_amount = v;
+        end;
+    });
+    local old_camera_fov = camera.FieldOfView;
+    camera_tab:AddToggle('fov_changer_enable', {
+        Text = 'Fov changer',
+        Default = false,
+        Callback = function(v)
+            ELI.fov_changer.enable = v;
+            if not v then
+                camera.FieldOfView = old_camera_fov;
+            end;
+        end;
+    });
+    camera_tab:AddSlider('fov_changer_fov', {
+        Text = 'Fov',
+        Default = 80,
+        Min = 10,
+        Max = 140,
+        Rounding = 2,
+        Callback = function(v)
+            ELI.fov_changer.fov = v;
+        end;
+    });
+end;
+end
+buildWorldTab()
+
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
     local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
@@ -8442,7 +9395,6 @@ local function buildMiscTab()
 end
 end
 buildMiscTab();
-
 
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
@@ -9562,7 +10514,7 @@ do
     end;
 end
 
-local function buildCharacterTab()
+function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -9847,5 +10799,5 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end));
 end
-buildCharacterTab()
 end;
+buildCharacterTab()
