@@ -1165,12 +1165,13 @@ local Tabs = {
     changelog = Window:AddTab('Changelog'),
     Main = Window:AddTab('Combat'),
     visualstab = Window:AddTab('Visuals'),
+    esptab = Window:AddTab('ESP'),
     optimizations = Window:AddTab('Performance'),
 };
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.6', true)
+changelog_box:AddLabel('Version 2.0.7', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -1184,7 +1185,7 @@ changelog_fix_box:AddLabel('Scripts/Settings are no longer created or initialize
 pcall(function()
     Tabs.Main._tab:Paragraph({
         Title = "Velox Hub | Rivals",
-        Desc = "A clean, organized interface for combat, visuals, ESP, world, character, performance, utilities, and updates.",
+        Desc = "A clean, organized interface for combat, visuals, ESP, performance, and updates.",
         Icon = "crosshair",
     })
 end)
@@ -1718,6 +1719,26 @@ getgenv().VeloxHubRivals = {
         enable = false,
         display = "",
         username = "",
+    },
+    esp = {
+        enable = true,
+        box = true,
+        health = true,
+        name = true,
+        distance = true,
+        tracer = false,
+        highlight = true,
+        offscreen_arrow = false,
+        team_check = false,
+        show_local_player = false,
+        visible_only = false,
+        max_dist = 1000,
+        team_color = true,
+        box_color = Color3.fromRGB(0, 210, 255),
+        text_color = Color3.fromRGB(240, 245, 255),
+        text_size = 13,
+        text_outline = true,
+        highlight_fill = 0.5,
     },
 };
 local ELI = getgenv().VeloxHubRivals;
@@ -7770,3 +7791,114 @@ end;
 end
 end
 runTabBuilder("Visuals", buildVisualsTab, Tabs.visualstab)
+
+local function buildEspTab()
+    local esp_tab = Tabs.esptab
+
+    local master = esp_tab:AddLeftGroupbox("ESP")
+    master:AddToggle("esp_enable", {
+        Text = "Enable ESP",
+        Default = ELI.esp.enable,
+        Callback = function(v) ELI.esp.enable = v end,
+    })
+    master:AddToggle("esp_box_enable", {
+        Text = "Box",
+        Default = ELI.esp.box,
+        Callback = function(v) ELI.esp.box = v end,
+    })
+    master:AddToggle("esp_health_enable", {
+        Text = "Health Bar",
+        Default = ELI.esp.health,
+        Callback = function(v) ELI.esp.health = v end,
+    })
+    master:AddToggle("esp_name_enable", {
+        Text = "Name",
+        Default = ELI.esp.name,
+        Callback = function(v) ELI.esp.name = v end,
+    })
+    master:AddToggle("esp_distance_enable", {
+        Text = "Distance",
+        Default = ELI.esp.distance,
+        Callback = function(v) ELI.esp.distance = v end,
+    })
+    master:AddToggle("esp_tracer_enable", {
+        Text = "Tracer",
+        Default = ELI.esp.tracer,
+        Callback = function(v) ELI.esp.tracer = v end,
+    })
+    master:AddToggle("esp_highlight_enable", {
+        Text = "Highlight",
+        Default = ELI.esp.highlight,
+        Callback = function(v) ELI.esp.highlight = v end,
+    })
+    master:AddToggle("esp_offscreen_arrow", {
+        Text = "Offscreen Arrow",
+        Default = ELI.esp.offscreen_arrow,
+        Callback = function(v) ELI.esp.offscreen_arrow = v end,
+    })
+
+    local filters = esp_tab:AddRightGroupbox("Filters")
+    filters:AddToggle("esp_team_check", {
+        Text = "Team Check",
+        Default = ELI.esp.team_check,
+        Callback = function(v) ELI.esp.team_check = v end,
+    })
+    filters:AddToggle("esp_show_local", {
+        Text = "Show Local Player",
+        Default = ELI.esp.show_local_player,
+        Callback = function(v) ELI.esp.show_local_player = v end,
+    })
+    filters:AddToggle("esp_visible_only", {
+        Text = "Visible Only",
+        Default = ELI.esp.visible_only,
+        Callback = function(v) ELI.esp.visible_only = v end,
+    })
+    filters:AddSlider("esp_max_distance", {
+        Text = "Max Distance",
+        Min = 50,
+        Max = 5000,
+        Default = ELI.esp.max_dist,
+        Rounding = 0,
+        Callback = function(v) ELI.esp.max_dist = v end,
+    })
+
+    local style = esp_tab:AddLeftGroupbox("Style")
+    style:AddToggle("esp_team_colors", {
+        Text = "Use Team Colors",
+        Default = ELI.esp.team_color,
+        Callback = function(v) ELI.esp.team_color = v end,
+    })
+    style:AddToggle("esp_text_outline", {
+        Text = "Text Outline",
+        Default = ELI.esp.text_outline,
+        Callback = function(v) ELI.esp.text_outline = v end,
+    })
+    style:AddColorPicker("esp_box_color", {
+        Text = "Box Color",
+        Default = ELI.esp.box_color,
+        Callback = function(v) ELI.esp.box_color = v end,
+    })
+    style:AddColorPicker("esp_text_color", {
+        Text = "Text Color",
+        Default = ELI.esp.text_color,
+        Callback = function(v) ELI.esp.text_color = v end,
+    })
+    style:AddSlider("esp_text_size", {
+        Text = "Text Size",
+        Min = 8,
+        Max = 24,
+        Default = ELI.esp.text_size,
+        Rounding = 0,
+        Callback = function(v) ELI.esp.text_size = v end,
+    })
+    style:AddSlider("esp_highlight_fill", {
+        Text = "Highlight Fill",
+        Min = 0,
+        Max = 1,
+        Default = ELI.esp.highlight_fill,
+        Rounding = 2,
+        Callback = function(v) ELI.esp.highlight_fill = v end,
+    })
+end
+
+runTabBuilder("ESP", buildEspTab, Tabs.esptab)
