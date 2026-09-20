@@ -9396,7 +9396,6 @@ end
 end
 buildMiscTab();
 
-local buildCharacterTab;
 
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
@@ -10516,7 +10515,7 @@ do
     end;
 end
 
-buildCharacterTab = function()
+local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -10801,5 +10800,5 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end));
 end
-end;
 buildCharacterTab()
+end;
