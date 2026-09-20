@@ -7676,6 +7676,7 @@ end;
     end;
 end;
 end
+end
 buildVisualsTab()
 
 local function buildWorldTab()
