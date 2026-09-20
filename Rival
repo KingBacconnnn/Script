@@ -205,6 +205,99 @@ local Toggles = {}
 getgenv().Options = Options
 getgenv().Toggles = Toggles
 
+--// Velox Hub diagnostic framework
+local VEL_DBG = {
+    enabled = true,
+    started = os.clock(),
+    stage = "BOOT",
+    counts = {},
+    errors = {},
+}
+
+local function VDBG(stage, ...)
+    VEL_DBG.stage = stage
+    if not VEL_DBG.enabled then return end
+    print("[VeloxDBG][STAGE] " .. tostring(stage), ...)
+end
+
+local function VCOUNT(name, amount)
+    amount = amount or 1
+    VEL_DBG.counts[name] = (VEL_DBG.counts[name] or 0) + amount
+end
+
+local function VERR(where, err)
+    VEL_DBG.errors[#VEL_DBG.errors + 1] = {
+        where = tostring(where),
+        error = tostring(err),
+        t = os.clock() - VEL_DBG.started,
+    }
+    warn("[VeloxDBG][ERROR][" .. tostring(where) .. "] " .. tostring(err))
+end
+
+local function VCALL(name, fn, ...)
+    VDBG(name .. "_START")
+    VCOUNT(name .. "_calls")
+
+    if type(fn) ~= "function" then
+        VCOUNT(name .. "_nil")
+        VERR(name, "Expected function, got " .. type(fn))
+        return false, "nil_function"
+    end
+
+    local args = table.pack(...)
+    local ok, result = xpcall(function()
+        return fn(table.unpack(args, 1, args.n))
+    end, function(err)
+        return debug.traceback(tostring(err), 2)
+    end)
+
+    if ok then
+        VCOUNT(name .. "_ok")
+        VDBG(name .. "_DONE")
+        return true, result
+    end
+
+    VCOUNT(name .. "_failed")
+    VERR(name, result)
+    VDBG(name .. "_FAILED")
+    return false, result
+end
+
+getgenv().VeloxHubRivalsDebug = {
+    state = VEL_DBG,
+    setEnabled = function(v)
+        VEL_DBG.enabled = v and true or false
+    end,
+    report = function()
+        print("========== Velox Hub FULL DEBUG ==========")
+        print("Stage:", VEL_DBG.stage)
+        print("Uptime:", math.floor(os.clock() - VEL_DBG.started), "s")
+        print("Counts:")
+        for k, v in pairs(VEL_DBG.counts) do
+            print("  ", k, v)
+        end
+        print("Errors:", #VEL_DBG.errors)
+        for i, e in ipairs(VEL_DBG.errors) do
+            warn("  #" .. i, e.where, e.error)
+        end
+        print("==========================================")
+        return VEL_DBG
+    end,
+}
+VDBG("DEBUG_FRAMEWORK_READY")
+
+task.spawn(function()
+    while VEL_DBG.enabled do
+        task.wait(5)
+        VCOUNT("watchdog")
+        print(
+            "[VeloxDBG][WATCHDOG]",
+            "stage=" .. tostring(VEL_DBG.stage),
+            "uptime=" .. math.floor(os.clock() - VEL_DBG.started) .. "s"
+        )
+    end
+end)
+
 local Library = {
     WindUI = WindUI,
     Options = Options,
@@ -7679,7 +7772,7 @@ end
 end
 buildVisualsTab()
 
-local function buildWorldTab()
+local function VCALL("WORLD_TAB", buildWorldTab)
     local world_tab = Tabs.worldtab; do
     local world_main_tab = world_tab:AddLeftTabbox(); do
         local color_correction_tab = world_main_tab:AddTab('Color correction'); do
@@ -8631,7 +8724,7 @@ end;
 end
 buildWorldTab()
 
-local function buildEspTab()
+local function VCALL("ESP_TAB", buildEspTab)
     local esp_tab = Tabs.esptab; do
     local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
         esp_groupbox:AddToggle('esp_enable', {
@@ -9138,6 +9231,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
 end;
 end
 buildEspTab()
+VDBG("MISC_TAB_DECLARED")
 local function buildMiscTab()
     local misc_tab = Tabs.misc_tab; do
     local auto_tabbox = Tabs.misc_tab:AddRightTabbox(); do
@@ -9394,7 +9488,7 @@ local function buildMiscTab()
     end;
 end
 end
-buildMiscTab();
+VCALL("MISC_TAB", buildMiscTab);
 
 
 do
@@ -10515,7 +10609,8 @@ do
     end;
 end
 
-local function buildCharacterTab()
+VDBG("CHARACTER_TAB_DECLARED")
+getgenv().VeloxHubRivals_buildCharacterTab = function()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -10800,5 +10895,7 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end));
 end
-buildCharacterTab()
+VCALL("CHARACTER_TAB", getgenv().VeloxHubRivals_buildCharacterTab)
+VDBG("ALL_FOUR_TAB_BUILD_CALLS_RETURNED")
+VEL_DBG.stage = "ALL_FOUR_TAB_BUILD_CALLS_RETURNED"
 end;
