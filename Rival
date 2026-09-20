@@ -186,7 +186,7 @@ pcall(function()
         return original(self, key);
     end)));
 end);
-getgenv().FourHub_set_antidetect = function(v)
+getgenv().VeloxHubRivals_set_antidetect = function(v)
     antidetect = v and true or false;
 end;
 
@@ -194,11 +194,6 @@ repeat task.wait() until not game:GetService("Players").LocalPlayer.PlayerGui:Fi
 
 getgenv().silent_load = false;
 
---// ============================================================
---// VeloxHubRivals - WindUI UI Layer
---// Migrated from the previous custom UI implementation.
---// WindUI is the only main UI framework used by this layer.
---// ============================================================
 
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.53/main.lua"))()
 
@@ -278,9 +273,6 @@ local function setVisible(actual, visible)
         ok = pcall(function() actual:SetVisibility(visible) end)
     end
     if not ok then
-        -- WindUI v1.6.53 does not document SetVisible on all element types.
-        -- Use Lock/Unlock as a safe fallback so dependency-controlled controls
-        -- remain usable/disabled without touching internal WindUI Instances.
         if visible and type(actual.Unlock) == "function" then
             pcall(function() actual:Unlock() end)
         elseif (not visible) and type(actual.Lock) == "function" then
@@ -797,18 +789,15 @@ function Library:RemoveFromRegistry(...) end
 function Library:MakeDraggable(...) end
 function Library:Create(...) return nil end
 
--- Minimal ThemeManager compatibility. The old custom theme editor is intentionally
--- removed; WindUI now owns the visual theme.
 local ThemeManager = {}
 function ThemeManager:SetLibrary(_) end
 function ThemeManager:SetFolder(_) end
 function ThemeManager:BuildAppearanceOverlay(_) return nil end
 getgenv().ThemeManager = ThemeManager
 
--- WindUI ConfigManager compatibility for the existing config UI and Lua-file storage.
 local SaveManager = {
     Library = Library,
-    Folder = "FourHub/rivals",
+    Folder = "VeloxHubRivals/rivals",
     IgnoreIndexes = {},
 }
 getgenv().SaveManager = SaveManager
@@ -927,7 +916,6 @@ function SaveManager:LoadAutoloadConfig()
     if ok and cfg and cfg.Load then pcall(function() cfg:Load() end) end
 end
 
--- A simple WindUI settings group replaces the old custom appearance/theme manager.
 function SaveManager:BuildAppearanceSection(tab)
     local box = tab:AddRightGroupbox("appearance")
     box:AddLabel("VeloxHubRivals uses the VeloxDark WindUI theme.", true)
@@ -1003,7 +991,7 @@ Library:OnUnload(function()
     pcall(function()
         GLOBAL_TROVE:Destroy();
     end);
-    getgenv().FourHub_loaded = false;
+    getgenv().VeloxHubRivals_loaded = false;
     getgenv().Library.Unloaded = true;
     getgenv().Library = nil;
 end);
@@ -1025,8 +1013,8 @@ local fonts = getgenv().fonts;
 
 task.spawn(function()
     for name, suffix in font_files do
-        local ttf_path = "FourHub/rivals/fonts/" .. suffix;
-        local font_path = "FourHub/rivals/fonts/" .. name .. ".font";
+        local ttf_path = "VeloxHubRivals/rivals/fonts/" .. suffix;
+        local font_path = "VeloxHubRivals/rivals/fonts/" .. name .. ".font";
 
         if not isfile(ttf_path) then
             local okFont, font_data = pcall(game.HttpGet, game, "https://github.com/i77lhm/storage/raw/refs/heads/main/fonts/" .. suffix);
@@ -1122,7 +1110,7 @@ local Tabs = {
     ['UI Settings'] = Window:AddTab('settings'),
 };
 
-getgenv().FourHub = {
+getgenv().VeloxHubRivals = {
     optimizations = {
         no_particles = false,
         no_shadows = false,
@@ -1206,7 +1194,7 @@ getgenv().FourHub = {
         shimmer = false,
         shimmer_speed = 4,
         text_enable = false,
-        text_content = "FourHub",
+        text_content = "VeloxHubRivals",
         text_font = "Plex",
         text_size = 16,
         text_offset = 18,
@@ -1653,7 +1641,7 @@ getgenv().FourHub = {
         username = "",
     },
 };
-local ELI = getgenv().FourHub;
+local ELI = getgenv().VeloxHubRivals;
 
 local spoof_old = {
     level = local_player:GetAttribute("Level") ,
@@ -1952,7 +1940,7 @@ do
         if opt.no_postfx then applyPost(inst, true) end;
     end));
 
-    getgenv().FourHub_apply_opt = function(kind)
+    getgenv().VeloxHubRivals_apply_opt = function(kind)
         if kind == "particles" or kind == "textures" then scanWorkspace();
         elseif kind == "postfx" then scanLighting();
         elseif kind == "shadows" then applyShadows();
@@ -2022,8 +2010,8 @@ do
     local function get_setter()
         return setfflag or set_fflag or (syn and syn.set_fflag) or (getgenv() and getgenv().setfflag);
     end;
-    getgenv().FourHub_fflag_preset = FFLAG_PRESET;
-    getgenv().FourHub_inject_fflags = function(json_str)
+    getgenv().VeloxHubRivals_fflag_preset = FFLAG_PRESET;
+    getgenv().VeloxHubRivals_inject_fflags = function(json_str)
         if type(json_str) ~= "string" or json_str:gsub("%s", "") == "" then
             json_str = FFLAG_PRESET;
         end;
@@ -2042,8 +2030,8 @@ do
         local saved = false;
         if writefile then
             pcall(function()
-                if makefolder and isfolder and not isfolder("FourHub") then makefolder("FourHub") end;
-                writefile("FourHub/fflags.json", json_str);
+                if makefolder and isfolder and not isfolder("VeloxHubRivals") then makefolder("VeloxHubRivals") end;
+                writefile("VeloxHubRivals/fflags.json", json_str);
                 saved = true;
             end);
         end;
@@ -2111,7 +2099,7 @@ local texture_id = {
     ["ray3"] = "rbxassetid://16892384522",
 };
 
-getgenv().FourHub_materials = {
+getgenv().VeloxHubRivals_materials = {
     presets = {
         ["Neon"]       = { material = Enum.Material.Neon },
         ["ForceField"] = { material = Enum.Material.ForceField },
@@ -2230,7 +2218,7 @@ end)))
 
 do
     local motion_blur = Instance.new("BlurEffect");
-    motion_blur.Name = "FourHub_motion_blur";
+    motion_blur.Name = "VeloxHubRivals_motion_blur";
     motion_blur.Size = 0;
     motion_blur.Enabled = false;
     motion_blur.Parent = lighting;
@@ -2315,8 +2303,8 @@ end
 
 do
     local forced = false;
-    if not Library.__FourHubDragHooked and type(Library.MouseIsOverFrame) == "function" then
-        Library.__FourHubDragHooked = true;
+    if not Library.__VeloxHubRivalsDragHooked and type(Library.MouseIsOverFrame) == "function" then
+        Library.__VeloxHubRivalsDragHooked = true;
         local old_mouse_over = Library.MouseIsOverFrame;
         Library.MouseIsOverFrame = function(self, frame, input)
             if not Library.MenuOpen and frame == Library.KeybindFrame then
@@ -2356,7 +2344,7 @@ local device_map = {
 local G2L = {};
 
 G2L["1"] = Instance.new("ScreenGui");
-G2L["1"]["Name"] = "FourHubdatargethud";
+G2L["1"]["Name"] = "VeloxHubRivalsdatargethud";
 G2L["1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Global;
 G2L["1"]["DisplayOrder"] = 998;
 G2L["1"]["ResetOnSpawn"] = false;
@@ -3359,14 +3347,14 @@ players.PlayerRemoving:Connect(function(player)
 	esp.remove(player);
 end);
 
-local FourHub_state = { esp_hidden = false, vm_chams_last = 0 };
+local VeloxHubRivals_state = { esp_hidden = false, vm_chams_last = 0 };
 
 trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
 	tickval = tick();
 
 	if not ELI.esp.enable then
-		if not FourHub_state.esp_hidden then
-			FourHub_state.esp_hidden = true;
+		if not VeloxHubRivals_state.esp_hidden then
+			VeloxHubRivals_state.esp_hidden = true;
 			for _, player in players:GetPlayers() do
 				if player ~= local_player then esp.hide(player) end;
 			end;
@@ -3374,7 +3362,7 @@ trove:Add(run_service.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function()
 		return
 	end;
 
-	FourHub_state.esp_hidden = false;
+	VeloxHubRivals_state.esp_hidden = false;
 	for _, player in players:GetPlayers() do
 		if player ~= local_player then esp.update(player) end;
 	end;
@@ -3386,21 +3374,21 @@ trove:Add(function()
 end)
 
 do
-    FourHub_state.dmgCallbacks = {};
-    FourHub_state.dmgQueue = {};
-    FourHub_state.onDamage = function(fn) FourHub_state.dmgCallbacks[#FourHub_state.dmgCallbacks + 1] = fn end;
-    FourHub_state.fireDamage = function(plr, amount, worldpos)
-        local q = FourHub_state.dmgQueue;
+    VeloxHubRivals_state.dmgCallbacks = {};
+    VeloxHubRivals_state.dmgQueue = {};
+    VeloxHubRivals_state.onDamage = function(fn) VeloxHubRivals_state.dmgCallbacks[#VeloxHubRivals_state.dmgCallbacks + 1] = fn end;
+    VeloxHubRivals_state.fireDamage = function(plr, amount, worldpos)
+        local q = VeloxHubRivals_state.dmgQueue;
         q[#q + 1] = { plr, amount, worldpos };
     end;
     trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-        local q = FourHub_state.dmgQueue;
+        local q = VeloxHubRivals_state.dmgQueue;
         local n = #q;
         if n == 0 then return end;
-        FourHub_state.dmgQueue = {};
+        VeloxHubRivals_state.dmgQueue = {};
         for i = 1, n do
             local d = q[i];
-            for _, cb in ipairs(FourHub_state.dmgCallbacks) do
+            for _, cb in ipairs(VeloxHubRivals_state.dmgCallbacks) do
                 pcall(cb, d[1], d[2], d[3]);
             end;
         end;
@@ -3421,7 +3409,7 @@ do
         local ok, f = pcall(function() return Enum.Font[name] end);
         return (ok and f) or Enum.Font.GothamBold;
     end;
-    FourHub_state.onDamage(function(plr, amount, worldpos)
+    VeloxHubRivals_state.onDamage(function(plr, amount, worldpos)
         local cfg = ELI.damage_numbers;
         if not cfg.enable or not worldpos then return end;
         local sp, onscreen = camera:WorldToViewportPoint(worldpos);
@@ -3955,8 +3943,8 @@ local old_tracer = tracer_effect.Play; tracer_effect.Play = function(...)
     local args = {...};
     if ELI.silent_aim.visualize and ELI.silent_aim.enable
         and args[2] and args[2].IsLocal and args[2].RaycastResults then
-        local st = FourHub_state.silentTarget;
-        if st and (tick() - (FourHub_state.silentTargetT or 0)) < 0.2 then
+        local st = VeloxHubRivals_state.silentTarget;
+        if st and (tick() - (VeloxHubRivals_state.silentTargetT or 0)) < 0.2 then
             for _, v in next, args[2].RaycastResults do
                 pcall(function() v.Position = st end);
             end;
@@ -4288,7 +4276,7 @@ trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
 end)))
 
 do
-local vm_material_presets = getgenv().FourHub_materials.presets;
+local vm_material_presets = getgenv().VeloxHubRivals_materials.presets;
 
 local vm_arm_keywords = { "arm", "hand", "sleeve", "elbow", "wrist", "shoulder", "finger", "thumb", "glove" };
 
@@ -4399,7 +4387,7 @@ local function vm_set_highlight(part, hl_cfg)
     local hl = vm_highlights[part];
     if not hl or not hl.Parent then
         hl = Instance.new("Highlight");
-        hl.Name = "FourHub_vm_highlight";
+        hl.Name = "VeloxHubRivals_vm_highlight";
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop;
         hl.Adornee = part;
         hl.Parent = part;
@@ -4426,8 +4414,8 @@ trove:Add(run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 
     local now = tick();
-    if now - FourHub_state.vm_chams_last < 0.1 then return end;
-    FourHub_state.vm_chams_last = now;
+    if now - VeloxHubRivals_state.vm_chams_last < 0.1 then return end;
+    VeloxHubRivals_state.vm_chams_last = now;
 
     for _, part in next, first_person:GetDescendants() do
         if part:IsA("BasePart") and vm_visible(part) then
@@ -4790,7 +4778,7 @@ do
             ["Twighlight"] = { SkyboxBk = "rbxassetid://264908339", SkyboxDn = "rbxassetid://264907909", SkyboxFt = "rbxassetid://264909420", SkyboxLf = "rbxassetid://264909758", SkyboxRt = "rbxassetid://264908886", SkyboxUp = "rbxassetid://264907379" },
             ["Vaporwave"] = { SkyboxBk = "rbxassetid://1417494030", SkyboxDn = "rbxassetid://1417494146", SkyboxFt = "rbxassetid://1417494253", SkyboxLf = "rbxassetid://1417494402", SkyboxRt = "rbxassetid://1417494499", SkyboxUp = "rbxassetid://1417494643" },
             ["Vivid Skies"] = { SkyboxBk = "rbxassetid://271042516", SkyboxDn = "rbxassetid://271077243", SkyboxFt = "rbxassetid://271042556", SkyboxLf = "rbxassetid://271042310", SkyboxRt = "rbxassetid://271042467", SkyboxUp = "rbxassetid://271077958" },
-            ["FourHub Sky"] = { SkyboxBk = "rbxassetid://1898724755", SkyboxDn = "rbxassetid://1898727189", SkyboxFt = "rbxassetid://1898722814", SkyboxLf = "rbxassetid://1898729298", SkyboxRt = "rbxassetid://1898741025", SkyboxUp = "rbxassetid://1898736761" },
+            ["VeloxHubRivals Sky"] = { SkyboxBk = "rbxassetid://1898724755", SkyboxDn = "rbxassetid://1898727189", SkyboxFt = "rbxassetid://1898722814", SkyboxLf = "rbxassetid://1898729298", SkyboxRt = "rbxassetid://1898741025", SkyboxUp = "rbxassetid://1898736761" },
         };
 
         self.elements = {};
@@ -5279,12 +5267,12 @@ local replicate_from_server = local_fighter.ReplicateFromServer; local_fighter.R
             end);
         end;
 
-        if FourHub_state.fireDamage and ELI.damage_numbers.enable then
+        if VeloxHubRivals_state.fireDamage and ELI.damage_numbers.enable then
             local hp = players:GetPlayerFromCharacter(hit_character);
             local ok, pos = pcall(function()
                 return hit_root.Position + Vector3.new(0, is_headshot and 2.6 or 2.1, 0);
             end);
-            FourHub_state.fireDamage(hp, hit_damage, ok and pos or nil);
+            VeloxHubRivals_state.fireDamage(hp, hit_damage, ok and pos or nil);
         end;
 
         if ELI.damage_numbers.enable or ELI.damage_numbers.remove_ingame then
@@ -5401,8 +5389,8 @@ local old_raycast = utility.Raycast; utility.Raycast = LPH_NO_VIRTUALIZE(functio
                     target_pos = aim_part and aim_part.Position;
                 end;
                 if target_pos then
-                    FourHub_state.silentTarget = target_pos;
-                    FourHub_state.silentTargetT = tick();
+                    VeloxHubRivals_state.silentTarget = target_pos;
+                    VeloxHubRivals_state.silentTargetT = tick();
                     local args = {...};
                     args[3] = target_pos;
                     return old_raycast(table.unpack(args));
@@ -6588,7 +6576,7 @@ end
 
 do
     local opt_tab = Tabs.optimizations;
-    local function apply(kind) pcall(function() getgenv().FourHub_apply_opt(kind) end) end;
+    local function apply(kind) pcall(function() getgenv().VeloxHubRivals_apply_opt(kind) end) end;
 
     local boost_box = opt_tab:AddLeftGroupbox('fps boost');
 
@@ -6687,7 +6675,7 @@ do
 
     ff_box:AddLabel('how to use', false);
     ff_box:AddLabel('1 tap "inject fps boost fflags"', true);
-    ff_box:AddLabel('2 it applies live if your executor supports it and always saves them to the FourHub fflags file', true);
+    ff_box:AddLabel('2 it applies live if your executor supports it and always saves them to the VeloxHubRivals fflags file', true);
     ff_box:AddLabel('3 if it only saved, open your executor fastflags editor and import that file (or paste it in)', true);
     ff_box:AddLabel('4 fully close and rejoin roblox to apply', true);
     ff_box:AddLabel('this unlocks fps past 60 and forces low graphics for a big fps gain, paste your own flags in the box for custom ones', true);
@@ -6719,7 +6707,7 @@ do
             macsploit = 'open the macsploit menu > settings > fastflags, paste the json',
             arceus = 'open menu > settings > fastflags, paste or import the json',
         };
-        local base = 'open its settings > fastflags editor, paste or import the FourHub fflags file then save';
+        local base = 'open its settings > fastflags editor, paste or import the VeloxHubRivals fflags file then save';
 
         local matched;
         for _, k in eli_ipairs(known) do
@@ -6731,7 +6719,7 @@ do
 
         local guide;
         if name == '' then
-            guide = 'could not auto detect your executor, open its fastflags or config editor, import the FourHub fflags file then fully rejoin roblox';
+            guide = 'could not auto detect your executor, open its fastflags or config editor, import the VeloxHubRivals fflags file then fully rejoin roblox';
         else
             local steps = (matched and overrides[matched]) or base;
             guide = 'detected ' .. string.lower(name) .. ', ' .. steps .. ' then fully rejoin roblox';
@@ -6740,7 +6728,7 @@ do
     end;
 
     local function do_inject(json)
-        local injector = getgenv().FourHub_inject_fflags;
+        local injector = getgenv().VeloxHubRivals_inject_fflags;
         if not injector then
             Library:Notify('fflags injector not ready', 4);
             return
@@ -6753,7 +6741,7 @@ do
         if res.live and res.applied > 0 then
             Library:Notify(string.format('fflags applied %d/%d live - rejoin to fully apply', res.applied, res.total), 6);
         elseif res.saved then
-            Library:Notify('fflags saved to FourHub/fflags.json - import in your executor & rejoin', 7);
+            Library:Notify('fflags saved to VeloxHubRivals/fflags.json - import in your executor & rejoin', 7);
         else
             Library:Notify('your executor cannot set fflags from a script', 5);
         end;
@@ -6780,10 +6768,10 @@ do
             return
         end;
         pcall(function()
-            if makefolder and isfolder and not isfolder('FourHub') then makefolder('FourHub') end;
-            writefile('FourHub/fflags.json', getgenv().FourHub_fflag_preset or '{}');
+            if makefolder and isfolder and not isfolder('VeloxHubRivals') then makefolder('VeloxHubRivals') end;
+            writefile('VeloxHubRivals/fflags.json', getgenv().VeloxHubRivals_fflag_preset or '{}');
         end);
-        Library:Notify('saved preset to FourHub/fflags.json', 5);
+        Library:Notify('saved preset to VeloxHubRivals/fflags.json', 5);
     end);
 end;
 
@@ -6792,7 +6780,7 @@ local visuals_tab = Tabs.visualstab; do
     local viewmodel_thing = visuals_tab:AddLeftTabbox(); do
         local viewmodel_tab = viewmodel_thing:AddTab('viewmodel'); do
 
-            local vm_material_names = getgenv().FourHub_materials.names;
+            local vm_material_names = getgenv().VeloxHubRivals_materials.names;
 
             local function build_vm_chams_section(tab, key, chams_label, is_arms)
                 local prefix = 'vm_' .. key;
@@ -8224,14 +8212,14 @@ local world_tab = Tabs.worldtab; do
     end;
 
     local shader_blur = Instance.new('BlurEffect');
-    shader_blur.Name = 'FourHub_blur';
+    shader_blur.Name = 'VeloxHubRivals_blur';
     shader_blur.Enabled = false;
     shader_blur.Size = 12;
     shader_blur.Parent = lighting;
     trove:Add(shader_blur);
 
     local shader_bloom = Instance.new('BloomEffect');
-    shader_bloom.Name = 'FourHub_bloom';
+    shader_bloom.Name = 'VeloxHubRivals_bloom';
     shader_bloom.Enabled = false;
     shader_bloom.Intensity = 1;
     shader_bloom.Size = 24;
@@ -8240,7 +8228,7 @@ local world_tab = Tabs.worldtab; do
     trove:Add(shader_bloom);
 
     local shader_dof = Instance.new('DepthOfFieldEffect');
-    shader_dof.Name = 'FourHub_dof';
+    shader_dof.Name = 'VeloxHubRivals_dof';
     shader_dof.Enabled = false;
     shader_dof.FocusDistance = 25;
     shader_dof.InFocusRadius = 10;
@@ -8250,7 +8238,7 @@ local world_tab = Tabs.worldtab; do
     trove:Add(shader_dof);
 
     local shader_sunrays = Instance.new('SunRaysEffect');
-    shader_sunrays.Name = 'FourHub_sunrays';
+    shader_sunrays.Name = 'VeloxHubRivals_sunrays';
     shader_sunrays.Enabled = false;
     shader_sunrays.Intensity = 0.25;
     shader_sunrays.Spread = 1;
@@ -8258,7 +8246,7 @@ local world_tab = Tabs.worldtab; do
     trove:Add(shader_sunrays);
 
     local shader_cc = Instance.new('ColorCorrectionEffect');
-    shader_cc.Name = 'FourHub_cc';
+    shader_cc.Name = 'VeloxHubRivals_cc';
     shader_cc.Enabled = false;
     shader_cc.Saturation = 0;
     shader_cc.Contrast = 0;
@@ -9391,7 +9379,7 @@ end
 do
 local v555 = Tabs.misc_tab:AddRightGroupbox('cosmetics');
 local unlockAllInitialized = false;
-getgenv().FourHub_cosmetic_state = getgenv().FourHub_cosmetic_state or {
+getgenv().VeloxHubRivals_cosmetic_state = getgenv().VeloxHubRivals_cosmetic_state or {
     gui = nil,
     frame = nil,
     inner = nil,
@@ -9404,10 +9392,10 @@ getgenv().FourHub_cosmetic_state = getgenv().FourHub_cosmetic_state or {
 
 v555:AddToggle("AnySkinMode", {
     Text = "any skin",
-    Default = getgenv().FourHub_cosmetic_state.anyModel or false,
+    Default = getgenv().VeloxHubRivals_cosmetic_state.anyModel or false,
     Callback = function(val)
-        getgenv().FourHub_cosmetic_state.anyModel = val and true or false;
-        local st = getgenv().FourHub_cosmetic_state;
+        getgenv().VeloxHubRivals_cosmetic_state.anyModel = val and true or false;
+        local st = getgenv().VeloxHubRivals_cosmetic_state;
         if st and st.refreshCosmetics then
             st.refreshCosmetics();
         end;
@@ -9415,7 +9403,7 @@ v555:AddToggle("AnySkinMode", {
 });
 
 local function syncCosmeticChangerVisibility()
-    local st = getgenv().FourHub_cosmetic_state;
+    local st = getgenv().VeloxHubRivals_cosmetic_state;
     if not st or not st.frame or not st.frame.Parent then return end;
     if not unlockAllInitialized then return end;
     local menuOpen = false;
@@ -9434,7 +9422,7 @@ local function openCosmeticChanger(showUi)
     if showUi == nil then showUi = true end;
     if unlockAllInitialized then
         if showUi then
-            local st = getgenv().FourHub_cosmetic_state;
+            local st = getgenv().VeloxHubRivals_cosmetic_state;
             if st then
                 st.dismissedThisSession = false;
             end;
@@ -9500,7 +9488,7 @@ local function openCosmeticChanger(showUi)
         end;
         return new_data;
     end;
-    local SKINS_FOLDER = "FourHub_skins";
+    local SKINS_FOLDER = "VeloxHubRivals_skins";
     local SKINS_FILE = SKINS_FOLDER .. "/skins.json";
     local http_service = game:GetService("HttpService");
     local has_fs = isfolder and makefolder and writefile and readfile and isfile;
@@ -9735,7 +9723,7 @@ local function openCosmeticChanger(showUi)
     data_ctrl.CurrentData:Replicate("CosmeticInventory");
     data_ctrl.CurrentData:Replicate("WeaponInventory");
     data_ctrl.CurrentData:Replicate("FavoritedCosmetics");
-    local uiState = getgenv().FourHub_cosmetic_state;
+    local uiState = getgenv().VeloxHubRivals_cosmetic_state;
     local function makeThemeColor(which, fallback)
         if Library and Library[which] then return Library[which] end;
         return fallback;
@@ -9754,7 +9742,7 @@ local function openCosmeticChanger(showUi)
     end;
     destroyOld();
     local gui = Instance.new("ScreenGui");
-    gui.Name = "FourHub_cosmetic_changer";
+    gui.Name = "VeloxHubRivals_cosmetic_changer";
     gui.ResetOnSpawn = false;
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
     gui.Parent = coreGui;
@@ -9862,7 +9850,7 @@ local function openCosmeticChanger(showUi)
     closeBtn.BackgroundTransparency = 1;
     closeBtn.Parent = top;
     closeBtn.MouseButton1Click:Connect(function()
-        local st = getgenv().FourHub_cosmetic_state;
+        local st = getgenv().VeloxHubRivals_cosmetic_state;
         if st then
             st.dismissedThisSession = true;
             if st.frame then
@@ -10136,7 +10124,7 @@ local function openCosmeticChanger(showUi)
         ["Paintball Gun"] = {"Slime Gun", "Ketchup Gun", "Glorious Paintball Gun", "Boba Gun", "Snowball Gun", "Brain Gun", "Paintballoon Gun"},
         Revolver = {"Peppermint sheriff", "Peppermint Sheriff", "Desert Eagle", "Deagle", "Boneclaw Revolver", "Glorious Revolver", "Keyvolver", "Sheriff", "Peppergun"},
         RPG = {"Rocket launcher", "Rocket Launcher", "Spaceship launcher", "Spaceship Launcher", "Firework Launcher", "Pencil Launcher", "RPKEY", "RPKey", "Squid Launcher", "Pumpkin Launcher", "Glorious RPG"},
-        Scythe = {"Scythe of Death", "Anchor", "FourHub Scythe", "Keythe", "Bat Scythe", "Cryo Scythe", "Crystal Scythe", "Glorious Scythe", "Bug Net"},
+        Scythe = {"Scythe of Death", "Anchor", "VeloxHubRivals Scythe", "Keythe", "Bat Scythe", "Cryo Scythe", "Crystal Scythe", "Glorious Scythe", "Bug Net"},
         Shorty = {"Shorty", "Lovely Shorty", "Demon Shorty", "Not So Shorty", "Balloon Shorty", "Too Shorty", "Glorious Shorty", "Wrapped Shorty"},
         Shotgun = {"Broomstick", "Wrapped Shotgun", "Hyper Shotgun", "Balloon Shotgun", "Cactus Shotgun", "Glorious Shotgun", "Shotkey", "Witch Shotgun"},
         Slingshot = {"Lucky Horseshoe", "Reindeer Slingshot", "Keyshot", "Boneshot", "Stick", "Glorious Slingshot", "Harp", "Goalpost"},
@@ -10196,7 +10184,7 @@ local function openCosmeticChanger(showUi)
         local weaponNorm = cosmeticNorm(weaponName);
         local seededList = weaponSkinSeed[weaponNorm];
         local function matchesWeapon(cdata)
-            local st = getgenv().FourHub_cosmetic_state;
+            local st = getgenv().VeloxHubRivals_cosmetic_state;
             if st and st.anyModel then
                 return true;
             end;
@@ -10852,7 +10840,7 @@ local function openCosmeticChanger(showUi)
         end;
     end;
     applyCosmeticUiTheme();
-    getgenv().FourHub_apply_cosmetic_theme = applyCosmeticUiTheme;
+    getgenv().VeloxHubRivals_apply_cosmetic_theme = applyCosmeticUiTheme;
 end;
 
 v555:AddButton("cosmetic changer", function()
@@ -10865,7 +10853,7 @@ task.defer(function()
 end);
 end
 
-;(function()
+(function()
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("local");
     local otherTab = spoof_box:AddTab("other");
@@ -11115,10 +11103,10 @@ end
     end)));
 end)()
 
-;(function()
+(function()
     local cfg = ELI;
-    local material_presets = getgenv().FourHub_materials.presets;
-    local material_preset_names = getgenv().FourHub_materials.names;
+    local material_presets = getgenv().VeloxHubRivals_materials.presets;
+    local material_preset_names = getgenv().VeloxHubRivals_materials.names;
     local enhance_box = Tabs.visualstab:AddLeftTabbox();
     local chams_tab = enhance_box:AddTab("chams");
     local crosshair_tab = Tabs.visualstab:AddRightTabbox();
@@ -11164,7 +11152,7 @@ end)()
         local hl = highlights[plr];
         if not hl or not hl.Parent then
             hl = Instance.new("Highlight");
-            hl.Name = "FourHub_chams";
+            hl.Name = "VeloxHubRivals_chams";
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop;
             highlights[plr] = hl;
             hl.Parent = char;
@@ -11380,7 +11368,7 @@ end)()
     ch_dot.Visible = false;
 
     local ch_text_gui = Instance.new("ScreenGui");
-    ch_text_gui.Name = "FourHub_crosshair_text";
+    ch_text_gui.Name = "VeloxHubRivals_crosshair_text";
     ch_text_gui.ResetOnSpawn = false;
     ch_text_gui.IgnoreGuiInset = true;
     ch_text_gui.DisplayOrder = 999;
@@ -11927,7 +11915,7 @@ end)()
 
         text_box:AddInput("CrosshairTextContent", {
             Text = "content",
-            Default = "FourHub",
+            Default = "VeloxHubRivals",
             ClearTextOnFocus = false,
             Callback = function(v)
                 cfg.crosshair.text_content = v;
@@ -12550,13 +12538,13 @@ end;
 Library.ToggleKeybind = Options.MenuKeybind;
 SaveManager:SetLibrary(Library);
 SaveManager:SetIgnoreIndexes({ 'MenuKeybind' });
-SaveManager:SetFolder('FourHub/rivals');
+SaveManager:SetFolder('VeloxHubRivals/rivals');
 SaveManager:BuildConfigSection(Tabs['UI Settings']);
 SaveManager:BuildAppearanceSection(Tabs['UI Settings']);
 
-;(function()
+(function()
     local lua_tab = Tabs.lua;
-    local base_folder = SaveManager.Folder or 'FourHub/rivals';
+    local base_folder = SaveManager.Folder or 'VeloxHubRivals/rivals';
     local lua_folder = base_folder .. '/luas';
     pcall(function()
         if makefolder and isfolder then
