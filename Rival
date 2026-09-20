@@ -10990,4 +10990,3 @@ end));
 end;
 print("[VeloxDBG] buildCharacterTab:", type(buildCharacterTab));
 TABDBG_CALL("CHARACTER", buildCharacterTab);
-end;
