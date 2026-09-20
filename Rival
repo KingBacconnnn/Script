@@ -9775,17 +9775,17 @@ do
         end
     });
 
-    local otherNameStamp = 0;
+    ELI._otherNameStamp = 0;
     otherTab:AddInput("SpoofOtherName", {
         Text = "Name",
         Default = "",
         Placeholder = "Username...",
         Callback = function(val)
             prof.spoof_other_name = val or "";
-            otherNameStamp = tick();
-            local stamp = otherNameStamp;
+            ELI._otherNameStamp = tick();
+            local stamp = ELI._otherNameStamp;
             task.delay(0.6, function()
-                if stamp == otherNameStamp and prof.spoof_other then
+                if stamp == ELI._otherNameStamp and prof.spoof_other then
                     doOtherAll();
                 end;
             end);
