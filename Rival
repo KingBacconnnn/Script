@@ -1171,7 +1171,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.8', true)
+changelog_box:AddLabel('Version 2.0.9', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -1208,7 +1208,7 @@ getgenv().VeloxHubRivals = {
         closest_part = false,
         show_fov = false,
         show_fill = false,
-        fov_radius = 180,
+        fov_radius = 100,
         lerp = 0,
         follow_target = false,
         follow_gunpoint = false,
@@ -1291,7 +1291,7 @@ getgenv().VeloxHubRivals = {
         follow_gunpoint = false,
         fov_fill_color = Color3.fromRGB(0, 30, 255),
         fov_fill_color2 = Color3.fromRGB(255, 255, 255),
-        fov_radius = 180,
+        fov_radius = 100,
         lerp = 0,
         fov_fill_transparency = 0.6,
         fov_outline_transparency = 0.2,
@@ -1326,10 +1326,10 @@ getgenv().VeloxHubRivals = {
         type = "snow",
     },
     esp = {
-        enable = true,
+        enable = false,
         team_check = false,
         box = {
-            enable = true,
+            enable = false,
             color = Color3.fromRGB(0, 210, 255),
             outline = Color3.fromRGB(0, 0, 0),
             inline = Color3.fromRGB(255, 255, 255),
@@ -1361,14 +1361,14 @@ getgenv().VeloxHubRivals = {
             color = Color3.fromRGB(60, 255, 90),
         },
         highlight = {
-            enable = true,
+            enable = false,
             fill_color = Color3.fromRGB(0, 30, 255),
             outline_color = Color3.fromRGB(255, 255, 255),
             fill_transparency = 0.55,
             outline_transparency = 0,
         },
         health = {
-            enable = true,
+            enable = false,
             color_high = Color3.fromRGB(0, 255, 0),
             color_mid = Color3.fromRGB(255, 255, 0),
             color_low = Color3.fromRGB(255, 0, 0),
@@ -1376,8 +1376,8 @@ getgenv().VeloxHubRivals = {
             gap = 5,
         },
         text = {
-            name = { enable = true, color = Color3.fromRGB(240, 245, 255) },
-            studs = { enable = true, color = Color3.fromRGB(240, 245, 255) },
+            name = { enable = false, color = Color3.fromRGB(240, 245, 255) },
+            studs = { enable = false, color = Color3.fromRGB(240, 245, 255) },
             tool = { enable = false, color = Color3.new(1, 1, 1), position = "right" },
             size = 13,
             gradient = false,
@@ -5602,7 +5602,7 @@ local function buildLegitTab()
 
             silentaim_tab:AddSlider('silent_aim_fov_radius', {
                 Text = 'Radius',
-                Default = 180,
+                Default = 100,
                 Suffix = 'px',
                 Min = 1,
                 Max = 600,
@@ -5783,7 +5783,7 @@ silentaim_tab:AddSlider('silent_aim_lerp', {
 
             aimbot_tab:AddSlider('aimbot_fov_radius', {
                 Text = 'Radius',
-                Default = 180,
+                Default = 100,
                 Suffix = 'px',
                 Min = 1,
                 Max = 600,
@@ -6871,12 +6871,6 @@ local function runTabBuilder(name, builder, tab)
     local ok, err = pcall(builder)
     if not ok then
         reportUiError(tostring(name) .. " builder failed", err)
-        if tab then
-            local holder = tab
-            pcall(function()
-                holder:AddLeftGroupbox('Load Status'):AddLabel(tostring(name) .. ' skipped: ' .. tostring(err), true)
-            end)
-        end
     end
     return ok, err
 end
@@ -7829,41 +7823,13 @@ local function buildEspTab()
         Rounding = 0,
         Callback = function(v) ELI.esp.max_dist = v end,
     })
+    filters:AddToggle("esp_wall_check", {
+        Text = "Wall Check",
+        Default = ELI.esp.visible.enable,
+        Callback = function(v) ELI.esp.visible.enable = v end,
+    })
 
-    local style = esp_tab:AddLeftGroupbox("Style")
 
-    style:AddColorPicker("esp_box_color", {
-        Text = "Box Color",
-        Default = ELI.esp.box.color,
-        Callback = function(v)
-            ELI.esp.box.color = v
-        end,
-    })
-    style:AddColorPicker("esp_text_color", {
-        Text = "Text Color",
-        Default = ELI.esp.text.name.color,
-        Callback = function(v)
-            ELI.esp.text.name.color = v
-            ELI.esp.text.studs.color = v
-            ELI.esp.text.tool.color = v
-        end,
-    })
-    style:AddSlider("esp_text_size", {
-        Text = "Text Size",
-        Min = 8,
-        Max = 24,
-        Default = ELI.esp.text.size,
-        Rounding = 0,
-        Callback = function(v) ELI.esp.text.size = v end,
-    })
-    style:AddSlider("esp_highlight_fill", {
-        Text = "Highlight Fill",
-        Min = 0,
-        Max = 1,
-        Default = ELI.esp.highlight.fill_transparency,
-        Rounding = 2,
-        Callback = function(v) ELI.esp.highlight.fill_transparency = v end,
-    })
 end
 
 runTabBuilder("ESP", buildEspTab, Tabs.esptab)
