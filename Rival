@@ -229,6 +229,8 @@ local _windWindow
 local _creating = true
 local _uiBuilding = true
 local _deferredUICallbacks = {}
+local _activeTabBuild = nil
+local _tabBuildReports = {}
 
 local function safeCall(fn, ...)
     if type(fn) ~= "function" then
@@ -252,7 +254,7 @@ local function safeCall(fn, ...)
         return result
     end
 
-    warn("[VeloxHub] UI callback failed:\n" .. tostring(result))
+    warn("[VeloxHub] UI callback failed:", tostring(result))
 end
 
 local function flushDeferredUICallbacks()
@@ -268,7 +270,7 @@ local function flushDeferredUICallbacks()
         end)
 
         if not ok then
-            warn("[VeloxHub] Deferred UI callback failed:\n" .. tostring(err))
+            warn("[VeloxHub] Deferred UI callback failed:", tostring(err))
         end
     end
 end
@@ -334,6 +336,13 @@ local function normalizeDropdownDefault(values, defaultValue, allowNull, multi)
 end
 
 local function makeElementWrapper(actual, index, bucket, info)
+    if _activeTabBuild then
+        _tabBuildReports[_activeTabBuild].elements = (_tabBuildReports[_activeTabBuild].elements or 0) + 1
+        if actual == nil then
+            _tabBuildReports[_activeTabBuild].nil_elements = (_tabBuildReports[_activeTabBuild].nil_elements or 0) + 1
+        end
+    end
+
     local wrapper = {
         _wind = actual,
         Index = index,
@@ -5444,11 +5453,42 @@ trove:Add(function()
 end);
 
 local function runTabBuilder(name, builder, tab)
+    local report = {
+        name = tostring(name),
+        elements = 0,
+        nil_elements = 0,
+        failed = false,
+        error = nil,
+    }
+
+    _tabBuildReports[report.name] = report
+    _activeTabBuild = report.name
+
     local ok, err = xpcall(builder, debug.traceback)
+
+    _activeTabBuild = nil
+
+    report.failed = not ok
+    report.error = ok and nil or tostring(err)
+
     if not ok then
-        warn("[VeloxHub] " .. tostring(name) .. " UI builder failed:\n" .. tostring(err))
+        warn("[VeloxHub][UI BUILDER ERROR] " .. report.name .. ":", report.error)
     end
-    return ok
+
+    if report.elements == 0 then
+        warn("[VeloxHub][EMPTY TAB] " .. report.name .. " created no UI controls.")
+        if not ok then
+            warn("[VeloxHub][EMPTY TAB REPORT] " .. report.name .. " stopped before rendering controls.", report.error)
+        else
+            warn("[VeloxHub][EMPTY TAB REPORT] " .. report.name .. " builder completed without creating controls.")
+        end
+    elseif report.nil_elements > 0 then
+        warn("[VeloxHub][UI CONTROL WARNING] " .. report.name .. " created " .. tostring(report.nil_elements) .. " nil WindUI element(s).")
+    else
+        print("[VeloxHub][UI BUILDER OK] " .. report.name .. " rendered " .. tostring(report.elements) .. " control(s).")
+    end
+
+    return ok, report
 end
 
 local function buildLegitTab()
@@ -10853,3 +10893,9 @@ end;
 runTabBuilder("Character", buildCharacterTab, Tabs.character_tab)
 
 flushDeferredUICallbacks()
+
+for reportName, report in next, _tabBuildReports do
+    if report.elements == 0 then
+        warn("[VeloxHub][FINAL TAB REPORT] " .. tostring(reportName) .. " is empty after initialization.")
+    end
+end
