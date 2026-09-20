@@ -6782,6 +6782,70 @@ end;
 end
 buildRagebotTab()
 
+
+--// EARLY TAB DEBUG: this must execute before Visuals so later builders can be diagnosed.
+local EDBG = {
+    started = os.clock(),
+    stage = "BOOT",
+    history = {},
+    errors = {},
+}
+
+local function EDBG_STAGE(name)
+    EDBG.stage = name
+    EDBG.history[#EDBG.history + 1] = {name = name, t = os.clock() - EDBG.started}
+    print("[EARLYTABDBG][STAGE]", name)
+end
+
+local function EDBG_CALL(name, fn)
+    EDBG_STAGE(name .. "_START")
+    if type(fn) ~= "function" then
+        local err = "expected function, got " .. type(fn)
+        EDBG.errors[#EDBG.errors + 1] = {name = name, error = err}
+        warn("[EARLYTABDBG][ERROR][" .. name .. "]", err)
+        return false
+    end
+    local ok, err = xpcall(fn, function(e)
+        return debug.traceback(tostring(e), 2)
+    end)
+    if not ok then
+        EDBG.errors[#EDBG.errors + 1] = {name = name, error = err}
+        warn("[EARLYTABDBG][ERROR][" .. name .. "]\n" .. tostring(err))
+        EDBG_STAGE(name .. "_FAILED")
+        return false
+    end
+    EDBG_STAGE(name .. "_DONE")
+    return true
+end
+
+getgenv().VeloxHubEarlyTabDebug = {
+    report = function()
+        print("========== EARLY TAB DEBUG ==========")
+        print("Stage:", EDBG.stage)
+        print("Uptime:", math.floor(os.clock() - EDBG.started) .. "s")
+        for i, v in ipairs(EDBG.history) do
+            print(i, v.name, string.format("%.2fs", v.t))
+        end
+        print("Errors:", #EDBG.errors)
+        for i, e in ipairs(EDBG.errors) do
+            warn("#" .. i, e.name, e.error)
+        end
+        print("=====================================")
+        return EDBG
+    end
+}
+
+EDBG_STAGE("DEBUG_READY")
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        print("[EARLYTABDBG][WATCHDOG]", "stage=" .. tostring(EDBG.stage),
+            "uptime=" .. math.floor(os.clock() - EDBG.started) .. "s")
+    end
+end)
+
+EDBG_STAGE("BEFORE_VISUALS_DEFINITION")
 local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
 
@@ -7677,9 +7741,9 @@ end;
 end;
 end
 end
-buildVisualsTab()
-
-
+EDBG_STAGE("BEFORE_VISUALS_CALL")
+EDBG_CALL("VISUALS", buildVisualsTab)
+EDBG_STAGE("AFTER_VISUALS_CALL")
 --// Full diagnostics for World / ESP / Character tab construction.
 local TABDBG = {
     started = os.clock(),
@@ -7779,6 +7843,7 @@ task.spawn(function()
     end
 end)
 
+EDBG_STAGE("BEFORE_WORLD_DEFINITION")
 local function buildWorldTab()
     local world_tab = Tabs.worldtab; do
     TABDBG_CHECK_TAB("WORLD", world_tab);
@@ -8731,7 +8796,9 @@ local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     });
 end;
 end
+EDBG_STAGE("BEFORE_WORLD_CALL")
 TABDBG_CALL("WORLD", buildWorldTab)
+EDBG_STAGE("AFTER_WORLD_CALL")
 
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
