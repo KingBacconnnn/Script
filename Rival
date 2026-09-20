@@ -16,8 +16,7 @@ if not cloneref then cloneref = function(ref) return ref end end
 
 do
     if hookfunction and newcclosure and getcallingscript then
-        pcallprint("[VeloxDBG] CharacterTab IIFE start")
-(function()
+        pcall(function()
             local Old1 = nil; Old1 = hookfunction(setmetatable, newcclosure(function(Table, MetaTable)
                 if type(MetaTable) == "table" and rawget(MetaTable, "__mode") == "kv" then
                     local Caller = getcallingscript();
@@ -10515,7 +10514,7 @@ do
     end;
 end
 
-(function()
+local function buildCharacterTab()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -10800,4 +10799,6 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
     end;
 end));
 end
-end)()
+print("[VeloxDBG] buildCharacterTab type:", type(buildCharacterTab))
+buildCharacterTab()
+end;
