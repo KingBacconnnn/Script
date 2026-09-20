@@ -1171,7 +1171,7 @@ local Tabs = {
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.11', true)
+changelog_box:AddLabel('Version 2.0.12', true)
 changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
@@ -1327,8 +1327,8 @@ getgenv().VeloxHubRivals = {
     },
     esp = {
         enable = false,
-        team_check = true,
-        wall_check = true,
+        team_check = false,
+        wall_check = false,
         box = {
             enable = true,
             color = Color3.fromRGB(0, 210, 255),
@@ -7822,8 +7822,10 @@ local function buildEspTab()
 
     filters:AddToggle("esp_team_check", {
         Text = "Team Check",
-        Default = ELI.esp.team_check,
-        Callback = function(v) ELI.esp.team_check = v end,
+        Default = false,
+        Callback = function(v)
+            ELI.esp.team_check = v
+        end,
     })
     filters:AddSlider("esp_max_distance", {
         Text = "Max Distance",
@@ -7835,10 +7837,9 @@ local function buildEspTab()
     })
     filters:AddToggle("esp_wall_check", {
         Text = "Wall Check",
-        Default = true,
+        Default = false,
         Callback = function(v)
             ELI.esp.wall_check = v
-            ELI.targeting.visible_only = v
         end,
     })
 
