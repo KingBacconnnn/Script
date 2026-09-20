@@ -9583,7 +9583,7 @@ buildMiscTab();
 
 local buildCharacterTab;
 
-do
+local function buildSpoofSection()
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
     local otherTab = spoof_box:AddTab("Other");
@@ -9783,9 +9783,8 @@ do
         Callback = function(val)
             prof.spoof_other_name = val or "";
             ELI._otherNameStamp = tick();
-            local stamp = ELI._otherNameStamp;
             task.delay(0.6, function()
-                if stamp == ELI._otherNameStamp and prof.spoof_other then
+                if ELI._otherNameStamp and prof.spoof_other then
                     doOtherAll();
                 end;
             end);
@@ -10700,6 +10699,7 @@ do
         });
     end;
 end
+buildSpoofSection()
 
 buildCharacterTab = function()
     local character_tab = Tabs.character_tab; do
