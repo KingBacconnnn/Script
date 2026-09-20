@@ -186,7 +186,7 @@ repeat task.wait() until not game:GetService("Players").LocalPlayer.PlayerGui:Fi
 getgenv().silent_load = false;
 
 
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.53/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.63/main.lua"))()
 
 pcall(function()
     WindUI:AddTheme({
