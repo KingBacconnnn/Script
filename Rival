@@ -9396,6 +9396,8 @@ end
 end
 buildMiscTab();
 
+local buildCharacterTab;
+
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
@@ -10514,7 +10516,7 @@ do
     end;
 end
 
-local function buildCharacterTab()
+buildCharacterTab = function()
     local character_tab = Tabs.character_tab; do
     local movement_tab = Tabs.character_tab:AddRightGroupbox('Movement'); do
         keybind_slide_boost_enable = false;
@@ -10798,7 +10800,7 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
         anim_last_id = "";
     end;
 end));
-end
-print("[VeloxDBG] buildCharacterTab type:", type(buildCharacterTab))
-buildCharacterTab()
+end;
+print("[VeloxDBG] buildCharacterTab:", type(buildCharacterTab));
+buildCharacterTab();
 end;
