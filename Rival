@@ -252,8 +252,7 @@ local function safeCall(fn, ...)
         return result
     end
 
-    warn("[VeloxHub] UI callback failed:
-" .. tostring(result))
+    warn("[VeloxHub] UI callback failed:\n" .. tostring(result))
 end
 
 local function flushDeferredUICallbacks()
@@ -269,8 +268,7 @@ local function flushDeferredUICallbacks()
         end)
 
         if not ok then
-            warn("[VeloxHub] Deferred UI callback failed:
-" .. tostring(err))
+            warn("[VeloxHub] Deferred UI callback failed:\n" .. tostring(err))
         end
     end
 end
