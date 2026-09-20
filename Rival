@@ -278,22 +278,38 @@ local function normalizeKey(key)
 end
 
 local function normalizeDropdownDefault(values, defaultValue, allowNull, multi)
+    values = type(values) == "table" and values or {}
     if multi then
-        return defaultValue
+        if type(defaultValue) == "table" then
+            local filtered = {}
+            for _, item in ipairs(defaultValue) do
+                for _, value in ipairs(values) do
+                    if value == item then
+                        table.insert(filtered, item)
+                        break
+                    end
+                end
+            end
+            return filtered
+        end
+        return {}
     end
     if type(defaultValue) == "number" then
-        return values[defaultValue]
+        defaultValue = values[defaultValue]
+    elseif type(defaultValue) == "table" then
+        defaultValue = defaultValue[1]
     end
-    if type(defaultValue) == "table" then
-        if #defaultValue > 0 then
-            return defaultValue[1]
+    if defaultValue ~= nil and defaultValue ~= "" then
+        for _, value in ipairs(values) do
+            if value == defaultValue then
+                return defaultValue
+            end
         end
-        return allowNull and nil or values[1]
     end
-    if defaultValue == nil or defaultValue == "" and allowNull then
-        return allowNull and nil or values[1]
+    if allowNull then
+        return nil
     end
-    return defaultValue
+    return values[1]
 end
 
 local function makeElementWrapper(actual, index, bucket, info)
@@ -364,16 +380,19 @@ local function makeElementWrapper(actual, index, bucket, info)
         local holder = self._holder or self._section or self._tab
         if not holder then return self end
         local opt
-        local actualColor = holder:Colorpicker({
-            Title = ci.Title or ci.Text or idx,
-            Desc = ci.Desc,
-            Default = ci.Default or Color3.fromRGB(255,255,255),
-            Transparency = ci.Transparency or 0,
-            Callback = function(color)
-                if opt then opt.Value = color end
-                if ci.Callback then safeCall(ci.Callback, color) end
-            end,
-        })
+        local actualColor
+        pcall(function()
+            actualColor = holder:Colorpicker({
+                Title = ci.Title or ci.Text or idx,
+                Desc = ci.Desc,
+                Default = ci.Default or Color3.fromRGB(255,255,255),
+                Transparency = ci.Transparency or 0,
+                Callback = function(color)
+                    if opt then opt.Value = color end
+                    if ci.Callback then safeCall(ci.Callback, color) end
+                end,
+            })
+        end)
         opt = makeElementWrapper(actualColor, idx, Options, {
             Type = "Colorpicker",
             Default = ci.Default or Color3.fromRGB(255,255,255),
@@ -426,17 +445,18 @@ local function makeElementWrapper(actual, index, bucket, info)
                 and input.KeyCode.Name == value
         end
 
-        actualKey = holder:Keybind({
-            Title = ki.Text or ki.Title or idx,
-            Desc = ki.Desc,
-            Value = defaultKey,
-            Callback = function(value)
-                if keyObj then
-                    keyObj.Value = normalizePressedKey(value)
-                end
-
-            end,
-        })
+        pcall(function()
+            actualKey = holder:Keybind({
+                Title = ki.Text or ki.Title or idx,
+                Desc = ki.Desc,
+                Value = defaultKey,
+                Callback = function(value)
+                    if keyObj then
+                        keyObj.Value = normalizePressedKey(value)
+                    end
+                end,
+            })
+        end)
 
         keyObj = makeElementWrapper(actualKey, idx, Options, {
             Type = "Keybind",
@@ -535,10 +555,13 @@ function ContainerMethods:AddLabel(text, doesWrap)
     end
 
     local section = self._section or self._tab
-    local actual = section:Paragraph({
-        Title = tostring(labelText or ""),
-        Desc = wrap and "" or nil,
-    })
+    local actual
+    pcall(function()
+        actual = section:Paragraph({
+            Title = tostring(labelText or ""),
+            Desc = wrap and "" or nil,
+        })
+    end)
     local wrapper = makeElementWrapper(actual, nil, nil, {
         Type = "Label",
         Default = labelText,
@@ -568,13 +591,16 @@ function ContainerMethods:AddButton(idxOrText, infoOrCallback)
         end
     end
     local host = self._section or self._tab
-    local actual = host:Button({
-        Title = title,
-        Desc = nil,
-        Callback = function()
-            safeCall(callback)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Button({
+            Title = title,
+            Desc = nil,
+            Callback = function()
+                safeCall(callback)
+            end,
+        })
+    end)
     local wrapper = makeElementWrapper(actual, nil, nil, { Type = "Button" })
     wrapper._holder = self._section
     wrapper._section = self._section
@@ -592,15 +618,18 @@ function ContainerMethods:AddToggle(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Toggle({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Value = info.Default == true,
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Toggle({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Value = info.Default == true,
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
     wrapper = makeElementWrapper(actual, idx, Toggles, {
         Type = "Toggle",
         Default = info.Default == true,
@@ -619,20 +648,23 @@ function ContainerMethods:AddSlider(idx, info)
     local step = 1 / (10 ^ math.max(0, rounding))
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Slider({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Step = step,
-        Value = {
-            Min = info.Min,
-            Max = info.Max,
-            Default = info.Default,
-        },
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Slider({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Step = step,
+            Value = {
+                Min = info.Min,
+                Max = info.Max,
+                Default = info.Default,
+            },
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Slider",
         Default = info.Default,
@@ -653,18 +685,21 @@ function ContainerMethods:AddDropdown(idx, info)
     local values = info.Values or {}
     local defaultValue = normalizeDropdownDefault(values, info.Default, info.AllowNull == true, info.Multi == true)
     local wrapper
-    local actual = host:Dropdown({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Values = values,
-        Value = defaultValue,
-        AllowNone = info.AllowNull == true,
-        Multi = info.Multi == true,
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Dropdown({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Values = values,
+            Value = defaultValue,
+            AllowNone = info.AllowNull == true,
+            Multi = info.Multi == true,
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
     pcall(function()
         if type(actual.Close) == "function" then
             actual:Close()
@@ -688,17 +723,20 @@ function ContainerMethods:AddInput(idx, info)
     info = info or {}
     local host = self._section or self._tab
     local wrapper
-    local actual = host:Input({
-        Title = info.Text or idx,
-        Desc = info.Desc,
-        Value = info.Default or "",
-        Placeholder = info.Placeholder,
-        Type = info.Type or (info.TextBox and "Textarea" or "Input"),
-        Callback = function(value)
-            if wrapper then wrapper.Value = value end
-            safeCall(info.Callback, value)
-        end,
-    })
+    local actual
+    pcall(function()
+        actual = host:Input({
+            Title = info.Text or idx,
+            Desc = info.Desc,
+            Value = info.Default or "",
+            Placeholder = info.Placeholder,
+            Type = info.Type or (info.TextBox and "Textarea" or "Input"),
+            Callback = function(value)
+                if wrapper then wrapper.Value = value end
+                safeCall(info.Callback, value)
+            end,
+        })
+    end)
     wrapper = makeElementWrapper(actual, idx, Options, {
         Type = "Input",
         Default = info.Default or "",
@@ -722,11 +760,15 @@ end
 
 function ContainerMethods:AddGroupbox(info)
     local title = type(info) == "table" and info.Name or tostring(info or "Section")
-    local section = self._tab:Section({
-        Title = title,
-        Box = true,
-        Opened = false,
-    })
+    local section
+    pcall(function()
+        section = self._tab:Section({
+            Title = title,
+            Box = true,
+            Opened = false,
+        })
+    end)
+    section = section or self._tab
     local container = {_section = section, _tab = self._tab}
     return setmetatable(container, {__index = ContainerMethods})
 end
@@ -737,11 +779,15 @@ function ContainerMethods:AddTabbox(info)
         _baseTitle = type(info) == "table" and info.Name or nil,
     }
     function tabbox:AddTab(name)
-        local section = self._tab:Section({
-            Title = tostring(name or "Section"),
-            Box = true,
-            Opened = false,
-        })
+        local section
+        pcall(function()
+            section = self._tab:Section({
+                Title = tostring(name or "Section"),
+                Box = true,
+                Opened = false,
+            })
+        end)
+        section = section or self._tab
         local child = {_section = section, _tab = self._tab}
         setmetatable(child, {__index = ContainerMethods})
         return child
@@ -1082,24 +1128,24 @@ local Tabs = {
     changelog = Window:AddTab('Changelog'),
     Main = Window:AddTab('Combat'),
     visualstab = Window:AddTab('Visuals'),
-    esptab = Window:AddTab('Esp'),
+    esptab = Window:AddTab('ESP'),
     worldtab = Window:AddTab('World'),
     character_tab = Window:AddTab('Character'),
-    optimizations = Window:AddTab('Optimizations'),
+    optimizations = Window:AddTab('Performance'),
     misc_tab = Window:AddTab('Misc'),
 };
 
 
 local changelog_tab = Tabs.changelog
 local changelog_box = changelog_tab:AddLeftGroupbox('Latest Update')
-changelog_box:AddLabel('Version 2.0.5', true)
-changelog_box:AddLabel('Fixed the remaining Character tab function closure that caused the compiler to reject the script.', true)
+changelog_box:AddLabel('Version 2.0.6', true)
+changelog_box:AddLabel('Hardened tab builders so one UI element error cannot stop later tabs from loading.', true)
 changelog_box:AddLabel('Removed the Scripts and Settings tabs and their initialization completely.', true)
 changelog_box:AddLabel('UI names now start with a capital letter for a cleaner and more consistent look.', true)
 changelog_box:AddLabel('Groupbox and nested panel arrows now start collapsed instead of expanded.', true)
 
 local changelog_fix_box = changelog_tab:AddRightGroupbox('Fixes')
-changelog_fix_box:AddLabel('Restored all tab builders and removed stale references left by the previous removal pass.', true)
+changelog_fix_box:AddLabel('Protected dropdown defaults, color pickers, keybinds, and sections against invalid runtime values.', true)
 changelog_fix_box:AddLabel('Kept the existing WindUI compatibility layer and AddDivider support.', true)
 changelog_fix_box:AddLabel('Scripts/Settings are no longer created or initialized anywhere in the UI setup.', true)
 
@@ -6782,6 +6828,17 @@ end;
 end
 buildRagebotTab()
 
+local function runTabBuilder(name, builder, tab)
+    local ok, err = pcall(builder)
+    if not ok and tab then
+        local holder = tab
+        pcall(function()
+            holder:AddLeftGroupbox('Load status'):AddLabel(tostring(name) .. ' loaded with a skipped component.', true)
+        end)
+    end
+    return ok, err
+end
+
 local function buildVisualsTab()
     local visuals_tab = Tabs.visualstab; do
 
@@ -7677,8 +7734,7 @@ end;
 end;
 end
 end
-buildVisualsTab()
-
+runTabBuilder("Visuals", buildVisualsTab, Tabs.visualstab)
 local function buildWorldTab()
     local world_tab = Tabs.worldtab; do
     local world_main_tab = world_tab:AddLeftTabbox(); do
@@ -8629,11 +8685,10 @@ local camera_tab = world_tab:AddRightGroupbox('Camera'); do
     });
 end;
 end
-buildWorldTab()
-
+runTabBuilder("World", buildWorldTab, Tabs.worldtab)
 local function buildEspTab()
     local esp_tab = Tabs.esptab; do
-    local esp_groupbox = esp_tab:AddLeftGroupbox('Esp'); do
+    local esp_groupbox = esp_tab:AddLeftGroupbox('ESP'); do
         esp_groupbox:AddToggle('esp_enable', {
             Text = 'Enable',
             Default = false,
@@ -9137,7 +9192,7 @@ local esp_throwable_tab = Tabs.esptab:AddRightGroupbox('Throwable esp'); do
     });
 end;
 end
-buildEspTab()
+runTabBuilder("ESP", buildEspTab, Tabs.esptab)
 local function buildMiscTab()
     local misc_tab = Tabs.misc_tab; do
     local auto_tabbox = Tabs.misc_tab:AddRightTabbox(); do
@@ -9394,8 +9449,7 @@ local function buildMiscTab()
     end;
 end
 end
-buildMiscTab();
-
+runTabBuilder("Misc", buildMiscTab, Tabs.misc_tab)
 do
     local spoof_box = Tabs.misc_tab:AddLeftTabbox();
     local localTab = spoof_box:AddTab("Local");
@@ -10800,4 +10854,4 @@ run_service.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
 end));
 end
 end;
-buildCharacterTab()
+runTabBuilder("Character", buildCharacterTab, Tabs.character_tab)
