@@ -53,6 +53,8 @@ if type(request) == "function" then
 	exec_request = request
 elseif type(http_request) == "function" then
 	exec_request = http_request
+elseif type(http) == "table" and type(http.request) == "function" then
+	exec_request = http.request
 elseif type(syn) == "table" and type(syn.request) == "function" then
 	exec_request = syn.request
 elseif type(fluxus) == "table" and type(fluxus.request) == "function" then
@@ -2044,7 +2046,6 @@ function _VH_OpenScriptDetails(data, entry)
 	ScriptDetailsBadge.Visible = recommended
 	ScriptDetailsBadgeText.Text = recommendationKind == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 	ScriptDetailsBadge.BackgroundColor3 = recommendationKind == "SMART" and Color3.fromRGB(79, 70, 229) or Color3.fromRGB(67, 56, 202)
-	local categoryText = type(data.Category) == "string" and data.Category ~= "" and data.Category or "General"
 	local quickStatus = NormalizeTagType(data.TagType)
 	ScriptDetailsTagBadgeText.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
 	ScriptDetailsTagBadge.Visible = quickStatus ~= "NONE"
@@ -2323,7 +2324,10 @@ SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 
 SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(203, 213, 225); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-SearchInput.ClearTextOnFocus = false; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
+SearchInput.ClearTextOnFocus = false
+pcall(function() SearchInput.TextEditable = true end)
+pcall(function() SearchInput.Interactable = true end)
+SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
 ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
@@ -2796,7 +2800,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Cleanup, UI & Stability Fixes", "• Finalized Recommended for You spacing, scaling, and mobile touch spacing.\n• Added favorite-signal protection with bounded favorite influence and batched recommendation refreshes.\n• Improved default text contrast across secondary and muted UI elements.\n• Added and refined Script Details with Category, TagType, compatibility, favorites, Auto Execute state, and update information.\n• Refined the View Details control to match the Auto Execute button style and kept its tap animation.\n• Fixed Script Details header spacing and TagType badge positioning.\n• Redesigned the execution confirmation dialog to match the Velox Hub theme.\n• Redesigned Auto Execute ON, OFF, and Wrong Game states for clearer status presentation.\n• Matched View Details press feedback with the same dark pressed state used by Auto Execute.\n• Kept normal script timestamps expanded while Recommended for You timestamps remain compact.\n• Removed obsolete hidden Script Details UI state and unnecessary recommendation UI variables.\n• Preserved the existing executor HTTP/compiler/GUI fallbacks and the PlaceId-based FOR YOU backbone.\n• Preserved critical fallback, cleanup, configuration, and recovery behavior.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Stability, Compatibility & Cleanup", "• Hardened viewport sizing and positioning so resized or small screens cannot create an invalid clamp range.\n• Removed the previous helper-based viewport clamp path and kept the protection inline to avoid unnecessary function/local-register overhead.\n• Guarded optional SearchBox properties so unsupported GUI properties cannot stop hub initialization.\n• Kept the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, and recovery fallbacks intact.\n• Added the optional http.request request fallback without replacing existing executor request paths.\n• Replaced the math.round dependency with an equivalent math.floor calculation for broader Luau/executor compatibility.\n• Removed the confirmed unused Script Details category variable.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI scale, and catalog refresh behavior.\n• Final source cleanup contains no Lua comment lines and avoids unnecessary new locals in the main UI functions.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3293,7 +3297,7 @@ function ExecuteSandboxed(code, scriptName)
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
-			local success, runtimeErr = pcall(chunk)
+			local success = pcall(chunk)
 			if not success and not isDestroying then
 				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 			end
@@ -4111,7 +4115,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	return row, rightContainer
 end
 function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
-	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local rightContainer = select(2, CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order))
 	local toggleBtn = Instance.new("TextButton", rightContainer)
 	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
 	toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
@@ -4144,7 +4148,7 @@ function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, de
 	end)))
 end
 function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
-	local row, rightContainer = CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
+	local rightContainer = select(2, CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order))
 	local btn = Instance.new("TextButton", rightContainer)
 	btn.Size = UDim2.new(0, 95, 0, 26)
 	btn.Position = UDim2.new(1, -95, 0.5, -13)
@@ -4351,8 +4355,8 @@ scalePlusStroke.Color = Theme.Stroke
 function RefreshScaleLabel()
 	scaleLabel.Text = tostring(math.floor(scaleValue * 100 + 0.5)) .. "%"
 end
-function SetUIScaleFromSetting(nextValue, source)
-	scaleValue = math.clamp(math.round((tonumber(nextValue) or 1) * 20) / 20, 0.8, 1.2)
+function SetUIScaleFromSetting(nextValue)
+	scaleValue = math.clamp(math.floor(((tonumber(nextValue) or 1) * 20) + 0.5) / 20, 0.8, 1.2)
 	SavedData.Settings.UIScale = scaleValue
 	RefreshScaleLabel()
 	ApplyPanelUIScale(scaleValue)
