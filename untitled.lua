@@ -2021,8 +2021,8 @@ RecommendationSeeMoreStroke.Transparency = 0.18
 RecommendationSeeMoreStroke.Thickness = 1
 
 RecommendationList = Instance.new("Frame", RecommendationPanel)
-RecommendationList.Size = UDim2.new(1, IsMobile and -56 or -72, 0, IsMobile and 66 or 76)
-RecommendationList.Position = UDim2.new(0, IsMobile and 28 or 36, 0, IsMobile and 58 or 61)
+RecommendationList.Size = UDim2.new(1, IsMobile and -80 or -88, 0, IsMobile and 66 or 76)
+RecommendationList.Position = UDim2.new(0, IsMobile and 40 or 44, 0, IsMobile and 58 or 61)
 RecommendationList.BackgroundTransparency = 1
 RecommendationList.BorderSizePixel = 0
 RecommendationList.ClipsDescendants = true
@@ -2039,7 +2039,7 @@ RecommendationListPadding.PaddingRight = UDim.new(0, 0)
 
 RecommendationPrevButton = Instance.new("TextButton", RecommendationPanel)
 RecommendationPrevButton.Size = UDim2.new(0, IsMobile and 24 or 28, 0, IsMobile and 24 or 28)
-RecommendationPrevButton.Position = UDim2.new(0, 4, 0, IsMobile and 79 or 85)
+RecommendationPrevButton.Position = UDim2.new(0, IsMobile and 6 or 7, 0, IsMobile and 79 or 85)
 RecommendationPrevButton.BackgroundColor3 = Color3.fromRGB(26, 34, 57)
 RecommendationPrevButton.BorderSizePixel = 0
 RecommendationPrevButton.AutoButtonColor = false
@@ -2056,7 +2056,7 @@ RecommendationPrevStroke.Thickness = 1
 
 RecommendationNextButton = Instance.new("TextButton", RecommendationPanel)
 RecommendationNextButton.Size = UDim2.new(0, IsMobile and 24 or 28, 0, IsMobile and 24 or 28)
-RecommendationNextButton.Position = UDim2.new(1, -(IsMobile and 28 or 32), 0, IsMobile and 79 or 85)
+RecommendationNextButton.Position = UDim2.new(1, -(IsMobile and 30 or 35), 0, IsMobile and 79 or 85)
 RecommendationNextButton.BackgroundColor3 = Color3.fromRGB(26, 34, 57)
 RecommendationNextButton.BorderSizePixel = 0
 RecommendationNextButton.AutoButtonColor = false
@@ -2355,7 +2355,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Kept Recommended for You timestamps compact (for example 2h ago and 5d ago) while normal script cards use full Updated 2 Hours Ago style labels.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.", ChangelogsView)
+CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Kept Recommended for You timestamps compact (for example 2h ago and 5d ago) while normal script cards use full Updated 2 Hours Ago style labels.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.\n• Increased touch-safe spacing between Recommended for You cards and the left/right navigation arrows to prevent accidental hit conflicts.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
