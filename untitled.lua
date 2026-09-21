@@ -1728,7 +1728,7 @@ Instance.new("UICorner", ScriptDetailsAccent).CornerRadius = UDim.new(1, 0)
 ScriptDetailsUIScale = Instance.new("UIScale", ScriptDetailsBox)
 ScriptDetailsUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 ScriptDetailsHeader = Instance.new("Frame", ScriptDetailsBox)
-ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 86 or 92)
+ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 102 or 108)
 ScriptDetailsHeader.Position = UDim2.new(0, 14, 0, 20)
 ScriptDetailsHeader.BackgroundTransparency = 1
 ScriptDetailsImage = Instance.new("ImageLabel", ScriptDetailsHeader)
@@ -1743,8 +1743,9 @@ ScriptDetailsImageStroke.Color = Theme.Stroke
 ScriptDetailsImageStroke.Transparency = 0.15
 ScriptDetailsImageStroke.Thickness = 1
 ScriptDetailsName = Instance.new("TextLabel", ScriptDetailsHeader)
-ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, IsMobile and 34 or 38)
-ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0, 2)
+ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, IsMobile and 30 or 34)
+ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0.5, 0)
+ScriptDetailsName.AnchorPoint = Vector2.new(0, 0.5)
 ScriptDetailsName.BackgroundTransparency = 1
 ScriptDetailsName.Text = "Script Details"
 ScriptDetailsName.TextColor3 = Theme.TextPrimary
@@ -1753,10 +1754,10 @@ ScriptDetailsName.TextSize = IsMobile and 13 or 16
 ScriptDetailsName.TextWrapped = true
 ScriptDetailsName.TextTruncate = Enum.TextTruncate.AtEnd
 ScriptDetailsName.TextXAlignment = Enum.TextXAlignment.Left
-ScriptDetailsName.TextYAlignment = Enum.TextYAlignment.Top
+ScriptDetailsName.TextYAlignment = Enum.TextYAlignment.Center
 ScriptDetailsBadge = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsBadge.Size = UDim2.new(0, IsMobile and 88 or 96, 0, 20)
-ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 39 or 42)
+ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 61 or 64)
 ScriptDetailsBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 ScriptDetailsBadge.BorderSizePixel = 0
 ScriptDetailsBadge.Visible = false
@@ -1770,7 +1771,7 @@ ScriptDetailsBadgeText.TextSize = 8
 ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
 ScriptDetailsQuickInfo = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsQuickInfo.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, 18)
-ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 62 or 66)
+ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 83 or 86)
 ScriptDetailsQuickInfo.BackgroundTransparency = 1
 ScriptDetailsQuickInfo.Visible = false
 ScriptDetailsQuickInfoLayout = Instance.new("UIListLayout", ScriptDetailsQuickInfo)
@@ -1811,8 +1812,8 @@ ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
 ScriptDetailsCloseStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(ScriptDetailsClose, Theme.Card, Theme.CardHover, Theme.BackgroundMain, ScriptDetailsCloseStroke, Theme.Stroke, Theme.Accent)
 ScriptDetailsContent = Instance.new("ScrollingFrame", ScriptDetailsBox)
-ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 146 or 150))
-ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 108)
+ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 158 or 164))
+ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 116 or 122)
 ScriptDetailsContent.BackgroundTransparency = 1
 ScriptDetailsContent.BorderSizePixel = 0
 ScriptDetailsContent.ScrollBarThickness = 2
@@ -3391,26 +3392,26 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 74 or 88, 0, 22); detailsBtn.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
-	detailsBtn.Text = "View Details"; detailsBtn.TextColor3 = Color3.fromRGB(245, 247, 255); detailsBtn.Font = Enum.Font.GothamBold; detailsBtn.TextSize = IsMobile and 8 or 9
-	detailsBtn.AutoButtonColor = false; detailsBtn.LayoutOrder = 2; detailsBtn.ZIndex = 2
-	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 7)
+	detailsBtn.Size = UDim2.new(0, IsMobile and 74 or 88, 0, 22)
+	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
+	detailsBtn.Text = "View Details"
+	detailsBtn.TextColor3 = Theme.TextPrimary
+	detailsBtn.Font = Enum.Font.GothamBold
+	detailsBtn.TextSize = IsMobile and 8 or 9
+	detailsBtn.AutoButtonColor = false
+	detailsBtn.LayoutOrder = 2
+	detailsBtn.ZIndex = 2
+	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
 	local detailsBtnStroke = Instance.new("UIStroke", detailsBtn)
-	detailsBtnStroke.Color = Color3.fromRGB(129, 140, 248)
-	detailsBtnStroke.Transparency = 0.35
+	detailsBtnStroke.Color = Theme.Stroke
+	detailsBtnStroke.Transparency = 0.2
 	detailsBtnStroke.Thickness = 1
-	local detailsGradient = Instance.new("UIGradient", detailsBtn)
-	detailsGradient.Rotation = 90
-	detailsGradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(99, 102, 241)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(67, 56, 202))
-	})
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Color3.fromRGB(79, 70, 229), Color3.fromRGB(99, 102, 241), Color3.fromRGB(67, 56, 202), detailsBtnStroke, detailsBtnStroke.Color, Color3.fromRGB(165, 180, 252), entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, detailsBtnStroke, Theme.Stroke, Theme.Stroke, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
