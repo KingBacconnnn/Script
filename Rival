@@ -1388,7 +1388,7 @@ getgenv().VeloxHubRivals = {
             flow = false,
             flow_speed = 1,
         },
-        max_dist = 1000,
+        max_dist = 5000,
     },
     death_effects = {
         enable = false,
