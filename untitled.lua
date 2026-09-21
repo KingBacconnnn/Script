@@ -981,12 +981,7 @@ FloatPadding.PaddingTop = UDim.new(0, 6); FloatPadding.PaddingBottom = UDim.new(
 Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
-local function SafeViewportClamp(value, minValue, maxValue)
-	if maxValue < minValue then
-		maxValue = minValue
-	end
-	return math.clamp(value, minValue, maxValue)
-end
+
 
 floatStart, floatPos = nil, nil
 _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
@@ -1006,8 +1001,8 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
 				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
 
-				targetX = SafeViewportClamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
-				targetY = SafeViewportClamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
+				targetX = math.max(halfX, math.min(targetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
+				targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -1061,8 +1056,8 @@ function ApplyPanelUIScale(scaleValue)
 		halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-		currentX = SafeViewportClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-		currentY = SafeViewportClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+		currentX = math.max(halfX, math.min(currentX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+		currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 	end)
 end
@@ -2152,8 +2147,8 @@ _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 				targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
 				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				targetX = SafeViewportClamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = SafeViewportClamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				targetX = math.max(halfX, math.min(targetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+				targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -2558,8 +2553,8 @@ function BindCamera()
 					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
 					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
 				end
-				targetX = SafeViewportClamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = SafeViewportClamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+				targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -2576,8 +2571,8 @@ function RefreshViewportLayout()
 	halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 	currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 	currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-	currentX = SafeViewportClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-	currentY = SafeViewportClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+	currentX = math.max(halfX, math.min(currentX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+	currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 end
 function BindViewportSizeChanged(camera)
@@ -2715,7 +2710,7 @@ _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 		camera = workspace.CurrentCamera
 		viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
 		dropWidth, dropHeight = 190, 210
-		posX = SafeViewportClamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
+		posX = math.max(10, math.min(absPos.X + absSize.X - dropWidth, math.max(10, viewportSize.X - dropWidth - 10)))
 		posY = absPos.Y + absSize.Y + 4
 		if posY + dropHeight > viewportSize.Y - 10 then
 			posY = absPos.Y - dropHeight - 4
