@@ -105,6 +105,9 @@ RecommendationConnections = {}
 RecommendationPanel = nil
 RecommendationList = nil
 RecommendationSubtitle = nil
+RecommendationPage = 1
+RecommendationPageSize = 3
+RecommendationPageCount = 1
 AutoExecuteRanThisSession = false
 InteractiveElements = setmetatable({}, { __mode = "k" })
 isDestroying = false
@@ -1857,44 +1860,83 @@ ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.f
 
 RecommendationPanel = Instance.new("Frame", ScriptsView)
 RecommendationPanel.Name = "RecommendedForYouPanel"
-RecommendationPanel.Size = UDim2.new(1, 0, 0, IsMobile and 116 or 104)
-RecommendationPanel.BackgroundColor3 = Color3.fromRGB(24, 31, 52)
+RecommendationPanel.Size = UDim2.new(1, 0, 0, IsMobile and 124 or 132)
+RecommendationPanel.BackgroundColor3 = Color3.fromRGB(12, 18, 32)
 RecommendationPanel.BorderSizePixel = 0
 RecommendationPanel.LayoutOrder = 0
 RecommendationPanel.Visible = false
-Instance.new("UICorner", RecommendationPanel).CornerRadius = UDim.new(0, 8)
+RecommendationPanel.ClipsDescendants = true
+Instance.new("UICorner", RecommendationPanel).CornerRadius = UDim.new(0, 10)
 RecommendationPanelStroke = Instance.new("UIStroke", RecommendationPanel)
-RecommendationPanelStroke.Color = Color3.fromRGB(79, 70, 229)
-RecommendationPanelStroke.Transparency = 0.2
-RecommendationPanelStroke.Thickness = 1
+RecommendationPanelStroke.Color = Color3.fromRGB(91, 84, 255)
+RecommendationPanelStroke.Transparency = 0.12
+RecommendationPanelStroke.Thickness = 1.2
 RecommendationPanelGradient = Instance.new("UIGradient", RecommendationPanel)
 RecommendationPanelGradient.Rotation = 0
 RecommendationPanelGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 41, 70)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 29, 55))
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 29, 55)),
+	ColorSequenceKeypoint.new(0.52, Color3.fromRGB(12, 20, 37)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 16, 29))
 })
+RecommendationIcon = Instance.new("Frame", RecommendationPanel)
+RecommendationIcon.Size = UDim2.new(0, IsMobile and 25 or 28, 0, IsMobile and 25 or 28)
+RecommendationIcon.Position = UDim2.new(0, 10, 0, 10)
+RecommendationIcon.BackgroundColor3 = Color3.fromRGB(43, 45, 105)
+RecommendationIcon.BorderSizePixel = 0
+RecommendationIcon.ZIndex = 6
+Instance.new("UICorner", RecommendationIcon).CornerRadius = UDim.new(0, 7)
+RecommendationIconStroke = Instance.new("UIStroke", RecommendationIcon)
+RecommendationIconStroke.Color = Color3.fromRGB(99, 102, 241)
+RecommendationIconStroke.Transparency = 0.15
+RecommendationIconImage = Instance.new("TextLabel", RecommendationIcon)
+RecommendationIconImage.Size = UDim2.new(1, 0, 1, 0)
+RecommendationIconImage.BackgroundTransparency = 1
+RecommendationIconImage.Text = "✦"
+RecommendationIconImage.TextColor3 = Color3.fromRGB(190, 192, 255)
+RecommendationIconImage.Font = Enum.Font.GothamBold
+RecommendationIconImage.TextSize = IsMobile and 14 or 16
+RecommendationIconImage.ZIndex = 7
 RecommendationTitle = Instance.new("TextLabel", RecommendationPanel)
-RecommendationTitle.Size = UDim2.new(1, -20, 0, 18)
-RecommendationTitle.Position = UDim2.new(0, 10, 0, 8)
+RecommendationTitle.Size = UDim2.new(1, -145, 0, 18)
+RecommendationTitle.Position = UDim2.new(0, IsMobile and 43 or 47, 0, 9)
 RecommendationTitle.BackgroundTransparency = 1
-RecommendationTitle.Text = "✦ Recommended for You"
+RecommendationTitle.Text = "Recommended for You"
 RecommendationTitle.TextColor3 = Theme.TextPrimary
 RecommendationTitle.Font = Enum.Font.GothamBold
-RecommendationTitle.TextSize = IsMobile and 12 or 13
+RecommendationTitle.TextSize = IsMobile and 12 or 14
 RecommendationTitle.TextXAlignment = Enum.TextXAlignment.Left
+RecommendationTitle.TextTruncate = Enum.TextTruncate.AtEnd
+RecommendationTitle.ZIndex = 6
 RecommendationSubtitle = Instance.new("TextLabel", RecommendationPanel)
-RecommendationSubtitle.Size = UDim2.new(1, -20, 0, 18)
-RecommendationSubtitle.Position = UDim2.new(0, 10, 0, 27)
+RecommendationSubtitle.Size = UDim2.new(1, -150, 0, 16)
+RecommendationSubtitle.Position = UDim2.new(0, IsMobile and 43 or 47, 0, 27)
 RecommendationSubtitle.BackgroundTransparency = 1
-RecommendationSubtitle.Text = "Other games you may like based on your current game."
+RecommendationSubtitle.Text = "Based on your current game"
 RecommendationSubtitle.TextColor3 = Theme.TextSecondary
 RecommendationSubtitle.Font = Enum.Font.Gotham
-RecommendationSubtitle.TextSize = IsMobile and 9 or 10
+RecommendationSubtitle.TextSize = IsMobile and 8 or 9
 RecommendationSubtitle.TextXAlignment = Enum.TextXAlignment.Left
 RecommendationSubtitle.TextTruncate = Enum.TextTruncate.AtEnd
+RecommendationSubtitle.ZIndex = 6
+RecommendationSeeMoreButton = Instance.new("TextButton", RecommendationPanel)
+RecommendationSeeMoreButton.Size = UDim2.new(0, IsMobile and 82 or 94, 0, IsMobile and 24 or 26)
+RecommendationSeeMoreButton.Position = UDim2.new(1, -(IsMobile and 92 or 104), 0, 10)
+RecommendationSeeMoreButton.BackgroundColor3 = Color3.fromRGB(38, 30, 94)
+RecommendationSeeMoreButton.BorderSizePixel = 0
+RecommendationSeeMoreButton.AutoButtonColor = false
+RecommendationSeeMoreButton.Text = "See More  →"
+RecommendationSeeMoreButton.TextColor3 = Color3.fromRGB(205, 208, 255)
+RecommendationSeeMoreButton.Font = Enum.Font.GothamBold
+RecommendationSeeMoreButton.TextSize = IsMobile and 8 or 9
+RecommendationSeeMoreButton.ZIndex = 7
+Instance.new("UICorner", RecommendationSeeMoreButton).CornerRadius = UDim.new(0, 8)
+RecommendationSeeMoreStroke = Instance.new("UIStroke", RecommendationSeeMoreButton)
+RecommendationSeeMoreStroke.Color = Color3.fromRGB(99, 102, 241)
+RecommendationSeeMoreStroke.Transparency = 0.1
+RecommendationSeeMoreStroke.Thickness = 1
 RecommendationList = Instance.new("ScrollingFrame", RecommendationPanel)
-RecommendationList.Size = UDim2.new(1, -20, 0, 40)
-RecommendationList.Position = UDim2.new(0, 10, 0, IsMobile and 68 or 61)
+RecommendationList.Size = UDim2.new(1, IsMobile and -64 or -72, 0, IsMobile and 62 or 70)
+RecommendationList.Position = UDim2.new(0, IsMobile and 32 or 36, 0, IsMobile and 55 or 57)
 RecommendationList.BackgroundTransparency = 1
 RecommendationList.BorderSizePixel = 0
 RecommendationList.ScrollBarThickness = 0
@@ -1903,14 +1945,57 @@ RecommendationList.AutomaticCanvasSize = Enum.AutomaticSize.X
 RecommendationList.CanvasSize = UDim2.new(0, 0, 0, 0)
 RecommendationList.ClipsDescendants = true
 RecommendationList.Active = true
-RecommendationList.ZIndex = 4
+RecommendationList.ZIndex = 5
 RecommendationListLayout = Instance.new("UIListLayout", RecommendationList)
 RecommendationListLayout.FillDirection = Enum.FillDirection.Horizontal
 RecommendationListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-RecommendationListLayout.Padding = UDim.new(0, 6)
+RecommendationListLayout.Padding = UDim.new(0, IsMobile and 6 or 8)
 RecommendationListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 RecommendationListPadding = Instance.new("UIPadding", RecommendationList)
-RecommendationListPadding.PaddingRight = UDim.new(0, 4)
+RecommendationListPadding.PaddingLeft = UDim.new(0, 2)
+RecommendationListPadding.PaddingRight = UDim.new(0, 2)
+RecommendationPrevButton = Instance.new("TextButton", RecommendationPanel)
+RecommendationPrevButton.Size = UDim2.new(0, IsMobile and 26 or 30, 0, IsMobile and 26 or 30)
+RecommendationPrevButton.Position = UDim2.new(0, 2, 0, IsMobile and 73 or 77)
+RecommendationPrevButton.BackgroundColor3 = Color3.fromRGB(27, 35, 57)
+RecommendationPrevButton.BorderSizePixel = 0
+RecommendationPrevButton.AutoButtonColor = false
+RecommendationPrevButton.Text = "‹"
+RecommendationPrevButton.TextColor3 = Theme.TextPrimary
+RecommendationPrevButton.Font = Enum.Font.GothamBold
+RecommendationPrevButton.TextSize = IsMobile and 18 or 20
+RecommendationPrevButton.ZIndex = 9
+Instance.new("UICorner", RecommendationPrevButton).CornerRadius = UDim.new(1, 0)
+RecommendationPrevStroke = Instance.new("UIStroke", RecommendationPrevButton)
+RecommendationPrevStroke.Color = Color3.fromRGB(68, 80, 112)
+RecommendationPrevStroke.Transparency = 0.18
+RecommendationNextButton = Instance.new("TextButton", RecommendationPanel)
+RecommendationNextButton.Size = UDim2.new(0, IsMobile and 26 or 30, 0, IsMobile and 26 or 30)
+RecommendationNextButton.Position = UDim2.new(1, -(IsMobile and 28 or 32), 0, IsMobile and 73 or 77)
+RecommendationNextButton.BackgroundColor3 = Color3.fromRGB(27, 35, 57)
+RecommendationNextButton.BorderSizePixel = 0
+RecommendationNextButton.AutoButtonColor = false
+RecommendationNextButton.Text = "›"
+RecommendationNextButton.TextColor3 = Theme.TextPrimary
+RecommendationNextButton.Font = Enum.Font.GothamBold
+RecommendationNextButton.TextSize = IsMobile and 18 or 20
+RecommendationNextButton.ZIndex = 9
+Instance.new("UICorner", RecommendationNextButton).CornerRadius = UDim.new(1, 0)
+RecommendationNextStroke = Instance.new("UIStroke", RecommendationNextButton)
+RecommendationNextStroke.Color = Color3.fromRGB(68, 80, 112)
+RecommendationNextStroke.Transparency = 0.18
+RecommendationPageLabel = Instance.new("TextLabel", RecommendationPanel)
+RecommendationPageLabel.Size = UDim2.new(0, 54, 0, 12)
+RecommendationPageLabel.Position = UDim2.new(0.5, -27, 1, -13)
+RecommendationPageLabel.BackgroundTransparency = 1
+RecommendationPageLabel.Text = ""
+RecommendationPageLabel.TextColor3 = Color3.fromRGB(110, 119, 150)
+RecommendationPageLabel.Font = Enum.Font.GothamMedium
+RecommendationPageLabel.TextSize = 8
+RecommendationPageLabel.ZIndex = 6
+ApplyInteractiveAnimations(RecommendationSeeMoreButton, RecommendationSeeMoreButton.BackgroundColor3, Color3.fromRGB(54, 45, 118), Color3.fromRGB(26, 22, 70), RecommendationSeeMoreStroke, RecommendationSeeMoreStroke.Color, Theme.Accent)
+ApplyInteractiveAnimations(RecommendationPrevButton, RecommendationPrevButton.BackgroundColor3, Color3.fromRGB(38, 49, 79), Color3.fromRGB(18, 24, 42), RecommendationPrevStroke, RecommendationPrevStroke.Color, Theme.Accent)
+ApplyInteractiveAnimations(RecommendationNextButton, RecommendationNextButton.BackgroundColor3, Color3.fromRGB(38, 49, 79), Color3.fromRGB(18, 24, 42), RecommendationNextStroke, RecommendationNextStroke.Color, Theme.Accent)
 
 DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
@@ -2320,6 +2405,27 @@ function _VH_BuildRecommendationState()
 	return candidates, currentCount
 end
 
+function _VH_GetRecommendationShortReason(reason)
+	local text = tostring(reason or "")
+	if text == "Similar to your current game" then return "Similar game" end
+	if text == "Matches your current game" then return "Current game" end
+	if text == "Related to your favorites" then return "From favorites" end
+	if text == "Similar to your favorites" then return "Similar to favorites" end
+	if text == "Shares similar game details" then return "Similar details" end
+	if text == "Featured in Velox Hub" then return "Featured" end
+	if text == "Recently updated" then return "Recently updated" end
+	return "Explore more"
+end
+
+function _VH_GetRecommendationReasonIcon(reason)
+	local text = tostring(reason or "")
+	if text == "Similar to your current game" or text == "Matches your current game" then return "◆" end
+	if text == "Related to your favorites" or text == "Similar to your favorites" then return "★" end
+	if text == "Recently updated" then return "◷" end
+	if text == "Featured in Velox Hub" then return "✦" end
+	return "•"
+end
+
 function _VH_RefreshRecommendationPanel(items, currentCount)
 	if not RecommendationPanel or not RecommendationPanel.Parent or not RecommendationList then return end
 	for _, connection in ipairs(RecommendationConnections) do
@@ -2327,51 +2433,118 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	end
 	table.clear(RecommendationConnections)
 	for _, child in ipairs(RecommendationList:GetChildren()) do
-		if child:IsA("GuiButton") or child:IsA("TextLabel") or child:IsA("Frame") then
-			child:Destroy()
-		end
+		if child:IsA("GuiButton") or child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("ImageLabel") then child:Destroy() end
 	end
 	table.clear(RecommendationItems)
-	for index, item in ipairs(items or {}) do
-		if index > 3 then break end
+
+	local allItems = {}
+	for _, item in ipairs(items or {}) do
+		if item and item.Entry and item.Entry.Instance and item.Entry.Instance.Parent then
+			allItems[#allItems + 1] = item
+		end
+	end
+
+	local pageSize = RecommendationPageSize or 3
+	RecommendationPageCount = math.max(1, math.ceil(#allItems / pageSize))
+	RecommendationPage = math.clamp(tonumber(RecommendationPage) or 1, 1, RecommendationPageCount)
+	local startIndex = ((RecommendationPage - 1) * pageSize) + 1
+	local endIndex = math.min(startIndex + pageSize - 1, #allItems)
+	local visibleIndex = 0
+
+	for index = startIndex, endIndex do
+		local item = allItems[index]
 		local entry = item.Entry
 		if entry and entry.Instance and entry.Instance.Parent then
-			RecommendationItems[index] = entry
+			visibleIndex = visibleIndex + 1
+			RecommendationItems[visibleIndex] = entry
+
+			local cardWidth = IsMobile and 145 or 194
+			local cardHeight = IsMobile and 58 or 64
 			local button = Instance.new("TextButton", RecommendationList)
-			button.Size = UDim2.new(0, IsMobile and 144 or 168, 0, 38)
-			button.BackgroundColor3 = Color3.fromRGB(30, 41, 66)
+			button.Size = UDim2.new(0, cardWidth, 0, cardHeight)
+			button.BackgroundColor3 = Color3.fromRGB(20, 29, 48)
 			button.BorderSizePixel = 0
 			button.AutoButtonColor = false
 			button.Text = ""
-			button.LayoutOrder = index
-			button.ZIndex = 5
-			Instance.new("UICorner", button).CornerRadius = UDim.new(0, 6)
+			button.LayoutOrder = visibleIndex
+			button.ZIndex = 6
+			Instance.new("UICorner", button).CornerRadius = UDim.new(0, 9)
 			local buttonStroke = Instance.new("UIStroke", button)
-			buttonStroke.Color = Color3.fromRGB(67, 78, 110)
-			buttonStroke.Transparency = 0.2
+			buttonStroke.Color = Color3.fromRGB(57, 72, 103)
+			buttonStroke.Transparency = 0.08
+			buttonStroke.Thickness = 1
+
+			local glow = Instance.new("Frame", button)
+			glow.Size = UDim2.new(0, 3, 1, -12)
+			glow.Position = UDim2.new(0, 0, 0, 6)
+			glow.BackgroundColor3 = Theme.Accent
+			glow.BackgroundTransparency = 0.15
+			glow.BorderSizePixel = 0
+			glow.ZIndex = 7
+			Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 2)
+
+			local thumb = Instance.new("ImageLabel", button)
+			local thumbSize = IsMobile and 45 or 52
+			thumb.Size = UDim2.new(0, thumbSize, 0, thumbSize)
+			thumb.Position = UDim2.new(0, 7, 0.5, -(thumbSize / 2))
+			thumb.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+			thumb.BorderSizePixel = 0
+			thumb.Image = type(entry.Data) == "table" and tostring(entry.Data.ImageAssetId or "") or ""
+			thumb.ScaleType = Enum.ScaleType.Crop
+			thumb.ZIndex = 7
+			Instance.new("UICorner", thumb).CornerRadius = UDim.new(0, 7)
+			local thumbStroke = Instance.new("UIStroke", thumb)
+			thumbStroke.Color = Color3.fromRGB(70, 84, 118)
+			thumbStroke.Transparency = 0.16
+
+			local textX = IsMobile and 58 or 66
 			local nameLabel = Instance.new("TextLabel", button)
-			nameLabel.Size = UDim2.new(1, -12, 0, 16)
-			nameLabel.Position = UDim2.new(0, 6, 0, 3)
+			nameLabel.Size = UDim2.new(1, -textX - 7, 0, IsMobile and 28 or 30)
+			nameLabel.Position = UDim2.new(0, textX, 0, IsMobile and 6 or 7)
 			nameLabel.BackgroundTransparency = 1
 			nameLabel.Text = tostring(entry.ExactName or entry.Name or "Unknown Game")
 			nameLabel.TextColor3 = Theme.TextPrimary
 			nameLabel.Font = Enum.Font.GothamBold
 			nameLabel.TextSize = IsMobile and 9 or 10
 			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLabel.TextWrapped = true
 			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-			nameLabel.ZIndex = 6
-			local reasonLabel = Instance.new("TextLabel", button)
-			reasonLabel.Size = UDim2.new(1, -12, 0, 14)
-			reasonLabel.Position = UDim2.new(0, 6, 0, 20)
+			nameLabel.TextYAlignment = Enum.TextYAlignment.Top
+			nameLabel.ZIndex = 7
+
+			local reasonChip = Instance.new("Frame", button)
+			reasonChip.Size = UDim2.new(1, -textX - 10, 0, IsMobile and 16 or 18)
+			reasonChip.Position = UDim2.new(0, textX, 1, -(IsMobile and 21 or 23))
+			reasonChip.BackgroundColor3 = Color3.fromRGB(29, 38, 63)
+			reasonChip.BorderSizePixel = 0
+			reasonChip.ZIndex = 7
+			Instance.new("UICorner", reasonChip).CornerRadius = UDim.new(0, 5)
+			local reasonStroke = Instance.new("UIStroke", reasonChip)
+			reasonStroke.Color = Color3.fromRGB(70, 82, 125)
+			reasonStroke.Transparency = 0.18
+
+			local reasonIcon = Instance.new("TextLabel", reasonChip)
+			reasonIcon.Size = UDim2.new(0, 14, 1, 0)
+			reasonIcon.BackgroundTransparency = 1
+			reasonIcon.Text = _VH_GetRecommendationReasonIcon(item.Reason)
+			reasonIcon.TextColor3 = Color3.fromRGB(167, 171, 255)
+			reasonIcon.Font = Enum.Font.GothamBold
+			reasonIcon.TextSize = IsMobile and 7 or 8
+			reasonIcon.ZIndex = 8
+
+			local reasonLabel = Instance.new("TextLabel", reasonChip)
+			reasonLabel.Size = UDim2.new(1, -17, 1, 0)
+			reasonLabel.Position = UDim2.new(0, 14, 0, 0)
 			reasonLabel.BackgroundTransparency = 1
-			reasonLabel.Text = tostring(item.Reason or "More games in Velox Hub")
-			reasonLabel.TextColor3 = Theme.TextSecondary
-			reasonLabel.Font = Enum.Font.Gotham
-			reasonLabel.TextSize = IsMobile and 8 or 9
+			reasonLabel.Text = _VH_GetRecommendationShortReason(item.Reason)
+			reasonLabel.TextColor3 = Color3.fromRGB(170, 179, 205)
+			reasonLabel.Font = Enum.Font.GothamMedium
+			reasonLabel.TextSize = IsMobile and 7 or 8
 			reasonLabel.TextTruncate = Enum.TextTruncate.AtEnd
 			reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
-			reasonLabel.ZIndex = 6
-			ApplyInteractiveAnimations(button, button.BackgroundColor3, Color3.fromRGB(40, 53, 82), Color3.fromRGB(18, 26, 48), nil, nil, nil, RecommendationConnections)
+			reasonLabel.ZIndex = 8
+
+			ApplyInteractiveAnimations(button, button.BackgroundColor3, Color3.fromRGB(28, 41, 68), Color3.fromRGB(15, 22, 38), buttonStroke, buttonStroke.Color, Theme.Accent, RecommendationConnections)
 			RecommendationConnections[#RecommendationConnections + 1] = button.Activated:Connect(function()
 				if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
 				local offset = entry.Instance.AbsolutePosition.Y - ScriptsView.AbsolutePosition.Y + ScriptsView.CanvasPosition.Y - 10
@@ -2380,13 +2553,47 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 		end
 	end
 
+	RecommendationList.CanvasPosition = Vector2.new(0, 0)
+	local hasMultiplePages = RecommendationPageCount > 1
+	RecommendationPrevButton.Visible = hasMultiplePages and #RecommendationItems > 0
+	RecommendationNextButton.Visible = hasMultiplePages and #RecommendationItems > 0
+	RecommendationSeeMoreButton.Visible = hasMultiplePages and #RecommendationItems > 0
+	RecommendationPageLabel.Visible = hasMultiplePages and #RecommendationItems > 0
+	RecommendationPageLabel.Text = hasMultiplePages and (tostring(RecommendationPage) .. " / " .. tostring(RecommendationPageCount)) or ""
+
 	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and not FilterFavoritesActive
 	RecommendationPanel.Visible = visible
 	if currentCount and currentCount > 0 then
-		RecommendationSubtitle.Text = #RecommendationItems > 0 and "Other games you may like based on this game and your favorites." or "No other game matches found yet."
+		RecommendationSubtitle.Text = "Based on your current game"
+	elseif #RecommendationItems > 0 then
+		RecommendationSubtitle.Text = "Discover other games in Velox Hub"
 	else
-		RecommendationSubtitle.Text = #RecommendationItems > 0 and "Discover other games available in Velox Hub." or "Browse the catalog to build recommendations."
+		RecommendationSubtitle.Text = "No other recommendations found yet"
 	end
+
+	local function GoToRecommendationPage(nextPage)
+		if RecommendationPageCount <= 1 then return end
+		RecommendationPage = math.clamp(nextPage, 1, RecommendationPageCount)
+		_VH_RefreshRecommendationPanel(allItems, currentCount)
+	end
+	RecommendationConnections[#RecommendationConnections + 1] = RecommendationPrevButton.Activated:Connect(function()
+		if RecommendationPageCount <= 1 then return end
+		local target = RecommendationPage - 1
+		if target < 1 then target = RecommendationPageCount end
+		GoToRecommendationPage(target)
+	end)
+	RecommendationConnections[#RecommendationConnections + 1] = RecommendationNextButton.Activated:Connect(function()
+		if RecommendationPageCount <= 1 then return end
+		local target = RecommendationPage + 1
+		if target > RecommendationPageCount then target = 1 end
+		GoToRecommendationPage(target)
+	end)
+	RecommendationConnections[#RecommendationConnections + 1] = RecommendationSeeMoreButton.Activated:Connect(function()
+		if RecommendationPageCount <= 1 then return end
+		local target = RecommendationPage + 1
+		if target > RecommendationPageCount then target = 1 end
+		GoToRecommendationPage(target)
+	end)
 end
 
 function _VH_RefreshRecommendations()
