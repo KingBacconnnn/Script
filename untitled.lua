@@ -752,34 +752,23 @@ function GetSafeTimestamp(value)
 	return timestamp
 end
 function GetRelativeTime(timestamp)
-	value = tonumber(timestamp)
-	if type(value) ~= "number" or value ~= value then return "Updated just now" end
-	diff = os.time() - value
-	if diff <= 0 then return "Updated just now" end
-	if diff < 60 then return "Updated just now" end
-	minutes = math.floor(diff / 60)
-	if minutes < 60 then
-		return "Updated " .. minutes .. (minutes == 1 and " minute ago" or " minutes ago")
-	end
-	hours = math.floor(diff / 3600)
-	if hours < 24 then
-		return "Updated " .. hours .. (hours == 1 and " hour ago" or " hours ago")
-	end
-	days = math.floor(diff / 86400)
-	if days == 1 then return "Updated yesterday" end
-	if days < 7 then
-		return "Updated " .. days .. (days == 1 and " day ago" or " days ago")
-	end
-	weeks = math.floor(days / 7)
-	if weeks < 4 then
-		return "Updated " .. weeks .. (weeks == 1 and " week ago" or " weeks ago")
-	end
-	months = math.floor(days / 30.44)
-	if months < 12 then
-		return "Updated " .. months .. (months == 1 and " month ago" or " months ago")
-	end
-	years = math.floor(days / 365.25)
-	return "Updated " .. years .. (years == 1 and " year ago" or " years ago")
+	local value = tonumber(timestamp)
+	if type(value) ~= "number" or value ~= value then return "Now" end
+	local diff = os.time() - value
+	if diff <= 0 or diff < 60 then return "Now" end
+	local minutes = math.floor(diff / 60)
+	if minutes < 60 then return tostring(minutes) .. "m ago" end
+	local hours = math.floor(diff / 3600)
+	if hours < 24 then return tostring(hours) .. "h ago" end
+	local days = math.floor(diff / 86400)
+	if days == 1 then return "1d ago" end
+	if days < 7 then return tostring(days) .. "d ago" end
+	local weeks = math.floor(days / 7)
+	if weeks < 4 then return tostring(weeks) .. "w ago" end
+	local months = math.floor(days / 30.44)
+	if months < 12 then return tostring(months) .. "mo ago" end
+	local years = math.floor(days / 365.25)
+	return tostring(years) .. "y ago"
 end
 function GetSecureParent()
 	huiSuccess, huiTarget = pcall(function() return gethui() end)
@@ -816,6 +805,20 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
+function _VH_DisableTextOutline(object)
+	if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+		object.TextStrokeTransparency = 1
+	end
+end
+function _VH_ClearTextOutlines(root)
+	if not root then return end
+	_VH_DisableTextOutline(root)
+	for _, object in ipairs(root:GetDescendants()) do
+		_VH_DisableTextOutline(object)
+	end
+end
+_VH_ClearTextOutlines(ScreenGui)
+_VH_RegConn(ScreenGui.DescendantAdded:Connect(_VH_DisableTextOutline))
 pcall(function() protectgui(ScreenGui) end)
 GlobalEnv[_G_Identifier] = function()
 	_VH_CleanUpMemory()
@@ -1398,6 +1401,8 @@ function ShowNotification(msg, notifType)
 		introTween:Play()
 		introTween.Completed:Connect(function() pcall(function() introTween:Destroy() end) end)
 
+		_VH_ClearTextOutlines(bannerGui)
+
 		progressTween = TweenService:Create(progressFill, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, 0, 1, 0)
 		})
@@ -1427,7 +1432,7 @@ function AttemptActionWithCooldown(actionFunc)
 			bannerGui.DisplayOrder = 10000
 			bannerGui.ResetOnSpawn = false
 			bannerGui.Parent = parent
-			GlobalCooldownBanner = bannerGui
+				GlobalCooldownBanner = bannerGui
 			local frame = Instance.new("Frame", bannerGui)
 			frame.Size = UDim2.new(0, IsMobile and 280 or 340, 0, 45)
 			frame.Position = UDim2.new(0.5, 0, 0, -60)
@@ -1443,6 +1448,7 @@ function AttemptActionWithCooldown(actionFunc)
 			txt.Position = UDim2.new(0, 10, 0, 0)
 			txt.BackgroundTransparency = 1
 			txt.TextColor3 = Theme.TextPrimary
+			_VH_ClearTextOutlines(bannerGui)
 			txt.Font = Enum.Font.GothamMedium
 			txt.TextSize = IsMobile and 11 or 13
 			txt.TextWrapped = true
@@ -1710,7 +1716,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.3 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.4 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -1870,7 +1876,6 @@ RecommendationPanel.Visible = false
 RecommendationPanel.ClipsDescendants = true
 Instance.new("UICorner", RecommendationPanel).CornerRadius = UDim.new(0, 12)
 
--- Keep the decorative border inset so UIStroke never gets clipped by the parent ScrollingFrame.
 RecommendationBorder = Instance.new("Frame", RecommendationPanel)
 RecommendationBorder.Name = "InsetBorder"
 RecommendationBorder.Size = UDim2.new(1, -2, 1, -2)
@@ -1961,7 +1966,6 @@ RecommendationSeeMoreButton.Text = "See More >"
 RecommendationSeeMoreButton.TextColor3 = Color3.fromRGB(216, 218, 255)
 RecommendationSeeMoreButton.Font = Enum.Font.GothamBold
 RecommendationSeeMoreButton.TextSize = IsMobile and 8 or 9
-RecommendationSeeMoreButton.TextStrokeTransparency = 1
 RecommendationSeeMoreButton.ZIndex = 7
 Instance.new("UICorner", RecommendationSeeMoreButton).CornerRadius = UDim.new(0, 8)
 RecommendationSeeMoreStroke = Instance.new("UIStroke", RecommendationSeeMoreButton)
@@ -1969,18 +1973,12 @@ RecommendationSeeMoreStroke.Color = Color3.fromRGB(105, 109, 240)
 RecommendationSeeMoreStroke.Transparency = 0.18
 RecommendationSeeMoreStroke.Thickness = 1
 
-RecommendationList = Instance.new("ScrollingFrame", RecommendationPanel)
+RecommendationList = Instance.new("Frame", RecommendationPanel)
 RecommendationList.Size = UDim2.new(1, IsMobile and -56 or -72, 0, IsMobile and 66 or 76)
 RecommendationList.Position = UDim2.new(0, IsMobile and 28 or 36, 0, IsMobile and 58 or 61)
 RecommendationList.BackgroundTransparency = 1
 RecommendationList.BorderSizePixel = 0
-RecommendationList.ScrollBarThickness = 0
-RecommendationList.ScrollingDirection = Enum.ScrollingDirection.X
-RecommendationList.ScrollingEnabled = false
-RecommendationList.AutomaticCanvasSize = Enum.AutomaticSize.None
-RecommendationList.CanvasSize = UDim2.new(0, 0, 0, 0)
 RecommendationList.ClipsDescendants = true
-RecommendationList.Active = true
 RecommendationList.ZIndex = 5
 RecommendationListLayout = Instance.new("UIListLayout", RecommendationList)
 RecommendationListLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -2001,7 +1999,6 @@ RecommendationPrevButton.Text = "<"
 RecommendationPrevButton.TextColor3 = Color3.fromRGB(222, 227, 245)
 RecommendationPrevButton.Font = Enum.Font.GothamBold
 RecommendationPrevButton.TextSize = IsMobile and 12 or 14
-RecommendationPrevButton.TextStrokeTransparency = 1
 RecommendationPrevButton.ZIndex = 10
 Instance.new("UICorner", RecommendationPrevButton).CornerRadius = UDim.new(1, 0)
 RecommendationPrevStroke = Instance.new("UIStroke", RecommendationPrevButton)
@@ -2019,7 +2016,6 @@ RecommendationNextButton.Text = ">"
 RecommendationNextButton.TextColor3 = Color3.fromRGB(222, 227, 245)
 RecommendationNextButton.Font = Enum.Font.GothamBold
 RecommendationNextButton.TextSize = IsMobile and 12 or 14
-RecommendationNextButton.TextStrokeTransparency = 1
 RecommendationNextButton.ZIndex = 10
 Instance.new("UICorner", RecommendationNextButton).CornerRadius = UDim.new(1, 0)
 RecommendationNextStroke = Instance.new("UIStroke", RecommendationNextButton)
@@ -2311,6 +2307,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
+CreateParagraph("v2.0.4 - Cleanup, Text & Recommendation Refinements", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Shortened update timestamps to compact labels such as Now, 5m ago, 6h ago, and 5d ago.\n• Improved Recommended for You rendering by removing unnecessary scrolling-frame overhead and unused recommendation helpers.\n• Reduced redundant recommendation UI work while preserving the PlaceId-based FOR YOU backbone and fallback behavior.\n• Removed unused single-purpose variables and stale recommendation helper code.\n• Removed code comments and cleaned the script structure without removing critical fallbacks.\n• Added additional UI cleanup and stability refinements.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -2375,8 +2372,6 @@ function _VH_BuildRecommendationState()
 				score = 1000
 				reasonType = "CURRENT"
 			else
-				-- The existing PlaceId-based FOR YOU system remains untouched above.
-				-- Smart recommendations are a separate layer and may include PlaceId 0 entries.
 				if topicOverlap > 0 then
 					score = score + math.min(topicOverlap * 32, 96)
 					reasonType = "TOPIC"
@@ -2453,10 +2448,6 @@ function _VH_BuildRecommendationState()
 	return candidates, currentCount
 end
 
-function _VH_GetRecommendationUpdatedText(timestamp)
-	return GetRelativeTime(timestamp)
-end
-
 function _VH_GetRecommendationShortReason(reason)
 	local text = tostring(reason or "")
 	if text == "Similar to your current game" then return "Similar game" end
@@ -2465,32 +2456,12 @@ function _VH_GetRecommendationShortReason(reason)
 	if text == "Similar to your favorites" then return "Similar favorites" end
 	if text == "Shares similar game details" then return "Similar" end
 	if text == "Featured in Velox Hub" then return "Featured" end
-	if text == "More games in Velox Hub" then return "Explore more" end
+	if text == "More games in Velox Hub" then return "Explore" end
 	if text == "No other recommendations found yet" then return "No matches" end
-
-	if text == "Updated just now" then return "Now" end
-	if text == "Updated yesterday" then return "1d ago" end
-	local amount, unit = string.match(text, "^Updated%s+(%d+)%s+(%a+)%s+ago$")
-	if amount and unit then
-		local compact = {
-			minute = "m", minutes = "m",
-			hour = "h", hours = "h",
-			day = "d", days = "d",
-			week = "w", weeks = "w",
-			month = "mo", months = "mo",
-			year = "y", years = "y",
-		}
-		local suffix = compact[unit]
-		if suffix then return amount .. suffix .. " ago" end
-	end
-	if string.sub(text, 1, 8) == "Updated " then return "Updated" end
+	if text == "Now" then return "Now" end
+	if string.match(text, "^%d+[mhdw] ago$") or string.match(text, "^%d+mo ago$") or string.match(text, "^%d+y ago$") then return text end
 	return "Explore"
 end
-
-function _VH_GetRecommendationReasonIcon(reason)
-	return ""
-end
-
 function _VH_RefreshRecommendationPanel(items, currentCount)
 	if not RecommendationPanel or not RecommendationPanel.Parent or not RecommendationList then return end
 
@@ -2552,7 +2523,6 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	local visibleCount = math.max(0, endIndex - startIndex + 1)
 	local visibleIndex = 0
 
-	-- Calculate card width from the actual viewport so no card is clipped on small screens.
 	local listWidth = RecommendationList.AbsoluteSize.X
 	if listWidth <= 0 then
 		listWidth = RecommendationPanel.AbsoluteSize.X - (IsMobile and 56 or 72)
@@ -2642,7 +2612,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			local reasonDotColor = Color3.fromRGB(129, 140, 248)
 			if reasonTextValue == "Related to your favorites" or reasonTextValue == "Similar to your favorites" then
 				reasonDotColor = Color3.fromRGB(250, 204, 21)
-			elseif string.sub(reasonTextValue, 1, 8) == "Updated " then
+			elseif reasonTextValue == "Now" or string.match(reasonTextValue, "^%d+[mhdw] ago$") or string.match(reasonTextValue, "^%d+mo ago$") or string.match(reasonTextValue, "^%d+y ago$") then
 				reasonDotColor = Color3.fromRGB(52, 211, 153)
 			elseif reasonTextValue == "Featured in Velox Hub" then
 				reasonDotColor = Color3.fromRGB(168, 85, 247)
@@ -2664,7 +2634,6 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
 			reasonLabel.ZIndex = 8
 
-			-- Keep recommendation cards lightweight: activation only, no per-card hover/input listener set.
 			RecommendationConnections[#RecommendationConnections + 1] = button.Activated:Connect(function()
 				if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
 				local offset = entry.Instance.AbsolutePosition.Y - ScriptsView.AbsolutePosition.Y + ScriptsView.CanvasPosition.Y - 10
@@ -2673,7 +2642,6 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 		end
 	end
 
-	RecommendationList.CanvasPosition = Vector2.new(0, 0)
 	local hasMultiplePages = RecommendationPageCount > 1
 	RecommendationPrevButton.Visible = hasMultiplePages and #RecommendationItems > 0
 	RecommendationNextButton.Visible = hasMultiplePages and #RecommendationItems > 0
@@ -3855,7 +3823,7 @@ _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() Set
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-RefreshCatalogButton = CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
 			ShowNotification("Catalog is already refreshing.", "Info")
