@@ -2793,7 +2793,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Cleanup, UI & Stability Fixes", "• Finalized Recommended for You spacing, scaling, and mobile touch spacing.\n• Added favorite-signal protection with bounded favorite influence and batched recommendation refreshes.\n• Improved default text contrast across secondary and muted UI elements.\n• Added and refined Script Details with Category, TagType, compatibility, favorites, Auto Execute state, and update information.\n• Refined the View Details control to match the Auto Execute button style and kept its tap animation.\n• Fixed Script Details header spacing and TagType badge positioning.\n• Redesigned the execution confirmation dialog to match the Velox Hub theme.\n• Kept normal script timestamps expanded while Recommended for You timestamps remain compact.\n• Removed obsolete hidden Script Details UI state and unnecessary recommendation UI variables.\n• Preserved the existing executor HTTP/compiler/GUI fallbacks and the PlaceId-based FOR YOU backbone.\n• Preserved critical fallback, cleanup, configuration, and recovery behavior.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Cleanup, UI & Stability Fixes", "• Finalized Recommended for You spacing, scaling, and mobile touch spacing.\n• Added favorite-signal protection with bounded favorite influence and batched recommendation refreshes.\n• Improved default text contrast across secondary and muted UI elements.\n• Added and refined Script Details with Category, TagType, compatibility, favorites, Auto Execute state, and update information.\n• Refined the View Details control to match the Auto Execute button style and kept its tap animation.\n• Fixed Script Details header spacing and TagType badge positioning.\n• Redesigned the execution confirmation dialog to match the Velox Hub theme.\n• Redesigned Auto Execute ON, OFF, and Wrong Game states for clearer status presentation.\n• Matched View Details press feedback with the same dark pressed state used by Auto Execute.\n• Kept normal script timestamps expanded while Recommended for You timestamps remain compact.\n• Removed obsolete hidden Script Details UI state and unnecessary recommendation UI variables.\n• Preserved the existing executor HTTP/compiler/GUI fallbacks and the PlaceId-based FOR YOU backbone.\n• Preserved critical fallback, cleanup, configuration, and recovery behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3476,13 +3476,20 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	autoExecBtn.Size = UDim2.new(0, IsMobile and 108 or 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
+	local autoExecStroke = Instance.new("UIStroke", autoExecBtn)
+	autoExecStroke.Color = Theme.Stroke
+	autoExecStroke.Transparency = 0.5
+	autoExecStroke.Thickness = 0.75
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
-	aeLbl.Size = UDim2.new(1, -34, 1, 0); aeLbl.Position = UDim2.new(0, 6, 0, 0); aeLbl.BackgroundTransparency = 1
+	aeLbl.Size = UDim2.new(1, -42, 1, 0); aeLbl.Position = UDim2.new(0, 8, 0, 0); aeLbl.BackgroundTransparency = 1
 	aeLbl.Text = "Auto Execute"; aeLbl.TextColor3 = Theme.TextPrimary
 	aeLbl.Font = Enum.Font.GothamBold; aeLbl.TextSize = 10; aeLbl.TextXAlignment = Enum.TextXAlignment.Left; aeLbl.ZIndex = 2
 	local aeState = Instance.new("Frame", autoExecBtn)
-	aeState.Size = UDim2.new(0, 24, 0, 14); aeState.Position = UDim2.new(1, -28, 0.5, -7); aeState.ZIndex = 2
-	Instance.new("UICorner", aeState).CornerRadius = UDim.new(0, 4)
+	aeState.Size = UDim2.new(0, 30, 0, 14); aeState.Position = UDim2.new(1, -34, 0.5, -7); aeState.ZIndex = 2
+	Instance.new("UICorner", aeState).CornerRadius = UDim.new(0, 5)
+	local aeStateStroke = Instance.new("UIStroke", aeState)
+	aeStateStroke.Transparency = 0.45
+	aeStateStroke.Thickness = 0.75
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
@@ -3505,8 +3512,8 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, detailsBtnStroke, detailsBtnStroke.Color, Theme.Accent, entryConnections)
+	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), autoExecStroke, autoExecStroke.Color, Theme.Accent, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), detailsBtnStroke, detailsBtnStroke.Color, Theme.Accent, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
@@ -3539,7 +3546,25 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
-		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
+		if not compatible then
+			aeState.Size = UDim2.new(0, 22, 0, 14)
+			aeState.Position = UDim2.new(1, -26, 0.5, -7)
+			aeState.BackgroundColor3 = Theme.Warning
+			aeStateStroke.Color = Theme.Warning
+			 aeStateTxt.TextColor3 = Color3.fromRGB(15, 18, 28)
+		elseif isON then
+			aeState.Size = UDim2.new(0, 30, 0, 14)
+			aeState.Position = UDim2.new(1, -34, 0.5, -7)
+			aeState.BackgroundColor3 = Theme.Success
+			aeStateStroke.Color = Theme.Success
+			aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+		else
+			aeState.Size = UDim2.new(0, 30, 0, 14)
+			aeState.Position = UDim2.new(1, -34, 0.5, -7)
+			aeState.BackgroundColor3 = Theme.ToggleOff
+			aeStateStroke.Color = Theme.ToggleOff
+			aeStateTxt.TextColor3 = Color3.fromRGB(226, 232, 240)
+		end
 	end
 	scriptEntry.SetRecommendation = function(enabled, reason, kind, score)
 		isRecommended = enabled == true
