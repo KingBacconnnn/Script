@@ -3522,7 +3522,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	detailsBtn.Text = "View Details"
 	detailsBtn.TextColor3 = Theme.TextPrimary
 	detailsBtn.Font = Enum.Font.GothamBold
-	detailsBtn.TextSize = IsMobile and 9 or 10
+	detailsBtn.TextSize = 8
 	detailsBtn.AutoButtonColor = false
 	detailsBtn.LayoutOrder = 2
 	detailsBtn.ZIndex = 2
