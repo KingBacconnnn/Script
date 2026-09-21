@@ -771,18 +771,51 @@ function GetRelativeTime(timestamp)
 	return tostring(years) .. "y ago"
 end
 function FormatLastUpdatedLabel(value)
+	local compact = nil
 	if type(value) == "number" or tonumber(value) then
-		return GetRelativeTime(value)
+		compact = GetRelativeTime(value)
+	else
+		local text = tostring(value or "")
+		text = string.gsub(text, "^%s*[Uu]pdated%s+", "")
+		text = string.gsub(text, "^%s*(.-)%s*$", "%1")
+		local n = string.match(text, "^(%d+)%s+minutes?%s+ago$")
+		if n then compact = n .. "m ago" end
+		if not compact then
+			n = string.match(text, "^(%d+)%s+hours?%s+ago$")
+			if n then compact = n .. "h ago" end
+		end
+		if not compact then
+			n = string.match(text, "^(%d+)%s+days?%s+ago$")
+			if n then compact = n .. "d ago" end
+		end
+		if not compact then
+			n = string.match(text, "^(%d+)%s+weeks?%s+ago$")
+			if n then compact = n .. "w ago" end
+		end
+		if not compact then
+			n = string.match(text, "^(%d+)%s+months?%s+ago$")
+			if n then compact = n .. "mo ago" end
+		end
+		if not compact then
+			n = string.match(text, "^(%d+)%s+years?%s+ago$")
+			if n then compact = n .. "y ago" end
+		end
+		if not compact and (text == "Now" or text == "now") then compact = "Now" end
+		if not compact then
+			local compactMatch = string.match(text, "^(%d+[mhdw])%s+ago$") or string.match(text, "^(%d+mo)%s+ago$") or string.match(text, "^(%d+y)%s+ago$")
+			if compactMatch then compact = compactMatch .. " ago" end
+		end
 	end
-	local text = tostring(value or "")
-	text = string.gsub(text, "^%s*[Uu]pdated%s+", "")
-	text = string.gsub(text, "^(%d+)%s+minutes?%s+ago$", "%1m ago")
-	text = string.gsub(text, "^(%d+)%s+hours?%s+ago$", "%1h ago")
-	text = string.gsub(text, "^(%d+)%s+days?%s+ago$", "%1d ago")
-	text = string.gsub(text, "^(%d+)%s+weeks?%s+ago$", "%1w ago")
-	text = string.gsub(text, "^(%d+)%s+months?%s+ago$", "%1mo ago")
-	text = string.gsub(text, "^(%d+)%s+years?%s+ago$", "%1y ago")
-	return text ~= "" and text or "Now"
+	compact = compact or "Now"
+	if compact == "Now" then return "Updated Now" end
+	local amount, shortUnit = string.match(compact, "^(%d+)(m|h|d|w|mo|y)%s+ago$")
+	if amount and shortUnit then
+		local unitNames = { m = "Minute", h = "Hour", d = "Day", w = "Week", mo = "Month", y = "Year" }
+		local unitName = unitNames[shortUnit] or "Time"
+		if tonumber(amount) ~= 1 then unitName = unitName .. "s" end
+		return "Updated " .. amount .. " " .. unitName .. " Ago"
+	end
+	return "Updated " .. compact
 end
 function GetSecureParent()
 	huiSuccess, huiTarget = pcall(function() return gethui() end)
@@ -1998,10 +2031,11 @@ RecommendationListLayout = Instance.new("UIListLayout", RecommendationList)
 RecommendationListLayout.FillDirection = Enum.FillDirection.Horizontal
 RecommendationListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 RecommendationListLayout.Padding = UDim.new(0, IsMobile and 7 or 8)
+RecommendationListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 RecommendationListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 RecommendationListPadding = Instance.new("UIPadding", RecommendationList)
-RecommendationListPadding.PaddingLeft = UDim.new(0, 5)
-RecommendationListPadding.PaddingRight = UDim.new(0, 5)
+RecommendationListPadding.PaddingLeft = UDim.new(0, 0)
+RecommendationListPadding.PaddingRight = UDim.new(0, 0)
 
 RecommendationPrevButton = Instance.new("TextButton", RecommendationPanel)
 RecommendationPrevButton.Size = UDim2.new(0, IsMobile and 24 or 28, 0, IsMobile and 24 or 28)
@@ -2321,7 +2355,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Standardized all script-card and recommendation timestamps to compact labels such as Now, 5m ago, 6h ago, and 5d ago.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.", ChangelogsView)
+CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Kept Recommended for You timestamps compact (for example 2h ago and 5d ago) while normal script cards use full Updated 2 Hours Ago style labels.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -2412,7 +2446,7 @@ function _VH_BuildRecommendationState()
 			end
 			local reason = _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap, topicOverlap, favoriteTopicOverlap, isRecent, tagType)
 			if reason == "Recently updated" then
-				reason = FormatLastUpdatedLabel(data.LastUpdated)
+				reason = GetRelativeTime(data.LastUpdated)
 			end
 			entry.RecommendationScore = score
 			entry.RecommendationReason = reason
@@ -2538,11 +2572,10 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	local visibleIndex = 0
 
 	local gap = IsMobile and 7 or 8
-	local sidePad = 10
 	local totalGaps = math.max(0, visibleCount - 1) * gap
 	local cardHeight = IsMobile and 64 or 72
 	local cardWidthScale = visibleCount > 0 and (1 / visibleCount) or 1
-	local cardWidthOffset = visibleCount > 0 and -((sidePad + totalGaps) / visibleCount) or 0
+	local cardWidthOffset = visibleCount > 0 and -(totalGaps / visibleCount) or 0
 
 	for index = startIndex, endIndex do
 		local item = allItems[index]
