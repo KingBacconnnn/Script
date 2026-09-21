@@ -895,47 +895,17 @@ ScreenGui.Parent = TargetParent
 function _VH_ApplyTextLayoutGuard(obj)
 	if not obj or not obj.Parent then return end
 	if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
-	if obj.TextScaled or obj:GetAttribute("VeloxTextGuardBound") then return end
-	if (tonumber(obj.TextSize) or 0) <= 0 then return end
-	obj:SetAttribute("VeloxTextGuardBound", true)
-	obj:SetAttribute("VeloxBaseTextSize", tonumber(obj.TextSize) or 1)
-	obj:SetAttribute("VeloxTextGuardBusy", false)
-	local function apply()
-		if isDestroying or not obj.Parent or obj:GetAttribute("VeloxTextGuardBusy") then return end
-		if obj.Text == nil or obj.Text == "" then return end
-		local base = tonumber(obj:GetAttribute("VeloxBaseTextSize")) or tonumber(obj.TextSize) or 1
-		local bounds = obj.TextBounds
-		local width, height = obj.AbsoluteSize.X, obj.AbsoluteSize.Y
-		if base <= 0 or width <= 0 or height <= 0 or bounds.X <= 0 or bounds.Y <= 0 then return end
-		local auto = obj.AutomaticSize
-		local fit = 1
-		if auto ~= Enum.AutomaticSize.X and auto ~= Enum.AutomaticSize.XY then
-			local availableWidth = math.max(1, width - 4)
-			if bounds.X > availableWidth then fit = math.min(fit, availableWidth / bounds.X) end
-		end
-		if auto ~= Enum.AutomaticSize.Y and auto ~= Enum.AutomaticSize.XY then
-			local availableHeight = math.max(1, height - 2)
-			if bounds.Y > availableHeight then fit = math.min(fit, availableHeight / bounds.Y) end
-		end
-		local target = math.floor(base * math.min(1, fit) + 0.5)
-		local minimum = math.max(5, math.floor(base * 0.45 + 0.5))
-		if target < minimum then target = minimum end
-		if target > base then target = base end
-		if math.abs((tonumber(obj.TextSize) or 0) - target) < 0.5 then return end
-		obj:SetAttribute("VeloxTextGuardBusy", true)
-		obj.TextSize = target
-		obj:SetAttribute("VeloxTextGuardBusy", false)
+	if obj:GetAttribute("VeloxTextConstraintBound") then return end
+	local base = tonumber(obj.TextSize) or 0
+	if base <= 0 then return end
+	if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
+		local constraint = Instance.new("UITextSizeConstraint")
+		constraint.Name = "VeloxTextSizeConstraint"
+		constraint.MinTextSize = math.min(base, math.max(5, math.floor(base * 0.7 + 0.5)))
+		constraint.MaxTextSize = base
+		constraint.Parent = obj
 	end
-	apply()
-	_VH_RegConn(obj:GetPropertyChangedSignal("TextBounds"):Connect(apply))
-	_VH_RegConn(obj:GetPropertyChangedSignal("AbsoluteSize"):Connect(apply))
-	_VH_RegConn(obj:GetPropertyChangedSignal("Text"):Connect(apply))
-	_VH_RegConn(obj:GetPropertyChangedSignal("TextSize"):Connect(function()
-		if not obj:GetAttribute("VeloxTextGuardBusy") then task.defer(apply) end
-	end))
-	task.defer(function()
-		if obj and obj.Parent and not isDestroying then apply() end
-	end)
+	obj:SetAttribute("VeloxTextConstraintBound", true)
 end
 function _VH_DisableTextOutline(object)
 	if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
@@ -2846,7 +2816,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Stability, Compatibility & Cleanup", "• Hardened viewport sizing and positioning so resized or small screens cannot create an invalid clamp range.\n• Removed the previous helper-based viewport clamp path and kept the protection inline to avoid unnecessary function/local-register overhead.\n• Guarded optional SearchBox properties so unsupported GUI properties cannot stop hub initialization.\n• Added adaptive text-layout protection that measures rendered TextBounds and keeps fixed UI text inside its available bounds when Roblox text-size settings change.\n• Preserved automatic-size labels and wrapped descriptions while protecting fixed-height buttons, badges, header labels, and status elements from text overlap.\n• Recalculates text fitting when text, bounds, or UI dimensions change, including saved UI Scale changes and dynamically created catalog cards.\n• Kept the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, and recovery fallbacks intact.\n• Added the optional http.request request fallback without replacing existing executor request paths.\n• Replaced the math.round dependency with an equivalent math.floor calculation for broader Luau/executor compatibility.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI scale, and catalog refresh behavior.\n• Final source cleanup contains no Lua comment lines and avoids unnecessary new locals in the main UI functions.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Stability, Compatibility & Cleanup", "• Hardened viewport sizing and positioning so resized or small screens cannot create an invalid clamp range.\n• Removed the helper-based viewport clamp path and kept the protection inline to avoid unnecessary function/local-register overhead.\n• Guarded optional SearchBox properties so unsupported GUI properties cannot stop hub initialization.\n• Replaced the previous live TextBounds fitting system with native UITextSizeConstraint protection so Roblox Preferred Text Size cannot expand fixed UI text beyond the designed maximum.\n• Removed TextBounds, TextSize, and AbsoluteSize layout listeners that could continuously trigger while Roblox recalculated accessibility text sizing and cause freezes.\n• Kept AutomaticSize, wrapped descriptions, card layouts, buttons, badges, headers, status chips, and text alignment behavior unchanged.\n• Applied the text-size constraint once to existing and dynamically created text objects with no per-frame polling or recursive text updates.\n• Kept the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, and recovery fallbacks intact.\n• Added the optional http.request request fallback without replacing existing executor request paths.\n• Replaced the math.round dependency with an equivalent math.floor calculation for broader Luau/executor compatibility.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI scale, and catalog refresh behavior.\n• Final source cleanup contains no Lua comment lines and avoids unnecessary new locals in the main UI functions.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
