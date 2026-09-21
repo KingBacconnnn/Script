@@ -14,10 +14,6 @@ function _VH_GenerateRandomString(len)
 	end
 	return str
 end
-function _VH_SafeClamp(value, minValue, maxValue)
-	if maxValue < minValue then maxValue = minValue end
-	return math.clamp(value, minValue, maxValue)
-end
 _G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
@@ -1002,8 +998,15 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
 				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
 				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-				targetX = _VH_SafeClamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
-				targetY = _VH_SafeClamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
+local function SafeViewportClamp(value, minValue, maxValue)
+	if maxValue < minValue then
+		maxValue = minValue
+	end
+	return math.clamp(value, minValue, maxValue)
+end
+
+				targetX = SafeViewportClamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
+				targetY = SafeViewportClamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -1057,8 +1060,8 @@ function ApplyPanelUIScale(scaleValue)
 		halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-		currentX = _VH_SafeClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-		currentY = _VH_SafeClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+		currentX = SafeViewportClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+		currentY = SafeViewportClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 	end)
 end
@@ -2324,10 +2327,7 @@ SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 
 SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(203, 213, 225); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-SearchInput.ClearTextOnFocus = false
-pcall(function() SearchInput.TextEditable = true end)
-pcall(function() SearchInput.Interactable = true end)
-SearchInput.ZIndex = 52
+SearchInput.ClearTextOnFocus = false; SearchInput.TextEditable = true; SearchInput.Interactable = true; SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
 ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
@@ -2557,8 +2557,8 @@ function BindCamera()
 					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
 					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
 				end
-				targetX = _VH_SafeClamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = _VH_SafeClamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				targetX = SafeViewportClamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				targetY = SafeViewportClamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -2575,8 +2575,8 @@ function RefreshViewportLayout()
 	halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 	currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 	currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-	currentX = _VH_SafeClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-	currentY = _VH_SafeClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+	currentX = SafeViewportClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+	currentY = SafeViewportClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 end
 function BindViewportSizeChanged(camera)
@@ -2714,7 +2714,7 @@ _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 		camera = workspace.CurrentCamera
 		viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
 		dropWidth, dropHeight = 190, 210
-		posX = math.clamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
+		posX = SafeViewportClamp(absPos.X + absSize.X - dropWidth, 10, viewportSize.X - dropWidth - 10)
 		posY = absPos.Y + absSize.Y + 4
 		if posY + dropHeight > viewportSize.Y - 10 then
 			posY = absPos.Y - dropHeight - 4
@@ -3499,7 +3499,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateStroke.Thickness = 0.75
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
-	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
+	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.TextXAlignment = Enum.TextXAlignment.Center; aeStateTxt.TextYAlignment = Enum.TextYAlignment.Center; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
 	detailsBtn.Size = UDim2.new(0, IsMobile and 84 or 94, 0, 22)
 	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
@@ -3554,11 +3554,11 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		if not compatible then
-			aeState.Size = UDim2.new(0, 22, 0, 14)
-			aeState.Position = UDim2.new(1, -26, 0.5, -7)
+			aeState.Size = UDim2.new(0, 30, 0, 14)
+			aeState.Position = UDim2.new(1, -34, 0.5, -7)
 			aeState.BackgroundColor3 = Theme.Warning
 			aeStateStroke.Color = Theme.Warning
-			 aeStateTxt.TextColor3 = Color3.fromRGB(15, 18, 28)
+			aeStateTxt.TextColor3 = Color3.fromRGB(15, 18, 28)
 		elseif isON then
 			aeState.Size = UDim2.new(0, 30, 0, 14)
 			aeState.Position = UDim2.new(1, -34, 0.5, -7)
