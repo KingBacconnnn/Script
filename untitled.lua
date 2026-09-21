@@ -3492,7 +3492,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateStroke.Thickness = 0.75
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
-	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; pcall(function() aeStateTxt.TextXAlignment = Enum.TextXAlignment.Center end); pcall(function() aeStateTxt.TextYAlignment = Enum.TextYAlignment.Center end); aeStateTxt.ZIndex = 2
+	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
 	detailsBtn.Size = UDim2.new(0, IsMobile and 84 or 94, 0, 22)
 	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
@@ -3551,7 +3551,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			aeState.Position = UDim2.new(1, -34, 0.5, -7)
 			aeState.BackgroundColor3 = Theme.Warning
 			aeStateStroke.Color = Theme.Warning
-			aeStateTxt.TextColor3 = Color3.fromRGB(15, 18, 28)
+			 aeStateTxt.TextColor3 = Color3.fromRGB(15, 18, 28)
 		elseif isON then
 			aeState.Size = UDim2.new(0, 30, 0, 14)
 			aeState.Position = UDim2.new(1, -34, 0.5, -7)
