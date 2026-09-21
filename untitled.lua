@@ -606,7 +606,8 @@ function _VH_GetRecommendationTokenSet(data)
 	local set = {}
 	local stopWords = {
 		"the", "and", "for", "with", "from", "this", "that", "your", "you", "are", "can", "into", "more",
-		"script", "scripts", "roblox", "game", "games", "play", "playing", "player", "players", "auto", "more"
+		"script", "scripts", "roblox", "game", "games", "play", "playing", "player", "players", "auto", "beta",
+		"currently", "features", "feature", "use", "using", "while", "through", "with", "convenient", "progress"
 	}
 	local function addText(value)
 		if type(value) ~= "string" then return end
@@ -629,6 +630,58 @@ function _VH_GetRecommendationTokenSet(data)
 	return set
 end
 
+function _VH_GetRecommendationTopicSet(data)
+	local topics = {}
+	local textParts = {}
+	local function add(value)
+		if type(value) == "string" and value ~= "" then textParts[#textParts + 1] = string.lower(value) end
+	end
+	add(data and data.Name)
+	add(data and data.Description)
+	add(data and data.Category)
+	add(data and data.Author)
+	add(data and data.Tags)
+	if data and type(data.Tags) == "table" then
+		for _, tag in ipairs(data.Tags) do add(tag) end
+	end
+	local textValue = table.concat(textParts, " ")
+	local topicKeywords = {
+		combat = {"murder", "mystery", "rivals", "arsenal", "shooter", "shooting", "gun", "pvp", "combat", "sword", "katana", "hunter", "fight", "battle", "enemy"},
+		eggs = {"egg", "eggs", "hatch", "hatching", "steal an egg", "lucky egg"},
+		brainrot = {"brainrot", "brainrots"},
+		anime = {"anime"},
+		rng = {"rng", "luck", "lucky", "dice", "roll", "random"},
+		obby = {"obby", "escape", "wall hop", "moonwalk", "keyboard escape", "backflip", "bottle flip", "web swing", "high jump", "jump crunch", "jump for"},
+		speed = {"speed", "fast", "run", "running", "moonwalk", "high jump", "jump"},
+		farming = {"farm", "farming", "grow", "garden", "collect", "collection", "bucket", "chicken farm", "tree", "axe", "pickaxe"},
+		clicker = {"click", "clicker", "tap", "money", "followers", "per click", "per jump"},
+		soccer = {"soccer", "football", "player squad", "squad"},
+		tycoon = {"tycoon", "city", "build a", "building", "base", "party"},
+		asmr = {"asmr"},
+		paint = {"paint", "painting", "seek"},
+		animals = {"animal", "animals", "chicken", "dino", "dinosaur", "crab", "fish"},
+		crafting = {"craft", "crafting", "unbox", "loot", "card"},
+	}
+	for topic, keywords in pairs(topicKeywords) do
+		for _, keyword in ipairs(keywords) do
+			if string.find(textValue, keyword, 1, true) then
+				topics[topic] = true
+				break
+			end
+		end
+	end
+	return topics
+end
+
+function _VH_CountTopicOverlap(a, b)
+	if type(a) ~= "table" or type(b) ~= "table" then return 0 end
+	local count = 0
+	for topic in pairs(a) do
+		if b[topic] then count = count + 1 end
+	end
+	return count
+end
+
 function _VH_CountTokenOverlap(a, b)
 	if type(a) ~= "table" or type(b) ~= "table" then return 0 end
 	local count = 0
@@ -643,15 +696,19 @@ function _VH_GetRecommendationContext(entries)
 	local favoriteSet = {}
 	local currentCategories = {}
 	local currentTags = {}
+	local currentTopics = {}
+	local favoriteTopics = {}
 	local currentCount = 0
 	for _, entry in ipairs(entries or {}) do
 		local data = entry and entry.Data or entry
 		if type(data) == "table" then
 			local placeId = tonumber(data.PlaceId) or 0
 			local tokens = _VH_GetRecommendationTokenSet(data)
+			local topics = _VH_GetRecommendationTopicSet(data)
 			if placeId ~= 0 and placeId == PlaceId then
 				currentCount = currentCount + 1
 				for token in pairs(tokens) do currentSet[token] = true end
+				for topic in pairs(topics) do currentTopics[topic] = true end
 				local category = type(data.Category) == "string" and string.lower(string.gsub(data.Category, "^%s*(.-)%s*$", "%1")) or ""
 				if category ~= "" then currentCategories[category] = true end
 				for _, tag in ipairs(_VH_NormalizeRecommendationList(data.Tags)) do currentTags[tag] = true end
@@ -659,10 +716,11 @@ function _VH_GetRecommendationContext(entries)
 			local id = tostring(data.Id or StableScriptId(data) or "")
 			if id ~= "" and SavedData.Favorites[id] then
 				for token in pairs(tokens) do favoriteSet[token] = true end
+				for topic in pairs(topics) do favoriteTopics[topic] = true end
 			end
 		end
 	end
-	return currentSet, favoriteSet, currentCategories, currentTags, currentCount
+	return currentSet, favoriteSet, currentCategories, currentTags, currentTopics, favoriteTopics, currentCount
 end
 function GetOrCreateCardStroke(card)
 	if not card or not card:IsA("GuiObject") then return nil end
@@ -1798,7 +1856,7 @@ SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color =
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
 RecommendationPanel = Instance.new("Frame", ScriptsView)
-RecommendationPanel.Name = "SmartRecommendationPanel"
+RecommendationPanel.Name = "RecommendedForYouPanel"
 RecommendationPanel.Size = UDim2.new(1, 0, 0, IsMobile and 116 or 104)
 RecommendationPanel.BackgroundColor3 = Color3.fromRGB(24, 31, 52)
 RecommendationPanel.BorderSizePixel = 0
@@ -2123,7 +2181,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Smart Recommendations that suggest other games using catalog metadata, favorites, tags, and recent updates.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -2143,19 +2201,21 @@ function IsRecommendedForCurrentPlace(data)
 	return PlaceId ~= 0 and allowedPlaceId == PlaceId
 end
 
-function _VH_GetRecommendationReason(reasonType, overlapCount, hasFavoriteSignal, isRecent)
+function _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap, topicOverlap, favoriteTopicOverlap, isRecent, tagType)
 	if reasonType == "CURRENT" then return "Matches your current game" end
-	if reasonType == "CATEGORY" then return "Related to your current game" end
-	if hasFavoriteSignal then return "Similar to your favorites" end
-	if overlapCount and overlapCount > 0 then return "Shares similar game tags" end
+	if topicOverlap and topicOverlap > 0 then return "Similar to your current game" end
+	if favoriteTopicOverlap and favoriteTopicOverlap > 0 then return "Related to your favorites" end
+	if favoriteOverlap and favoriteOverlap > 0 then return "Similar to your favorites" end
+	if overlapCount and overlapCount > 0 then return "Shares similar game details" end
+	if tagType == "HOT" or tagType == "FEATURED" then return "Featured in Velox Hub" end
 	if isRecent then return "Recently updated" end
-	return "Popular in the catalog"
+	return "More games in Velox Hub"
 end
 
 function _VH_BuildRecommendationState()
 	RecommendationGeneration = RecommendationGeneration + 1
 	local generation = RecommendationGeneration
-	local currentSet, favoriteSet, currentCategories, currentTags, currentCount = _VH_GetRecommendationContext(RegisteredScripts)
+	local currentSet, favoriteSet, currentCategories, currentTags, currentTopics, favoriteTopics, currentCount = _VH_GetRecommendationContext(RegisteredScripts)
 	local candidates = {}
 	local selected = {}
 	local selectedPlaces = {}
@@ -2170,69 +2230,80 @@ function _VH_BuildRecommendationState()
 			local samePlace = PlaceId ~= 0 and placeId ~= 0 and placeId == PlaceId
 			local score = 0
 			local reasonType = "FALLBACK"
-			local overlapCount = 0
-			local favoriteOverlap = 0
-			local categoryMatch = false
+			local tokens = _VH_GetRecommendationTokenSet(data)
+			local topics = _VH_GetRecommendationTopicSet(data)
+			local overlapCount = _VH_CountTokenOverlap(tokens, currentSet)
+			local favoriteOverlap = _VH_CountTokenOverlap(tokens, favoriteSet)
+			local topicOverlap = _VH_CountTopicOverlap(topics, currentTopics)
+			local favoriteTopicOverlap = _VH_CountTopicOverlap(topics, favoriteTopics)
+			local category = type(data.Category) == "string" and string.lower(string.gsub(data.Category, "^%s*(.-)%s*$", "%1")) or ""
+			local categoryMatch = category ~= "" and currentCategories[category] == true
 			local isRecent = false
+			local tagType = NormalizeTagType(data.TagType)
+
 			if samePlace then
 				score = 1000
 				reasonType = "CURRENT"
 			else
-				local tokens = _VH_GetRecommendationTokenSet(data)
-				overlapCount = _VH_CountTokenOverlap(tokens, currentSet)
-				favoriteOverlap = _VH_CountTokenOverlap(tokens, favoriteSet)
-				local category = type(data.Category) == "string" and string.lower(string.gsub(data.Category, "^%s*(.-)%s*$", "%1")) or ""
-				categoryMatch = category ~= "" and currentCategories[category] == true
-				if categoryMatch then score = score + 35; reasonType = "CATEGORY" end
-				if overlapCount > 0 then score = score + math.min(overlapCount * 10, 60) end
-				if favoriteOverlap > 0 then score = score + math.min(favoriteOverlap * 7, 35) end
-				local tags = _VH_NormalizeRecommendationList(data.Tags)
-				for _, tag in ipairs(tags) do
-					if currentTags[tag] then score = score + 12; break end
+				-- The existing PlaceId-based FOR YOU system remains untouched above.
+				-- Smart recommendations are a separate layer and may include PlaceId 0 entries.
+				if topicOverlap > 0 then
+					score = score + math.min(topicOverlap * 32, 96)
+					reasonType = "TOPIC"
 				end
+				if categoryMatch then score = score + 28; reasonType = reasonType == "FALLBACK" and "CATEGORY" or reasonType end
+				if overlapCount > 0 then score = score + math.min(overlapCount * 5, 35) end
+				if favoriteTopicOverlap > 0 then score = score + math.min(favoriteTopicOverlap * 18, 36); if reasonType == "FALLBACK" then reasonType = "FAVORITE_TOPIC" end end
+				if favoriteOverlap > 0 then score = score + math.min(favoriteOverlap * 4, 24); if reasonType == "FALLBACK" then reasonType = "FAVORITE" end end
+				local tags = _VH_NormalizeRecommendationList(data.Tags)
+				local matchingTags = 0
+				for _, tag in ipairs(tags) do
+					if currentTags[tag] then matchingTags = matchingTags + 1 end
+				end
+				if matchingTags > 0 then score = score + math.min(matchingTags * 12, 24) end
 				local age = now - GetSafeTimestamp(data.LastUpdated)
-				if age >= 0 and age <= 7 * 86400 then score = score + 10; isRecent = true end
-				score = score + math.max(0, (NormalizeTagType(data.TagType) == "HOT" and 8 or 0))
-				score = score + math.max(0, (NormalizeTagType(data.TagType) == "FEATURED" and 7 or 0))
-				if placeId ~= 0 then score = score + 3 end
+				if age >= 0 and age <= 7 * 86400 then score = score + 12; isRecent = true
+				elseif age > 7 * 86400 and age <= 30 * 86400 then score = score + 5; isRecent = true end
+				if tagType == "HOT" then score = score + 10
+				elseif tagType == "FEATURED" then score = score + 9
+				elseif tagType == "UPDATED" then score = score + 7
+				elseif tagType == "NEW" then score = score + 6 end
+				if placeId ~= 0 then score = score + 2 end
+				if score <= 0 then score = 1 end
 			end
-			local reason = _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap > 0, isRecent)
+			local reason = _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap, topicOverlap, favoriteTopicOverlap, isRecent, tagType)
 			entry.RecommendationScore = score
 			entry.RecommendationReason = reason
 			entry.RecommendationType = samePlace and "CURRENT" or "OTHER"
 			entry.Recommended = samePlace
-			if not samePlace and placeId ~= 0 then
-				otherCandidates[#otherCandidates + 1] = { Entry = entry, Score = score, PlaceId = placeId, Reason = reason }
+			if not samePlace then
+				otherCandidates[#otherCandidates + 1] = {
+					Entry = entry,
+					Score = score,
+					PlaceId = placeId,
+					Reason = reason,
+					TopicOverlap = topicOverlap,
+					FavoriteTopicOverlap = favoriteTopicOverlap,
+					LastUpdated = GetSafeTimestamp(data.LastUpdated),
+				}
 			end
 		end
 	end
 
 	table.sort(otherCandidates, function(a, b)
 		if a.Score ~= b.Score then return a.Score > b.Score end
-		if a.Entry.LastUpdatedNumber ~= b.Entry.LastUpdatedNumber then return a.Entry.LastUpdatedNumber > b.Entry.LastUpdatedNumber end
+		if a.TopicOverlap ~= b.TopicOverlap then return a.TopicOverlap > b.TopicOverlap end
+		if a.FavoriteTopicOverlap ~= b.FavoriteTopicOverlap then return a.FavoriteTopicOverlap > b.FavoriteTopicOverlap end
+		if a.LastUpdated ~= b.LastUpdated then return a.LastUpdated > b.LastUpdated end
 		return a.Entry.SearchTitle < b.Entry.SearchTitle
 	end)
 
 	for _, candidate in ipairs(otherCandidates) do
-		if #selected < 6 and not selectedPlaces[candidate.PlaceId] then
-			selectedPlaces[candidate.PlaceId] = true
+		if #selected < 6 and (candidate.PlaceId == 0 or not selectedPlaces[candidate.PlaceId]) then
+			if candidate.PlaceId ~= 0 then selectedPlaces[candidate.PlaceId] = true end
 			selected[#selected + 1] = candidate
 		end
 		if #selected >= 6 then break end
-	end
-	
-	-- Testing-phase fallback: make sure the user can discover other games
-	-- even when the catalog has no tags/category data yet.
-	if #selected < 3 then
-		for _, candidate in ipairs(otherCandidates) do
-			if #selected >= 3 then break end
-			if not selectedPlaces[candidate.PlaceId] then
-				selectedPlaces[candidate.PlaceId] = true
-				candidate.Score = math.max(candidate.Score, 1)
-				candidate.Reason = candidate.Reason == "Popular in the catalog" and "More games in Velox Hub" or candidate.Reason
-				selected[#selected + 1] = candidate
-			end
-		end
 	end
 
 	for index, candidate in ipairs(selected) do
