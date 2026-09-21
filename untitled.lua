@@ -51,6 +51,8 @@ protectgui = type(protectgui) == "function" and protectgui or ((type(syn) == "ta
 exec_request = nil
 if type(request) == "function" then
 	exec_request = request
+elseif type(request) == "table" and type(request.request) == "function" then
+	exec_request = request.request
 elseif type(http_request) == "function" then
 	exec_request = http_request
 elseif type(http) == "table" and type(http.request) == "function" then
@@ -2221,7 +2223,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.4 BETA | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.4 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -2800,7 +2802,7 @@ function CreateParagraph(title, desc, parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover
 	Instance.new("UICorner", block).CornerRadius = UDim.new(0, 8)
-	blockStroke = Instance.new("UIStroke", block); blockStroke.Color = Color3.fromRGB(33, 43, 61)
+	Instance.new("UIStroke", block).Color = Color3.fromRGB(33, 43, 61)
 	pad = Instance.new("UIPadding", block)
 	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	lay = Instance.new("UIListLayout", block)
@@ -2816,7 +2818,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Stability, Compatibility & Cleanup", "• Hardened viewport sizing and positioning so resized or small screens cannot create an invalid clamp range.\n• Removed the helper-based viewport clamp path and kept the protection inline to avoid unnecessary function/local-register overhead.\n• Guarded optional SearchBox properties so unsupported GUI properties cannot stop hub initialization.\n• Replaced the previous live TextBounds fitting system with native UITextSizeConstraint protection so Roblox Preferred Text Size cannot expand fixed UI text beyond the designed maximum.\n• Removed TextBounds, TextSize, and AbsoluteSize layout listeners that could continuously trigger while Roblox recalculated accessibility text sizing and cause freezes.\n• Kept AutomaticSize, wrapped descriptions, card layouts, buttons, badges, headers, status chips, and text alignment behavior unchanged.\n• Applied the text-size constraint once to existing and dynamically created text objects with no per-frame polling or recursive text updates.\n• Kept the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, and recovery fallbacks intact.\n• Added the optional http.request request fallback without replacing existing executor request paths.\n• Replaced the math.round dependency with an equivalent math.floor calculation for broader Luau/executor compatibility.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI scale, and catalog refresh behavior.\n• Final source cleanup contains no Lua comment lines and avoids unnecessary new locals in the main UI functions.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Clean, Stability & Compatibility", "• Hardened viewport positioning so small screens and resized windows cannot create invalid clamp ranges.\n• Replaced the previous live text-fitting loop with native UITextSizeConstraint protection so Roblox text-size changes cannot continuously resize the hub or freeze it.\n• Kept text-size protection bounded to each text object's designed size and applied it once to existing and dynamically created text objects.\n• Matched View Details text size to the Auto Execute ON, OFF, and Wrong Game state text while leaving the other action buttons unchanged.\n• Guarded optional SearchBox properties so unsupported properties cannot stop hub initialization.\n• Preserved the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, recovery, and executor request fallbacks, with an additional request.request compatibility path.\n• Kept loadstring/load compiler fallback behavior unchanged.\n• Removed unused catalog and recommendation fields and an unused UIStroke variable without changing their visible behavior.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI Scale, catalog refresh, and recovery behavior.\n• Removed Lua comments and avoided introducing unnecessary locals or per-frame text calculations.\n• Final source cleanup keeps the existing compatibility architecture intact; executors that do not expose required Roblox/executor APIs will continue to use the built-in fallbacks or show a controlled compatibility message.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -2922,7 +2924,6 @@ function _VH_BuildRecommendationState()
 					PlaceId = placeId,
 					Reason = reason,
 					TopicOverlap = topicOverlap,
-					FavoriteTopicOverlap = favoriteTopicOverlap,
 					LastUpdated = GetSafeTimestamp(data.LastUpdated),
 				}
 			end
@@ -3839,8 +3840,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 							PlaceId = placeId,
 							Category = type(entry.Category) == "string" and entry.Category or "",
 							Author = type(entry.Author) == "string" and entry.Author or "",
-							Tags = _VH_NormalizeRecommendationList(entry.Tags),
-							Source = rawUrl:match("^https?://([^/]+)") or ""
+							Tags = _VH_NormalizeRecommendationList(entry.Tags)
 						}
 					elseif id and seenIds[id] then
 						validationIssueCount = validationIssueCount + 1
