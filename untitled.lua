@@ -1769,6 +1769,20 @@ ScriptDetailsBadgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
 ScriptDetailsBadgeText.Font = Enum.Font.GothamBold
 ScriptDetailsBadgeText.TextSize = 8
 ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
+ScriptDetailsTagBadge = Instance.new("Frame", ScriptDetailsHeader)
+ScriptDetailsTagBadge.Size = UDim2.new(0, IsMobile and 84 or 92, 0, 20)
+ScriptDetailsTagBadge.Position = UDim2.new(0, IsMobile and 164 or 182, 0, IsMobile and 55 or 58)
+ScriptDetailsTagBadge.BackgroundColor3 = Color3.fromRGB(50, 62, 82)
+ScriptDetailsTagBadge.BorderSizePixel = 0
+ScriptDetailsTagBadge.Visible = true
+Instance.new("UICorner", ScriptDetailsTagBadge).CornerRadius = UDim.new(0, 7)
+ScriptDetailsTagBadgeText = Instance.new("TextLabel", ScriptDetailsTagBadge)
+ScriptDetailsTagBadgeText.Size = UDim2.new(1, 0, 1, 0)
+ScriptDetailsTagBadgeText.BackgroundTransparency = 1
+ScriptDetailsTagBadgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ScriptDetailsTagBadgeText.Font = Enum.Font.GothamBold
+ScriptDetailsTagBadgeText.TextSize = 8
+ScriptDetailsTagBadgeText.TextXAlignment = Enum.TextXAlignment.Center
 ScriptDetailsQuickInfo = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsQuickInfo.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, 18)
 ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 74 or 78)
@@ -1948,9 +1962,12 @@ function _VH_OpenScriptDetails(data, entry)
 	ScriptDetailsBadge.BackgroundColor3 = recommendationKind == "SMART" and Color3.fromRGB(79, 70, 229) or Color3.fromRGB(67, 56, 202)
 	local categoryText = type(data.Category) == "string" and data.Category ~= "" and data.Category or "General"
 	local quickStatus = NormalizeTagType(data.TagType)
+	ScriptDetailsTagBadgeText.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
+	local tagBadgeConfig = TagTypeConfig[quickStatus] or TagTypeConfig.NONE
+	ScriptDetailsTagBadge.BackgroundColor3 = tagBadgeConfig.BadgeColor
 	ScriptDetailsQuickCategory.Text = categoryText
 	ScriptDetailsQuickStatus.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
-	ScriptDetailsQuickStatus.BackgroundColor3 = quickStatus == "UPDATED" and Theme.Success or (quickStatus == "HOT" and Theme.Error or (quickStatus == "FEATURED" and Theme.System or Color3.fromRGB(39, 64, 88)))
+	ScriptDetailsQuickStatus.BackgroundColor3 = tagBadgeConfig.BadgeColor
 	ScriptDetailsQuickInfo.Visible = false
 	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
 	_VH_ClearDetailsMetadata()
@@ -3392,7 +3409,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 108 or 120, 0, 22)
+	detailsBtn.Size = UDim2.new(0, IsMobile and 96 or 108, 0, 22)
 	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
 	detailsBtn.Text = "View Details"
 	detailsBtn.TextColor3 = Theme.TextPrimary
@@ -3402,13 +3419,16 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	detailsBtn.LayoutOrder = 2
 	detailsBtn.ZIndex = 2
 	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
-	local detailsBtnStroke = nil
+	local detailsBtnStroke = Instance.new("UIStroke", detailsBtn)
+	detailsBtnStroke.Color = Theme.Stroke
+	detailsBtnStroke.Transparency = 0.45
+	detailsBtnStroke.Thickness = 0.75
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, nil, nil, nil, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, detailsBtnStroke, detailsBtnStroke.Color, Theme.Accent, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
