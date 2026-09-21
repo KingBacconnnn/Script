@@ -14,6 +14,10 @@ function _VH_GenerateRandomString(len)
 	end
 	return str
 end
+function _VH_SafeClamp(value, minValue, maxValue)
+	if maxValue < minValue then maxValue = minValue end
+	return math.clamp(value, minValue, maxValue)
+end
 _G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
@@ -998,8 +1002,8 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
 				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
 				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-				targetX = math.clamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
-				targetY = math.clamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
+				targetX = _VH_SafeClamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
+				targetY = _VH_SafeClamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -1053,8 +1057,8 @@ function ApplyPanelUIScale(scaleValue)
 		halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-		currentX = math.clamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-		currentY = math.clamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+		currentX = _VH_SafeClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+		currentY = _VH_SafeClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 	end)
 end
@@ -2553,8 +2557,8 @@ function BindCamera()
 					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
 					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
 				end
-				targetX = math.clamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = math.clamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				targetX = _VH_SafeClamp(currentOffsetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				targetY = _VH_SafeClamp(currentOffsetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
@@ -2571,8 +2575,8 @@ function RefreshViewportLayout()
 	halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 	currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 	currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-	currentX = math.clamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-	currentY = math.clamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+	currentX = _VH_SafeClamp(currentX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+	currentY = _VH_SafeClamp(currentY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 end
 function BindViewportSizeChanged(camera)
