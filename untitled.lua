@@ -1728,7 +1728,7 @@ Instance.new("UICorner", ScriptDetailsAccent).CornerRadius = UDim.new(1, 0)
 ScriptDetailsUIScale = Instance.new("UIScale", ScriptDetailsBox)
 ScriptDetailsUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 ScriptDetailsHeader = Instance.new("Frame", ScriptDetailsBox)
-ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 102 or 108)
+ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 94 or 100)
 ScriptDetailsHeader.Position = UDim2.new(0, 14, 0, 20)
 ScriptDetailsHeader.BackgroundTransparency = 1
 ScriptDetailsImage = Instance.new("ImageLabel", ScriptDetailsHeader)
@@ -1743,7 +1743,7 @@ ScriptDetailsImageStroke.Color = Theme.Stroke
 ScriptDetailsImageStroke.Transparency = 0.15
 ScriptDetailsImageStroke.Thickness = 1
 ScriptDetailsName = Instance.new("TextLabel", ScriptDetailsHeader)
-ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, IsMobile and 30 or 34)
+ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, IsMobile and 34 or 40)
 ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0.5, 0)
 ScriptDetailsName.AnchorPoint = Vector2.new(0, 0.5)
 ScriptDetailsName.BackgroundTransparency = 1
@@ -1757,7 +1757,7 @@ ScriptDetailsName.TextXAlignment = Enum.TextXAlignment.Left
 ScriptDetailsName.TextYAlignment = Enum.TextYAlignment.Center
 ScriptDetailsBadge = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsBadge.Size = UDim2.new(0, IsMobile and 88 or 96, 0, 20)
-ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 61 or 64)
+ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 55 or 58)
 ScriptDetailsBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 ScriptDetailsBadge.BorderSizePixel = 0
 ScriptDetailsBadge.Visible = false
@@ -1771,7 +1771,7 @@ ScriptDetailsBadgeText.TextSize = 8
 ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
 ScriptDetailsQuickInfo = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsQuickInfo.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, 18)
-ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 83 or 86)
+ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 74 or 78)
 ScriptDetailsQuickInfo.BackgroundTransparency = 1
 ScriptDetailsQuickInfo.Visible = false
 ScriptDetailsQuickInfoLayout = Instance.new("UIListLayout", ScriptDetailsQuickInfo)
@@ -1812,8 +1812,8 @@ ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
 ScriptDetailsCloseStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(ScriptDetailsClose, Theme.Card, Theme.CardHover, Theme.BackgroundMain, ScriptDetailsCloseStroke, Theme.Stroke, Theme.Accent)
 ScriptDetailsContent = Instance.new("ScrollingFrame", ScriptDetailsBox)
-ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 158 or 164))
-ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 116 or 122)
+ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 154 or 162))
+ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 108 or 114)
 ScriptDetailsContent.BackgroundTransparency = 1
 ScriptDetailsContent.BorderSizePixel = 0
 ScriptDetailsContent.ScrollBarThickness = 2
@@ -1951,7 +1951,7 @@ function _VH_OpenScriptDetails(data, entry)
 	ScriptDetailsQuickCategory.Text = categoryText
 	ScriptDetailsQuickStatus.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
 	ScriptDetailsQuickStatus.BackgroundColor3 = quickStatus == "UPDATED" and Theme.Success or (quickStatus == "HOT" and Theme.Error or (quickStatus == "FEATURED" and Theme.System or Color3.fromRGB(39, 64, 88)))
-	ScriptDetailsQuickInfo.Visible = true
+	ScriptDetailsQuickInfo.Visible = false
 	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
 	_VH_ClearDetailsMetadata()
 	local compatibility = IsScriptCompatible(data)
@@ -3392,26 +3392,23 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 74 or 88, 0, 22)
+	detailsBtn.Size = UDim2.new(0, IsMobile and 108 or 120, 0, 22)
 	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
 	detailsBtn.Text = "View Details"
 	detailsBtn.TextColor3 = Theme.TextPrimary
 	detailsBtn.Font = Enum.Font.GothamBold
-	detailsBtn.TextSize = IsMobile and 8 or 9
+	detailsBtn.TextSize = 10
 	detailsBtn.AutoButtonColor = false
 	detailsBtn.LayoutOrder = 2
 	detailsBtn.ZIndex = 2
 	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
-	local detailsBtnStroke = Instance.new("UIStroke", detailsBtn)
-	detailsBtnStroke.Color = Theme.Stroke
-	detailsBtnStroke.Transparency = 0.2
-	detailsBtnStroke.Thickness = 1
+	local detailsBtnStroke = nil
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, detailsBtnStroke, Theme.Stroke, Theme.Stroke, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Theme.Card, nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
