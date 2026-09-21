@@ -1770,11 +1770,11 @@ ScriptDetailsBadgeText.Font = Enum.Font.GothamBold
 ScriptDetailsBadgeText.TextSize = 8
 ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
 ScriptDetailsTagBadge = Instance.new("Frame", ScriptDetailsHeader)
-ScriptDetailsTagBadge.Size = UDim2.new(0, IsMobile and 84 or 92, 0, 20)
-ScriptDetailsTagBadge.Position = UDim2.new(0, IsMobile and 164 or 182, 0, IsMobile and 55 or 58)
+ScriptDetailsTagBadge.Size = UDim2.new(0, IsMobile and 78 or 86, 0, 20)
+ScriptDetailsTagBadge.Position = UDim2.new(0, IsMobile and 153 or 170, 0, IsMobile and 55 or 58)
 ScriptDetailsTagBadge.BackgroundColor3 = Color3.fromRGB(50, 62, 82)
 ScriptDetailsTagBadge.BorderSizePixel = 0
-ScriptDetailsTagBadge.Visible = true
+ScriptDetailsTagBadge.Visible = false
 Instance.new("UICorner", ScriptDetailsTagBadge).CornerRadius = UDim.new(0, 7)
 ScriptDetailsTagBadgeText = Instance.new("TextLabel", ScriptDetailsTagBadge)
 ScriptDetailsTagBadgeText.Size = UDim2.new(1, 0, 1, 0)
@@ -1963,6 +1963,7 @@ function _VH_OpenScriptDetails(data, entry)
 	local categoryText = type(data.Category) == "string" and data.Category ~= "" and data.Category or "General"
 	local quickStatus = NormalizeTagType(data.TagType)
 	ScriptDetailsTagBadgeText.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
+	ScriptDetailsTagBadge.Visible = quickStatus ~= "NONE"
 	local tagBadgeConfig = TagTypeConfig[quickStatus] or TagTypeConfig.NONE
 	ScriptDetailsTagBadge.BackgroundColor3 = tagBadgeConfig.BadgeColor
 	ScriptDetailsQuickCategory.Text = categoryText
@@ -3409,12 +3410,12 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 96 or 108, 0, 22)
+	detailsBtn.Size = UDim2.new(0, IsMobile and 84 or 94, 0, 22)
 	detailsBtn.BackgroundColor3 = Theme.BackgroundMain
 	detailsBtn.Text = "View Details"
 	detailsBtn.TextColor3 = Theme.TextPrimary
 	detailsBtn.Font = Enum.Font.GothamBold
-	detailsBtn.TextSize = 10
+	detailsBtn.TextSize = IsMobile and 9 or 10
 	detailsBtn.AutoButtonColor = false
 	detailsBtn.LayoutOrder = 2
 	detailsBtn.ZIndex = 2
