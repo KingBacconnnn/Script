@@ -1893,34 +1893,6 @@ ScriptDetailsTagBadgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
 ScriptDetailsTagBadgeText.Font = Enum.Font.GothamBold
 ScriptDetailsTagBadgeText.TextSize = 8
 ScriptDetailsTagBadgeText.TextXAlignment = Enum.TextXAlignment.Center
-ScriptDetailsQuickInfo = Instance.new("Frame", ScriptDetailsHeader)
-ScriptDetailsQuickInfo.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, 18)
-ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 74 or 78)
-ScriptDetailsQuickInfo.BackgroundTransparency = 1
-ScriptDetailsQuickInfo.Visible = false
-ScriptDetailsQuickInfoLayout = Instance.new("UIListLayout", ScriptDetailsQuickInfo)
-ScriptDetailsQuickInfoLayout.FillDirection = Enum.FillDirection.Horizontal
-ScriptDetailsQuickInfoLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ScriptDetailsQuickInfoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-ScriptDetailsQuickInfoLayout.Padding = UDim.new(0, 5)
-ScriptDetailsQuickCategory = Instance.new("TextLabel", ScriptDetailsQuickInfo)
-ScriptDetailsQuickCategory.Size = UDim2.new(0, IsMobile and 92 or 110, 0, 18)
-ScriptDetailsQuickCategory.BackgroundColor3 = Color3.fromRGB(40, 48, 88)
-ScriptDetailsQuickCategory.TextColor3 = Color3.fromRGB(224, 228, 255)
-ScriptDetailsQuickCategory.Font = Enum.Font.GothamBold
-ScriptDetailsQuickCategory.TextSize = 8
-ScriptDetailsQuickCategory.TextTruncate = Enum.TextTruncate.AtEnd
-ScriptDetailsQuickCategory.TextXAlignment = Enum.TextXAlignment.Center
-Instance.new("UICorner", ScriptDetailsQuickCategory).CornerRadius = UDim.new(0, 6)
-ScriptDetailsQuickStatus = Instance.new("TextLabel", ScriptDetailsQuickInfo)
-ScriptDetailsQuickStatus.Size = UDim2.new(0, IsMobile and 82 or 96, 0, 18)
-ScriptDetailsQuickStatus.BackgroundColor3 = Color3.fromRGB(39, 64, 88)
-ScriptDetailsQuickStatus.TextColor3 = Color3.fromRGB(224, 255, 244)
-ScriptDetailsQuickStatus.Font = Enum.Font.GothamBold
-ScriptDetailsQuickStatus.TextSize = 8
-ScriptDetailsQuickStatus.TextTruncate = Enum.TextTruncate.AtEnd
-ScriptDetailsQuickStatus.TextXAlignment = Enum.TextXAlignment.Center
-Instance.new("UICorner", ScriptDetailsQuickStatus).CornerRadius = UDim.new(0, 6)
 ScriptDetailsClose = Instance.new("TextButton", ScriptDetailsHeader)
 ScriptDetailsClose.Size = UDim2.new(0, 28, 0, 28)
 ScriptDetailsClose.Position = UDim2.new(1, -28, 0, 0)
@@ -2055,7 +2027,6 @@ function _VH_ClearDetailsMetadata()
 end
 function _VH_CloseScriptDetails()
 	CurrentScriptDetails = nil
-	ScriptDetailsQuickInfo.Visible = false
 	ScriptDetailsOverlay.Visible = false
 	ScriptDetailsOverlay.Active = false
 	ScriptDetailsOverlay.BackgroundTransparency = 1
@@ -2076,10 +2047,6 @@ function _VH_OpenScriptDetails(data, entry)
 	ScriptDetailsTagBadge.Visible = quickStatus ~= "NONE"
 	local tagBadgeConfig = TagTypeConfig[quickStatus] or TagTypeConfig.NONE
 	ScriptDetailsTagBadge.BackgroundColor3 = tagBadgeConfig.BadgeColor
-	ScriptDetailsQuickCategory.Text = categoryText
-	ScriptDetailsQuickStatus.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
-	ScriptDetailsQuickStatus.BackgroundColor3 = tagBadgeConfig.BadgeColor
-	ScriptDetailsQuickInfo.Visible = false
 	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
 	_VH_ClearDetailsMetadata()
 	local compatibility = IsScriptCompatible(data)
@@ -2826,7 +2793,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Limited favorite-derived recommendation context to a small bounded sample and capped its scoring influence so favorites cannot overpower current-game relevance.\n• Batched favorite changes before saving and refreshing recommendations to reduce repeated local I/O and recommendation churn from rapid toggling.\n• Raised secondary and muted UI text contrast for clearer readability without adding a settings toggle.\n• Added a themed script details panel with metadata, tags, compatibility, favorites, auto-execute state, and update information.\n• Adjusted the details header to use the previously empty vertical space more efficiently and reduced the Details button to a borderless themed control.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Cleanup, UI & Stability Fixes", "• Finalized Recommended for You spacing, scaling, and mobile touch spacing.\n• Added favorite-signal protection with bounded favorite influence and batched recommendation refreshes.\n• Improved default text contrast across secondary and muted UI elements.\n• Added and refined Script Details with Category, TagType, compatibility, favorites, Auto Execute state, and update information.\n• Refined the View Details control to match the Auto Execute button style and kept its tap animation.\n• Fixed Script Details header spacing and TagType badge positioning.\n• Redesigned the execution confirmation dialog to match the Velox Hub theme.\n• Kept normal script timestamps expanded while Recommended for You timestamps remain compact.\n• Removed obsolete hidden Script Details UI state and unnecessary recommendation UI variables.\n• Preserved the existing executor HTTP/compiler/GUI fallbacks and the PlaceId-based FOR YOU backbone.\n• Preserved critical fallback, cleanup, configuration, and recovery behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
