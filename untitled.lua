@@ -1911,16 +1911,21 @@ RecommendationIconStroke = Instance.new("UIStroke", RecommendationIcon)
 RecommendationIconStroke.Color = Color3.fromRGB(109, 113, 255)
 RecommendationIconStroke.Transparency = 0.14
 RecommendationIconStroke.Thickness = 1
-RecommendationIconImage = Instance.new("TextLabel", RecommendationIcon)
-RecommendationIconImage.Size = UDim2.new(1, 0, 1, 0)
-RecommendationIconImage.BackgroundTransparency = 1
-RecommendationIconImage.Text = "★"
-RecommendationIconImage.TextColor3 = Color3.fromRGB(214, 216, 255)
-RecommendationIconImage.Font = Enum.Font.GothamBold
-RecommendationIconImage.TextSize = IsMobile and 13 or 15
-RecommendationIconImage.TextXAlignment = Enum.TextXAlignment.Center
-RecommendationIconImage.TextYAlignment = Enum.TextYAlignment.Center
-RecommendationIconImage.ZIndex = 7
+RecommendationSparkBack = Instance.new("Frame", RecommendationIcon)
+RecommendationSparkBack.Size = UDim2.new(0, IsMobile and 10 or 12, 0, IsMobile and 10 or 12)
+RecommendationSparkBack.Position = UDim2.new(0.5, -(IsMobile and 5 or 6), 0.5, -(IsMobile and 5 or 6))
+RecommendationSparkBack.BackgroundColor3 = Color3.fromRGB(188, 193, 255)
+RecommendationSparkBack.BorderSizePixel = 0
+RecommendationSparkBack.Rotation = 45
+RecommendationSparkBack.ZIndex = 7
+Instance.new("UICorner", RecommendationSparkBack).CornerRadius = UDim.new(0, 3)
+RecommendationSparkCore = Instance.new("Frame", RecommendationIcon)
+RecommendationSparkCore.Size = UDim2.new(0, IsMobile and 4 or 5, 0, IsMobile and 4 or 5)
+RecommendationSparkCore.Position = UDim2.new(0.5, -(IsMobile and 2 or 2.5), 0.5, -(IsMobile and 2 or 2.5))
+RecommendationSparkCore.BackgroundColor3 = Color3.fromRGB(68, 74, 160)
+RecommendationSparkCore.BorderSizePixel = 0
+RecommendationSparkCore.ZIndex = 8
+Instance.new("UICorner", RecommendationSparkCore).CornerRadius = UDim.new(1, 0)
 
 RecommendationTitle = Instance.new("TextLabel", RecommendationPanel)
 RecommendationTitle.Size = UDim2.new(1, -(IsMobile and 150 or 170), 0, 18)
@@ -1952,10 +1957,11 @@ RecommendationSeeMoreButton.Position = UDim2.new(1, -(IsMobile and 88 or 100), 0
 RecommendationSeeMoreButton.BackgroundColor3 = Color3.fromRGB(40, 34, 105)
 RecommendationSeeMoreButton.BorderSizePixel = 0
 RecommendationSeeMoreButton.AutoButtonColor = false
-RecommendationSeeMoreButton.Text = "See More  >"
+RecommendationSeeMoreButton.Text = "See More >"
 RecommendationSeeMoreButton.TextColor3 = Color3.fromRGB(216, 218, 255)
 RecommendationSeeMoreButton.Font = Enum.Font.GothamBold
 RecommendationSeeMoreButton.TextSize = IsMobile and 8 or 9
+RecommendationSeeMoreButton.TextStrokeTransparency = 1
 RecommendationSeeMoreButton.ZIndex = 7
 Instance.new("UICorner", RecommendationSeeMoreButton).CornerRadius = UDim.new(0, 8)
 RecommendationSeeMoreStroke = Instance.new("UIStroke", RecommendationSeeMoreButton)
@@ -1971,7 +1977,7 @@ RecommendationList.BorderSizePixel = 0
 RecommendationList.ScrollBarThickness = 0
 RecommendationList.ScrollingDirection = Enum.ScrollingDirection.X
 RecommendationList.ScrollingEnabled = false
-RecommendationList.AutomaticCanvasSize = Enum.AutomaticSize.X
+RecommendationList.AutomaticCanvasSize = Enum.AutomaticSize.None
 RecommendationList.CanvasSize = UDim2.new(0, 0, 0, 0)
 RecommendationList.ClipsDescendants = true
 RecommendationList.Active = true
@@ -1995,6 +2001,7 @@ RecommendationPrevButton.Text = "<"
 RecommendationPrevButton.TextColor3 = Color3.fromRGB(222, 227, 245)
 RecommendationPrevButton.Font = Enum.Font.GothamBold
 RecommendationPrevButton.TextSize = IsMobile and 12 or 14
+RecommendationPrevButton.TextStrokeTransparency = 1
 RecommendationPrevButton.ZIndex = 10
 Instance.new("UICorner", RecommendationPrevButton).CornerRadius = UDim.new(1, 0)
 RecommendationPrevStroke = Instance.new("UIStroke", RecommendationPrevButton)
@@ -2012,6 +2019,7 @@ RecommendationNextButton.Text = ">"
 RecommendationNextButton.TextColor3 = Color3.fromRGB(222, 227, 245)
 RecommendationNextButton.Font = Enum.Font.GothamBold
 RecommendationNextButton.TextSize = IsMobile and 12 or 14
+RecommendationNextButton.TextStrokeTransparency = 1
 RecommendationNextButton.ZIndex = 10
 Instance.new("UICorner", RecommendationNextButton).CornerRadius = UDim.new(1, 0)
 RecommendationNextStroke = Instance.new("UIStroke", RecommendationNextButton)
@@ -2455,19 +2463,32 @@ function _VH_GetRecommendationShortReason(reason)
 	if text == "Matches your current game" then return "Current game" end
 	if text == "Related to your favorites" then return "From favorites" end
 	if text == "Similar to your favorites" then return "Similar favorites" end
-	if text == "Shares similar game details" then return "Similar details" end
+	if text == "Shares similar game details" then return "Similar" end
 	if text == "Featured in Velox Hub" then return "Featured" end
-	if string.sub(text, 1, 8) == "Updated " then return text end
-	return "Explore more"
+	if text == "More games in Velox Hub" then return "Explore more" end
+	if text == "No other recommendations found yet" then return "No matches" end
+
+	if text == "Updated just now" then return "Now" end
+	if text == "Updated yesterday" then return "1d ago" end
+	local amount, unit = string.match(text, "^Updated%s+(%d+)%s+(%a+)%s+ago$")
+	if amount and unit then
+		local compact = {
+			minute = "m", minutes = "m",
+			hour = "h", hours = "h",
+			day = "d", days = "d",
+			week = "w", weeks = "w",
+			month = "mo", months = "mo",
+			year = "y", years = "y",
+		}
+		local suffix = compact[unit]
+		if suffix then return amount .. suffix .. " ago" end
+	end
+	if string.sub(text, 1, 8) == "Updated " then return "Updated" end
+	return "Explore"
 end
 
 function _VH_GetRecommendationReasonIcon(reason)
-	local text = tostring(reason or "")
-	if text == "Similar to your current game" or text == "Matches your current game" then return "◆" end
-	if text == "Related to your favorites" or text == "Similar to your favorites" then return "★" end
-	if string.sub(text, 1, 8) == "Updated " then return "◷" end
-	if text == "Featured in Velox Hub" then return "★" end
-	return "+"
+	return ""
 end
 
 function _VH_RefreshRecommendationPanel(items, currentCount)
@@ -2614,15 +2635,22 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			reasonStroke.Transparency = 0.2
 			reasonStroke.Thickness = 1
 
-			local reasonIcon = Instance.new("TextLabel", reasonChip)
-			reasonIcon.Size = UDim2.new(0, 14, 1, 0)
-			reasonIcon.BackgroundTransparency = 1
-			reasonIcon.Text = _VH_GetRecommendationReasonIcon(item.Reason)
-			reasonIcon.TextColor3 = Color3.fromRGB(170, 176, 255)
-			reasonIcon.Font = Enum.Font.GothamBold
-			reasonIcon.TextSize = IsMobile and 7 or 8
-			reasonIcon.TextXAlignment = Enum.TextXAlignment.Center
-			reasonIcon.ZIndex = 8
+			local reasonDot = Instance.new("Frame", reasonChip)
+			reasonDot.Size = UDim2.new(0, 5, 0, 5)
+			reasonDot.Position = UDim2.new(0, 6, 0.5, -2.5)
+			local reasonTextValue = tostring(item.Reason or "")
+			local reasonDotColor = Color3.fromRGB(129, 140, 248)
+			if reasonTextValue == "Related to your favorites" or reasonTextValue == "Similar to your favorites" then
+				reasonDotColor = Color3.fromRGB(250, 204, 21)
+			elseif string.sub(reasonTextValue, 1, 8) == "Updated " then
+				reasonDotColor = Color3.fromRGB(52, 211, 153)
+			elseif reasonTextValue == "Featured in Velox Hub" then
+				reasonDotColor = Color3.fromRGB(168, 85, 247)
+			end
+			reasonDot.BackgroundColor3 = reasonDotColor
+			reasonDot.BorderSizePixel = 0
+			reasonDot.ZIndex = 8
+			Instance.new("UICorner", reasonDot).CornerRadius = UDim.new(1, 0)
 
 			local reasonLabel = Instance.new("TextLabel", reasonChip)
 			reasonLabel.Size = UDim2.new(1, -18, 1, 0)
@@ -2636,7 +2664,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
 			reasonLabel.ZIndex = 8
 
-			ApplyInteractiveAnimations(button, button.BackgroundColor3, Color3.fromRGB(25, 39, 66), Color3.fromRGB(14, 20, 34), buttonStroke, buttonStroke.Color, Theme.Accent, RecommendationConnections)
+			-- Keep recommendation cards lightweight: activation only, no per-card hover/input listener set.
 			RecommendationConnections[#RecommendationConnections + 1] = button.Activated:Connect(function()
 				if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
 				local offset = entry.Instance.AbsolutePosition.Y - ScriptsView.AbsolutePosition.Y + ScriptsView.CanvasPosition.Y - 10
@@ -2691,6 +2719,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 end
 
 function _VH_RefreshRecommendations()
+	RecommendationRenderSignature = ""
 	local items, currentCount = _VH_BuildRecommendationState()
 	for _, entry in ipairs(RegisteredScripts) do
 		if type(entry.SetRecommendation) == "function" then
