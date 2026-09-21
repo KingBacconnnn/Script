@@ -770,6 +770,20 @@ function GetRelativeTime(timestamp)
 	local years = math.floor(days / 365.25)
 	return tostring(years) .. "y ago"
 end
+function FormatLastUpdatedLabel(value)
+	if type(value) == "number" or tonumber(value) then
+		return GetRelativeTime(value)
+	end
+	local text = tostring(value or "")
+	text = string.gsub(text, "^%s*[Uu]pdated%s+", "")
+	text = string.gsub(text, "^(%d+)%s+minutes?%s+ago$", "%1m ago")
+	text = string.gsub(text, "^(%d+)%s+hours?%s+ago$", "%1h ago")
+	text = string.gsub(text, "^(%d+)%s+days?%s+ago$", "%1d ago")
+	text = string.gsub(text, "^(%d+)%s+weeks?%s+ago$", "%1w ago")
+	text = string.gsub(text, "^(%d+)%s+months?%s+ago$", "%1mo ago")
+	text = string.gsub(text, "^(%d+)%s+years?%s+ago$", "%1y ago")
+	return text ~= "" and text or "Now"
+end
 function GetSecureParent()
 	huiSuccess, huiTarget = pcall(function() return gethui() end)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
@@ -2307,7 +2321,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Cleanup, Text & Recommendation Refinements", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Shortened update timestamps to compact labels such as Now, 5m ago, 6h ago, and 5d ago.\n• Improved Recommended for You rendering by removing unnecessary scrolling-frame overhead and unused recommendation helpers.\n• Reduced redundant recommendation UI work while preserving the PlaceId-based FOR YOU backbone and fallback behavior.\n• Removed unused single-purpose variables and stale recommendation helper code.\n• Removed code comments and cleaned the script structure without removing critical fallbacks.\n• Added additional UI cleanup and stability refinements.", ChangelogsView)
+CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Standardized all script-card and recommendation timestamps to compact labels such as Now, 5m ago, 6h ago, and 5d ago.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -2398,7 +2412,7 @@ function _VH_BuildRecommendationState()
 			end
 			local reason = _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap, topicOverlap, favoriteTopicOverlap, isRecent, tagType)
 			if reason == "Recently updated" then
-				reason = GetRelativeTime(data.LastUpdated)
+				reason = FormatLastUpdatedLabel(data.LastUpdated)
 			end
 			entry.RecommendationScore = score
 			entry.RecommendationReason = reason
@@ -2523,23 +2537,12 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	local visibleCount = math.max(0, endIndex - startIndex + 1)
 	local visibleIndex = 0
 
-	local listWidth = RecommendationList.AbsoluteSize.X
-	if listWidth <= 0 then
-		listWidth = RecommendationPanel.AbsoluteSize.X - (IsMobile and 56 or 72)
-	end
-	if listWidth <= 0 then listWidth = IsMobile and 280 or 540 end
 	local gap = IsMobile and 7 or 8
 	local sidePad = 10
 	local totalGaps = math.max(0, visibleCount - 1) * gap
-	local calculatedWidth = visibleCount > 0 and math.floor((listWidth - sidePad - totalGaps) / visibleCount) or 0
-	local minWidth = IsMobile and 116 or 164
-	local maxWidth = IsMobile and 158 or 220
-	local cardWidth = math.clamp(calculatedWidth > 0 and calculatedWidth or minWidth, minWidth, maxWidth)
-	if visibleCount > 0 then
-		local maxAllowed = math.floor((listWidth - sidePad - totalGaps) / visibleCount)
-		if maxAllowed > 0 then cardWidth = math.min(cardWidth, maxAllowed) end
-	end
 	local cardHeight = IsMobile and 64 or 72
+	local cardWidthScale = visibleCount > 0 and (1 / visibleCount) or 1
+	local cardWidthOffset = visibleCount > 0 and -((sidePad + totalGaps) / visibleCount) or 0
 
 	for index = startIndex, endIndex do
 		local item = allItems[index]
@@ -2549,7 +2552,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			RecommendationItems[visibleIndex] = entry
 
 			local button = Instance.new("TextButton", RecommendationList)
-			button.Size = UDim2.new(0, cardWidth, 0, cardHeight)
+			button.Size = UDim2.new(cardWidthScale, cardWidthOffset, 0, cardHeight)
 			button.BackgroundColor3 = Color3.fromRGB(18, 27, 46)
 			button.BorderSizePixel = 0
 			button.AutoButtonColor = false
@@ -2787,7 +2790,7 @@ function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
 		if type(scrData.UpdateUI) == "function" then scrData.UpdateUI() end
 		if scrData.TimeLabel and scrData.TimeLabel.Parent then
-			scrData.TimeLabel.Text = GetRelativeTime(scrData.LastUpdatedNumber)
+			scrData.TimeLabel.Text = FormatLastUpdatedLabel(scrData.LastUpdatedNumber)
 		end
 	end
 end
@@ -2957,7 +2960,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
 	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
-	dateLbl.BackgroundTransparency = 1; dateLbl.Text = GetRelativeTime(data.LastUpdated)
+	dateLbl.BackgroundTransparency = 1; dateLbl.Text = FormatLastUpdatedLabel(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 1; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
 	dateLbl.TextWrapped = false; dateLbl.TextTruncate = Enum.TextTruncate.AtEnd
@@ -3463,7 +3466,7 @@ _VH_TrackTask(function()
 		if isDestroying then break end
 		for _, scrData in ipairs(RegisteredScripts) do
 			if scrData.TimeLabel and scrData.TimeLabel.Parent then
-				scrData.TimeLabel.Text = GetRelativeTime(scrData.LastUpdatedNumber)
+				scrData.TimeLabel.Text = FormatLastUpdatedLabel(scrData.LastUpdatedNumber)
 			end
 		end
 	end
