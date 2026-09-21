@@ -99,6 +99,12 @@ PendingTasks = {}
 ActiveTweens = setmetatable({}, { __mode = "k" })
 CatalogGeneration = 0
 LastCatalogRefreshAt = 0
+RecommendationGeneration = 0
+RecommendationItems = {}
+RecommendationConnections = {}
+RecommendationPanel = nil
+RecommendationList = nil
+RecommendationSubtitle = nil
 AutoExecuteRanThisSession = false
 InteractiveElements = setmetatable({}, { __mode = "k" })
 isDestroying = false
@@ -218,6 +224,11 @@ function _VH_CleanUpMemory()
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
+	for _, connection in ipairs(RecommendationConnections) do
+		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
+	end
+	table.clear(RecommendationConnections)
+	if RecommendationPanel and RecommendationPanel.Parent then pcall(function() RecommendationPanel:Destroy() end) end
 	table.clear(RegisteredScripts)
 	table.clear(ActiveTweens)
 	table.clear(InteractiveElements)
@@ -565,6 +576,93 @@ function NormalizeTagType(value)
 	normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 	if TagTypeConfig[normalized] then return normalized end
 	return "NONE"
+end
+
+function _VH_RecommendationListFingerprint(value)
+	local list = _VH_NormalizeRecommendationList(value)
+	table.sort(list)
+	return table.concat(list, "|")
+end
+
+function _VH_NormalizeRecommendationList(value)
+	local list = {}
+	local seen = {}
+	local function add(v)
+		if type(v) ~= "string" then return end
+		local cleaned = string.lower(string.gsub(v, "^%s*(.-)%s*$", "%1"))
+		if cleaned == "" or seen[cleaned] then return end
+		seen[cleaned] = true
+		list[#list + 1] = cleaned
+	end
+	if type(value) == "string" then
+		for item in string.gmatch(value, "[^,;|]+") do add(item) end
+	elseif type(value) == "table" then
+		for _, item in ipairs(value) do add(item) end
+	end
+	return list
+end
+
+function _VH_GetRecommendationTokenSet(data)
+	local set = {}
+	local stopWords = {
+		"the", "and", "for", "with", "from", "this", "that", "your", "you", "are", "can", "into", "more",
+		"script", "scripts", "roblox", "game", "games", "play", "playing", "player", "players", "auto", "more"
+	}
+	local function addText(value)
+		if type(value) ~= "string" then return end
+		value = string.lower(value)
+		value = string.gsub(value, "[^%w%s]", " ")
+		for word in string.gmatch(value, "%S+") do
+			if #word >= 3 and not stopWords[word] then set[word] = true end
+		end
+	end
+	addText(data and data.Name)
+	addText(data and data.Description)
+	addText(data and data.Category)
+	addText(data and data.Author)
+	addText(data and data.TagType)
+	if data and type(data.Tags) == "table" then
+		for _, tag in ipairs(data.Tags) do addText(tag) end
+	elseif data and type(data.Tags) == "string" then
+		addText(data.Tags)
+	end
+	return set
+end
+
+function _VH_CountTokenOverlap(a, b)
+	if type(a) ~= "table" or type(b) ~= "table" then return 0 end
+	local count = 0
+	for token in pairs(a) do
+		if b[token] then count = count + 1 end
+	end
+	return count
+end
+
+function _VH_GetRecommendationContext(entries)
+	local currentSet = {}
+	local favoriteSet = {}
+	local currentCategories = {}
+	local currentTags = {}
+	local currentCount = 0
+	for _, entry in ipairs(entries or {}) do
+		local data = entry and entry.Data or entry
+		if type(data) == "table" then
+			local placeId = tonumber(data.PlaceId) or 0
+			local tokens = _VH_GetRecommendationTokenSet(data)
+			if placeId ~= 0 and placeId == PlaceId then
+				currentCount = currentCount + 1
+				for token in pairs(tokens) do currentSet[token] = true end
+				local category = type(data.Category) == "string" and string.lower(string.gsub(data.Category, "^%s*(.-)%s*$", "%1")) or ""
+				if category ~= "" then currentCategories[category] = true end
+				for _, tag in ipairs(_VH_NormalizeRecommendationList(data.Tags)) do currentTags[tag] = true end
+			end
+			local id = tostring(data.Id or StableScriptId(data) or "")
+			if id ~= "" and SavedData.Favorites[id] then
+				for token in pairs(tokens) do favoriteSet[token] = true end
+			end
+		end
+	end
+	return currentSet, favoriteSet, currentCategories, currentTags, currentCount
 end
 function GetOrCreateCardStroke(card)
 	if not card or not card:IsA("GuiObject") then return nil end
@@ -1334,281 +1432,93 @@ end
 ConfirmOverlay = Instance.new("Frame", ScreenGui)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.Position = UDim2.new(0, 0, 0, 0)
-ConfirmOverlay.BackgroundColor3 = Theme.BackgroundMain
+ConfirmOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ConfirmOverlay.BackgroundTransparency = 1
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 400
 ConfirmOverlay.Active = false
-
 ConfirmBox = Instance.new("Frame", ConfirmOverlay)
-ConfirmBox.Size = IsMobile and UDim2.new(0, 312, 0, 228) or UDim2.new(0, 420, 0, 250)
-ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 18)
+ConfirmBox.Size = IsMobile and UDim2.new(0, 300, 0, 180) or UDim2.new(0, 360, 0, 190)
+ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 0)
 ConfirmBox.AnchorPoint = Vector2.new(0.5, 0.5)
 ConfirmBox.BackgroundColor3 = Theme.BackgroundSecondary
 ConfirmBox.BorderSizePixel = 0
 ConfirmBox.ClipsDescendants = true
 ConfirmBox.ZIndex = 401
-Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 14)
+Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 12)
 ConfirmBoxStroke = Instance.new("UIStroke", ConfirmBox)
-ConfirmBoxStroke.Color = Theme.Stroke
-ConfirmBoxStroke.Thickness = 1
-
-ConfirmAccentBar = Instance.new("Frame", ConfirmBox)
-ConfirmAccentBar.Size = UDim2.new(1, -40, 0, 4)
-ConfirmAccentBar.Position = UDim2.new(0, 20, 0, 0)
-ConfirmAccentBar.BackgroundColor3 = Theme.Accent
-ConfirmAccentBar.BorderSizePixel = 0
-ConfirmAccentBar.ZIndex = 402
-
-ConfirmGlow = Instance.new("Frame", ConfirmBox)
-ConfirmGlow.Size = UDim2.new(1, 0, 0, 78)
-ConfirmGlow.Position = UDim2.new(0, 0, 0, 0)
-ConfirmGlow.BackgroundColor3 = Theme.Accent
-ConfirmGlow.BackgroundTransparency = 0.94
-ConfirmGlow.BorderSizePixel = 0
-ConfirmGlow.ZIndex = 401
-
-ConfirmMainPadding = Instance.new("UIPadding", ConfirmBox)
-ConfirmMainPadding.PaddingTop = UDim.new(0, 18)
-ConfirmMainPadding.PaddingBottom = UDim.new(0, 16)
-ConfirmMainPadding.PaddingLeft = UDim.new(0, IsMobile and 16 or 20)
-ConfirmMainPadding.PaddingRight = UDim.new(0, IsMobile and 16 or 20)
-
-ConfirmContent = Instance.new("Frame", ConfirmBox)
-ConfirmContent.Size = UDim2.new(1, 0, 1, 0)
-ConfirmContent.BackgroundTransparency = 1
-ConfirmContent.ZIndex = 403
-
-ConfirmContentLayout = Instance.new("UIListLayout", ConfirmContent)
-ConfirmContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfirmContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ConfirmContentLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-ConfirmContentLayout.Padding = UDim.new(0, 8)
-
-ConfirmHeaderRow = Instance.new("Frame", ConfirmContent)
-ConfirmHeaderRow.Size = UDim2.new(1, 0, 0, IsMobile and 40 or 44)
-ConfirmHeaderRow.BackgroundTransparency = 1
-ConfirmHeaderRow.LayoutOrder = 1
-ConfirmHeaderRow.ZIndex = 404
-
-ConfirmIconHolder = Instance.new("Frame", ConfirmHeaderRow)
-ConfirmIconHolder.Size = UDim2.new(0, IsMobile and 36 or 40, 0, IsMobile and 36 or 40)
-ConfirmIconHolder.Position = UDim2.new(0, 0, 0.5, 0)
-ConfirmIconHolder.AnchorPoint = Vector2.new(0, 0.5)
-ConfirmIconHolder.BackgroundColor3 = Theme.Accent
-ConfirmIconHolder.BackgroundTransparency = 0.86
-ConfirmIconHolder.BorderSizePixel = 0
-ConfirmIconHolder.ZIndex = 405
-Instance.new("UICorner", ConfirmIconHolder).CornerRadius = UDim.new(1, 0)
-ConfirmIconStroke = Instance.new("UIStroke", ConfirmIconHolder)
-ConfirmIconStroke.Color = Theme.Accent
-ConfirmIconStroke.Transparency = 0.35
-ConfirmIconStroke.Thickness = 1
-
-ConfirmIcon = Instance.new("TextLabel", ConfirmIconHolder)
-ConfirmIcon.Size = UDim2.new(1, 0, 1, 0)
-ConfirmIcon.BackgroundTransparency = 1
-ConfirmIcon.Text = "▶"
-ConfirmIcon.TextColor3 = Theme.Accent
-ConfirmIcon.Font = Enum.Font.GothamBold
-ConfirmIcon.TextSize = IsMobile and 14 or 16
-ConfirmIcon.ZIndex = 406
-
-ConfirmTitleGroup = Instance.new("Frame", ConfirmHeaderRow)
-ConfirmTitleGroup.Size = UDim2.new(1, -(IsMobile and 48 or 54), 1, 0)
-ConfirmTitleGroup.Position = UDim2.new(0, IsMobile and 46 or 52, 0, 0)
-ConfirmTitleGroup.BackgroundTransparency = 1
-ConfirmTitleGroup.ZIndex = 405
-
-ConfirmTitle = Instance.new("TextLabel", ConfirmTitleGroup)
-ConfirmTitle.Size = UDim2.new(1, 0, 0, IsMobile and 20 or 22)
-ConfirmTitle.Position = UDim2.new(0, 0, 0, 1)
-ConfirmTitle.BackgroundTransparency = 1
-ConfirmTitle.Text = "Execute Script"
-ConfirmTitle.TextColor3 = Theme.TextPrimary
-ConfirmTitle.Font = Enum.Font.GothamBold
-ConfirmTitle.TextSize = IsMobile and 14 or 16
-ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Left
-ConfirmTitle.ZIndex = 406
-
-ConfirmSubtitle = Instance.new("TextLabel", ConfirmTitleGroup)
-ConfirmSubtitle.Size = UDim2.new(1, 0, 0, IsMobile and 16 or 18)
-ConfirmSubtitle.Position = UDim2.new(0, 0, 0, IsMobile and 21 or 23)
-ConfirmSubtitle.BackgroundTransparency = 1
-ConfirmSubtitle.Text = "Review this action before running it"
-ConfirmSubtitle.TextColor3 = Theme.TextSecondary
-ConfirmSubtitle.Font = Enum.Font.Gotham
-ConfirmSubtitle.TextSize = IsMobile and 10 or 11
-ConfirmSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-ConfirmSubtitle.ZIndex = 406
-
-ConfirmReviewCard = Instance.new("Frame", ConfirmContent)
-ConfirmReviewCard.Size = UDim2.new(1, 0, 0, IsMobile and 64 or 70)
-ConfirmReviewCard.BackgroundColor3 = Theme.Card
-ConfirmReviewCard.BorderSizePixel = 0
-ConfirmReviewCard.LayoutOrder = 2
-ConfirmReviewCard.ZIndex = 404
-Instance.new("UICorner", ConfirmReviewCard).CornerRadius = UDim.new(0, 9)
-ConfirmReviewStroke = Instance.new("UIStroke", ConfirmReviewCard)
-ConfirmReviewStroke.Color = Theme.Stroke
-ConfirmReviewStroke.Thickness = 1
-
-ConfirmReviewDot = Instance.new("Frame", ConfirmReviewCard)
-ConfirmReviewDot.Size = UDim2.new(0, 8, 0, 8)
-ConfirmReviewDot.Position = UDim2.new(0, 12, 0.5, 0)
-ConfirmReviewDot.AnchorPoint = Vector2.new(0, 0.5)
-ConfirmReviewDot.BackgroundColor3 = Theme.Success
-ConfirmReviewDot.BorderSizePixel = 0
-ConfirmReviewDot.ZIndex = 405
-Instance.new("UICorner", ConfirmReviewDot).CornerRadius = UDim.new(1, 0)
-
-ConfirmReviewLabel = Instance.new("TextLabel", ConfirmReviewCard)
-ConfirmReviewLabel.Size = UDim2.new(1, -34, 0, 16)
-ConfirmReviewLabel.Position = UDim2.new(0, 28, 0, 10)
-ConfirmReviewLabel.BackgroundTransparency = 1
-ConfirmReviewLabel.Text = "SCRIPT READY"
-ConfirmReviewLabel.TextColor3 = Theme.TextSecondary
-ConfirmReviewLabel.Font = Enum.Font.GothamBold
-ConfirmReviewLabel.TextSize = IsMobile and 9 or 10
-ConfirmReviewLabel.TextXAlignment = Enum.TextXAlignment.Left
-ConfirmReviewLabel.ZIndex = 405
-
-ConfirmScriptName = Instance.new("TextLabel", ConfirmReviewCard)
-ConfirmScriptName.Size = UDim2.new(1, -34, 0, IsMobile and 24 or 28)
-ConfirmScriptName.Position = UDim2.new(0, 28, 0, IsMobile and 28 or 30)
-ConfirmScriptName.BackgroundTransparency = 1
-ConfirmScriptName.Text = ""
-ConfirmScriptName.TextColor3 = Theme.Accent
-ConfirmScriptName.Font = Enum.Font.GothamBold
-ConfirmScriptName.TextSize = IsMobile and 12 or 13
-ConfirmScriptName.TextXAlignment = Enum.TextXAlignment.Left
-ConfirmScriptName.TextWrapped = true
-ConfirmScriptName.TextTruncate = Enum.TextTruncate.AtEnd
-ConfirmScriptName.ZIndex = 405
-
-ConfirmMessage = Instance.new("TextLabel", ConfirmContent)
-ConfirmMessage.Size = UDim2.new(1, 0, 0, IsMobile and 28 or 30)
-ConfirmMessage.BackgroundTransparency = 1
-ConfirmMessage.Text = "This will execute the selected script in your current session."
-ConfirmMessage.TextColor3 = Theme.TextSecondary
-ConfirmMessage.Font = Enum.Font.Gotham
-ConfirmMessage.TextSize = IsMobile and 10 or 11
-ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Left
-ConfirmMessage.TextWrapped = true
-ConfirmMessage.LayoutOrder = 3
-ConfirmMessage.ZIndex = 404
-
-ConfirmButtonRow = Instance.new("Frame", ConfirmContent)
-ConfirmButtonRow.Size = UDim2.new(1, 0, 0, IsMobile and 36 or 38)
-ConfirmButtonRow.BackgroundTransparency = 1
-ConfirmButtonRow.LayoutOrder = 4
-ConfirmButtonRow.ZIndex = 404
+ConfirmBoxStroke.Color = Theme.Stroke; ConfirmBoxStroke.Thickness = 1
+ConfirmPadding = Instance.new("UIPadding", ConfirmBox)
+ConfirmPadding.PaddingTop = UDim.new(0, 16); ConfirmPadding.PaddingBottom = UDim.new(0, 16)
+ConfirmPadding.PaddingLeft = UDim.new(0, 20); ConfirmPadding.PaddingRight = UDim.new(0, 20)
+ConfirmLayout = Instance.new("UIListLayout", ConfirmBox)
+ConfirmLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ConfirmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ConfirmLayout.VerticalAlignment = Enum.VerticalAlignment.Center; ConfirmLayout.Padding = UDim.new(0, 8)
+ConfirmTitle = Instance.new("TextLabel", ConfirmBox)
+ConfirmTitle.Size = UDim2.new(1, 0, 0, 22); ConfirmTitle.BackgroundTransparency = 1
+ConfirmTitle.Text = "Execute Script"; ConfirmTitle.TextColor3 = Theme.TextPrimary
+ConfirmTitle.Font = Enum.Font.GothamBold; ConfirmTitle.TextSize = IsMobile and 14 or 16
+ConfirmTitle.TextXAlignment = Enum.TextXAlignment.Center; ConfirmTitle.LayoutOrder = 1; ConfirmTitle.ZIndex = 402
+ConfirmMessage = Instance.new("TextLabel", ConfirmBox)
+ConfirmMessage.Size = UDim2.new(1, 0, 0, 18); ConfirmMessage.BackgroundTransparency = 1
+ConfirmMessage.Text = "Are you sure you want to run this script?"
+ConfirmMessage.TextColor3 = Theme.TextSecondary; ConfirmMessage.Font = Enum.Font.Gotham
+ConfirmMessage.TextSize = IsMobile and 11 or 12; ConfirmMessage.TextXAlignment = Enum.TextXAlignment.Center
+ConfirmMessage.TextWrapped = true; ConfirmMessage.LayoutOrder = 2; ConfirmMessage.ZIndex = 402
+ConfirmScriptName = Instance.new("TextLabel", ConfirmBox)
+ConfirmScriptName.Size = UDim2.new(1, 0, 0, 0); ConfirmScriptName.AutomaticSize = Enum.AutomaticSize.Y
+ConfirmScriptName.BackgroundTransparency = 1; ConfirmScriptName.Text = ""
+ConfirmScriptName.TextColor3 = Theme.Accent; ConfirmScriptName.Font = Enum.Font.GothamBold
+ConfirmScriptName.TextSize = IsMobile and 12 or 13; ConfirmScriptName.TextXAlignment = Enum.TextXAlignment.Center
+ConfirmScriptName.TextWrapped = true; ConfirmScriptName.LayoutOrder = 3; ConfirmScriptName.ZIndex = 402
+ConfirmButtonRow = Instance.new("Frame", ConfirmBox)
+ConfirmButtonRow.Size = UDim2.new(1, 0, 0, 34); ConfirmButtonRow.BackgroundTransparency = 1
+ConfirmButtonRow.LayoutOrder = 4; ConfirmButtonRow.ZIndex = 402
 ConfirmRowLayout = Instance.new("UIListLayout", ConfirmButtonRow)
 ConfirmRowLayout.FillDirection = Enum.FillDirection.Horizontal
 ConfirmRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 ConfirmRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-ConfirmRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfirmRowLayout.Padding = UDim.new(0, 10)
-
+ConfirmRowLayout.SortOrder = Enum.SortOrder.LayoutOrder; ConfirmRowLayout.Padding = UDim.new(0, 12)
 ConfirmCancelBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmCancelBtn.Size = UDim2.new(0.5, -5, 1, 0)
-ConfirmCancelBtn.BackgroundColor3 = Theme.CardHover
-ConfirmCancelBtn.Text = "Cancel"
-ConfirmCancelBtn.TextColor3 = Theme.TextPrimary
-ConfirmCancelBtn.Font = Enum.Font.GothamBold
-ConfirmCancelBtn.TextSize = IsMobile and 11 or 12
-ConfirmCancelBtn.AutoButtonColor = false
-ConfirmCancelBtn.LayoutOrder = 1
-ConfirmCancelBtn.ZIndex = 405
-Instance.new("UICorner", ConfirmCancelBtn).CornerRadius = UDim.new(0, 7)
-CancelStroke = Instance.new("UIStroke", ConfirmCancelBtn)
-CancelStroke.Color = Theme.Stroke
-CancelStroke.Thickness = 1
-
+ConfirmCancelBtn.Size = UDim2.new(0.5, -6, 1, 0); ConfirmCancelBtn.BackgroundColor3 = Theme.CardHover
+ConfirmCancelBtn.Text = "Cancel"; ConfirmCancelBtn.TextColor3 = Theme.TextPrimary
+ConfirmCancelBtn.Font = Enum.Font.GothamBold; ConfirmCancelBtn.TextSize = IsMobile and 11 or 12
+ConfirmCancelBtn.AutoButtonColor = false; ConfirmCancelBtn.LayoutOrder = 1; ConfirmCancelBtn.ZIndex = 403
+Instance.new("UICorner", ConfirmCancelBtn).CornerRadius = UDim.new(0, 6)
+CancelStroke = Instance.new("UIStroke", ConfirmCancelBtn); CancelStroke.Color = Theme.Stroke
 ConfirmExecuteBtn = Instance.new("TextButton", ConfirmButtonRow)
-ConfirmExecuteBtn.Size = UDim2.new(0.5, -5, 1, 0)
-ConfirmExecuteBtn.BackgroundColor3 = Theme.Execution or Theme.Accent
-ConfirmExecuteBtn.Text = "Execute  ›"
-ConfirmExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ConfirmExecuteBtn.Font = Enum.Font.GothamBold
-ConfirmExecuteBtn.TextSize = IsMobile and 11 or 12
-ConfirmExecuteBtn.AutoButtonColor = false
-ConfirmExecuteBtn.LayoutOrder = 2
-ConfirmExecuteBtn.ZIndex = 405
-Instance.new("UICorner", ConfirmExecuteBtn).CornerRadius = UDim.new(0, 7)
-ConfirmExecuteStroke = Instance.new("UIStroke", ConfirmExecuteBtn)
-ConfirmExecuteStroke.Color = Theme.Execution or Theme.Accent
-ConfirmExecuteStroke.Transparency = 0.35
-ConfirmExecuteStroke.Thickness = 1
-
-ConfirmShortcutRow = Instance.new("Frame", ConfirmContent)
-ConfirmShortcutRow.Size = UDim2.new(1, 0, 0, IsMobile and 13 or 15)
-ConfirmShortcutRow.BackgroundTransparency = 1
-ConfirmShortcutRow.LayoutOrder = 5
-ConfirmShortcutRow.ZIndex = 404
-
-ConfirmShortcut = Instance.new("TextLabel", ConfirmShortcutRow)
-ConfirmShortcut.Size = UDim2.new(1, 0, 1, 0)
-ConfirmShortcut.BackgroundTransparency = 1
-ConfirmShortcut.Text = IsMobile and "Tap outside to cancel" or "ESC  Cancel    •    ENTER  Execute"
-ConfirmShortcut.TextColor3 = Theme.TextSecondary
-ConfirmShortcut.TextTransparency = 0.2
-ConfirmShortcut.Font = Enum.Font.Gotham
-ConfirmShortcut.TextSize = IsMobile and 9 or 10
-ConfirmShortcut.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmShortcut.ZIndex = 405
-
-ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Theme.BackgroundMain, Theme.TextSecondary, CancelStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Execution or Theme.Accent, Theme.Accent, Theme.BackgroundSecondary, ConfirmExecuteStroke, Theme.Execution or Theme.Accent, Theme.Accent)
-
+ConfirmExecuteBtn.Size = UDim2.new(0.5, -6, 1, 0); ConfirmExecuteBtn.BackgroundColor3 = Theme.Accent
+ConfirmExecuteBtn.Text = "Execute"; ConfirmExecuteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmExecuteBtn.Font = Enum.Font.GothamBold; ConfirmExecuteBtn.TextSize = IsMobile and 11 or 12
+ConfirmExecuteBtn.AutoButtonColor = false; ConfirmExecuteBtn.LayoutOrder = 2; ConfirmExecuteBtn.ZIndex = 403
+Instance.new("UICorner", ConfirmExecuteBtn).CornerRadius = UDim.new(0, 6)
+ApplyInteractiveAnimations(ConfirmCancelBtn, Theme.CardHover, Color3.fromRGB(40, 53, 75), Color3.fromRGB(20, 29, 45), CancelStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(ConfirmExecuteBtn, Theme.Accent, Color3.fromRGB(120, 123, 245), Color3.fromRGB(79, 82, 221))
 isConfirming = false
 pendingExecuteCallback = nil
 function OpenConfirmDialog(scriptName, onExecute)
 	if isConfirming or isTransitioning then return end
 	isConfirming = true
 	pendingExecuteCallback = onExecute
-	ConfirmScriptName.Text = tostring(scriptName or "Selected script")
+	ConfirmScriptName.Text = scriptName
 	ConfirmExecuteBtn.Active = true
-	ConfirmExecuteBtn.AutoButtonColor = false
-	ConfirmExecuteBtn.Text = "Execute  ›"
-	ConfirmReviewDot.BackgroundColor3 = Theme.Success
-	ConfirmAccentBar.BackgroundColor3 = Theme.Accent
-	ConfirmGlow.BackgroundColor3 = Theme.Accent
-	ConfirmIconHolder.BackgroundColor3 = Theme.Accent
-	ConfirmIconStroke.Color = Theme.Accent
-	ConfirmIcon.TextColor3 = Theme.Accent
-	ConfirmExecuteBtn.BackgroundColor3 = Theme.Execution or Theme.Accent
-	ConfirmExecuteStroke.Color = Theme.Execution or Theme.Accent
-	ConfirmBox.Position = UDim2.new(0.5, 0, 0.5, 18)
-	ConfirmBox.Size = IsMobile and UDim2.new(0, 312, 0, 228) or UDim2.new(0, 420, 0, 250)
-	ConfirmOverlay.BackgroundTransparency = 1
+	ConfirmExecuteBtn.AutoButtonColor = true
+	ConfirmExecuteBtn.Text = "Execute"
+	ConfirmOverlay.BackgroundTransparency = 0.5
 	ConfirmOverlay.Visible = true
 	ConfirmOverlay.Active = true
-	_VH_SafeTween(ConfirmOverlay, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.34})
-	_VH_SafeTween(ConfirmBox, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.5, 0)})
 end
 function CloseConfirmDialog(shouldExecute)
 	if not isConfirming then return end
 	ConfirmExecuteBtn.Active = false
+	ConfirmOverlay.BackgroundTransparency = 1
+	ConfirmOverlay.Visible = false
+	ConfirmOverlay.Active = false
 	isConfirming = false
 	local cb = pendingExecuteCallback
 	pendingExecuteCallback = nil
-	local closeGeneration = CatalogGeneration
-	_VH_SafeTween(ConfirmOverlay, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
-	_VH_SafeTween(ConfirmBox, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0.5, 10)})
-	task.delay(0.13, function()
-		if isDestroying then return end
-		if closeGeneration ~= CatalogGeneration then return end
-		if ConfirmOverlay then
-			ConfirmOverlay.Visible = false
-			ConfirmOverlay.Active = false
-		end
-	end)
-	if shouldExecute and type(cb) == "function" then
-		task.spawn(function()
-			if not isDestroying then cb() end
-		end)
-	end
+	if shouldExecute and type(cb) == "function" then task.spawn(cb) end
 end
 _VH_RegConn(ConfirmCancelBtn.Activated:Connect(_VH_CreateDebounce(0.1, function() CloseConfirmDialog(false) end)))
 _VH_RegConn(ConfirmExecuteBtn.Activated:Connect(function()
@@ -1619,9 +1529,9 @@ end))
 _VH_RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 	if not isConfirming then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		local pos = input.Position
-		local bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
-		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
+		pos = input.Position
+		bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
+		inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
 		if not inside then CloseConfirmDialog(false) end
 	end
 end))
@@ -1647,16 +1557,9 @@ end
 BindToggleKey(ToggleKeybind)
 _VH_RegConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isConfirming then
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			if input.KeyCode == Enum.KeyCode.Escape then
-				CloseConfirmDialog(false)
-				return
-			elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
-				AttemptActionWithCooldown(function()
-					CloseConfirmDialog(true)
-				end)
-				return
-			end
+		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Escape then
+			CloseConfirmDialog(false)
+			return
 		end
 	end
 end))
@@ -1893,6 +1796,64 @@ SortDropdownBtn.Font = Enum.Font.GothamBold; SortDropdownBtn.ZIndex = 51; SortDr
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
 SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
+
+RecommendationPanel = Instance.new("Frame", ScriptsView)
+RecommendationPanel.Name = "SmartRecommendationPanel"
+RecommendationPanel.Size = UDim2.new(1, 0, 0, IsMobile and 116 or 104)
+RecommendationPanel.BackgroundColor3 = Color3.fromRGB(24, 31, 52)
+RecommendationPanel.BorderSizePixel = 0
+RecommendationPanel.LayoutOrder = 0
+RecommendationPanel.Visible = false
+Instance.new("UICorner", RecommendationPanel).CornerRadius = UDim.new(0, 8)
+RecommendationPanelStroke = Instance.new("UIStroke", RecommendationPanel)
+RecommendationPanelStroke.Color = Color3.fromRGB(79, 70, 229)
+RecommendationPanelStroke.Transparency = 0.2
+RecommendationPanelStroke.Thickness = 1
+RecommendationPanelGradient = Instance.new("UIGradient", RecommendationPanel)
+RecommendationPanelGradient.Rotation = 0
+RecommendationPanelGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 41, 70)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 29, 55))
+})
+RecommendationTitle = Instance.new("TextLabel", RecommendationPanel)
+RecommendationTitle.Size = UDim2.new(1, -20, 0, 18)
+RecommendationTitle.Position = UDim2.new(0, 10, 0, 8)
+RecommendationTitle.BackgroundTransparency = 1
+RecommendationTitle.Text = "✦ Recommended for You"
+RecommendationTitle.TextColor3 = Theme.TextPrimary
+RecommendationTitle.Font = Enum.Font.GothamBold
+RecommendationTitle.TextSize = IsMobile and 12 or 13
+RecommendationTitle.TextXAlignment = Enum.TextXAlignment.Left
+RecommendationSubtitle = Instance.new("TextLabel", RecommendationPanel)
+RecommendationSubtitle.Size = UDim2.new(1, -20, 0, 18)
+RecommendationSubtitle.Position = UDim2.new(0, 10, 0, 27)
+RecommendationSubtitle.BackgroundTransparency = 1
+RecommendationSubtitle.Text = "Other games you may like based on your current game."
+RecommendationSubtitle.TextColor3 = Theme.TextSecondary
+RecommendationSubtitle.Font = Enum.Font.Gotham
+RecommendationSubtitle.TextSize = IsMobile and 9 or 10
+RecommendationSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+RecommendationSubtitle.TextTruncate = Enum.TextTruncate.AtEnd
+RecommendationList = Instance.new("ScrollingFrame", RecommendationPanel)
+RecommendationList.Size = UDim2.new(1, -20, 0, 40)
+RecommendationList.Position = UDim2.new(0, 10, 0, IsMobile and 68 or 61)
+RecommendationList.BackgroundTransparency = 1
+RecommendationList.BorderSizePixel = 0
+RecommendationList.ScrollBarThickness = 0
+RecommendationList.ScrollingDirection = Enum.ScrollingDirection.X
+RecommendationList.AutomaticCanvasSize = Enum.AutomaticSize.X
+RecommendationList.CanvasSize = UDim2.new(0, 0, 0, 0)
+RecommendationList.ClipsDescendants = true
+RecommendationList.Active = true
+RecommendationList.ZIndex = 4
+RecommendationListLayout = Instance.new("UIListLayout", RecommendationList)
+RecommendationListLayout.FillDirection = Enum.FillDirection.Horizontal
+RecommendationListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+RecommendationListLayout.Padding = UDim.new(0, 6)
+RecommendationListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+RecommendationListPadding = Instance.new("UIPadding", RecommendationList)
+RecommendationListPadding.PaddingRight = UDim.new(0, 4)
+
 DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
 DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
 DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownContainer.BorderSizePixel = 0
@@ -1962,6 +1923,9 @@ function UpdateFilter()
 	task.defer(function()
 		if isDestroying or currentVersion ~= filterVersion then return end
 		local query = string.lower(string.gsub(SearchInput.Text or "", "^%s*(.-)%s*$", "%1"))
+		if RecommendationPanel and RecommendationPanel.Parent then
+			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and query == "" and not FilterFavoritesActive
+		end
 		local words = {}
 		for word in string.gmatch(query, "%S+") do words[#words + 1] = word end
 		local matches = {}
@@ -1999,8 +1963,10 @@ function UpdateFilter()
 		end
 		if currentVersion ~= filterVersion then return end
 		table.sort(matches, function(a, b)
-			if currentSort == "Most Relevant" and a.Recommended ~= b.Recommended then
-				return a.Recommended == true
+			if currentSort == "Most Relevant" then
+				if a.Recommended ~= b.Recommended then return a.Recommended == true end
+				if a.RecommendationScore ~= b.RecommendationScore then return a.RecommendationScore > b.RecommendationScore end
+				if a.RecommendationRank ~= b.RecommendationRank then return a.RecommendationRank < b.RecommendationRank end
 			end
 			if currentSort == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
@@ -2157,7 +2123,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Smart Recommendations that suggest other games using catalog metadata, favorites, tags, and recent updates.\n• Improved recommendation filtering based on the current place/game.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
@@ -2175,6 +2141,191 @@ end
 function IsRecommendedForCurrentPlace(data)
 	local allowedPlaceId = tonumber(data and data.PlaceId) or 0
 	return PlaceId ~= 0 and allowedPlaceId == PlaceId
+end
+
+function _VH_GetRecommendationReason(reasonType, overlapCount, hasFavoriteSignal, isRecent)
+	if reasonType == "CURRENT" then return "Matches your current game" end
+	if reasonType == "CATEGORY" then return "Related to your current game" end
+	if hasFavoriteSignal then return "Similar to your favorites" end
+	if overlapCount and overlapCount > 0 then return "Shares similar game tags" end
+	if isRecent then return "Recently updated" end
+	return "Popular in the catalog"
+end
+
+function _VH_BuildRecommendationState()
+	RecommendationGeneration = RecommendationGeneration + 1
+	local generation = RecommendationGeneration
+	local currentSet, favoriteSet, currentCategories, currentTags, currentCount = _VH_GetRecommendationContext(RegisteredScripts)
+	local candidates = {}
+	local selected = {}
+	local selectedPlaces = {}
+	local otherCandidates = {}
+	local now = os.time()
+
+	for _, entry in ipairs(RegisteredScripts) do
+		if generation ~= RecommendationGeneration then return {}, nil end
+		local data = entry and entry.Data or nil
+		if type(data) == "table" then
+			local placeId = tonumber(data.PlaceId) or 0
+			local samePlace = PlaceId ~= 0 and placeId ~= 0 and placeId == PlaceId
+			local score = 0
+			local reasonType = "FALLBACK"
+			local overlapCount = 0
+			local favoriteOverlap = 0
+			local categoryMatch = false
+			local isRecent = false
+			if samePlace then
+				score = 1000
+				reasonType = "CURRENT"
+			else
+				local tokens = _VH_GetRecommendationTokenSet(data)
+				overlapCount = _VH_CountTokenOverlap(tokens, currentSet)
+				favoriteOverlap = _VH_CountTokenOverlap(tokens, favoriteSet)
+				local category = type(data.Category) == "string" and string.lower(string.gsub(data.Category, "^%s*(.-)%s*$", "%1")) or ""
+				categoryMatch = category ~= "" and currentCategories[category] == true
+				if categoryMatch then score = score + 35; reasonType = "CATEGORY" end
+				if overlapCount > 0 then score = score + math.min(overlapCount * 10, 60) end
+				if favoriteOverlap > 0 then score = score + math.min(favoriteOverlap * 7, 35) end
+				local tags = _VH_NormalizeRecommendationList(data.Tags)
+				for _, tag in ipairs(tags) do
+					if currentTags[tag] then score = score + 12; break end
+				end
+				local age = now - GetSafeTimestamp(data.LastUpdated)
+				if age >= 0 and age <= 7 * 86400 then score = score + 10; isRecent = true end
+				score = score + math.max(0, (NormalizeTagType(data.TagType) == "HOT" and 8 or 0))
+				score = score + math.max(0, (NormalizeTagType(data.TagType) == "FEATURED" and 7 or 0))
+				if placeId ~= 0 then score = score + 3 end
+			end
+			local reason = _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap > 0, isRecent)
+			entry.RecommendationScore = score
+			entry.RecommendationReason = reason
+			entry.RecommendationType = samePlace and "CURRENT" or "OTHER"
+			entry.Recommended = samePlace
+			if not samePlace and placeId ~= 0 then
+				otherCandidates[#otherCandidates + 1] = { Entry = entry, Score = score, PlaceId = placeId, Reason = reason }
+			end
+		end
+	end
+
+	table.sort(otherCandidates, function(a, b)
+		if a.Score ~= b.Score then return a.Score > b.Score end
+		if a.Entry.LastUpdatedNumber ~= b.Entry.LastUpdatedNumber then return a.Entry.LastUpdatedNumber > b.Entry.LastUpdatedNumber end
+		return a.Entry.SearchTitle < b.Entry.SearchTitle
+	end)
+
+	for _, candidate in ipairs(otherCandidates) do
+		if #selected < 6 and not selectedPlaces[candidate.PlaceId] then
+			selectedPlaces[candidate.PlaceId] = true
+			selected[#selected + 1] = candidate
+		end
+		if #selected >= 6 then break end
+	end
+	
+	-- Testing-phase fallback: make sure the user can discover other games
+	-- even when the catalog has no tags/category data yet.
+	if #selected < 3 then
+		for _, candidate in ipairs(otherCandidates) do
+			if #selected >= 3 then break end
+			if not selectedPlaces[candidate.PlaceId] then
+				selectedPlaces[candidate.PlaceId] = true
+				candidate.Score = math.max(candidate.Score, 1)
+				candidate.Reason = candidate.Reason == "Popular in the catalog" and "More games in Velox Hub" or candidate.Reason
+				selected[#selected + 1] = candidate
+			end
+		end
+	end
+
+	for index, candidate in ipairs(selected) do
+		if candidate and candidate.Entry then
+			candidate.Entry.RecommendationRank = index
+			candidate.Entry.RecommendationScore = candidate.Score
+			candidate.Entry.RecommendationReason = candidate.Reason
+			candidate.Entry.RecommendationType = "SMART"
+			candidate.Entry.Recommended = true
+			candidates[#candidates + 1] = candidate
+		end
+	end
+
+	return candidates, currentCount
+end
+
+function _VH_RefreshRecommendationPanel(items, currentCount)
+	if not RecommendationPanel or not RecommendationPanel.Parent or not RecommendationList then return end
+	for _, connection in ipairs(RecommendationConnections) do
+		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
+	end
+	table.clear(RecommendationConnections)
+	for _, child in ipairs(RecommendationList:GetChildren()) do
+		if child:IsA("GuiButton") or child:IsA("TextLabel") or child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	table.clear(RecommendationItems)
+	for index, item in ipairs(items or {}) do
+		if index > 3 then break end
+		local entry = item.Entry
+		if entry and entry.Instance and entry.Instance.Parent then
+			RecommendationItems[index] = entry
+			local button = Instance.new("TextButton", RecommendationList)
+			button.Size = UDim2.new(0, IsMobile and 144 or 168, 0, 38)
+			button.BackgroundColor3 = Color3.fromRGB(30, 41, 66)
+			button.BorderSizePixel = 0
+			button.AutoButtonColor = false
+			button.Text = ""
+			button.LayoutOrder = index
+			button.ZIndex = 5
+			Instance.new("UICorner", button).CornerRadius = UDim.new(0, 6)
+			local buttonStroke = Instance.new("UIStroke", button)
+			buttonStroke.Color = Color3.fromRGB(67, 78, 110)
+			buttonStroke.Transparency = 0.2
+			local nameLabel = Instance.new("TextLabel", button)
+			nameLabel.Size = UDim2.new(1, -12, 0, 16)
+			nameLabel.Position = UDim2.new(0, 6, 0, 3)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.Text = tostring(entry.ExactName or entry.Name or "Unknown Game")
+			nameLabel.TextColor3 = Theme.TextPrimary
+			nameLabel.Font = Enum.Font.GothamBold
+			nameLabel.TextSize = IsMobile and 9 or 10
+			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.ZIndex = 6
+			local reasonLabel = Instance.new("TextLabel", button)
+			reasonLabel.Size = UDim2.new(1, -12, 0, 14)
+			reasonLabel.Position = UDim2.new(0, 6, 0, 20)
+			reasonLabel.BackgroundTransparency = 1
+			reasonLabel.Text = tostring(item.Reason or "More games in Velox Hub")
+			reasonLabel.TextColor3 = Theme.TextSecondary
+			reasonLabel.Font = Enum.Font.Gotham
+			reasonLabel.TextSize = IsMobile and 8 or 9
+			reasonLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
+			reasonLabel.ZIndex = 6
+			ApplyInteractiveAnimations(button, button.BackgroundColor3, Color3.fromRGB(40, 53, 82), Color3.fromRGB(18, 26, 48), nil, nil, nil, RecommendationConnections)
+			RecommendationConnections[#RecommendationConnections + 1] = button.Activated:Connect(function()
+				if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
+				local offset = entry.Instance.AbsolutePosition.Y - ScriptsView.AbsolutePosition.Y + ScriptsView.CanvasPosition.Y - 10
+				ScriptsView.CanvasPosition = Vector2.new(0, math.max(0, offset))
+			end)
+		end
+	end
+
+	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and not FilterFavoritesActive
+	RecommendationPanel.Visible = visible
+	if currentCount and currentCount > 0 then
+		RecommendationSubtitle.Text = #RecommendationItems > 0 and "Other games you may like based on this game and your favorites." or "No other game matches found yet."
+	else
+		RecommendationSubtitle.Text = #RecommendationItems > 0 and "Discover other games available in Velox Hub." or "Browse the catalog to build recommendations."
+	end
+end
+
+function _VH_RefreshRecommendations()
+	local items, currentCount = _VH_BuildRecommendationState()
+	for _, entry in ipairs(RegisteredScripts) do
+		if type(entry.SetRecommendation) == "function" then
+			entry.SetRecommendation(entry.Recommended == true, entry.RecommendationReason or "", entry.RecommendationType or "OTHER", entry.RecommendationScore or 0)
+		end
+	end
+	_VH_RefreshRecommendationPanel(items, currentCount)
 end
 function _VH_NormalizeAutoExecuteName(value)
 	if type(value) ~= "string" then return "" end
@@ -2309,6 +2460,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local tagConfig = TagTypeConfig[tagType]
 	local exactName = type(data.Name) == "string" and data.Name or "Unnamed Script"
 	local isRecommended = IsRecommendedForCurrentPlace(data)
+	local recommendationReason = isRecommended and "Matches your current game" or ""
+	local recommendationType = isRecommended and "CURRENT" or "OTHER"
+	local recommendationScore = isRecommended and 1000 or 0
 	local scriptId = StableScriptId(data) or ("name:" .. string.lower(exactName))
 	local safeImageAssetId = type(data.ImageAssetId) == "string" and data.ImageAssetId or "rbxassetid://99657752206675"
 	local entryConnections = {}
@@ -2373,7 +2527,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	titleLbl.LayoutOrder = 1; titleLbl.ZIndex = 3
 
 	local recommendBadge = Instance.new("Frame", titleContainer)
-	recommendBadge.Size = UDim2.new(0, 68, 0, 20)
+	recommendBadge.Size = UDim2.new(0, IsMobile and 88 or 96, 0, 20)
 	recommendBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 	recommendBadge.Visible = isRecommended
 	recommendBadge.LayoutOrder = 2
@@ -2392,7 +2546,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local recommendText = Instance.new("TextLabel", recommendBadge)
 	recommendText.Size = UDim2.new(1, 0, 1, 0)
 	recommendText.BackgroundTransparency = 1
-	recommendText.Text = "FOR YOU"
+	recommendText.Text = recommendationType == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 	recommendText.TextColor3 = Color3.fromRGB(255, 255, 255)
 	recommendText.Font = Enum.Font.GothamBold
 	recommendText.TextSize = IsMobile and 8 or 9
@@ -2487,8 +2641,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local tagSearch = tagType
 	local scriptEntry = {
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
-		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or ""}, " ")),
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31"), TimeLabel = dateLbl
+		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or "you may like"}, " ")),
+		Data = data,
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -2504,15 +2659,27 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
 		ApplyTagBorder(card, tagType, cardStroke)
 		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
+		cardStroke.Thickness = isRecommended and 1.5 or 1
+		if isRecommended then cardStroke.Color = Color3.fromRGB(129, 140, 248) end
 		recommendBadge.Visible = isRecommended
-		if isRecommended then
-			cardStroke.Color = Color3.fromRGB(129, 140, 248)
-			cardStroke.Thickness = 1.5
-		end
+		recommendText.Text = recommendationType == "SMART" and "YOU MAY LIKE" or "FOR YOU"
+		badgeRow.Visible = isRecommended or tagType ~= "NONE"
+		scriptEntry.SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagType, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", compatible and "compatible" or "game-only", isRecommended and (recommendationType == "SMART" and "you may like" or "recommended for you") or ""}, " "))
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
 		aeState.BackgroundColor3 = compatible and (isON and Theme.Success or Theme.Error) or Theme.Warning
+	end
+	scriptEntry.SetRecommendation = function(enabled, reason, kind, score)
+		isRecommended = enabled == true
+		recommendationReason = tostring(reason or "")
+		recommendationType = tostring(kind or "OTHER")
+		recommendationScore = tonumber(score) or 0
+		scriptEntry.Recommended = isRecommended
+		scriptEntry.RecommendationReason = recommendationReason
+		scriptEntry.RecommendationType = recommendationType
+		scriptEntry.RecommendationScore = recommendationScore
+		if type(scriptEntry.UpdateUI) == "function" then scriptEntry.UpdateUI() end
 	end
 	scriptEntry.UpdateUI()
 	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
@@ -2523,7 +2690,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		else
 			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
-		SaveConfiguration(); RefreshAllCardStates(); UpdateFilter()
+		SaveConfiguration(); _VH_RefreshRecommendations(); RefreshAllCardStates(); UpdateFilter()
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
@@ -2608,7 +2775,7 @@ function BuildCatalogFingerprint(entries)
 				tostring(entry.Id or StableScriptId(entry) or ""), tostring(entry.Name or ""), tostring(entry.Description or ""), tostring(entry.RawUrl or ""),
 				tostring(entry.ImageAssetId or ""), tostring(NormalizeTagType(entry.TagType)),
 				tostring(GetSafeTimestamp(entry.LastUpdated)), tostring(tonumber(entry.PlaceId) or 0),
-				tostring(entry.Category or ""), tostring(entry.Author or ""), tostring(index)
+				tostring(entry.Category or ""), tostring(entry.Author or ""), _VH_RecommendationListFingerprint(entry.Tags), tostring(index)
 			}, "\31")
 		end
 	end
@@ -2624,6 +2791,7 @@ function ClearCatalogCardsForRefresh()
 	end
 	EmptyStateMessage.Visible = false
 	EmptyStateMessage.Text = ""
+	if RecommendationPanel then RecommendationPanel.Visible = false end
 	ScriptsView.CanvasPosition = Vector2.new(0, 0)
 end
 function RestoreCatalogCardsAfterRefreshFailure()
@@ -2739,6 +2907,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 							PlaceId = placeId,
 							Category = type(entry.Category) == "string" and entry.Category or "",
 							Author = type(entry.Author) == "string" and entry.Author or "",
+							Tags = _VH_NormalizeRecommendationList(entry.Tags),
 							Source = rawUrl:match("^https?://([^/]+)") or ""
 						}
 					elseif id and seenIds[id] then
@@ -2755,6 +2924,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				for _, existingEntry in ipairs(RegisteredScripts) do
 					if existingEntry and existingEntry.Instance and existingEntry.Instance.Parent then existingEntry.Instance.Visible = true end
 				end
+				_VH_RefreshRecommendations()
 				RefreshAllCardStates()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
@@ -2775,7 +2945,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
 			local function BuildEntryFingerprint(data)
-				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or "") }, "\31")
+				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31")
 			end
 			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
@@ -2829,6 +2999,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
+			_VH_RefreshRecommendations()
 			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
