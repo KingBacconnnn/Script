@@ -1728,7 +1728,7 @@ Instance.new("UICorner", ScriptDetailsAccent).CornerRadius = UDim.new(1, 0)
 ScriptDetailsUIScale = Instance.new("UIScale", ScriptDetailsBox)
 ScriptDetailsUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 ScriptDetailsHeader = Instance.new("Frame", ScriptDetailsBox)
-ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 84 or 92)
+ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 72 or 78)
 ScriptDetailsHeader.Position = UDim2.new(0, 14, 0, 20)
 ScriptDetailsHeader.BackgroundTransparency = 1
 ScriptDetailsImage = Instance.new("ImageLabel", ScriptDetailsHeader)
@@ -1743,8 +1743,8 @@ ScriptDetailsImageStroke.Color = Theme.Stroke
 ScriptDetailsImageStroke.Transparency = 0.15
 ScriptDetailsImageStroke.Thickness = 1
 ScriptDetailsName = Instance.new("TextLabel", ScriptDetailsHeader)
-ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 106 or 122), 0, 40)
-ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0, 4)
+ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, IsMobile and 34 or 38)
+ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0, 2)
 ScriptDetailsName.BackgroundTransparency = 1
 ScriptDetailsName.Text = "Script Details"
 ScriptDetailsName.TextColor3 = Theme.TextPrimary
@@ -1756,7 +1756,7 @@ ScriptDetailsName.TextXAlignment = Enum.TextXAlignment.Left
 ScriptDetailsName.TextYAlignment = Enum.TextYAlignment.Top
 ScriptDetailsBadge = Instance.new("Frame", ScriptDetailsHeader)
 ScriptDetailsBadge.Size = UDim2.new(0, IsMobile and 88 or 96, 0, 20)
-ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 1, -25)
+ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 39 or 42)
 ScriptDetailsBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
 ScriptDetailsBadge.BorderSizePixel = 0
 ScriptDetailsBadge.Visible = false
@@ -1783,8 +1783,8 @@ ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
 ScriptDetailsCloseStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(ScriptDetailsClose, Theme.Card, Theme.CardHover, Theme.BackgroundMain, ScriptDetailsCloseStroke, Theme.Stroke, Theme.Accent)
 ScriptDetailsContent = Instance.new("ScrollingFrame", ScriptDetailsBox)
-ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 170 or 178))
-ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 108 or 118)
+ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 158 or 160))
+ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 96 or 98)
 ScriptDetailsContent.BackgroundTransparency = 1
 ScriptDetailsContent.BorderSizePixel = 0
 ScriptDetailsContent.ScrollBarThickness = 2
@@ -2662,7 +2662,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Limited favorite-derived recommendation context to a small bounded sample and capped its scoring influence so favorites cannot overpower current-game relevance.\n• Batched favorite changes before saving and refreshing recommendations to reduce repeated local I/O and recommendation churn from rapid toggling.\n• Raised secondary and muted UI text contrast for clearer readability without adding a settings toggle.\n• Added a themed script details panel with metadata, tags, compatibility, favorites, auto-execute state, and update information.\n• Added a compact Details action to each script card without replacing the existing card behavior.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Limited favorite-derived recommendation context to a small bounded sample and capped its scoring influence so favorites cannot overpower current-game relevance.\n• Batched favorite changes before saving and refreshing recommendations to reduce repeated local I/O and recommendation churn from rapid toggling.\n• Raised secondary and muted UI text contrast for clearer readability without adding a settings toggle.\n• Added a themed script details panel with metadata, tags, compatibility, favorites, auto-execute state, and update information.\n• Adjusted the details header to use the previously empty vertical space more efficiently and reduced the Details button to a borderless themed control.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3356,17 +3356,22 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 62 or 82, 0, 22); detailsBtn.BackgroundColor3 = Theme.BackgroundSecondary
+	detailsBtn.Size = UDim2.new(0, IsMobile and 62 or 78, 0, 22); detailsBtn.BackgroundColor3 = Color3.fromRGB(34, 45, 76)
 	detailsBtn.Text = "Details"; detailsBtn.TextColor3 = Theme.TextPrimary; detailsBtn.Font = Enum.Font.GothamBold; detailsBtn.TextSize = IsMobile and 8 or 9
 	detailsBtn.AutoButtonColor = false; detailsBtn.LayoutOrder = 2; detailsBtn.ZIndex = 2
 	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
-	local detailsStroke = Instance.new("UIStroke", detailsBtn); detailsStroke.Color = Theme.Stroke; detailsStroke.Transparency = 0.1
+	detailsGradient = Instance.new("UIGradient", detailsBtn)
+	detailsGradient.Rotation = 90
+	detailsGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 52, 88)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 38, 65))
+	})
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundSecondary, Theme.CardHover, Theme.BackgroundMain, detailsStroke, Theme.Stroke, Theme.Accent, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Color3.fromRGB(34, 45, 76), Color3.fromRGB(48, 60, 99), Color3.fromRGB(25, 34, 58), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
