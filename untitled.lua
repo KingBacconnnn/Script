@@ -140,6 +140,8 @@ KeybindCaptureConnection = nil
 DropdownContainer = nil
 ToastContainer = nil
 ConfirmOverlay = nil
+ScriptDetailsOverlay = nil
+ScriptDetailsUIScale = nil
 GlobalCooldownBanner = nil
 GlobalCooldownLoopVersion = 0
 GlobalActionCooldownEndTime = 0
@@ -244,6 +246,7 @@ function _VH_CleanUpMemory()
 	if DropdownContainer and DropdownContainer.Parent then pcall(function() DropdownContainer:Destroy() end) end
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
+	if ScriptDetailsOverlay and ScriptDetailsOverlay.Parent then pcall(function() ScriptDetailsOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
 	for _, connection in ipairs(RecommendationConnections) do
 		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
@@ -1037,6 +1040,9 @@ function ApplyPanelUIScale(scaleValue)
 	if PanelUIScale and PanelUIScale.Parent then
 		_VH_SafeTween(PanelUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
 	end
+	if ScriptDetailsUIScale and ScriptDetailsUIScale.Parent then
+		_VH_SafeTween(ScriptDetailsUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
+	end
 	task.defer(function()
 		if isDestroying or not MainPanel or not MainPanel.Parent then return end
 		camera = workspace.CurrentCamera
@@ -1682,6 +1688,273 @@ _VH_RegConn(ConfirmOverlay.InputBegan:Connect(function(input)
 		bPos, bSize = ConfirmBox.AbsolutePosition, ConfirmBox.AbsoluteSize
 		inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
 		if not inside then CloseConfirmDialog(false) end
+	end
+end))
+ScriptDetailsOverlay = Instance.new("Frame", ScreenGui)
+ScriptDetailsOverlay.Name = "ScriptDetailsOverlay"
+ScriptDetailsOverlay.Size = UDim2.new(1, 0, 1, 0)
+ScriptDetailsOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ScriptDetailsOverlay.BackgroundTransparency = 1
+ScriptDetailsOverlay.Visible = false
+ScriptDetailsOverlay.Active = false
+ScriptDetailsOverlay.ZIndex = 500
+ScriptDetailsBox = Instance.new("Frame", ScriptDetailsOverlay)
+ScriptDetailsBox.Size = IsMobile and UDim2.new(0, 322, 0, 438) or UDim2.new(0, 420, 0, 468)
+ScriptDetailsBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+ScriptDetailsBox.AnchorPoint = Vector2.new(0.5, 0.5)
+ScriptDetailsBox.BackgroundColor3 = Theme.BackgroundSecondary
+ScriptDetailsBox.BorderSizePixel = 0
+ScriptDetailsBox.ClipsDescendants = true
+ScriptDetailsBox.ZIndex = 501
+Instance.new("UICorner", ScriptDetailsBox).CornerRadius = UDim.new(0, 14)
+ScriptDetailsStroke = Instance.new("UIStroke", ScriptDetailsBox)
+ScriptDetailsStroke.Color = Theme.Accent
+ScriptDetailsStroke.Transparency = 0.2
+ScriptDetailsStroke.Thickness = 1
+ScriptDetailsGradient = Instance.new("UIGradient", ScriptDetailsBox)
+ScriptDetailsGradient.Rotation = 135
+ScriptDetailsGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 32, 60)),
+	ColorSequenceKeypoint.new(0.55, Theme.BackgroundSecondary),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 18, 32))
+})
+ScriptDetailsAccent = Instance.new("Frame", ScriptDetailsBox)
+ScriptDetailsAccent.Size = UDim2.new(1, -28, 0, 3)
+ScriptDetailsAccent.Position = UDim2.new(0, 14, 0, 10)
+ScriptDetailsAccent.BackgroundColor3 = Theme.Accent
+ScriptDetailsAccent.BorderSizePixel = 0
+ScriptDetailsAccent.ZIndex = 503
+Instance.new("UICorner", ScriptDetailsAccent).CornerRadius = UDim.new(1, 0)
+ScriptDetailsUIScale = Instance.new("UIScale", ScriptDetailsBox)
+ScriptDetailsUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+ScriptDetailsHeader = Instance.new("Frame", ScriptDetailsBox)
+ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 84 or 92)
+ScriptDetailsHeader.Position = UDim2.new(0, 14, 0, 20)
+ScriptDetailsHeader.BackgroundTransparency = 1
+ScriptDetailsImage = Instance.new("ImageLabel", ScriptDetailsHeader)
+ScriptDetailsImage.Size = UDim2.new(0, IsMobile and 58 or 66, 0, IsMobile and 58 or 66)
+ScriptDetailsImage.Position = UDim2.new(0, 0, 0.5, -(IsMobile and 29 or 33))
+ScriptDetailsImage.BackgroundColor3 = Theme.BackgroundMain
+ScriptDetailsImage.BorderSizePixel = 0
+ScriptDetailsImage.ScaleType = Enum.ScaleType.Crop
+Instance.new("UICorner", ScriptDetailsImage).CornerRadius = UDim.new(0, 10)
+ScriptDetailsImageStroke = Instance.new("UIStroke", ScriptDetailsImage)
+ScriptDetailsImageStroke.Color = Theme.Stroke
+ScriptDetailsImageStroke.Transparency = 0.15
+ScriptDetailsImageStroke.Thickness = 1
+ScriptDetailsName = Instance.new("TextLabel", ScriptDetailsHeader)
+ScriptDetailsName.Size = UDim2.new(1, -(IsMobile and 106 or 122), 0, 40)
+ScriptDetailsName.Position = UDim2.new(0, IsMobile and 70 or 80, 0, 4)
+ScriptDetailsName.BackgroundTransparency = 1
+ScriptDetailsName.Text = "Script Details"
+ScriptDetailsName.TextColor3 = Theme.TextPrimary
+ScriptDetailsName.Font = Enum.Font.GothamBold
+ScriptDetailsName.TextSize = IsMobile and 13 or 16
+ScriptDetailsName.TextWrapped = true
+ScriptDetailsName.TextTruncate = Enum.TextTruncate.AtEnd
+ScriptDetailsName.TextXAlignment = Enum.TextXAlignment.Left
+ScriptDetailsName.TextYAlignment = Enum.TextYAlignment.Top
+ScriptDetailsBadge = Instance.new("Frame", ScriptDetailsHeader)
+ScriptDetailsBadge.Size = UDim2.new(0, IsMobile and 88 or 96, 0, 20)
+ScriptDetailsBadge.Position = UDim2.new(0, IsMobile and 70 or 80, 1, -25)
+ScriptDetailsBadge.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
+ScriptDetailsBadge.BorderSizePixel = 0
+ScriptDetailsBadge.Visible = false
+Instance.new("UICorner", ScriptDetailsBadge).CornerRadius = UDim.new(0, 7)
+ScriptDetailsBadgeText = Instance.new("TextLabel", ScriptDetailsBadge)
+ScriptDetailsBadgeText.Size = UDim2.new(1, 0, 1, 0)
+ScriptDetailsBadgeText.BackgroundTransparency = 1
+ScriptDetailsBadgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ScriptDetailsBadgeText.Font = Enum.Font.GothamBold
+ScriptDetailsBadgeText.TextSize = 8
+ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
+ScriptDetailsClose = Instance.new("TextButton", ScriptDetailsHeader)
+ScriptDetailsClose.Size = UDim2.new(0, 28, 0, 28)
+ScriptDetailsClose.Position = UDim2.new(1, -28, 0, 0)
+ScriptDetailsClose.BackgroundColor3 = Theme.Card
+ScriptDetailsClose.BorderSizePixel = 0
+ScriptDetailsClose.AutoButtonColor = false
+ScriptDetailsClose.Text = "×"
+ScriptDetailsClose.TextColor3 = Theme.TextPrimary
+ScriptDetailsClose.Font = Enum.Font.GothamBold
+ScriptDetailsClose.TextSize = 20
+Instance.new("UICorner", ScriptDetailsClose).CornerRadius = UDim.new(1, 0)
+ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
+ScriptDetailsCloseStroke.Color = Theme.Stroke
+ApplyInteractiveAnimations(ScriptDetailsClose, Theme.Card, Theme.CardHover, Theme.BackgroundMain, ScriptDetailsCloseStroke, Theme.Stroke, Theme.Accent)
+ScriptDetailsContent = Instance.new("ScrollingFrame", ScriptDetailsBox)
+ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 170 or 178))
+ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 108 or 118)
+ScriptDetailsContent.BackgroundTransparency = 1
+ScriptDetailsContent.BorderSizePixel = 0
+ScriptDetailsContent.ScrollBarThickness = 2
+ScriptDetailsContent.ScrollBarImageColor3 = Theme.Stroke
+ScriptDetailsContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScriptDetailsContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScriptDetailsContent.ClipsDescendants = true
+ScriptDetailsLayout = Instance.new("UIListLayout", ScriptDetailsContent)
+ScriptDetailsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptDetailsLayout.Padding = UDim.new(0, 8)
+ScriptDetailsDescription = Instance.new("TextLabel", ScriptDetailsContent)
+ScriptDetailsDescription.Size = UDim2.new(1, -2, 0, 0)
+ScriptDetailsDescription.AutomaticSize = Enum.AutomaticSize.Y
+ScriptDetailsDescription.BackgroundTransparency = 1
+ScriptDetailsDescription.TextColor3 = Theme.TextSecondary
+ScriptDetailsDescription.Font = Enum.Font.Gotham
+ScriptDetailsDescription.TextSize = IsMobile and 10 or 11
+ScriptDetailsDescription.TextWrapped = true
+ScriptDetailsDescription.TextXAlignment = Enum.TextXAlignment.Left
+ScriptDetailsDescription.TextYAlignment = Enum.TextYAlignment.Top
+ScriptDetailsDescription.LayoutOrder = 1
+ScriptDetailsMeta = Instance.new("Frame", ScriptDetailsContent)
+ScriptDetailsMeta.Size = UDim2.new(1, -2, 0, 0)
+ScriptDetailsMeta.AutomaticSize = Enum.AutomaticSize.Y
+ScriptDetailsMeta.BackgroundColor3 = Theme.Card
+ScriptDetailsMeta.BorderSizePixel = 0
+ScriptDetailsMeta.LayoutOrder = 2
+Instance.new("UICorner", ScriptDetailsMeta).CornerRadius = UDim.new(0, 9)
+ScriptDetailsMetaPad = Instance.new("UIPadding", ScriptDetailsMeta)
+ScriptDetailsMetaPad.PaddingTop = UDim.new(0, 9)
+ScriptDetailsMetaPad.PaddingBottom = UDim.new(0, 9)
+ScriptDetailsMetaPad.PaddingLeft = UDim.new(0, 10)
+ScriptDetailsMetaPad.PaddingRight = UDim.new(0, 10)
+ScriptDetailsMetaLayout = Instance.new("UIListLayout", ScriptDetailsMeta)
+ScriptDetailsMetaLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptDetailsMetaLayout.Padding = UDim.new(0, 5)
+function _VH_SetDetailsMetaRow(order, labelText, valueText, valueColor)
+	local row = Instance.new("Frame", ScriptDetailsMeta)
+	row.Size = UDim2.new(1, 0, 0, 18)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = order
+	local label = Instance.new("TextLabel", row)
+	label.Size = UDim2.new(0.35, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = labelText
+	label.TextColor3 = Theme.TextSecondary
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = 9
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	local value = Instance.new("TextLabel", row)
+	value.Size = UDim2.new(0.65, 0, 1, 0)
+	value.Position = UDim2.new(0.35, 0, 0, 0)
+	value.BackgroundTransparency = 1
+	value.Text = valueText
+	value.TextColor3 = valueColor or Theme.TextPrimary
+	value.Font = Enum.Font.GothamMedium
+	value.TextSize = 9
+	value.TextXAlignment = Enum.TextXAlignment.Right
+	value.TextTruncate = Enum.TextTruncate.AtEnd
+	return row
+end
+ScriptDetailsTagsFrame = Instance.new("Frame", ScriptDetailsContent)
+ScriptDetailsTagsFrame.Size = UDim2.new(1, -2, 0, 0)
+ScriptDetailsTagsFrame.AutomaticSize = Enum.AutomaticSize.Y
+ScriptDetailsTagsFrame.BackgroundColor3 = Theme.Card
+ScriptDetailsTagsFrame.BorderSizePixel = 0
+ScriptDetailsTagsFrame.LayoutOrder = 3
+Instance.new("UICorner", ScriptDetailsTagsFrame).CornerRadius = UDim.new(0, 9)
+ScriptDetailsTagsPad = Instance.new("UIPadding", ScriptDetailsTagsFrame)
+ScriptDetailsTagsPad.PaddingTop = UDim.new(0, 8)
+ScriptDetailsTagsPad.PaddingBottom = UDim.new(0, 8)
+ScriptDetailsTagsPad.PaddingLeft = UDim.new(0, 10)
+ScriptDetailsTagsPad.PaddingRight = UDim.new(0, 10)
+ScriptDetailsTagsLabel = Instance.new("TextLabel", ScriptDetailsTagsFrame)
+ScriptDetailsTagsLabel.Size = UDim2.new(0, 42, 0, 18)
+ScriptDetailsTagsLabel.BackgroundTransparency = 1
+ScriptDetailsTagsLabel.Text = "Tags"
+ScriptDetailsTagsLabel.TextColor3 = Theme.TextSecondary
+ScriptDetailsTagsLabel.Font = Enum.Font.GothamMedium
+ScriptDetailsTagsLabel.TextSize = 9
+ScriptDetailsTagsLabel.TextXAlignment = Enum.TextXAlignment.Left
+ScriptDetailsTagsText = Instance.new("TextLabel", ScriptDetailsTagsFrame)
+ScriptDetailsTagsText.Size = UDim2.new(1, -48, 0, 0)
+ScriptDetailsTagsText.Position = UDim2.new(0, 48, 0, 0)
+ScriptDetailsTagsText.AutomaticSize = Enum.AutomaticSize.Y
+ScriptDetailsTagsText.BackgroundTransparency = 1
+ScriptDetailsTagsText.TextColor3 = Theme.TextPrimary
+ScriptDetailsTagsText.Font = Enum.Font.GothamMedium
+ScriptDetailsTagsText.TextSize = 9
+ScriptDetailsTagsText.TextWrapped = true
+ScriptDetailsTagsText.TextXAlignment = Enum.TextXAlignment.Left
+ScriptDetailsTagsText.TextYAlignment = Enum.TextYAlignment.Top
+ScriptDetailsActions = Instance.new("Frame", ScriptDetailsBox)
+ScriptDetailsActions.Size = UDim2.new(1, -28, 0, 34)
+ScriptDetailsActions.Position = UDim2.new(0, 14, 1, -48)
+ScriptDetailsActions.BackgroundTransparency = 1
+ScriptDetailsCloseBottom = Instance.new("TextButton", ScriptDetailsActions)
+ScriptDetailsCloseBottom.Size = UDim2.new(1, 0, 1, 0)
+ScriptDetailsCloseBottom.BackgroundColor3 = Theme.Accent
+ScriptDetailsCloseBottom.BorderSizePixel = 0
+ScriptDetailsCloseBottom.AutoButtonColor = false
+ScriptDetailsCloseBottom.Text = "Close"
+ScriptDetailsCloseBottom.TextColor3 = Color3.fromRGB(255, 255, 255)
+ScriptDetailsCloseBottom.Font = Enum.Font.GothamBold
+ScriptDetailsCloseBottom.TextSize = 10
+Instance.new("UICorner", ScriptDetailsCloseBottom).CornerRadius = UDim.new(0, 7)
+ScriptDetailsCloseBottomStroke = Instance.new("UIStroke", ScriptDetailsCloseBottom)
+ScriptDetailsCloseBottomStroke.Color = Theme.Accent
+ApplyInteractiveAnimations(ScriptDetailsCloseBottom, Theme.Accent, Color3.fromRGB(120, 123, 245), Color3.fromRGB(79, 82, 221), ScriptDetailsCloseBottomStroke, Theme.Accent, Theme.Accent)
+CurrentScriptDetails = nil
+function _VH_ClearDetailsMetadata()
+	for _, child in ipairs(ScriptDetailsMeta:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+end
+function _VH_CloseScriptDetails()
+	CurrentScriptDetails = nil
+	ScriptDetailsOverlay.Visible = false
+	ScriptDetailsOverlay.Active = false
+	ScriptDetailsOverlay.BackgroundTransparency = 1
+end
+function _VH_OpenScriptDetails(data, entry)
+	if isDestroying or type(data) ~= "table" or not ScriptDetailsOverlay then return end
+	CurrentScriptDetails = entry
+	ScriptDetailsImage.Image = type(data.ImageAssetId) == "string" and data.ImageAssetId or ""
+	ScriptDetailsName.Text = tostring(data.Name or "Unnamed Script")
+	local recommendationKind = entry and tostring(entry.RecommendationType or "") or ""
+	local recommended = entry and entry.Recommended == true
+	ScriptDetailsBadge.Visible = recommended
+	ScriptDetailsBadgeText.Text = recommendationKind == "SMART" and "YOU MAY LIKE" or "FOR YOU"
+	ScriptDetailsBadge.BackgroundColor3 = recommendationKind == "SMART" and Color3.fromRGB(79, 70, 229) or Color3.fromRGB(67, 56, 202)
+	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
+	_VH_ClearDetailsMetadata()
+	local compatibility = IsScriptCompatible(data)
+	local placeId = tonumber(data.PlaceId) or 0
+	local gameText = placeId == 0 and "Any game" or (placeId == PlaceId and "Current game" or "PlaceId " .. tostring(placeId))
+	_VH_SetDetailsMetaRow(1, "Category", type(data.Category) == "string" and data.Category ~= "" and data.Category or "General")
+	_VH_SetDetailsMetaRow(2, "Author", type(data.Author) == "string" and data.Author ~= "" and data.Author or "Not specified")
+	_VH_SetDetailsMetaRow(3, "Updated", FormatLastUpdatedLabel(data.LastUpdated))
+	_VH_SetDetailsMetaRow(4, "Game", gameText, placeId == 0 and Theme.Success or (placeId == PlaceId and Theme.Success or Theme.Warning))
+	_VH_SetDetailsMetaRow(5, "Compatibility", compatibility and "Compatible" or "Configured for another game", compatibility and Theme.Success or Theme.Warning)
+	_VH_SetDetailsMetaRow(6, "Favorite", SavedData.Favorites[entry.Id] and "Favorited" or "Not favorited", SavedData.Favorites[entry.Id] and Color3.fromRGB(250, 204, 21) or Theme.TextPrimary)
+	local autoOn = compatibility and SavedData.AutoExecutes[entry.Id] ~= nil
+	_VH_SetDetailsMetaRow(7, "Auto Execute", autoOn and "ON" or "OFF", autoOn and Theme.Success or Theme.TextPrimary)
+	local tagTypeValue = NormalizeTagType(data.TagType)
+	_VH_SetDetailsMetaRow(8, "Status", tagTypeValue ~= "NONE" and tagTypeValue or "Standard")
+	local tagValues = _VH_NormalizeRecommendationList(data.Tags)
+	ScriptDetailsTagsText.Text = #tagValues > 0 and table.concat(tagValues, "  •  ") or "No tags"
+	ScriptDetailsTagsText.TextColor3 = #tagValues > 0 and Theme.TextPrimary or Theme.TextSecondary
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local uiScale = math.max(0.8, math.min(1.2, tonumber(ScriptDetailsUIScale.Scale) or 1))
+	local baseWidth = IsMobile and 322 or 420
+	local baseHeight = IsMobile and 438 or 468
+	local fittedWidth = math.min(baseWidth, math.max(240, (viewport.X - 24) / uiScale))
+	local fittedHeight = math.min(baseHeight, math.max(260, (viewport.Y - 24) / uiScale))
+	ScriptDetailsBox.Size = UDim2.fromOffset(fittedWidth, fittedHeight)
+	ScriptDetailsOverlay.BackgroundTransparency = 0.5
+	ScriptDetailsOverlay.Visible = true
+	ScriptDetailsOverlay.Active = true
+end
+_VH_RegConn(ScriptDetailsClose.Activated:Connect(_VH_CreateDebounce(0.1, _VH_CloseScriptDetails)))
+_VH_RegConn(ScriptDetailsCloseBottom.Activated:Connect(_VH_CreateDebounce(0.1, _VH_CloseScriptDetails)))
+_VH_RegConn(ScriptDetailsOverlay.InputBegan:Connect(function(input)
+	if not ScriptDetailsOverlay.Visible then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local pos = input.Position
+		local bPos, bSize = ScriptDetailsBox.AbsolutePosition, ScriptDetailsBox.AbsoluteSize
+		local inside = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
+		if not inside then _VH_CloseScriptDetails() end
 	end
 end))
 ToggleKeybind = Enum.KeyCode.RightControl
@@ -2389,7 +2662,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Limited favorite-derived recommendation context to a small bounded sample and capped its scoring influence so favorites cannot overpower current-game relevance.\n• Batched favorite changes before saving and refreshing recommendations to reduce repeated local I/O and recommendation churn from rapid toggling.\n• Raised secondary and muted UI text contrast for clearer readability without adding a settings toggle.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Limited favorite-derived recommendation context to a small bounded sample and capped its scoring influence so favorites cannot overpower current-game relevance.\n• Batched favorite changes before saving and refreshing recommendations to reduce repeated local I/O and recommendation churn from rapid toggling.\n• Raised secondary and muted UI text contrast for clearer readability without adding a settings toggle.\n• Added a themed script details panel with metadata, tags, compatibility, favorites, auto-execute state, and update information.\n• Added a compact Details action to each script card without replacing the existing card behavior.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3067,9 +3340,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local btmRow = Instance.new("Frame", content)
 	btmRow.Size = UDim2.new(1, 0, 0, 22); btmRow.BackgroundTransparency = 1; btmRow.LayoutOrder = 3
 	local brLay = Instance.new("UIListLayout", btmRow)
-	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
+	brLay.FillDirection = Enum.FillDirection.Horizontal; brLay.SortOrder = Enum.SortOrder.LayoutOrder; brLay.Padding = UDim.new(0, IsMobile and 6 or 8); brLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	local autoExecBtn = Instance.new("TextButton", btmRow)
-	autoExecBtn.Size = UDim2.new(0, 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
+	autoExecBtn.Size = UDim2.new(0, IsMobile and 108 or 120, 0, 22); autoExecBtn.BackgroundColor3 = Theme.BackgroundMain
 	autoExecBtn.Text = ""; autoExecBtn.AutoButtonColor = false; autoExecBtn.ClipsDescendants = true; autoExecBtn.LayoutOrder = 1; autoExecBtn.ZIndex = 2
 	Instance.new("UICorner", autoExecBtn).CornerRadius = UDim.new(0, 6)
 	local aeLbl = Instance.new("TextLabel", autoExecBtn)
@@ -3082,11 +3355,18 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local aeStateTxt = Instance.new("TextLabel", aeState)
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
+	local detailsBtn = Instance.new("TextButton", btmRow)
+	detailsBtn.Size = UDim2.new(0, IsMobile and 62 or 82, 0, 22); detailsBtn.BackgroundColor3 = Theme.BackgroundSecondary
+	detailsBtn.Text = "Details"; detailsBtn.TextColor3 = Theme.TextPrimary; detailsBtn.Font = Enum.Font.GothamBold; detailsBtn.TextSize = IsMobile and 8 or 9
+	detailsBtn.AutoButtonColor = false; detailsBtn.LayoutOrder = 2; detailsBtn.ZIndex = 2
+	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
+	local detailsStroke = Instance.new("UIStroke", detailsBtn); detailsStroke.Color = Theme.Stroke; detailsStroke.Transparency = 0.1
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
-	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 2; starBtn.ZIndex = 2
+	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundSecondary, Theme.CardHover, Theme.BackgroundMain, detailsStroke, Theme.Stroke, Theme.Accent, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
@@ -3133,6 +3413,11 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if type(scriptEntry.UpdateUI) == "function" then scriptEntry.UpdateUI() end
 	end
 	scriptEntry.UpdateUI()
+	RegEntryConn(detailsBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
+		if isDestroying then return end
+		innerActionTime = tick()
+		_VH_OpenScriptDetails(data, scriptEntry)
+	end)))
 	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
