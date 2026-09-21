@@ -14,19 +14,21 @@ function _VH_GenerateRandomString(len)
 	end
 	return str
 end
-_G_Identifier = "VeloxHub_Core_Cleanup_V3_5"
+_G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
 Services = setmetatable({}, {
 	__index = function(self, key)
 		success, service = pcall(function() return game:GetService(key) end)
-		if success and service then
-			final = (type(cloneref) == "function") and cloneref(service) or service
-			self[key] = final
-			return final
+		if not success or not service then return nil end
+		final = service
+		if type(cloneref) == "function" then
+			cloneOk, cloneResult = pcall(cloneref, service)
+			if cloneOk and cloneResult then final = cloneResult end
 		end
-		return nil
+		self[key] = final
+		return final
 	end
 })
 Players = Services.Players
@@ -44,9 +46,20 @@ while not LocalPlayer do
 end
 PlaceId = game.PlaceId
 GameId = game.GameId
-gethui = gethui or function() return nil end
-protectgui = protectgui or (syn and syn.protect_gui) or function(...) return ... end
-exec_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+gethui = type(gethui) == "function" and gethui or function() return nil end
+protectgui = type(protectgui) == "function" and protectgui or ((type(syn) == "table" and type(syn.protect_gui) == "function") and syn.protect_gui or function(...) return ... end)
+exec_request = nil
+if type(request) == "function" then
+	exec_request = request
+elseif type(http_request) == "function" then
+	exec_request = http_request
+elseif type(syn) == "table" and type(syn.request) == "function" then
+	exec_request = syn.request
+elseif type(fluxus) == "table" and type(fluxus.request) == "function" then
+	exec_request = fluxus.request
+elseif type(krnl) == "table" and type(krnl.request) == "function" then
+	exec_request = krnl.request
+end
 write_file = type(writefile) == "function" and writefile or nil
 read_file = type(readfile) == "function" and readfile or nil
 is_file = type(isfile) == "function" and isfile or nil
@@ -200,7 +213,7 @@ typingTask = nil
 function _VH_CleanUpMemory()
 	isDestroying = true
 	GlobalEnv[_G_Identifier] = nil
-	if typingTask then task.cancel(typingTask); typingTask = nil end
+	if typingTask then pcall(task.cancel, typingTask); typingTask = nil end
 	_VH_CancelTrackedTasks()
 	if mainDragConnection then pcall(function() mainDragConnection:Disconnect() end) end
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
@@ -505,17 +518,29 @@ LoadConfiguration()
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
-		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
+		reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
+		if not reqSuccess or not reqResult then
+			reqSuccess, reqResult = pcall(function() return exec_request({url = url, method = "GET"}) end)
+		end
 		if reqSuccess and reqResult then
-			local body = reqResult.Body or reqResult.body or reqResult.Response
-			local status = tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code)
+			body = type(reqResult) == "table" and (reqResult.Body or reqResult.body or reqResult.ResponseBody or reqResult.Response or reqResult.response) or (type(reqResult) == "string" and reqResult or nil)
+			status = type(reqResult) == "table" and tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code or reqResult.Code) or 200
 			if status == nil and body then status = 200 end
-			if body and status == 200 then return body, status, nil end
-			return nil, status, "http " .. tostring(status or "unknown")
+			if body and tostring(body) ~= "" and (status == nil or (status >= 200 and status < 300)) then return tostring(body), status or 200, nil end
 		end
 	end
-	local success, result = pcall(function() return game:HttpGet(url) end)
+	if type(httpget) == "function" then
+		success, result = pcall(httpget, url)
+		if success and type(result) == "string" and result ~= "" then return result, 200, nil end
+	end
+	success, result = pcall(function() return game:HttpGet(url) end)
 	if success and type(result) == "string" and result ~= "" then return result, 200, nil end
+	success, result = pcall(function() return game:HttpGetAsync(url) end)
+	if success and type(result) == "string" and result ~= "" then return result, 200, nil end
+	if HttpService and type(HttpService.GetAsync) == "function" then
+		success, result = pcall(function() return HttpService:GetAsync(url, true) end)
+		if success and type(result) == "string" and result ~= "" then return result, 200, nil end
+	end
 	return nil, nil, "request failed"
 end
 function AddCacheBuster(url)
@@ -818,16 +843,14 @@ function FormatLastUpdatedLabel(value)
 	return "Updated " .. compact
 end
 function GetSecureParent()
-	huiSuccess, huiTarget = pcall(function() return gethui() end)
-	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then
-		return huiTarget
-	end
-	coreSuccess, coreTarget = pcall(function() return CoreGui end)
-	if coreSuccess and coreTarget then
+	huiSuccess, huiTarget = pcall(gethui)
+	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then return huiTarget end
+	coreTarget = CoreGui
+	if coreTarget then
 		testAccess = pcall(function()
-			t = Instance.new("Folder")
-			t.Parent = coreTarget
-			t:Destroy()
+		t = Instance.new("Folder")
+		t.Parent = coreTarget
+		t:Destroy()
 		end)
 		if testAccess then return coreTarget end
 	end
@@ -2355,7 +2378,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - UI Scale, Timestamp & Recommendation Fixes", "• Removed text outlines across Velox Hub UI elements for cleaner typography.\n• Kept Recommended for You timestamps compact (for example 2h ago and 5d ago) while normal script cards use full Updated 2 Hours Ago style labels.\n• Fixed Recommended for You cards so their widths resize proportionally with the UI size scale instead of using fixed pixel widths.\n• Improved recommendation card layout so three-card pages remain evenly sized at every supported UI scale.\n• Preserved the PlaceId-based FOR YOU backbone and fallback behavior.\n• Reduced redundant recommendation UI work and kept the recommendation panel lightweight.\n• Kept critical fallback systems and stability protections intact.\n• Increased touch-safe spacing between Recommended for You cards and the left/right navigation arrows to prevent accidental hit conflicts.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Cleanup, Compatibility & UI Fixes", "• Removed remaining code comments and kept the runtime path focused on the active hub systems.\n• Hardened HTTP and compiler fallbacks for broader executor compatibility without depending on one request or load API.\n• Added safer service references and GUI protection fallbacks for executors with different APIs.\n• Kept Recommended for You cards proportional under UI scaling and preserved balanced three-card spacing.\n• Kept navigation arrows separated from recommendation cards to reduce missed touches on mobile.\n• Normal script cards use full Updated 2 Hours Ago labels while Recommended for You keeps compact 2h ago labels.\n• Removed only redundant temporary state where it was safe, while preserving configuration, recommendation, refresh, cleanup, and fallback systems.\n• Reduced local-register pressure by avoiding new large local tables and keeping compatibility helpers outside heavy card/render functions.\n• Preserved the PlaceId-based FOR YOU backbone and all critical fallback behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
