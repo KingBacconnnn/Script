@@ -1728,7 +1728,7 @@ Instance.new("UICorner", ScriptDetailsAccent).CornerRadius = UDim.new(1, 0)
 ScriptDetailsUIScale = Instance.new("UIScale", ScriptDetailsBox)
 ScriptDetailsUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 ScriptDetailsHeader = Instance.new("Frame", ScriptDetailsBox)
-ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 72 or 78)
+ScriptDetailsHeader.Size = UDim2.new(1, -28, 0, IsMobile and 86 or 92)
 ScriptDetailsHeader.Position = UDim2.new(0, 14, 0, 20)
 ScriptDetailsHeader.BackgroundTransparency = 1
 ScriptDetailsImage = Instance.new("ImageLabel", ScriptDetailsHeader)
@@ -1768,6 +1768,34 @@ ScriptDetailsBadgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
 ScriptDetailsBadgeText.Font = Enum.Font.GothamBold
 ScriptDetailsBadgeText.TextSize = 8
 ScriptDetailsBadgeText.TextXAlignment = Enum.TextXAlignment.Center
+ScriptDetailsQuickInfo = Instance.new("Frame", ScriptDetailsHeader)
+ScriptDetailsQuickInfo.Size = UDim2.new(1, -(IsMobile and 108 or 124), 0, 18)
+ScriptDetailsQuickInfo.Position = UDim2.new(0, IsMobile and 70 or 80, 0, IsMobile and 62 or 66)
+ScriptDetailsQuickInfo.BackgroundTransparency = 1
+ScriptDetailsQuickInfo.Visible = false
+ScriptDetailsQuickInfoLayout = Instance.new("UIListLayout", ScriptDetailsQuickInfo)
+ScriptDetailsQuickInfoLayout.FillDirection = Enum.FillDirection.Horizontal
+ScriptDetailsQuickInfoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptDetailsQuickInfoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+ScriptDetailsQuickInfoLayout.Padding = UDim.new(0, 5)
+ScriptDetailsQuickCategory = Instance.new("TextLabel", ScriptDetailsQuickInfo)
+ScriptDetailsQuickCategory.Size = UDim2.new(0, IsMobile and 92 or 110, 0, 18)
+ScriptDetailsQuickCategory.BackgroundColor3 = Color3.fromRGB(40, 48, 88)
+ScriptDetailsQuickCategory.TextColor3 = Color3.fromRGB(224, 228, 255)
+ScriptDetailsQuickCategory.Font = Enum.Font.GothamBold
+ScriptDetailsQuickCategory.TextSize = 8
+ScriptDetailsQuickCategory.TextTruncate = Enum.TextTruncate.AtEnd
+ScriptDetailsQuickCategory.TextXAlignment = Enum.TextXAlignment.Center
+Instance.new("UICorner", ScriptDetailsQuickCategory).CornerRadius = UDim.new(0, 6)
+ScriptDetailsQuickStatus = Instance.new("TextLabel", ScriptDetailsQuickInfo)
+ScriptDetailsQuickStatus.Size = UDim2.new(0, IsMobile and 82 or 96, 0, 18)
+ScriptDetailsQuickStatus.BackgroundColor3 = Color3.fromRGB(39, 64, 88)
+ScriptDetailsQuickStatus.TextColor3 = Color3.fromRGB(224, 255, 244)
+ScriptDetailsQuickStatus.Font = Enum.Font.GothamBold
+ScriptDetailsQuickStatus.TextSize = 8
+ScriptDetailsQuickStatus.TextTruncate = Enum.TextTruncate.AtEnd
+ScriptDetailsQuickStatus.TextXAlignment = Enum.TextXAlignment.Center
+Instance.new("UICorner", ScriptDetailsQuickStatus).CornerRadius = UDim.new(0, 6)
 ScriptDetailsClose = Instance.new("TextButton", ScriptDetailsHeader)
 ScriptDetailsClose.Size = UDim2.new(0, 28, 0, 28)
 ScriptDetailsClose.Position = UDim2.new(1, -28, 0, 0)
@@ -1783,8 +1811,8 @@ ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
 ScriptDetailsCloseStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(ScriptDetailsClose, Theme.Card, Theme.CardHover, Theme.BackgroundMain, ScriptDetailsCloseStroke, Theme.Stroke, Theme.Accent)
 ScriptDetailsContent = Instance.new("ScrollingFrame", ScriptDetailsBox)
-ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 158 or 160))
-ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 96 or 98)
+ScriptDetailsContent.Size = UDim2.new(1, -28, 1, -(IsMobile and 146 or 150))
+ScriptDetailsContent.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 108)
 ScriptDetailsContent.BackgroundTransparency = 1
 ScriptDetailsContent.BorderSizePixel = 0
 ScriptDetailsContent.ScrollBarThickness = 2
@@ -1814,16 +1842,16 @@ ScriptDetailsMeta.BorderSizePixel = 0
 ScriptDetailsMeta.LayoutOrder = 2
 Instance.new("UICorner", ScriptDetailsMeta).CornerRadius = UDim.new(0, 9)
 ScriptDetailsMetaPad = Instance.new("UIPadding", ScriptDetailsMeta)
-ScriptDetailsMetaPad.PaddingTop = UDim.new(0, 9)
-ScriptDetailsMetaPad.PaddingBottom = UDim.new(0, 9)
+ScriptDetailsMetaPad.PaddingTop = UDim.new(0, 8)
+ScriptDetailsMetaPad.PaddingBottom = UDim.new(0, 8)
 ScriptDetailsMetaPad.PaddingLeft = UDim.new(0, 10)
 ScriptDetailsMetaPad.PaddingRight = UDim.new(0, 10)
 ScriptDetailsMetaLayout = Instance.new("UIListLayout", ScriptDetailsMeta)
 ScriptDetailsMetaLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ScriptDetailsMetaLayout.Padding = UDim.new(0, 5)
+ScriptDetailsMetaLayout.Padding = UDim.new(0, 4)
 function _VH_SetDetailsMetaRow(order, labelText, valueText, valueColor)
 	local row = Instance.new("Frame", ScriptDetailsMeta)
-	row.Size = UDim2.new(1, 0, 0, 18)
+	row.Size = UDim2.new(1, 0, 0, 19)
 	row.BackgroundTransparency = 1
 	row.LayoutOrder = order
 	local label = Instance.new("TextLabel", row)
@@ -1902,6 +1930,7 @@ function _VH_ClearDetailsMetadata()
 end
 function _VH_CloseScriptDetails()
 	CurrentScriptDetails = nil
+	ScriptDetailsQuickInfo.Visible = false
 	ScriptDetailsOverlay.Visible = false
 	ScriptDetailsOverlay.Active = false
 	ScriptDetailsOverlay.BackgroundTransparency = 1
@@ -1916,6 +1945,12 @@ function _VH_OpenScriptDetails(data, entry)
 	ScriptDetailsBadge.Visible = recommended
 	ScriptDetailsBadgeText.Text = recommendationKind == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 	ScriptDetailsBadge.BackgroundColor3 = recommendationKind == "SMART" and Color3.fromRGB(79, 70, 229) or Color3.fromRGB(67, 56, 202)
+	local categoryText = type(data.Category) == "string" and data.Category ~= "" and data.Category or "General"
+	local quickStatus = NormalizeTagType(data.TagType)
+	ScriptDetailsQuickCategory.Text = categoryText
+	ScriptDetailsQuickStatus.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
+	ScriptDetailsQuickStatus.BackgroundColor3 = quickStatus == "UPDATED" and Theme.Success or (quickStatus == "HOT" and Theme.Error or (quickStatus == "FEATURED" and Theme.System or Color3.fromRGB(39, 64, 88)))
+	ScriptDetailsQuickInfo.Visible = true
 	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
 	_VH_ClearDetailsMetadata()
 	local compatibility = IsScriptCompatible(data)
@@ -3356,22 +3391,26 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	aeStateTxt.Size = UDim2.new(1, 0, 1, 0); aeStateTxt.BackgroundTransparency = 1
 	aeStateTxt.TextColor3 = Color3.fromRGB(255, 255, 255); aeStateTxt.Font = Enum.Font.GothamBold; aeStateTxt.TextSize = 8; aeStateTxt.ZIndex = 2
 	local detailsBtn = Instance.new("TextButton", btmRow)
-	detailsBtn.Size = UDim2.new(0, IsMobile and 62 or 78, 0, 22); detailsBtn.BackgroundColor3 = Color3.fromRGB(34, 45, 76)
-	detailsBtn.Text = "Details"; detailsBtn.TextColor3 = Theme.TextPrimary; detailsBtn.Font = Enum.Font.GothamBold; detailsBtn.TextSize = IsMobile and 8 or 9
+	detailsBtn.Size = UDim2.new(0, IsMobile and 74 or 88, 0, 22); detailsBtn.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
+	detailsBtn.Text = "View Details"; detailsBtn.TextColor3 = Color3.fromRGB(245, 247, 255); detailsBtn.Font = Enum.Font.GothamBold; detailsBtn.TextSize = IsMobile and 8 or 9
 	detailsBtn.AutoButtonColor = false; detailsBtn.LayoutOrder = 2; detailsBtn.ZIndex = 2
-	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 6)
-	detailsGradient = Instance.new("UIGradient", detailsBtn)
+	Instance.new("UICorner", detailsBtn).CornerRadius = UDim.new(0, 7)
+	local detailsBtnStroke = Instance.new("UIStroke", detailsBtn)
+	detailsBtnStroke.Color = Color3.fromRGB(129, 140, 248)
+	detailsBtnStroke.Transparency = 0.35
+	detailsBtnStroke.Thickness = 1
+	local detailsGradient = Instance.new("UIGradient", detailsBtn)
 	detailsGradient.Rotation = 90
 	detailsGradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 52, 88)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 38, 65))
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(99, 102, 241)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(67, 56, 202))
 	})
 	local starBtn = Instance.new("TextButton", btmRow)
 	starBtn.Size = UDim2.new(0, 22, 0, 22); starBtn.BackgroundTransparency = 1
 	starBtn.Font = Enum.Font.GothamBold; starBtn.TextSize = 15; starBtn.LayoutOrder = 3; starBtn.ZIndex = 2
 	ApplyInteractiveAnimations(card, tagConfig.CardColor, tagConfig.HoverColor, Color3.fromRGB(20, 29, 45), nil, nil, nil, entryConnections)
 	ApplyInteractiveAnimations(autoExecBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), nil, nil, nil, entryConnections)
-	ApplyInteractiveAnimations(detailsBtn, Color3.fromRGB(34, 45, 76), Color3.fromRGB(48, 60, 99), Color3.fromRGB(25, 34, 58), nil, nil, nil, entryConnections)
+	ApplyInteractiveAnimations(detailsBtn, Color3.fromRGB(79, 70, 229), Color3.fromRGB(99, 102, 241), Color3.fromRGB(67, 56, 202), detailsBtnStroke, detailsBtnStroke.Color, Color3.fromRGB(165, 180, 252), entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
 	local tagSearch = tagType
@@ -3418,9 +3457,17 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if type(scriptEntry.UpdateUI) == "function" then scriptEntry.UpdateUI() end
 	end
 	scriptEntry.UpdateUI()
+	local detailsBtnScale = Instance.new("UIScale", detailsBtn)
+	detailsBtnScale.Scale = 1
 	RegEntryConn(detailsBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		if isDestroying then return end
 		innerActionTime = tick()
+		_VH_SafeTween(detailsBtnScale, TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.95})
+		task.delay(0.07, function()
+			if detailsBtnScale and detailsBtnScale.Parent and not isDestroying then
+				_VH_SafeTween(detailsBtnScale, TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})
+			end
+		end)
 		_VH_OpenScriptDetails(data, scriptEntry)
 	end)))
 	RegEntryConn(starBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
