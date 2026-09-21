@@ -981,6 +981,13 @@ FloatPadding.PaddingTop = UDim.new(0, 6); FloatPadding.PaddingBottom = UDim.new(
 Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
+local function SafeViewportClamp(value, minValue, maxValue)
+	if maxValue < minValue then
+		maxValue = minValue
+	end
+	return math.clamp(value, minValue, maxValue)
+end
+
 floatStart, floatPos = nil, nil
 _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeFloatDragInput then
@@ -998,12 +1005,6 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
 				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
 				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-local function SafeViewportClamp(value, minValue, maxValue)
-	if maxValue < minValue then
-		maxValue = minValue
-	end
-	return math.clamp(value, minValue, maxValue)
-end
 
 				targetX = SafeViewportClamp(targetX, halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))
 				targetY = SafeViewportClamp(targetY, halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))
@@ -2151,8 +2152,8 @@ _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 				targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
 				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				targetX = math.clamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-				targetY = math.clamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+				targetX = SafeViewportClamp(targetX, halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+				targetY = SafeViewportClamp(targetY, halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
