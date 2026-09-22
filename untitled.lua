@@ -153,13 +153,6 @@ OriginalCache = setmetatable({}, { __mode = "k" })
 AntiAFKConnection = nil
 AntiAFKDisabledConnections = {}
 DisableAntiAFK = nil
-RecentUpdatedPanel = nil
-RecentUpdatedConnections = {}
-ScriptHealthCache = {}
-LastCatalogChangeCount = 0
-LastCatalogUsedCache = false
-ScriptDetailsHealthValue = nil
-ScriptDetailsHistoryText = nil
 function _VH_CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
@@ -259,11 +252,6 @@ function _VH_CleanUpMemory()
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if ScriptDetailsOverlay and ScriptDetailsOverlay.Parent then pcall(function() ScriptDetailsOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
-	if RecentUpdatedPanel and RecentUpdatedPanel.Parent then pcall(function() RecentUpdatedPanel:Destroy() end) end
-	for _, connection in ipairs(RecentUpdatedConnections) do
-		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
-	end
-	table.clear(RecentUpdatedConnections)
 	for _, connection in ipairs(RecommendationConnections) do
 		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
 	end
@@ -276,12 +264,6 @@ function _VH_CleanUpMemory()
 end
 function _VH_SafeTween(instance, tweenInfo, properties)
 	if not instance or not instance.Parent then return nil end
-	if SavedData and SavedData.Settings and SavedData.Settings.PerformanceMode then
-		for property, value in pairs(properties) do
-			pcall(function() instance[property] = value end)
-		end
-		return nil
-	end
 	local oldData
 	local tween
 	local conn
@@ -326,18 +308,12 @@ function _VH_CreateDebounce(cooldown, func)
 	end
 end
 DATA_FILE = ".VeloxHub_Data_V3.1.json"
-CATALOG_CACHE_FILE = ".VeloxHub_CatalogCache_V1.json"
-EXPORT_FILE = ".VeloxHub_Export_V1.json"
 make_folder = type(makefolder) == "function" and makefolder or nil
-remove_file = type(delfile) == "function" and delfile or nil
 SavedData = {
 	Favorites = {},
-	FavoriteTimes = {},
-	RecentScripts = {},
-	VersionHistory = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1, PerformanceMode = false }
+	Settings = { AntiAFK = false, UIScale = 1 }
 }
 SavedConfigExtras = {}
 ConfigurationLoaded = false
@@ -442,34 +418,10 @@ function _VH_BuildConfigurationData()
 	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
 	cleanData.Settings = {
 		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
-		PerformanceMode = SavedData.Settings.PerformanceMode == true
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	}
-	cleanData.FavoriteTimes = {}
 	for k, v in pairs(SavedData.Favorites) do
 		if v then cleanData.Favorites[tostring(k)] = true end
-	end
-	for k, v in pairs(SavedData.FavoriteTimes) do
-		if tonumber(v) then cleanData.FavoriteTimes[tostring(k)] = tonumber(v) end
-	end
-	cleanData.RecentScripts = {}
-	for i = 1, math.min(12, #(SavedData.RecentScripts or {})) do
-		local item = SavedData.RecentScripts[i]
-		if type(item) == "table" and type(item.Id) == "string" and tonumber(item.LastUsed) then
-			cleanData.RecentScripts[#cleanData.RecentScripts + 1] = {Id = item.Id, LastUsed = tonumber(item.LastUsed), Action = type(item.Action) == "string" and item.Action or "Used"}
-		end
-	end
-	cleanData.VersionHistory = {}
-	for key, list in pairs(SavedData.VersionHistory or {}) do
-		if type(key) == "string" and type(list) == "table" then
-			cleanData.VersionHistory[key] = {}
-			for i = 1, math.min(3, #list) do
-				local item = list[i]
-				if type(item) == "table" then
-					cleanData.VersionHistory[key][#cleanData.VersionHistory[key] + 1] = {LastUpdated = tonumber(item.LastUpdated) or 0, TagType = tostring(item.TagType or "NONE"), Category = tostring(item.Category or ""), Name = tostring(item.Name or ""), RecordedAt = tonumber(item.RecordedAt) or os.time()}
-				end
-			end
-		end
 	end
 	for k, v in pairs(SavedData.AutoExecutes) do
 		if type(v) == "table" then
@@ -546,36 +498,9 @@ function LoadConfiguration()
 		end
 	end
 	SavedData.Favorites = {}
-	SavedData.FavoriteTimes = {}
-	SavedData.RecentScripts = {}
-	SavedData.VersionHistory = {}
 	SavedData.AutoExecutes = {}
 	if type(result.Favorites) == "table" then
 		for k, v in pairs(result.Favorites) do if v then SavedData.Favorites[tostring(k)] = true end end
-	end
-	if type(result.FavoriteTimes) == "table" then
-		for k, v in pairs(result.FavoriteTimes) do if tonumber(v) then SavedData.FavoriteTimes[tostring(k)] = tonumber(v) end end
-	end
-	if type(result.RecentScripts) == "table" then
-		for _, item in ipairs(result.RecentScripts) do
-			if type(item) == "table" and type(item.Id) == "string" and tonumber(item.LastUsed) then
-				SavedData.RecentScripts[#SavedData.RecentScripts + 1] = {Id = item.Id, LastUsed = tonumber(item.LastUsed), Action = tostring(item.Action or "Used")}
-				if #SavedData.RecentScripts >= 12 then break end
-			end
-		end
-	end
-	if type(result.VersionHistory) == "table" then
-		for key, list in pairs(result.VersionHistory) do
-			if type(key) == "string" and type(list) == "table" then
-				SavedData.VersionHistory[key] = {}
-				for i = 1, math.min(3, #list) do
-					item = list[i]
-					if type(item) == "table" then
-						SavedData.VersionHistory[key][#SavedData.VersionHistory[key] + 1] = {LastUpdated = tonumber(item.LastUpdated) or 0, TagType = tostring(item.TagType or "NONE"), Category = tostring(item.Category or ""), Name = tostring(item.Name or ""), RecordedAt = tonumber(item.RecordedAt) or os.time()}
-					end
-				end
-			end
-		end
 	end
 	if type(result.AutoExecutes) == "table" then
 		for k, v in pairs(result.AutoExecutes) do
@@ -591,107 +516,16 @@ function LoadConfiguration()
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 	if type(result.Settings) == "table" then
-		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" or k == "PerformanceMode" then SavedData.Settings[k] = v end end
+		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" then SavedData.Settings[k] = v end end
 	end
 	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
-	SavedData.Settings.PerformanceMode = SavedData.Settings.PerformanceMode == true
 	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 	ConfigurationLoaded = true
 	return true, nil
 end
 
 LoadConfiguration()
-function _VH_ReadCatalogCache()
-	if type(read_file) ~= "function" then return nil end
-	local ok, raw = pcall(function() return read_file(CATALOG_CACHE_FILE) end)
-	if ok and type(raw) == "string" and #raw > 0 then return raw end
-	return nil
-end
-function _VH_WriteCatalogCache(raw)
-	if type(write_file) ~= "function" or type(raw) ~= "string" or raw == "" then return false end
-	local ok = pcall(function() write_file(CATALOG_CACHE_FILE, raw) end)
-	return ok
-end
-function _VH_ClearCatalogCache()
-	if type(remove_file) ~= "function" then return false end
-	local ok = pcall(function() remove_file(CATALOG_CACHE_FILE) end)
-	return ok
-end
-function _VH_EncodeExportConfiguration()
-	local data = _VH_BuildConfigurationData()
-	data.ExportVersion = 1
-	data.ExportedAt = os.time()
-	return _VH_EncodeConfiguration(data)
-end
-function ExportConfiguration()
-	if type(write_file) ~= "function" then return false, "this executor does not expose writefile()" end
-	local raw, err = _VH_EncodeExportConfiguration()
-	if not raw then return false, err end
-	local ok, result = pcall(function() return write_file(EXPORT_FILE, raw) end)
-	if not ok or result == false then return false, "export file could not be written" end
-	return true
-end
-function _VH_ApplyConfigurationTable(result)
-	if type(result) ~= "table" then return false end
-	SavedData.Favorites = {}
-	SavedData.FavoriteTimes = {}
-	SavedData.RecentScripts = {}
-	SavedData.VersionHistory = {}
-	SavedData.AutoExecutes = {}
-	if type(result.Favorites) == "table" then for k, v in pairs(result.Favorites) do if v then SavedData.Favorites[tostring(k)] = true end end end
-	if type(result.FavoriteTimes) == "table" then for k, v in pairs(result.FavoriteTimes) do if tonumber(v) then SavedData.FavoriteTimes[tostring(k)] = tonumber(v) end end end
-	if type(result.RecentScripts) == "table" then
-		for _, item in ipairs(result.RecentScripts) do
-			if type(item) == "table" and type(item.Id) == "string" and tonumber(item.LastUsed) then SavedData.RecentScripts[#SavedData.RecentScripts + 1] = {Id = item.Id, LastUsed = tonumber(item.LastUsed), Action = tostring(item.Action or "Used")} end
-			if #SavedData.RecentScripts >= 12 then break end
-		end
-	end
-	if type(result.VersionHistory) == "table" then
-		for key, list in pairs(result.VersionHistory) do
-			if type(key) == "string" and type(list) == "table" then
-				SavedData.VersionHistory[key] = {}
-				for i = 1, math.min(3, #list) do
-					item = list[i]
-					if type(item) == "table" then SavedData.VersionHistory[key][#SavedData.VersionHistory[key] + 1] = {LastUpdated = tonumber(item.LastUpdated) or 0, TagType = tostring(item.TagType or "NONE"), Category = tostring(item.Category or ""), Name = tostring(item.Name or ""), RecordedAt = tonumber(item.RecordedAt) or os.time()} end
-				end
-			end
-		end
-	end
-	if type(result.AutoExecutes) == "table" then
-		for k, v in pairs(result.AutoExecutes) do
-			if type(k) == "string" and type(v) == "table" then
-				place = tonumber(v.PlaceId); gameId = tonumber(v.GameId)
-				if place or gameId then SavedData.AutoExecutes[k] = {PlaceId = place, GameId = gameId, Name = type(v.Name) == "string" and v.Name or nil} end
-			end
-		end
-	end
-	if type(result.ToggleKeybind) == "string" and Enum.KeyCode[result.ToggleKeybind] then
-		SavedData.ToggleKeybind = result.ToggleKeybind
-		ToggleKeybind = Enum.KeyCode[result.ToggleKeybind]
-	end
-	if type(result.Settings) == "table" then
-		SavedData.Settings.AntiAFK = result.Settings.AntiAFK == true
-		SavedData.Settings.UIScale = math.clamp(tonumber(result.Settings.UIScale) or 1, 0.8, 1.2)
-		SavedData.Settings.PerformanceMode = result.Settings.PerformanceMode == true
-	end
-	return true
-end
-function ImportConfiguration()
-	if type(read_file) ~= "function" then return false, "this executor does not expose readfile()" end
-	local ok, raw = pcall(function() return read_file(EXPORT_FILE) end)
-	if not ok or type(raw) ~= "string" or raw == "" then return false, "no exported settings file was found" end
-	local decodeOk, result = pcall(function() return HttpService:JSONDecode(raw) end)
-	if not decodeOk or type(result) ~= "table" or tonumber(result.ExportVersion) ~= 1 then return false, "invalid Velox settings export" end
-	if not _VH_ApplyConfigurationTable(result) then return false, "settings could not be applied" end
-	SaveConfiguration()
-	if type(BindToggleKey) == "function" and ToggleKeybind then BindToggleKey(ToggleKeybind) end
-	if SavedData.Settings.AntiAFK then ApplyAntiAFK() else DisableAntiAFK() end
-	if type(ApplyPanelUIScale) == "function" then ApplyPanelUIScale(SavedData.Settings.UIScale) end
-	if type(RefreshAllCardStates) == "function" then RefreshAllCardStates() end
-	if type(UpdateFilter) == "function" then UpdateFilter() end
-	if type(_VH_RefreshRecommendations) == "function" then _VH_RefreshRecommendations() end
-	return true
-end
+
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
@@ -2158,7 +1992,6 @@ function _VH_SetDetailsMetaRow(order, labelText, valueText, valueColor)
 	value.TextSize = 9
 	value.TextXAlignment = Enum.TextXAlignment.Right
 	value.TextTruncate = Enum.TextTruncate.AtEnd
-	if labelText == "Health" then ScriptDetailsHealthValue = value end
 	return row
 end
 ScriptDetailsTagsFrame = Instance.new("Frame", ScriptDetailsContent)
@@ -2192,37 +2025,6 @@ ScriptDetailsTagsText.TextSize = 9
 ScriptDetailsTagsText.TextWrapped = true
 ScriptDetailsTagsText.TextXAlignment = Enum.TextXAlignment.Left
 ScriptDetailsTagsText.TextYAlignment = Enum.TextYAlignment.Top
-ScriptDetailsHistoryFrame = Instance.new("Frame", ScriptDetailsContent)
-ScriptDetailsHistoryFrame.Size = UDim2.new(1, -2, 0, 0)
-ScriptDetailsHistoryFrame.AutomaticSize = Enum.AutomaticSize.Y
-ScriptDetailsHistoryFrame.BackgroundColor3 = Theme.Card
-ScriptDetailsHistoryFrame.BorderSizePixel = 0
-ScriptDetailsHistoryFrame.LayoutOrder = 4
-Instance.new("UICorner", ScriptDetailsHistoryFrame).CornerRadius = UDim.new(0, 9)
-ScriptDetailsHistoryPad = Instance.new("UIPadding", ScriptDetailsHistoryFrame)
-ScriptDetailsHistoryPad.PaddingTop = UDim.new(0, 8)
-ScriptDetailsHistoryPad.PaddingBottom = UDim.new(0, 8)
-ScriptDetailsHistoryPad.PaddingLeft = UDim.new(0, 10)
-ScriptDetailsHistoryPad.PaddingRight = UDim.new(0, 10)
-ScriptDetailsHistoryTitle = Instance.new("TextLabel", ScriptDetailsHistoryFrame)
-ScriptDetailsHistoryTitle.Size = UDim2.new(1, 0, 0, 16)
-ScriptDetailsHistoryTitle.BackgroundTransparency = 1
-ScriptDetailsHistoryTitle.Text = "Version History"
-ScriptDetailsHistoryTitle.TextColor3 = Theme.TextSecondary
-ScriptDetailsHistoryTitle.Font = Enum.Font.GothamMedium
-ScriptDetailsHistoryTitle.TextSize = 9
-ScriptDetailsHistoryTitle.TextXAlignment = Enum.TextXAlignment.Left
-ScriptDetailsHistoryText = Instance.new("TextLabel", ScriptDetailsHistoryFrame)
-ScriptDetailsHistoryText.Size = UDim2.new(1, 0, 0, 0)
-ScriptDetailsHistoryText.AutomaticSize = Enum.AutomaticSize.Y
-ScriptDetailsHistoryText.Position = UDim2.new(0, 0, 0, 18)
-ScriptDetailsHistoryText.BackgroundTransparency = 1
-ScriptDetailsHistoryText.TextColor3 = Theme.TextPrimary
-ScriptDetailsHistoryText.Font = Enum.Font.Gotham
-ScriptDetailsHistoryText.TextSize = 8
-ScriptDetailsHistoryText.TextWrapped = true
-ScriptDetailsHistoryText.TextXAlignment = Enum.TextXAlignment.Left
-ScriptDetailsHistoryText.TextYAlignment = Enum.TextYAlignment.Top
 ScriptDetailsActions = Instance.new("Frame", ScriptDetailsBox)
 ScriptDetailsActions.Size = UDim2.new(1, -28, 0, 34)
 ScriptDetailsActions.Position = UDim2.new(0, 14, 1, -48)
@@ -2255,63 +2057,47 @@ end
 function _VH_OpenScriptDetails(data, entry)
 	if isDestroying or type(data) ~= "table" or not ScriptDetailsOverlay then return end
 	CurrentScriptDetails = entry
-	_VH_RecordRecentUse(entry, "Viewed")
 	ScriptDetailsImage.Image = type(data.ImageAssetId) == "string" and data.ImageAssetId or ""
 	ScriptDetailsName.Text = tostring(data.Name or "Unnamed Script")
-	recommendationKind = entry and tostring(entry.RecommendationType or "") or ""
-	recommended = entry and entry.Recommended == true
+	local recommendationKind = entry and tostring(entry.RecommendationType or "") or ""
+	local recommended = entry and entry.Recommended == true
 	ScriptDetailsBadge.Visible = recommended
 	ScriptDetailsBadgeText.Text = recommendationKind == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 	ScriptDetailsBadge.BackgroundColor3 = recommendationKind == "SMART" and Color3.fromRGB(79, 70, 229) or Color3.fromRGB(67, 56, 202)
-	quickStatus = NormalizeTagType(data.TagType)
+	local quickStatus = NormalizeTagType(data.TagType)
 	ScriptDetailsTagBadgeText.Text = quickStatus ~= "NONE" and quickStatus or "STANDARD"
 	ScriptDetailsTagBadge.Visible = quickStatus ~= "NONE"
-	tagBadgeConfig = TagTypeConfig[quickStatus] or TagTypeConfig.NONE
+	local tagBadgeConfig = TagTypeConfig[quickStatus] or TagTypeConfig.NONE
 	ScriptDetailsTagBadge.BackgroundColor3 = tagBadgeConfig.BadgeColor
 	ScriptDetailsDescription.Text = type(data.Description) == "string" and data.Description ~= "" and data.Description or "No description provided."
 	_VH_ClearDetailsMetadata()
-	compatibility = IsScriptCompatible(data)
-	placeId = tonumber(data.PlaceId) or 0
-	gameText = placeId == 0 and "Any game" or (placeId == PlaceId and "Current game" or "PlaceId " .. tostring(placeId))
-	healthState = _VH_GetHealthState(entry)
+	local compatibility = IsScriptCompatible(data)
+	local placeId = tonumber(data.PlaceId) or 0
+	local gameText = placeId == 0 and "Any game" or (placeId == PlaceId and "Current game" or "PlaceId " .. tostring(placeId))
 	_VH_SetDetailsMetaRow(1, "Category", type(data.Category) == "string" and data.Category ~= "" and data.Category or "General")
 	_VH_SetDetailsMetaRow(2, "Author", type(data.Author) == "string" and data.Author ~= "" and data.Author or "Not specified")
 	_VH_SetDetailsMetaRow(3, "Updated", FormatLastUpdatedLabel(data.LastUpdated))
 	_VH_SetDetailsMetaRow(4, "Game", gameText, placeId == 0 and Theme.Success or (placeId == PlaceId and Theme.Success or Theme.Warning))
-	_VH_SetDetailsMetaRow(5, "Compatibility", compatibility and "Compatible" or "Other game", compatibility and Theme.Success or Theme.Warning)
-	_VH_SetDetailsMetaRow(6, "Source", healthState == "Online" and "Available" or (healthState == "Offline" and "Unavailable" or healthState), healthState == "Online" and Theme.Success or (healthState == "Offline" and Theme.Error or Theme.TextSecondary))
-	_VH_SetDetailsMetaRow(7, "Favorite", SavedData.Favorites[entry.Id] and "Favorited" or "Not favorited", SavedData.Favorites[entry.Id] and Color3.fromRGB(250, 204, 21) or Theme.TextPrimary)
-	autoOn = compatibility and SavedData.AutoExecutes[entry.Id] ~= nil
-	_VH_SetDetailsMetaRow(8, "Auto Execute", autoOn and "ON" or "OFF", autoOn and Theme.Success or Theme.TextPrimary)
-	tagTypeValue = NormalizeTagType(data.TagType)
-	_VH_SetDetailsMetaRow(9, "Status", tagTypeValue ~= "NONE" and tagTypeValue or "Standard")
-	tagValues = _VH_NormalizeRecommendationList(data.Tags)
+	_VH_SetDetailsMetaRow(5, "Compatibility", compatibility and "Compatible" or "Configured for another game", compatibility and Theme.Success or Theme.Warning)
+	_VH_SetDetailsMetaRow(6, "Favorite", SavedData.Favorites[entry.Id] and "Favorited" or "Not favorited", SavedData.Favorites[entry.Id] and Color3.fromRGB(250, 204, 21) or Theme.TextPrimary)
+	local autoOn = compatibility and SavedData.AutoExecutes[entry.Id] ~= nil
+	_VH_SetDetailsMetaRow(7, "Auto Execute", autoOn and "ON" or "OFF", autoOn and Theme.Success or Theme.TextPrimary)
+	local tagTypeValue = NormalizeTagType(data.TagType)
+	_VH_SetDetailsMetaRow(8, "Status", tagTypeValue ~= "NONE" and tagTypeValue or "Standard")
+	local tagValues = _VH_NormalizeRecommendationList(data.Tags)
 	ScriptDetailsTagsText.Text = #tagValues > 0 and table.concat(tagValues, "  •  ") or "No tags"
 	ScriptDetailsTagsText.TextColor3 = #tagValues > 0 and Theme.TextPrimary or Theme.TextSecondary
-	history = SavedData.VersionHistory[entry.Id] or {}
-	if #history == 0 then
-		ScriptDetailsHistoryText.Text = "No previous catalog versions recorded yet."
-		ScriptDetailsHistoryText.TextColor3 = Theme.TextSecondary
-	else
-		historyLines = {}
-		for i, item in ipairs(history) do
-			historyLines[#historyLines + 1] = "" .. tostring(i) .. ". " .. FormatLastUpdatedLabel(item.LastUpdated) .. " • " .. tostring(item.TagType or "STANDARD") .. ((item.Category or "") ~= "" and " • " .. tostring(item.Category) or "")
-		end
-		ScriptDetailsHistoryText.Text = table.concat(historyLines, "\n")
-		ScriptDetailsHistoryText.TextColor3 = Theme.TextPrimary
-	end
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
 	local uiScale = math.max(0.8, math.min(1.2, tonumber(ScriptDetailsUIScale.Scale) or 1))
-	baseWidth = IsMobile and 322 or 420
-	baseHeight = IsMobile and 454 or 490
-	fittedWidth = math.min(baseWidth, math.max(240, (viewport.X - 24) / uiScale))
-	fittedHeight = math.min(baseHeight, math.max(280, (viewport.Y - 24) / uiScale))
+	local baseWidth = IsMobile and 322 or 420
+	local baseHeight = IsMobile and 438 or 468
+	local fittedWidth = math.min(baseWidth, math.max(240, (viewport.X - 24) / uiScale))
+	local fittedHeight = math.min(baseHeight, math.max(260, (viewport.Y - 24) / uiScale))
 	ScriptDetailsBox.Size = UDim2.fromOffset(fittedWidth, fittedHeight)
 	ScriptDetailsOverlay.BackgroundTransparency = 0.5
 	ScriptDetailsOverlay.Visible = true
 	ScriptDetailsOverlay.Active = true
-	_VH_CheckScriptHealth(entry, false)
 end
 _VH_RegConn(ScriptDetailsClose.Activated:Connect(_VH_CreateDebounce(0.1, _VH_CloseScriptDetails)))
 _VH_RegConn(ScriptDetailsCloseBottom.Activated:Connect(_VH_CreateDebounce(0.1, _VH_CloseScriptDetails)))
@@ -2499,8 +2285,8 @@ _VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	end
 	fpsCount = fpsCount + 1
 	diagnosticsElapsed = diagnosticsElapsed + deltaTime
-	if diagnosticsElapsed < (SavedData.Settings.PerformanceMode and 2 or 1) then return end
-	diagnosticsElapsed = diagnosticsElapsed - (SavedData.Settings.PerformanceMode and 2 or 1)
+	if diagnosticsElapsed < 1 then return end
+	diagnosticsElapsed = diagnosticsElapsed - 1
 	success, ping = pcall(function()
 		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
@@ -2553,7 +2339,7 @@ Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 6)
 SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Color3.fromRGB(51, 65, 85); SearchStroke.Thickness = 1
 SearchInput = Instance.new("TextBox", SearchContainer)
 SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 12, 0, 0); SearchInput.BackgroundTransparency = 1
-SearchInput.Text = ""; SearchInput.PlaceholderText = "Search name, tag:HOT, fav, auto, recent..."
+SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(203, 213, 225); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
 SearchInput.ClearTextOnFocus = false
@@ -2580,17 +2366,6 @@ FavFilterBtn.TextColor3 = Color3.fromRGB(203, 213, 225); FavFilterBtn.TextSize =
 FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
 FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
-FavCountLabel = Instance.new("TextLabel", FavFilterBtn)
-FavCountLabel.Size = UDim2.new(0, 12, 0, 12)
-FavCountLabel.Position = UDim2.new(1, -12, 0, -2)
-FavCountLabel.BackgroundColor3 = Color3.fromRGB(250, 204, 21)
-FavCountLabel.TextColor3 = Theme.BackgroundMain
-FavCountLabel.Font = Enum.Font.GothamBold
-FavCountLabel.TextSize = 7
-FavCountLabel.TextXAlignment = Enum.TextXAlignment.Center
-FavCountLabel.Text = "0"
-FavCountLabel.ZIndex = 54
-Instance.new("UICorner", FavCountLabel).CornerRadius = UDim.new(1, 0)
 SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
 SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
@@ -2600,66 +2375,13 @@ Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
 SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
-RecentUpdatedPanel = Instance.new("Frame", ScriptsView)
-RecentUpdatedPanel.Name = "RecentlyUpdatedPanel"
-RecentUpdatedPanel.Size = UDim2.new(1, -4, 0, IsMobile and 88 or 94)
-RecentUpdatedPanel.Position = UDim2.new(0, 2, 0, 0)
-RecentUpdatedPanel.BackgroundColor3 = Theme.BackgroundSecondary
-RecentUpdatedPanel.BorderSizePixel = 0
-RecentUpdatedPanel.LayoutOrder = 0
-RecentUpdatedPanel.Visible = false
-RecentUpdatedPanel.ClipsDescendants = true
-Instance.new("UICorner", RecentUpdatedPanel).CornerRadius = UDim.new(0, 11)
-RecentUpdatedPanelGradient = Instance.new("UIGradient", RecentUpdatedPanel)
-RecentUpdatedPanelGradient.Rotation = 90
-RecentUpdatedPanelGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 31, 54)), ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 18, 31))})
-RecentUpdatedPanelStroke = Instance.new("UIStroke", RecentUpdatedPanel)
-RecentUpdatedPanelStroke.Color = Theme.Stroke
-RecentUpdatedPanelStroke.Transparency = 0.12
-RecentUpdatedPanelStroke.Thickness = 1
-RecentUpdatedAccent = Instance.new("Frame", RecentUpdatedPanel)
-RecentUpdatedAccent.Size = UDim2.new(1, -28, 0, 2)
-RecentUpdatedAccent.Position = UDim2.new(0, 14, 0, 9)
-RecentUpdatedAccent.BackgroundColor3 = Theme.Info
-RecentUpdatedAccent.BorderSizePixel = 0
-Instance.new("UICorner", RecentUpdatedAccent).CornerRadius = UDim.new(1, 0)
-RecentUpdatedTitle = Instance.new("TextLabel", RecentUpdatedPanel)
-RecentUpdatedTitle.Size = UDim2.new(0.6, 0, 0, 16)
-RecentUpdatedTitle.Position = UDim2.new(0, 14, 0, 15)
-RecentUpdatedTitle.BackgroundTransparency = 1
-RecentUpdatedTitle.Text = "Recently Updated"
-RecentUpdatedTitle.TextColor3 = Theme.TextPrimary
-RecentUpdatedTitle.Font = Enum.Font.GothamBold
-RecentUpdatedTitle.TextSize = IsMobile and 11 or 12
-RecentUpdatedTitle.TextXAlignment = Enum.TextXAlignment.Left
-RecentUpdatedTitle.TextTruncate = Enum.TextTruncate.AtEnd
-RecentUpdatedSub = Instance.new("TextLabel", RecentUpdatedPanel)
-RecentUpdatedSub.Size = UDim2.new(0.36, 0, 0, 14)
-RecentUpdatedSub.Position = UDim2.new(0.64, 0, 0, 16)
-RecentUpdatedSub.BackgroundTransparency = 1
-RecentUpdatedSub.Text = "Latest catalog changes"
-RecentUpdatedSub.TextColor3 = Theme.TextSecondary
-RecentUpdatedSub.Font = Enum.Font.GothamMedium
-RecentUpdatedSub.TextSize = 8
-RecentUpdatedSub.TextXAlignment = Enum.TextXAlignment.Right
-RecentUpdatedSub.TextTruncate = Enum.TextTruncate.AtEnd
-RecentUpdatedList = Instance.new("Frame", RecentUpdatedPanel)
-RecentUpdatedList.Size = UDim2.new(1, -28, 0, IsMobile and 48 or 52)
-RecentUpdatedList.Position = UDim2.new(0, 14, 0, IsMobile and 36 or 39)
-RecentUpdatedList.BackgroundTransparency = 1
-RecentUpdatedLayout = Instance.new("UIListLayout", RecentUpdatedList)
-RecentUpdatedLayout.FillDirection = Enum.FillDirection.Horizontal
-RecentUpdatedLayout.SortOrder = Enum.SortOrder.LayoutOrder
-RecentUpdatedLayout.Padding = UDim.new(0, IsMobile and 6 or 8)
-RecentUpdatedLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-
 RecommendationPanel = Instance.new("Frame", ScriptsView)
 RecommendationPanel.Name = "RecommendedForYouPanel"
 RecommendationPanel.Size = UDim2.new(1, -4, 0, IsMobile and 136 or 148)
 RecommendationPanel.Position = UDim2.new(0, 2, 0, 0)
 RecommendationPanel.BackgroundColor3 = Color3.fromRGB(10, 15, 28)
 RecommendationPanel.BorderSizePixel = 0
-RecommendationPanel.LayoutOrder = 1
+RecommendationPanel.LayoutOrder = 0
 RecommendationPanel.Visible = false
 RecommendationPanel.ClipsDescendants = true
 Instance.new("UICorner", RecommendationPanel).CornerRadius = UDim.new(0, 12)
@@ -2887,103 +2609,50 @@ SortMode = "Most Relevant"
 SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
 	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Recently Favorited", "Recently Used", "Auto Execute: ON", "Auto Execute: OFF"
+	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
 }
-function _VH_ParseSearchQuery(query)
-	filters = {Terms = {}, Tag = "", Category = "", Author = "", Game = "", Health = "", Updated = "", Favorite = false, Auto = "", Recent = false}
-	for token in string.gmatch(query, "%S+") do
-		lowerToken = string.lower(token)
-		key, value = string.match(lowerToken, "^([%w_]+):(.+)$")
-		if key then
-			if key == "tag" or key == "type" then filters.Tag = value
-			elseif key == "category" or key == "cat" then filters.Category = value
-			elseif key == "author" or key == "by" then filters.Author = value
-			elseif key == "game" then filters.Game = value
-			elseif key == "health" or key == "status" then filters.Health = value
-			elseif key == "updated" then filters.Updated = value
-			elseif key == "auto" then filters.Auto = value
-			elseif key == "recent" or key == "used" then filters.Recent = value == "1" or value == "true" or value == "yes"
-			else filters.Terms[#filters.Terms + 1] = lowerToken end
-		elseif lowerToken == "fav" or lowerToken == "favorite" or lowerToken == "favorites" then
-			filters.Favorite = true
-		elseif lowerToken == "recent" or lowerToken == "used" then
-			filters.Recent = true
-		elseif lowerToken ~= "" then
-			filters.Terms[#filters.Terms + 1] = lowerToken
-		end
-	end
-	return filters
-end
-function _VH_GetRecentUseTime(id)
-	for _, item in ipairs(SavedData.RecentScripts or {}) do
-		if type(item) == "table" and tostring(item.Id) == tostring(id) then return tonumber(item.LastUsed) or 0 end
-	end
-	return 0
-end
-function _VH_GetFavoriteTime(id)
-	return tonumber((SavedData.FavoriteTimes or {})[id]) or 0
-end
-function _VH_GetHealthState(entry)
-	local cached = entry and ScriptHealthCache[entry.Id]
-	return cached and tostring(cached.State or "Unknown") or "Unknown"
-end
-function _VH_MatchesSearch(scr, filters)
-	if filters.Favorite and SavedData.Favorites[scr.Id] ~= true then return false end
-	if filters.Auto == "on" and SavedData.AutoExecutes[scr.Id] == nil then return false end
-	if filters.Auto == "off" and SavedData.AutoExecutes[scr.Id] ~= nil then return false end
-	if filters.Game == "current" and not scr.Compatible then return false end
-	if filters.Game == "other" and (scr.PlaceId == 0 or scr.Compatible) then return false end
-	if filters.Game == "any" and scr.PlaceId ~= 0 then return false end
-	if filters.Health ~= "" and string.lower(_VH_GetHealthState(scr)) ~= filters.Health then return false end
-	if filters.Updated ~= "" then
-		if filters.Updated == "today" and not IsCalendarDay(scr.LastUpdatedNumber) then return false end
-		if filters.Updated == "week" and not IsCalendarWeek(scr.LastUpdatedNumber) then return false end
-		if filters.Updated == "month" and not IsCalendarMonth(scr.LastUpdatedNumber) then return false end
-	end
-	if filters.Recent and _VH_GetRecentUseTime(scr.Id) <= 0 then return false end
-	if filters.Tag ~= "" and string.lower(tostring(scr.TagType or "none")) ~= filters.Tag then return false end
-	if filters.Category ~= "" and not string.find(string.lower(tostring(scr.Data and scr.Data.Category or "")), filters.Category, 1, true) then return false end
-	if filters.Author ~= "" and not string.find(string.lower(tostring(scr.Data and scr.Data.Author or "")), filters.Author, 1, true) then return false end
-	for _, word in ipairs(filters.Terms) do
-		if not string.find(scr.SearchTitle, word, 1, true) and not string.find(scr.SearchDesc, word, 1, true) and not string.find(scr.SearchMeta, word, 1, true) then return false end
-	end
-	return true
-end
-function UpdateFavoriteFilterCount()
-	favoriteCount = 0
-	for _, scr in ipairs(RegisteredScripts) do if SavedData.Favorites[scr.Id] == true then favoriteCount = favoriteCount + 1 end end
-	if FavCountLabel and FavCountLabel.Parent then
-		FavCountLabel.Text = favoriteCount > 99 and "99+" or tostring(favoriteCount)
-		FavCountLabel.Visible = favoriteCount > 0
-	end
-end
 function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
-	currentVersion = filterVersion
+	local currentVersion = filterVersion
 	task.defer(function()
 		if isDestroying or currentVersion ~= filterVersion then return end
-		query = string.lower(string.gsub(SearchInput.Text or "", "^%s*(.-)%s*$", "%1"))
-		filters = _VH_ParseSearchQuery(query)
-		matches = {}
-		currentSort = SortMode
-		showDiscoveryPanels = currentSort == "Most Relevant" and query == "" and not FilterFavoritesActive
-		if RecommendationPanel and RecommendationPanel.Parent then RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and showDiscoveryPanels end
-		if RecentUpdatedPanel and RecentUpdatedPanel.Parent then RecentUpdatedPanel.Visible = #RegisteredScripts > 0 and currentTab == "Scripts" and showDiscoveryPanels end
+		local query = string.lower(string.gsub(SearchInput.Text or "", "^%s*(.-)%s*$", "%1"))
+		if RecommendationPanel and RecommendationPanel.Parent then
+			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and query == "" and not FilterFavoritesActive
+		end
+		local words = {}
+		for word in string.gmatch(query, "%S+") do words[#words + 1] = word end
+		local matches = {}
+		local currentSort = SortMode
 		for _, scr in ipairs(RegisteredScripts) do
 			if currentVersion ~= filterVersion then return end
-			filterPass = not FilterFavoritesActive or SavedData.Favorites[scr.Id] == true
-			if filterPass then
-				if currentSort == "Updated Today" then filterPass = IsCalendarDay(scr.LastUpdatedNumber)
-				elseif currentSort == "Updated This Week" then filterPass = IsCalendarWeek(scr.LastUpdatedNumber)
-				elseif currentSort == "Updated This Month" then filterPass = IsCalendarMonth(scr.LastUpdatedNumber)
-				elseif currentSort == "Favorites" then filterPass = SavedData.Favorites[scr.Id] == true
-				elseif currentSort == "Recently Favorited" then filterPass = SavedData.Favorites[scr.Id] == true
-				elseif currentSort == "Recently Used" then filterPass = _VH_GetRecentUseTime(scr.Id) > 0
-				elseif currentSort == "Auto Execute: ON" then filterPass = SavedData.AutoExecutes[scr.Id] ~= nil
-				elseif currentSort == "Auto Execute: OFF" then filterPass = SavedData.AutoExecutes[scr.Id] == nil end
+			local isMatch = true
+			if query ~= "" then
+				for _, word in ipairs(words) do
+					if not string.find(scr.SearchTitle, word, 1, true) and not string.find(scr.SearchDesc, word, 1, true) and not string.find(scr.SearchMeta, word, 1, true) then
+						isMatch = false
+						break
+					end
+				end
 			end
-			visible = filterPass and _VH_MatchesSearch(scr, filters)
+			local filterPass = not FilterFavoritesActive or SavedData.Favorites[scr.Id] == true
+			if filterPass then
+				if currentSort == "Updated Today" then
+					filterPass = IsCalendarDay(scr.LastUpdatedNumber)
+				elseif currentSort == "Updated This Week" then
+					filterPass = IsCalendarWeek(scr.LastUpdatedNumber)
+				elseif currentSort == "Updated This Month" then
+					filterPass = IsCalendarMonth(scr.LastUpdatedNumber)
+				elseif currentSort == "Favorites" then
+					filterPass = SavedData.Favorites[scr.Id] == true
+				elseif currentSort == "Auto Execute: ON" then
+					filterPass = SavedData.AutoExecutes[scr.Id] ~= nil
+				elseif currentSort == "Auto Execute: OFF" then
+					filterPass = SavedData.AutoExecutes[scr.Id] == nil
+				end
+			end
+			local visible = isMatch and filterPass
 			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
 			if visible then matches[#matches + 1] = scr end
 		end
@@ -2993,7 +2662,8 @@ function UpdateFilter()
 				if a.Recommended ~= b.Recommended then return a.Recommended == true end
 				if a.RecommendationScore ~= b.RecommendationScore then return a.RecommendationScore > b.RecommendationScore end
 				if a.RecommendationRank ~= b.RecommendationRank then return a.RecommendationRank < b.RecommendationRank end
-			elseif currentSort == "A-Z" then
+			end
+			if currentSort == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif currentSort == "Z-A" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
@@ -3001,25 +2671,18 @@ function UpdateFilter()
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber < b.LastUpdatedNumber end
 			elseif currentSort == "Newest" or currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
-			elseif currentSort == "Recently Used" then
-				if _VH_GetRecentUseTime(a.Id) ~= _VH_GetRecentUseTime(b.Id) then return _VH_GetRecentUseTime(a.Id) > _VH_GetRecentUseTime(b.Id) end
-			elseif currentSort == "Recently Favorited" then
-				if _VH_GetFavoriteTime(a.Id) ~= _VH_GetFavoriteTime(b.Id) then return _VH_GetFavoriteTime(a.Id) > _VH_GetFavoriteTime(b.Id) end
 			else
 				if a.TagPriority ~= b.TagPriority then return a.TagPriority > b.TagPriority end
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
 			end
-			if a.LastUpdatedNumber ~= b.LastUpdatedNumber and (currentSort == "Recently Used" or currentSort == "Recently Favorited") then return a.LastUpdatedNumber > b.LastUpdatedNumber end
-		if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
-		return a.Id < b.Id
-	end)
-		for order, scr in ipairs(matches) do scr.Instance.LayoutOrder = order + 2 end
-		shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
+			if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
+			return a.Id < b.Id
+		end)
+		for order, scr in ipairs(matches) do scr.Instance.LayoutOrder = order end
+		local shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
 		if EmptyStateMessage.Visible ~= shouldShowEmpty then EmptyStateMessage.Visible = shouldShowEmpty end
 		if shouldShowEmpty then EmptyStateMessage.Text = "No scripts matched your search or filters." end
 		if query == "" and shouldShowEmpty == false and EmptyStateMessage.Text == "No scripts matched your search or filters." then EmptyStateMessage.Text = "" end
-		UpdateFavoriteFilterCount()
-		if RecentUpdatedPanel and RecentUpdatedPanel.Parent then RecentUpdatedPanel.Visible = #RegisteredScripts > 0 and currentTab == "Scripts" and showDiscoveryPanels end
 	end)
 end
 _VH_RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
@@ -3041,7 +2704,6 @@ _VH_RegConn(FavFilterBtn.MouseButton1Click:Connect(_VH_CreateDebounce(0.1, funct
 		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(203, 213, 225); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
 		ShowNotification("Showing all scripts.", "Info")
 	end
-	UpdateFavoriteFilterCount()
 	UpdateFilter()
 end)))
 for _, opt in ipairs(SortOptions) do
@@ -3156,7 +2818,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Feature Complete UI & Smart Recovery", "• Added Recently Updated discovery with compact themed cards and quick navigation.\n• Added recent-use tracking, Recently Used sorting, recent search filters, and a small favorites count indicator.\n• Added source availability checks with cached status badges and a controlled Check Sources action.\n• Added bounded Script Details version history for previously observed catalog changes.\n• Added smart catalog refresh, change counting, and offline cache recovery without clearing the current UI during fetch/validation.\n• Added expanded search operators for tags, categories, authors, game scope, source status, update windows, favorites, auto-execute, and recent use.\n• Added Performance Mode to reduce nonessential tweens and diagnostics work.\n• Added settings export/import and catalog-cache controls with executor file-API fallbacks.\n• Kept Favorites, Auto Execute, Recommended for You, exact PlaceId FOR YOU, Script Details, confirmation dialogs, UI scale, and existing execution fallbacks intact.\n• Replaced the previous live text-fitting system with native UITextSizeConstraint protection so Roblox text-size changes do not trigger continuous recalculation or freezes.\n• Batched recent-activity persistence and staggered source checks to reduce file writes and request bursts.\n• Removed unused helper state/fields and obsolete refresh-clearing code while keeping compatibility fallbacks intact.\n• Final source contains no Lua comment-only lines and avoids unnecessary per-frame work or new local-heavy loops.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Clean, Stability & Compatibility", "• Hardened viewport positioning so small screens and resized windows cannot create invalid clamp ranges.\n• Replaced the previous live text-fitting loop with native UITextSizeConstraint protection so Roblox text-size changes cannot continuously resize the hub or freeze it.\n• Kept text-size protection bounded to each text object's designed size and applied it once to existing and dynamically created text objects.\n• Matched View Details text size to the Auto Execute ON, OFF, and Wrong Game state text while leaving the other action buttons unchanged.\n• Guarded optional SearchBox properties so unsupported properties cannot stop hub initialization.\n• Preserved the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, recovery, and executor request fallbacks, with an additional request.request compatibility path.\n• Kept loadstring/load compiler fallback behavior unchanged.\n• Removed unused catalog and recommendation fields and an unused UIStroke variable without changing their visible behavior.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI Scale, catalog refresh, and recovery behavior.\n• Removed Lua comments and avoided introducing unnecessary locals or per-frame text calculations.\n• Final source cleanup keeps the existing compatibility architecture intact; executors that do not expose required Roblox/executor APIs will continue to use the built-in fallbacks or show a controlled compatibility message.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3637,109 +3299,7 @@ function RefreshAllCardStates()
 		if scrData.TimeLabel and scrData.TimeLabel.Parent then
 			scrData.TimeLabel.Text = FormatLastUpdatedLabel(scrData.LastUpdatedNumber)
 		end
-		if scrData.HealthState then _VH_UpdateHealthBadge(scrData, scrData.HealthState) end
 	end
-	UpdateFavoriteFilterCount()
-	if RecentUpdatedPanel and RecentUpdatedPanel.Parent then _VH_RefreshRecentlyUpdatedPanel() end
-end
-RecentActivitySaveGeneration = 0
-function _VH_ScheduleRecentActivitySave()
-	if isDestroying or not SavedData or not SavedData.Settings or SavedData.Settings.PerformanceMode == true then return end
-	RecentActivitySaveGeneration = RecentActivitySaveGeneration + 1
-	local generation = RecentActivitySaveGeneration
-	task.delay(2, function()
-		if isDestroying or generation ~= RecentActivitySaveGeneration then return end
-		SaveConfiguration()
-	end)
-end
-function _VH_RecordRecentUse(entry, action)
-	if type(entry) ~= "table" or type(entry.Id) ~= "string" then return end
-	local now = os.time()
-	local kept = {{Id = entry.Id, LastUsed = now, Action = tostring(action or "Used")}}
-	for _, item in ipairs(SavedData.RecentScripts or {}) do
-		if type(item) == "table" and tostring(item.Id) ~= entry.Id and tonumber(item.LastUsed) then
-			kept[#kept + 1] = {Id = tostring(item.Id), LastUsed = tonumber(item.LastUsed), Action = tostring(item.Action or "Used")}
-			if #kept >= 12 then break end
-		end
-	end
-	SavedData.RecentScripts = kept
-	_VH_ScheduleRecentActivitySave()
-	UpdateFilter()
-end
-function _VH_RecordVersionHistory(key, oldEntry, newData)
-	if type(key) ~= "string" or type(oldEntry) ~= "table" or type(newData) ~= "table" then return false end
-	if oldEntry.EntryFingerprint == _VH_BuildScriptFingerprint(newData) then return false end
-	list = SavedData.VersionHistory[key] or {}
-	newItem = {LastUpdated = tonumber(oldEntry.LastUpdatedNumber) or GetSafeTimestamp(oldEntry.LastUpdated), TagType = tostring(oldEntry.TagType or "NONE"), Category = tostring(oldEntry.Data and oldEntry.Data.Category or ""), Name = tostring(oldEntry.ExactName or oldEntry.Name or ""), RecordedAt = os.time()}
-	if not list[1] or tonumber(list[1].LastUpdated) ~= tonumber(newItem.LastUpdated) or tostring(list[1].TagType) ~= newItem.TagType then
-		table.insert(list, 1, newItem)
-	end
-	while #list > 3 do table.remove(list) end
-	SavedData.VersionHistory[key] = list
-	return true
-end
-function _VH_BuildScriptFingerprint(data)
-	if type(data) ~= "table" then return "" end
-	return table.concat({tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags)}, "\31")
-end
-function _VH_RefreshRecentlyUpdatedPanel()
-	if not RecentUpdatedPanel or not RecentUpdatedPanel.Parent then return end
-	for _, connection in ipairs(RecentUpdatedConnections) do if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end end
-	table.clear(RecentUpdatedConnections)
-	for _, child in ipairs(RecentUpdatedList:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
-	updatedEntries = {}
-	for _, entry in ipairs(RegisteredScripts) do if entry and entry.Instance and entry.Instance.Parent then updatedEntries[#updatedEntries + 1] = entry end end
-	table.sort(updatedEntries, function(a, b) if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end return a.SearchTitle < b.SearchTitle end)
-	for i = 1, math.min(3, #updatedEntries) do
-		entry = updatedEntries[i]
-		button = Instance.new("TextButton", RecentUpdatedList)
-		button.Size = UDim2.new(1 / math.min(3, #updatedEntries), -(IsMobile and 4 or 6), 1, 0)
-		button.BackgroundColor3 = Theme.Card
-		button.BorderSizePixel = 0
-		button.AutoButtonColor = false
-		button.Text = ""
-		button.LayoutOrder = i
-		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
-		buttonStroke = Instance.new("UIStroke", button)
-		buttonStroke.Color = Theme.Stroke
-		buttonStroke.Transparency = 0.25
-		img = Instance.new("ImageLabel", button)
-		img.Size = UDim2.new(0, IsMobile and 30 or 34, 0, IsMobile and 30 or 34)
-		img.Position = UDim2.new(0, 6, 0.5, -(IsMobile and 15 or 17))
-		img.BackgroundColor3 = Theme.BackgroundMain
-		img.BorderSizePixel = 0
-		img.Image = type(entry.Data) == "table" and tostring(entry.Data.ImageAssetId or "") or ""
-		img.ScaleType = Enum.ScaleType.Crop
-		Instance.new("UICorner", img).CornerRadius = UDim.new(0, 6)
-		name = Instance.new("TextLabel", button)
-		name.Size = UDim2.new(1, -(IsMobile and 44 or 50), 0, 18)
-		name.Position = UDim2.new(0, IsMobile and 42 or 48, 0, 7)
-		name.BackgroundTransparency = 1
-		name.Text = entry.ExactName or "Unknown"
-		name.TextColor3 = Theme.TextPrimary
-		name.Font = Enum.Font.GothamBold
-		name.TextSize = IsMobile and 7 or 8
-		name.TextXAlignment = Enum.TextXAlignment.Left
-		name.TextTruncate = Enum.TextTruncate.AtEnd
-		date = Instance.new("TextLabel", button)
-		date.Size = UDim2.new(1, -(IsMobile and 44 or 50), 0, 14)
-		date.Position = UDim2.new(0, IsMobile and 42 or 48, 0, IsMobile and 26 or 29)
-		date.BackgroundTransparency = 1
-		date.Text = FormatLastUpdatedLabel(entry.LastUpdatedNumber)
-		date.TextColor3 = Theme.TextSecondary
-		date.Font = Enum.Font.GothamMedium
-		date.TextSize = 7
-		date.TextXAlignment = Enum.TextXAlignment.Left
-		date.TextTruncate = Enum.TextTruncate.AtEnd
-		ApplyInteractiveAnimations(button, Theme.Card, Theme.CardHover, Theme.BackgroundMain, buttonStroke, Theme.Stroke, Theme.Accent)
-		RecentUpdatedConnections[#RecentUpdatedConnections + 1] = button.Activated:Connect(function()
-			if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
-			entry.Instance.Visible = true
-			ScriptsView.CanvasPosition = Vector2.new(0, math.max(0, entry.Instance.AbsolutePosition.Y - ScriptsView.AbsolutePosition.Y + ScriptsView.CanvasPosition.Y - 10))
-			_VH_RecordRecentUse(entry, "Opened")
-		end)
-	end
-	RecentUpdatedPanel.Visible = #updatedEntries > 0 and currentTab == "Scripts" and SortMode == "Most Relevant" and string.gsub(SearchInput.Text or "", "%s", "") == "" and not FilterFavoritesActive
 end
 function ExecuteSandboxed(code, scriptName)
 	if type(CompileFunction) ~= "function" then
@@ -3773,58 +3333,6 @@ function ExecuteSandboxed(code, scriptName)
 
 	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
 	return false, detail
-end
-function _VH_UpdateHealthBadge(entry, state)
-	if not entry then return end
-	entry.HealthState = tostring(state or "Unknown")
-	if entry.HealthBadge and entry.HealthBadge.Parent then
-		if entry.HealthState == "Online" then
-			entry.HealthBadge.Text = "SOURCE OK"; entry.HealthBadge.TextColor3 = Theme.Success
-		elseif entry.HealthState == "Offline" then
-			entry.HealthBadge.Text = "SOURCE DOWN"; entry.HealthBadge.TextColor3 = Theme.Error
-		elseif entry.HealthState == "Checking" then
-			entry.HealthBadge.Text = "CHECKING"; entry.HealthBadge.TextColor3 = Theme.Warning
-		else
-			entry.HealthBadge.Text = "UNKNOWN"; entry.HealthBadge.TextColor3 = Theme.TextSecondary
-		end
-	end
-	if CurrentScriptDetails == entry and ScriptDetailsHealthValue and ScriptDetailsHealthValue.Parent then
-		ScriptDetailsHealthValue.Text = entry.HealthState
-		ScriptDetailsHealthValue.TextColor3 = entry.HealthState == "Online" and Theme.Success or (entry.HealthState == "Offline" and Theme.Error or Theme.TextSecondary)
-	end
-end
-function _VH_CheckScriptHealth(entry, force)
-	if not entry or type(entry.Data) ~= "table" or isDestroying then return end
-	local id = tostring(entry.Id or "")
-	local cache = ScriptHealthCache[id]
-	if not force and cache and os.time() - (tonumber(cache.CheckedAt) or 0) < 600 then
-		_VH_UpdateHealthBadge(entry, cache.State)
-		return
-	end
-	_VH_UpdateHealthBadge(entry, "Checking")
-	entry.HealthGeneration = (tonumber(entry.HealthGeneration) or 0) + 1
-	local healthGeneration = entry.HealthGeneration
-	_VH_TrackTask(function()
-		local raw, status = FetchWithRetry(tostring(entry.Data.RawUrl or ""), 1, false)
-		if isDestroying or entry.HealthGeneration ~= healthGeneration or not entry.Instance or not entry.Instance.Parent then return end
-		local state = raw and #string.gsub(raw, "%s+", "") > 0 and "Online" or "Offline"
-		ScriptHealthCache[id] = {State = state, CheckedAt = os.time(), Status = tonumber(status) or 0}
-		_VH_UpdateHealthBadge(entry, state)
-		UpdateFilter()
-	end)
-end
-function _VH_RefreshScriptHealthSubset(limit)
-	limit = math.max(1, tonumber(limit) or 10)
-	local count = 0
-	for _, entry in ipairs(RegisteredScripts) do
-		if count >= limit then break end
-		if entry and entry.Data then
-			count = count + 1
-			_VH_CheckScriptHealth(entry, true)
-			task.wait(0.08)
-		end
-	end
-	return count
 end
 function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
 	local tagType = NormalizeTagType(data and data.TagType)
@@ -3957,17 +3465,8 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	metaRightContainer.Size = UDim2.new(0, metaWidth, 0, 18); metaRightContainer.BackgroundTransparency = 1; metaRightContainer.LayoutOrder = 2
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
-	local healthBadge = Instance.new("TextLabel", metaRightContainer)
-	healthBadge.Size = UDim2.new(0, IsMobile and 52 or 58, 1, 0)
-	healthBadge.BackgroundTransparency = 1
-	healthBadge.Text = "UNKNOWN"
-	healthBadge.TextColor3 = Theme.TextSecondary
-	healthBadge.Font = Enum.Font.GothamBold
-	healthBadge.TextSize = 7
-	healthBadge.TextXAlignment = Enum.TextXAlignment.Right
-	healthBadge.TextTruncate = Enum.TextTruncate.AtEnd
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 112 or 132, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = FormatLastUpdatedLabel(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 1; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
@@ -4046,9 +3545,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
 		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or "you may like"}, " ")),
 		Data = data,
-		HealthBadge = healthBadge,
-		HealthState = "Unknown",
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = _VH_BuildScriptFingerprint(data), TimeLabel = dateLbl
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -4122,15 +3619,10 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.Favorites[scriptId] then
-			SavedData.Favorites[scriptId] = nil
-			SavedData.FavoriteTimes[scriptId] = nil
-			ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
+			SavedData.Favorites[scriptId] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
 		else
-			SavedData.Favorites[scriptId] = true
-			SavedData.FavoriteTimes[scriptId] = os.time()
-			ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
+			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
 		end
-		UpdateFavoriteFilterCount()
 		_VH_ScheduleFavoriteRecommendationRefresh()
 	end)))
 	RegEntryConn(autoExecBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
@@ -4183,7 +3675,6 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				else
 					local success = ExecuteSandboxed(raw, exactName)
 					if success then
-						if type(scriptEntry) == "table" then _VH_RecordRecentUse(scriptEntry, "Executed") end
 						ShowNotification("Successfully executed [" .. exactName .. "]!", "Execution")
 					end
 				end
@@ -4223,6 +3714,19 @@ function BuildCatalogFingerprint(entries)
 	end
 	return table.concat(parts, "\30")
 end
+function ClearCatalogCardsForRefresh()
+
+	filterVersion = filterVersion + 1
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry and entry.Instance and entry.Instance.Parent then
+			entry.Instance.Visible = false
+		end
+	end
+	EmptyStateMessage.Visible = false
+	EmptyStateMessage.Text = ""
+	if RecommendationPanel then RecommendationPanel.Visible = false end
+	ScriptsView.CanvasPosition = Vector2.new(0, 0)
+end
 function RestoreCatalogCardsAfterRefreshFailure()
 	for _, entry in ipairs(RegisteredScripts) do
 		if entry and entry.Instance and entry.Instance.Parent then
@@ -4249,6 +3753,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	CatalogGeneration += 1
 	local generation = CatalogGeneration
 	local savedScroll = ScriptsView.CanvasPosition
+	if force == true then
+		ClearCatalogCardsForRefresh()
+	end
 	ShowNotification("Fetching latest script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
@@ -4276,23 +3783,17 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	_VH_TrackTask(function()
 		taskOk, taskErr = xpcall(function()
 			raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
-			LastCatalogUsedCache = false
-			if not raw then
-				raw = _VH_ReadCatalogCache()
-				LastCatalogUsedCache = raw ~= nil
-			end
 			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
 				RestoreCatalogCardsAfterRefreshFailure()
-				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach catalog and no cached copy is available." end
+				if #RegisteredScripts == 0 then EmptyStateMessage.Visible = true; EmptyStateMessage.Text = "Unable to reach script catalog server." end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
 				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Catalog is unavailable and no cached copy could be recovered.", "Error")
+				ShowNotification("Could not connect to the script catalog server.", "Error")
 				FinishRefresh()
 				return
 			end
-			if not LastCatalogUsedCache then _VH_WriteCatalogCache(raw) end
 			success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
 				RestoreCatalogCardsAfterRefreshFailure()
@@ -4351,7 +3852,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				ShowNotification("Catalog validation failed: no usable scripts were found.", "Error")
 			end
 			fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
-			if fingerprint == LastCatalogFingerprint then
+			if fingerprint == LastCatalogFingerprint and force ~= true then
 				for _, existingEntry in ipairs(RegisteredScripts) do
 					if existingEntry and existingEntry.Instance and existingEntry.Instance.Parent then existingEntry.Instance.Visible = true end
 				end
@@ -4367,20 +3868,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				return
 			end
 			previousByKey = RegisteredScripts.__ByKey or {}
-			LastCatalogChangeCount = 0
-			historyChanged = false
-			for _, scriptData in ipairs(validEntries) do
-				key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
-				oldEntry = previousByKey[key]
-				if not oldEntry then
-					LastCatalogChangeCount = LastCatalogChangeCount + 1
-				elseif oldEntry.EntryFingerprint ~= _VH_BuildScriptFingerprint(scriptData) then
-					LastCatalogChangeCount = LastCatalogChangeCount + 1
-					if _VH_RecordVersionHistory(key, oldEntry, scriptData) then historyChanged = true end
-				end
-			end
-			for key in pairs(previousByKey) do if not (function() for _, scriptData in ipairs(validEntries) do if tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "") == key then return true end end return false end)() then LastCatalogChangeCount = LastCatalogChangeCount + 1 end end
-			if historyChanged and not SavedData.Settings.PerformanceMode then SaveConfiguration() end
 			nextByKey = {}
 			nextEntries = {}
 			nextKeys = {}
@@ -4389,6 +3876,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			activeBuildFolder = Instance.new("Folder")
 			activeBuildFolder.Name = "__VeloxCatalogBuild"
 			activeBuildFolder.Parent = ScriptsView
+			local function BuildEntryFingerprint(data)
+				return table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31")
+			end
 			local function DestroyEntry(entry)
 				if not entry or not entry.Instance then return end
 				if entry.DisconnectConnections then pcall(entry.DisconnectConnections) end
@@ -4404,7 +3894,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for index, scriptData in ipairs(validEntries) do
 				if not _VH_IsTaskCurrent(generation) then CleanupNewEntries(); FinishRefresh(); return end
 				key = tostring(scriptData.Id or StableScriptId(scriptData) or scriptData.Name or "")
-				entryFingerprint = _VH_BuildScriptFingerprint(scriptData)
+				entryFingerprint = BuildEntryFingerprint(scriptData)
 				existing = previousByKey[key]
 				entry = nil
 				if existing and existing.EntryFingerprint == entryFingerprint and existing.Instance and existing.Instance.Parent then
@@ -4431,7 +3921,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for _, entry in ipairs(replacedEntries) do DestroyEntry(entry) end
 			for _, entry in ipairs(nextEntries) do
 				if entry.Instance and entry.Instance.Parent ~= ScriptsView then entry.Instance.Parent = ScriptsView end
-				entry.Instance.LayoutOrder = entry.OriginalIndex + 2
+				entry.Instance.LayoutOrder = entry.OriginalIndex
 				entry.Instance.Visible = true
 			end
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
@@ -4443,7 +3933,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			LastCatalogFingerprint = fingerprint
 			_VH_RefreshRecommendations()
 			RefreshAllCardStates()
-			_VH_RefreshRecentlyUpdatedPanel()
 			UpdateFilter()
 			task.defer(function()
 				if _VH_IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
@@ -4491,15 +3980,10 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			StatusDot.BackgroundColor3 = Theme.Success
 			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
-			if LastCatalogUsedCache then
-				StatusDot.BackgroundColor3 = Theme.Warning
-				StatusText.Text = "Cached"
-				StatusText.TextColor3 = Theme.Warning
-				ShowNotification("Using cached catalog data while offline.", "Warning")
-			elseif isAutoRefresh then
-				ShowNotification(LastCatalogChangeCount > 0 and ("Catalog updated • " .. tostring(LastCatalogChangeCount) .. " change(s).") or "Catalog checked • no changes found.", LastCatalogChangeCount > 0 and "Success" or "Info")
+			if isAutoRefresh then
+				ShowNotification("Catalog updated.", "Success")
 			else
-				ShowNotification(LastCatalogChangeCount > 0 and ("Catalog refreshed • " .. tostring(LastCatalogChangeCount) .. " change(s).") or "Catalog is already up to date.", LastCatalogChangeCount > 0 and "Success" or "Info")
+				ShowNotification("Script catalog loaded successfully!", "Success")
 			end
 		end, function(err) return tostring(err) end)
 		if not taskOk then
@@ -4847,13 +4331,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 	end
 end)
 
-CreateToggleSettingInGroup(prefGroup, "Performance Mode", "Reduces UI tweens and nonessential visual work.", "rbxassetid://10734898592", 3, SavedData.Settings.PerformanceMode, function(val)
-	SavedData.Settings.PerformanceMode = val == true
-	SaveConfiguration()
-	ShowNotification(val and "Performance Mode enabled." or "Performance Mode disabled.", val and "Success" or "Info")
-end)
-
-scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 4)
+scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
 scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -4907,29 +4385,7 @@ ApplyInteractiveAnimations(scalePlus, Theme.BackgroundMain, Theme.CardHover, Col
 _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue - 0.05) end)))
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
-dataRecoveryGroup = CreateSettingsGroup("Data & Recovery", SettingsView, 2)
-CreateButtonSettingInGroup(dataRecoveryGroup, "Export Settings", "Save favorites, auto-execute, UI preferences, activity and history.", "rbxassetid://10734976528", "Export", 1, false, function(btn)
-	AttemptActionWithCooldown(function()
-		ok, err = ExportConfiguration()
-		if ok then AnimateRefreshButton(btn, "success"); ShowNotification("Settings exported successfully.", "Success") else AnimateRefreshButton(btn, "error"); ShowNotification("Export failed: " .. tostring(err), "Error") end
-	end)
-end)
-CreateButtonSettingInGroup(dataRecoveryGroup, "Import Settings", "Restore a previously exported Velox Hub settings file.", "rbxassetid://10734976528", "Import", 2, false, function(btn)
-	AttemptActionWithCooldown(function()
-		ok, err = ImportConfiguration()
-		if ok then AnimateRefreshButton(btn, "success"); ShowNotification("Settings imported successfully.", "Success") else AnimateRefreshButton(btn, "error"); ShowNotification("Import failed: " .. tostring(err), "Error") end
-	end)
-end)
-CreateButtonSettingInGroup(dataRecoveryGroup, "Check Sources", "Check a small batch of script sources for availability.", "rbxassetid://10734976528", "Check", 3, false, function()
-	count = _VH_RefreshScriptHealthSubset(10)
-	ShowNotification("Checking health for " .. tostring(count) .. " scripts...", "System")
-end)
-CreateButtonSettingInGroup(dataRecoveryGroup, "Clear Catalog Cache", "Remove the saved offline catalog copy.", "rbxassetid://10734976528", "Clear", 4, false, function()
-	ok = _VH_ClearCatalogCache()
-	ShowNotification(ok and "Catalog cache cleared." or "Catalog cache could not be removed by this executor.", ok and "Success" or "Warning")
-end)
-
-actionGroup = CreateSettingsGroup("System Actions", SettingsView, 3)
+actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
@@ -4995,7 +4451,7 @@ SearchRow.Visible = false
 FloatingBtn.Visible = false
 ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
-	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 4)
+	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
