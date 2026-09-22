@@ -3668,6 +3668,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
 				return
 			end
+			ShowNotification("Starting [" .. tostring(exactName) .. "]...", "Execution")
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
 				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
