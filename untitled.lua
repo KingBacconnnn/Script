@@ -1141,7 +1141,7 @@ ToastLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 ToastLayout.Padding = UDim.new(0, 8)
 ToastLayout.FillDirection = Enum.FillDirection.Vertical
 
-NOTIF_DURATION = 3.5
+NOTIF_DURATION = 3.0
 MAX_VISIBLE_NOTIFICATIONS = IsMobile and 3 or 5
 NotificationSequence = 0
 LastNotificationSignature = nil
@@ -1211,30 +1211,16 @@ end
 
 function GetNotificationTitle(notifType, message)
 	local info = NotificationTypeInfo[notifType] or NotificationTypeInfo.Info
-
 	local lowerMessage = string.lower(message)
-	if notifType == "Success" then
-		if string.find(lowerMessage, "execut") then return "Execution complete" end
-		if string.find(lowerMessage, "refresh") or string.find(lowerMessage, "catalog") then
-			return "Update complete"
-		end
-	elseif notifType == "Error" then
-		if string.find(lowerMessage, "download") or string.find(lowerMessage, "connect") then
-			return "Connection failed"
-		end
-		if string.find(lowerMessage, "compile") or string.find(lowerMessage, "loadstring") then
-			return "Execution unavailable"
-		end
-	elseif notifType == "Warning" then
-		if string.find(lowerMessage, "cancel") then return "Action canceled" end
-		if string.find(lowerMessage, "compatible") then return "Compatibility warning" end
-	elseif notifType == "System" then
-		if string.find(lowerMessage, "catalog") then return "Catalog update" end
-	elseif notifType == "Execution" then
-		if string.find(lowerMessage, "starting", 1, true) then return "Starting script" end
-		if string.find(lowerMessage, "execut", 1, true) then return "Script execution" end
-	end
-
+	if notifType == "Success" and string.find(lowerMessage, "execut", 1, true) then return "Execution complete" end
+	if notifType == "Success" and (string.find(lowerMessage, "refresh", 1, true) or string.find(lowerMessage, "catalog", 1, true)) then return "Update complete" end
+	if notifType == "Error" and (string.find(lowerMessage, "download", 1, true) or string.find(lowerMessage, "connect", 1, true)) then return "Connection failed" end
+	if notifType == "Error" and (string.find(lowerMessage, "compile", 1, true) or string.find(lowerMessage, "loadstring", 1, true) or string.find(lowerMessage, "execution error", 1, true)) then return "Execution failed" end
+	if notifType == "Warning" and string.find(lowerMessage, "cancel", 1, true) then return "Canceled" end
+	if notifType == "Warning" and string.find(lowerMessage, "compatible", 1, true) then return "Compatibility" end
+	if notifType == "System" and string.find(lowerMessage, "catalog", 1, true) then return "Catalog update" end
+	if notifType == "Execution" and string.find(lowerMessage, "starting", 1, true) then return "Starting script" end
+	if notifType == "Execution" then return "Script execution" end
 	return info.Title
 end
 
@@ -2716,10 +2702,8 @@ _VH_RegConn(FavFilterBtn.MouseButton1Click:Connect(_VH_CreateDebounce(0.1, funct
 	FilterFavoritesActive = not FilterFavoritesActive
 	if FilterFavoritesActive then
 		FavFilterBtn.Text = "★"; FavFilterBtn.TextColor3 = Color3.fromRGB(250, 204, 21); FavFilterStroke.Color = Color3.fromRGB(250, 204, 21)
-		ShowNotification("Showing your favorite scripts only.", "Info")
 	else
 		FavFilterBtn.Text = "☆"; FavFilterBtn.TextColor3 = Color3.fromRGB(203, 213, 225); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
-		ShowNotification("Showing all scripts.", "Info")
 	end
 	UpdateFilter()
 end)))
@@ -2736,7 +2720,6 @@ for _, opt in ipairs(SortOptions) do
 			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
 		end
 		btn.TextColor3 = Theme.Accent
-		ShowNotification("Sorted by: " .. opt, "Info")
 		UpdateFilter()
 	end))
 end
@@ -3331,7 +3314,7 @@ function RefreshAllCardStates()
 end
 function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 	if type(CompileFunction) ~= "function" then
-		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
+		ShowNotification("Execution unavailable: executor has no loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
 	end
 	if type(code) ~= "string" or code == "" then
@@ -3349,7 +3332,7 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 						ShowNotification("Successfully executed [" .. tostring(scriptName) .. "]!", "Success")
 					end
 				else
-					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+					ShowNotification("Execution failed [" .. tostring(scriptName) .. "]. Check F9.", "Error")
 				end
 			end
 		end)
@@ -3361,11 +3344,11 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 	if string.find(normalized, "out of local", 1, true)
 		or string.find(normalized, "registers", 1, true)
 		or (string.find(normalized, "register", 1, true) and string.find(normalized, "limit", 1, true)) then
-		ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: executor compiler local-register limit was exceeded.", "Error")
+		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: compiler limit exceeded.", "Error")
 		return false, detail
 	end
 
-	ShowNotification("Compile Error in [" .. tostring(scriptName) .. "]: " .. detail, "Error")
+	ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: " .. detail, "Error")
 	return false, detail
 end
 function CreateScriptCard(data, renderParent, registerImmediately, originalIndex)
@@ -3653,9 +3636,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if isDestroying then return end
 		innerActionTime = tick()
 		if SavedData.Favorites[scriptId] then
-			SavedData.Favorites[scriptId] = nil; ShowNotification("Removed '" .. exactName .. "' from favorites.", "Warning")
+			SavedData.Favorites[scriptId] = nil; ShowNotification("Removed from favorites.", "Info")
 		else
-			SavedData.Favorites[scriptId] = true; ShowNotification("Added '" .. exactName .. "' to favorites!", "Success")
+			SavedData.Favorites[scriptId] = true; ShowNotification("Added to favorites.", "Success")
 		end
 		_VH_ScheduleFavoriteRecommendationRefresh()
 	end)))
@@ -3683,7 +3666,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			SavedData.AutoExecutes[scriptId] = previousEntry
 			ShowNotification("Auto-execute setting could not be saved: " .. tostring(saveError), "Error")
 		else
-			ShowNotification(previousEntry and "Disabled auto-execute for '" .. exactName .. "'." or "Enabled auto-execute for '" .. exactName .. "'.", previousEntry and "Warning" or "Success")
+			ShowNotification(previousEntry and "Auto-execute disabled." or "Auto-execute enabled.", previousEntry and "Warning" or "Success")
 		end
 		RefreshAllCardStates()
 		UpdateFilter()
@@ -3697,7 +3680,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				return
 			end
 			if type(CompileFunction) ~= "function" then
-				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
+				ShowNotification("Execution unavailable: executor has no loadstring/load.", "Error")
 				return
 			end
 			ShowNotification("Starting [" .. exactName .. "]...", "Execution")
@@ -3706,9 +3689,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
 				if isDestroying then return end
 				if not raw then
-					ShowNotification("Failed to download script" .. (status and " (HTTP " .. tostring(status) .. ")" or "") .. ".", "Error")
+					ShowNotification("Could not download [" .. exactName .. "]" .. (status and " (" .. tostring(status) .. ")" or "") .. ".", "Error")
 				elseif #string.gsub(raw, "%s+", "") == 0 then
-					ShowNotification("The script returned an empty response.", "Error")
+					ShowNotification("Empty script source for [" .. exactName .. "].", "Error")
 				else
 					ExecuteSandboxed(raw, exactName)
 				end
@@ -3808,7 +3791,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	if force == true then
 		ClearCatalogCardsForRefresh()
 	end
-	ShowNotification("Fetching latest script catalog...", "System")
 	StatusDot.BackgroundColor3 = Theme.Warning
 	StatusText.Text = "Connecting..."
 	StatusText.TextColor3 = Theme.Warning
@@ -4006,7 +3988,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 					_VH_TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
 						startedList, failList = {}, {}
-						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
 							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
@@ -4018,8 +3999,13 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 							end
 							task.wait(0.3)
 						end
-						if #startedList > 0 then ShowNotification("Auto-started: " .. table.concat(startedList, ", "), "Success") end
-						if #failList > 0 then ShowNotification("Auto-execution failed to start for: " .. table.concat(failList, ", "), "Warning") end
+						if #startedList > 0 and #failList == 0 then
+							ShowNotification("Auto-started " .. #startedList .. " script" .. (#startedList == 1 and "" or "s") .. ".", "Success")
+						elseif #startedList > 0 then
+							ShowNotification("Auto-started " .. #startedList .. "; " .. #failList .. " failed to start.", "Warning")
+						elseif #failList > 0 then
+							ShowNotification("Auto-execute: " .. #failList .. " script" .. (#failList == 1 and "" or "s") .. " failed to start.", "Warning")
+						end
 					end)
 				end
 			end
@@ -4372,10 +4358,10 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 	SaveConfiguration()
 	if val then
 		ApplyAntiAFK()
-		ShowNotification("Anti-AFK system engaged.", "Success")
+		ShowNotification("Anti-AFK enabled.", "Success")
 	else
 		DisableAntiAFK()
-		ShowNotification("Anti-AFK deactivated.", "Warning")
+		ShowNotification("Anti-AFK disabled.", "Warning")
 	end
 end)
 
@@ -4425,7 +4411,7 @@ function SetUIScaleFromSetting(nextValue)
 	RefreshScaleLabel()
 	ApplyPanelUIScale(scaleValue)
 	SaveConfiguration()
-	ShowNotification("UI Scale set to " .. tostring(math.floor(scaleValue * 100 + 0.5)) .. "%.", "Success")
+	ShowNotification("UI scale: " .. tostring(math.floor(scaleValue * 100 + 0.5)) .. "%.", "Success")
 end
 RefreshScaleLabel()
 ApplyInteractiveAnimations(scaleMinus, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), scaleMinusStroke, Theme.Stroke, Theme.Accent)
@@ -4437,11 +4423,9 @@ actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
-			ShowNotification("Catalog is already refreshing.", "Info")
 			return
 		end
 		AnimateRefreshButton(btn, true)
-		ShowNotification("Refreshing script catalog...", "System")
 		started = false
 		ok = pcall(function()
 			started = PendingTasks.__LoadCatalog(true) == true
@@ -4468,7 +4452,6 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 	end)
 end)
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
-	ShowNotification("Unloading Velox Hub...", "Info")
 	task.wait(0.3)
 	CloseUI()
 end)
@@ -4495,7 +4478,6 @@ SectionHeaderLabel.Text = "Updates"
 MainPanel.Visible = true
 SearchRow.Visible = false
 FloatingBtn.Visible = false
-ShowNotification("Velox Hub is ready for use!", "Success")
 if IsMobile then
 	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
@@ -4505,7 +4487,7 @@ if IsMobile then
 		FloatingBtn.Position = UDim2.new(0.5, 0, 0, 42.5)
 		_VH_CacheInstanceAndDescendants(MainPanel)
 		_VH_CacheInstanceAndDescendants(FloatingBtn)
-		ShowNotification("UI Cache cleared successfully.", "Success")
+		ShowNotification("UI cache cleared.", "Success")
 	end)
 end
 end
