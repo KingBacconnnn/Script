@@ -1108,11 +1108,22 @@ SidebarDivider.Position = UDim2.new(1, -1, 0, 0)
 SidebarDivider.BackgroundColor3 = Theme.Stroke
 SidebarDivider.BackgroundTransparency = 0.3
 SidebarDivider.BorderSizePixel = 0
+SidebarDragHandle = Instance.new("TextButton", Sidebar)
+SidebarDragHandle.Name = "SidebarDragHandle"
+SidebarDragHandle.Size = UDim2.new(1, 0, 1, 0)
+SidebarDragHandle.Position = UDim2.new(0, 0, 0, 0)
+SidebarDragHandle.BackgroundTransparency = 1
+SidebarDragHandle.BorderSizePixel = 0
+SidebarDragHandle.Text = ""
+SidebarDragHandle.AutoButtonColor = false
+SidebarDragHandle.Active = true
+SidebarDragHandle.ZIndex = 4
 SidebarBrand = Instance.new("Frame", Sidebar)
 SidebarBrand.Size = UDim2.new(1, -20, 0, 40)
 SidebarBrand.Position = UDim2.new(0, 10, 0, 10)
 SidebarBrand.BackgroundTransparency = 1
 SidebarBrand.Active = false
+SidebarBrand.ZIndex = 5
 SidebarLogo = Instance.new("ImageLabel", SidebarBrand)
 SidebarLogo.Name = "VeloxLogo"
 SidebarLogo.Size = UDim2.new(0, IsMobile and 30 or 34, 0, IsMobile and 30 or 34)
@@ -1123,7 +1134,6 @@ SidebarLogo.Image = "rbxassetid://97589005673854"
 SidebarLogo.ScaleType = Enum.ScaleType.Fit
 SidebarLogo.Active = false
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
-Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 PanelUIScale = Instance.new("UIScale", MainPanel)
 PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 function ApplyPanelUIScale(scaleValue)
@@ -2240,6 +2250,30 @@ _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		end))
 	end
 end))
+_VH_RegConn(SidebarDragHandle.InputBegan:Connect(function(input)
+	if isDestroying or not SidebarDragHandle.Visible then return end
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+	if activeMainDragInput then return end
+	activeMainDragInput = input
+	mainDragStart = input.Position
+	mainStartPos = MainPanel.Position
+	if mainDragConnection then _VH_UnregConn(mainDragConnection); mainDragConnection = nil end
+	mainDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
+		if isDestroying then return end
+		if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = moveInput.Position - mainDragStart
+			local camera = workspace.CurrentCamera
+			local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+			local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
+			local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
+			local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+			local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+			targetX = math.max(halfX, math.min(targetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+			targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
+			MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
+		end
+	end))
+end))
 _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	if isDestroying then return end
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
@@ -2929,17 +2963,13 @@ CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SidebarCredits = Instance.new("Frame", Sidebar)
 SidebarCredits.Size = UDim2.new(1, -18, 0, IsMobile and 134 or 150)
-SidebarCredits.Position = UDim2.new(0, 9, 1, -(IsMobile and 141 or 159))
+SidebarCredits.AnchorPoint = Vector2.new(0, 1)
+SidebarCredits.Position = UDim2.new(0, 9, 1, -10)
 SidebarCredits.BackgroundColor3 = Theme.Card
 SidebarCredits.BackgroundTransparency = 0.18
 SidebarCredits.BorderSizePixel = 0
 SidebarCredits.ZIndex = 6
 Instance.new("UICorner", SidebarCredits).CornerRadius = UDim.new(0, 8)
-SidebarCreditsStroke = Instance.new("UIStroke", SidebarCredits)
-SidebarCreditsStroke.Color = Theme.Stroke
-SidebarCreditsStroke.Thickness = 1
-SidebarCreditsStroke.Transparency = 0.25
-
 SidebarCreditAvatar = Instance.new("ImageLabel", SidebarCredits)
 SidebarCreditAvatar.Size = UDim2.new(0, IsMobile and 30 or 34, 0, IsMobile and 30 or 34)
 SidebarCreditAvatar.Position = UDim2.new(0, 8, 0, 8)
