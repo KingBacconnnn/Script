@@ -6,10 +6,10 @@ if type(getgenv) == "function" then
 	end
 end
 function _VH_GenerateRandomString(len)
-	chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	str = ""
+	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local str = ""
 	for i = 1, len do
-		r = math.random(1, #chars)
+		local r = math.random(1, #chars)
 		str = str .. string.sub(chars, r, r)
 	end
 	return str
@@ -20,11 +20,11 @@ if GlobalEnv[_G_Identifier] then
 end
 Services = setmetatable({}, {
 	__index = function(self, key)
-		success, service = pcall(function() return game:GetService(key) end)
+		local success, service = pcall(function() return game:GetService(key) end)
 		if not success or not service then return nil end
-		final = service
+		local final = service
 		if type(cloneref) == "function" then
-			cloneOk, cloneResult = pcall(cloneref, service)
+			local cloneOk, cloneResult = pcall(cloneref, service)
 			if cloneOk and cloneResult then final = cloneResult end
 		end
 		self[key] = final
@@ -47,12 +47,14 @@ end
 PlaceId = game.PlaceId
 GameId = game.GameId
 gethui = type(gethui) == "function" and gethui or function() return nil end
-protectgui = type(protectgui) == "function" and protectgui or ((type(syn) == "table" and type(syn.protect_gui) == "function") and syn.protect_gui or function(...) return ... end)
+protectgui = type(protectgui) == "function" and protectgui or (type(protect_gui) == "function" and protect_gui or ((type(syn) == "table" and type(syn.protect_gui) == "function") and syn.protect_gui or function(...) return ... end))
 exec_request = nil
 if type(request) == "function" then
 	exec_request = request
 elseif type(request) == "table" and type(request.request) == "function" then
 	exec_request = request.request
+elseif type(requestfunc) == "function" then
+	exec_request = requestfunc
 elseif type(http_request) == "function" then
 	exec_request = http_request
 elseif type(http) == "table" and type(http.request) == "function" then
@@ -82,13 +84,13 @@ function _VH_TryCompiler(fn, source, chunkName)
 end
 if type(loadstring) == "function" then
 	CompileFunction = function(source, chunkName)
-		ok, chunk, err = _VH_TryCompiler(loadstring, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(loadstring, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
 elseif type(load) == "function" then
 	CompileFunction = function(source, chunkName)
-		ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
+		local ok, chunk, err = _VH_TryCompiler(load, source, chunkName)
 		if ok then return chunk end
 		return nil, err
 	end
@@ -136,7 +138,7 @@ isDestroying = false
 isMinimized = false
 isTransitioning = false
 IsBindingKey = false
-IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or GuiService:IsTenFootInterface())
+IsMobile = UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y <= 800) or (GuiService and GuiService:IsTenFootInterface()))
 mainDragConnection, floatDragConnection = nil, nil
 activeMainDragInput, activeFloatDragInput = nil, nil
 ToggleKeybindConnection = nil
@@ -531,22 +533,22 @@ LoadConfiguration()
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
 	if type(exec_request) == "function" then
-		reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
+		local reqSuccess, reqResult = pcall(function() return exec_request({Url = url, Method = "GET"}) end)
 		if not reqSuccess or not reqResult then
 			reqSuccess, reqResult = pcall(function() return exec_request({url = url, method = "GET"}) end)
 		end
 		if reqSuccess and reqResult then
-			body = type(reqResult) == "table" and (reqResult.Body or reqResult.body or reqResult.ResponseBody or reqResult.Response or reqResult.response) or (type(reqResult) == "string" and reqResult or nil)
-			status = type(reqResult) == "table" and tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code or reqResult.Code) or 200
+			local body = type(reqResult) == "table" and (reqResult.Body or reqResult.body or reqResult.ResponseBody or reqResult.Response or reqResult.response) or (type(reqResult) == "string" and reqResult or nil)
+			local status = type(reqResult) == "table" and tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code or reqResult.Code) or 200
 			if status == nil and body then status = 200 end
 			if body and tostring(body) ~= "" and (status == nil or (status >= 200 and status < 300)) then return tostring(body), status or 200, nil end
 		end
 	end
 	if type(httpget) == "function" then
-		success, result = pcall(httpget, url)
+		local success, result = pcall(httpget, url)
 		if success and type(result) == "string" and result ~= "" then return result, 200, nil end
 	end
-	success, result = pcall(function() return game:HttpGet(url) end)
+	local success, result = pcall(function() return game:HttpGet(url) end)
 	if success and type(result) == "string" and result ~= "" then return result, 200, nil end
 	success, result = pcall(function() return game:HttpGetAsync(url) end)
 	if success and type(result) == "string" and result ~= "" then return result, 200, nil end
@@ -615,7 +617,7 @@ TagTypeConfig = {
 }
 function NormalizeTagType(value)
 	if type(value) ~= "string" then return "NONE" end
-	normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	local normalized = string.upper(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 	if TagTypeConfig[normalized] then return normalized end
 	return "NONE"
 end
@@ -863,19 +865,19 @@ function FormatLastUpdatedLabel(value)
 	return "Updated " .. compact
 end
 function GetSecureParent()
-	huiSuccess, huiTarget = pcall(gethui)
+	local huiSuccess, huiTarget = pcall(gethui)
 	if huiSuccess and huiTarget and typeof(huiTarget) == "Instance" then return huiTarget end
-	coreTarget = CoreGui
+	local coreTarget = CoreGui
 	if coreTarget then
-		testAccess = pcall(function()
-		t = Instance.new("Folder")
-		t.Parent = coreTarget
-		t:Destroy()
+		local testAccess = pcall(function()
+			local temp = Instance.new("Folder")
+			temp.Parent = coreTarget
+			temp:Destroy()
 		end)
 		if testAccess then return coreTarget end
 	end
 	if LocalPlayer then
-		playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 		if playerGui then return playerGui end
 	end
 	return nil
@@ -939,7 +941,6 @@ function GetPanelSize()
 	local height = math.max(220, math.min(maxHeight, viewport.Y - 12))
 	return UDim2.fromOffset(width, height)
 end
-PANEL_SIZE = GetPanelSize()
 function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
 	if not gui:IsA("GuiObject") then return end
 	connectionRegistry = connectionRegistry or VeloxConnections
@@ -1013,27 +1014,28 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 		activeFloatDragInput = input
 		floatStart = input.Position
 		floatPos = FloatingBtn.Position
-		if floatDragConnection then floatDragConnection:Disconnect() end
+		if floatDragConnection then _VH_UnregConn(floatDragConnection); floatDragConnection = nil end
 		floatDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeFloatDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
-				delta = moveInput.Position - floatStart
-				camera = workspace.CurrentCamera
-				viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-				targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
-				targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
-				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				local delta = moveInput.Position - floatStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = floatPos.X.Scale * viewport.X + floatPos.X.Offset + delta.X
+				local targetY = floatPos.Y.Scale * viewport.Y + floatPos.Y.Offset + delta.Y
+				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
 
 				targetX = math.max(halfX, math.min(targetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
 				targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
+			if RefreshViewportLayout then RefreshViewportLayout() end
 		end))
 	end
 end))
 MainPanel = Instance.new("Frame", ScreenGui)
-MainPanel.Size = PANEL_SIZE
+MainPanel.Size = GetPanelSize()
 MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 MainPanel.BackgroundColor3 = Theme.BackgroundMain
@@ -2157,17 +2159,17 @@ _VH_RegConn(HeaderContainer.InputBegan:Connect(function(input)
 		activeMainDragInput = input
 		mainDragStart = input.Position
 		mainStartPos = MainPanel.Position
-		if mainDragConnection then mainDragConnection:Disconnect() end
+		if mainDragConnection then _VH_UnregConn(mainDragConnection); mainDragConnection = nil end
 		mainDragConnection = _VH_RegConn(UserInputService.InputChanged:Connect(function(moveInput)
 			if isDestroying then return end
 			if moveInput == activeMainDragInput or moveInput.UserInputType == Enum.UserInputType.MouseMovement then
-				delta = moveInput.Position - mainDragStart
-				camera = workspace.CurrentCamera
-				viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-				targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
-				targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
-				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				local delta = moveInput.Position - mainDragStart
+				local camera = workspace.CurrentCamera
+				local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+				local targetX = mainStartPos.X.Scale * viewport.X + mainStartPos.X.Offset + delta.X
+				local targetY = mainStartPos.Y.Scale * viewport.Y + mainStartPos.Y.Offset + delta.Y
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
 				targetX = math.max(halfX, math.min(targetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
 				targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
@@ -2180,7 +2182,7 @@ _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeMainDragInput and (input == activeMainDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeMainDragInput = nil
 		if mainDragConnection then
-			mainDragConnection:Disconnect()
+			_VH_UnregConn(mainDragConnection)
 			mainDragConnection = nil
 		end
 		if OriginalCache[MainPanel] then OriginalCache[MainPanel].Position = MainPanel.Position end
@@ -2188,7 +2190,7 @@ _VH_RegConn(UserInputService.InputEnded:Connect(function(input)
 	if activeFloatDragInput and (input == activeFloatDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
 		activeFloatDragInput = nil
 		if floatDragConnection then
-			floatDragConnection:Disconnect()
+			_VH_UnregConn(floatDragConnection)
 			floatDragConnection = nil
 		end
 		if floatStart then
@@ -2560,33 +2562,33 @@ Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
 DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
 viewportConn = nil
 function BindCamera()
-	if viewportConn then viewportConn:Disconnect() end
-	cam = workspace.CurrentCamera
+	if viewportConn then _VH_UnregConn(viewportConn); viewportConn = nil end
+	local cam = workspace.CurrentCamera
 	if cam then
 		viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			if DropdownContainer and DropdownContainer.Visible then
 				DropdownContainer.Visible = false
 			end
+			local viewport = cam.ViewportSize
 			if MainPanel and MainPanel.Parent then
-				viewport = cam.ViewportSize
-				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				currentOffsetX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-				currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-				targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
-				targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
+				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+				local currentOffsetX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+				local currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+				local targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
+				local targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 			if FloatingBtn and FloatingBtn.Parent then
-				viewport = cam.ViewportSize
-				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-				currentOffsetX = FloatingBtn.Position.X.Scale * viewport.X + FloatingBtn.Position.X.Offset
-				currentOffsetY = FloatingBtn.Position.Y.Scale * viewport.Y + FloatingBtn.Position.Y.Offset
-				targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
-				targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
+				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				local currentOffsetX = FloatingBtn.Position.X.Scale * viewport.X + FloatingBtn.Position.X.Offset
+				local currentOffsetY = FloatingBtn.Position.Y.Scale * viewport.Y + FloatingBtn.Position.Y.Offset
+				local targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
+				local targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
+			if RefreshViewportLayout then RefreshViewportLayout() end
 		end))
 	end
 end
@@ -2595,12 +2597,12 @@ BindCamera()
 function RefreshViewportLayout()
 	if isDestroying or not MainPanel or not MainPanel.Parent then return end
 	MainPanel.Size = GetPanelSize()
-	camera = workspace.CurrentCamera
-	viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-	halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-	currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-	currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
+	local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+	local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+	local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
 	currentX = math.max(halfX, math.min(currentX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
 	currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
@@ -2818,7 +2820,7 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Clean, Stability & Compatibility", "• Hardened viewport positioning so small screens and resized windows cannot create invalid clamp ranges.\n• Replaced the previous live text-fitting loop with native UITextSizeConstraint protection so Roblox text-size changes cannot continuously resize the hub or freeze it.\n• Kept text-size protection bounded to each text object's designed size and applied it once to existing and dynamically created text objects.\n• Matched View Details text size to the Auto Execute ON, OFF, and Wrong Game state text while leaving the other action buttons unchanged.\n• Guarded optional SearchBox properties so unsupported properties cannot stop hub initialization.\n• Preserved the existing HTTP, compiler, GUI-parent, cloneref, file, cleanup, configuration, recovery, and executor request fallbacks, with an additional request.request compatibility path.\n• Kept loadstring/load compiler fallback behavior unchanged.\n• Removed unused catalog and recommendation fields and an unused UIStroke variable without changing their visible behavior.\n• Preserved Recommended for You, PlaceId-based FOR YOU, favorites, Auto Execute, Script Details, confirmation dialogs, card states, UI Scale, catalog refresh, and recovery behavior.\n• Removed Lua comments and avoided introducing unnecessary locals or per-frame text calculations.\n• Final source cleanup keeps the existing compatibility architecture intact; executors that do not expose required Roblox/executor APIs will continue to use the built-in fallbacks or show a controlled compatibility message.", ChangelogsView)
+CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
@@ -3202,20 +3204,29 @@ end
 function _VH_GetSavedAutoExecute(scriptData)
 	if type(scriptData) ~= "table" then return nil, false end
 	local scriptId = tostring(scriptData.Id or "")
+	local catalogPlaceId = tonumber(scriptData.PlaceId) or 0
+	local function NormalizeSavedEntry(entry)
+		if type(entry) ~= "table" then return false end
+		local changed = false
+		if (tonumber(entry.PlaceId) or 0) ~= catalogPlaceId then entry.PlaceId = catalogPlaceId; changed = true end
+		if (tonumber(entry.GameId) or 0) ~= 0 then entry.GameId = 0; changed = true end
+		if entry.Name ~= scriptData.Name then entry.Name = scriptData.Name; changed = true end
+		return changed
+	end
 	local direct = scriptId ~= "" and SavedData.AutoExecutes[scriptId] or nil
 	if type(direct) == "table" then
-		return direct, false
+		return direct, NormalizeSavedEntry(direct)
 	end
 	local stableId = StableScriptId(scriptData)
 	if type(stableId) == "string" and SavedData.AutoExecutes[stableId] then
 		local entry = SavedData.AutoExecutes[stableId]
+		local changed = NormalizeSavedEntry(entry)
 		if scriptId ~= "" and stableId ~= scriptId then
 			SavedData.AutoExecutes[scriptId] = entry
 			SavedData.AutoExecutes[stableId] = nil
-			entry.Name = entry.Name or scriptData.ExactName or scriptData.Name
-			return entry, true
+			changed = true
 		end
-		return entry, false
+		return entry, changed
 	end
 	local targetName = _VH_NormalizeAutoExecuteName(scriptData.ExactName or scriptData.Name)
 	if targetName == "" then return nil, false end
@@ -3234,7 +3245,7 @@ function _VH_GetSavedAutoExecute(scriptData)
 	if scriptId ~= "" then
 		SavedData.AutoExecutes[scriptId] = candidate
 		SavedData.AutoExecutes[candidateKey] = nil
-		candidate.Name = scriptData.ExactName or scriptData.Name
+		NormalizeSavedEntry(candidate)
 	end
 	return candidate, true
 end
@@ -3286,10 +3297,16 @@ function _VH_ScheduleFavoriteRecommendationRefresh()
 end
 function MigrateSavedEntries(entries)
 	local changed = false
+	local nameCounts = {}
+	for _, data in ipairs(entries) do
+		local name = type(data.Name) == "string" and string.lower(string.gsub(data.Name, "^%s*(.-)%s*$", "%1")) or ""
+		if name ~= "" then nameCounts[name] = (nameCounts[name] or 0) + 1 end
+	end
 	for _, data in ipairs(entries) do
 		local id = data.Id
 		local name = data.Name
-		if id and name and id ~= name then
+		local nameKey = type(name) == "string" and string.lower(string.gsub(name, "^%s*(.-)%s*$", "%1")) or ""
+		if id and name and id ~= name and nameKey ~= "" and nameCounts[nameKey] == 1 then
 			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then
 				SavedData.Favorites[id] = SavedData.Favorites[name]
 				SavedData.Favorites[name] = nil
@@ -3575,6 +3592,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[scriptId]
 		local compatible = IsScriptCompatible(data)
+		if compatible then _VH_GetSavedAutoExecute(data) end
 		local isON = compatible and _VH_IsAutoExecuteActive(scriptId)
 		ApplyTagBorder(card, tagType, cardStroke)
 		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
@@ -4315,15 +4333,15 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 end)))
 function ApplyAntiAFK()
 	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	player = Players.LocalPlayer
-	GC = getconnections or get_signal_cons
+	local player = Players.LocalPlayer
+	local GC = getconnections or get_signal_cons
 	if type(GC) == "function" then
 		table.clear(AntiAFKDisabledConnections)
-		ok, connections = pcall(function() return GC(player.Idled) end)
+		local ok, connections = pcall(function() return GC(player.Idled) end)
 		if ok and type(connections) == "table" then
 			for _, connection in pairs(connections) do
 				if connection.Disable then
-					disabled = pcall(function() connection:Disable() end)
+					local disabled = pcall(function() connection:Disable() end)
 					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
 				end
 			end
@@ -4333,7 +4351,7 @@ function ApplyAntiAFK()
 		AntiAFKConnection = player.Idled:Connect(function()
 			if isDestroying then return end
 			pcall(function()
-				virtualUser = Services.VirtualUser
+				local virtualUser = Services.VirtualUser
 				if virtualUser then
 					virtualUser:CaptureController()
 					virtualUser:ClickButton2(Vector2.new())
