@@ -2423,7 +2423,7 @@ function CreateCanvas(name)
 	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.Active = true
 	local layout = Instance.new("UIListLayout", scroll)
-	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
 	local pad = Instance.new("UIPadding", scroll)
 	pad.PaddingRight = UDim.new(0, 4); pad.PaddingBottom = UDim.new(0, 16)
 	TabViews[name] = scroll
@@ -2432,6 +2432,7 @@ end
 ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
+ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
@@ -2439,6 +2440,7 @@ EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTra
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
 EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
 SearchRow = Instance.new("Frame", MainContent)
+SearchRow.AnchorPoint = Vector2.new(0, 0)
 SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 28 or 32); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 118)
 SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Active = false; SearchRow.ZIndex = 50
 filterBtnWidth = IsMobile and 28 or 32
@@ -2964,15 +2966,17 @@ end
 CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SidebarCredits = Instance.new("Frame", Sidebar)
-SidebarCredits.Size = UDim2.new(1, -20, 0, IsMobile and 112 or 128)
+SidebarCredits.Size = UDim2.new(1, -20, 0, IsMobile and 126 or 142)
 SidebarCredits.AnchorPoint = Vector2.new(0.5, 1)
-SidebarCredits.Position = UDim2.new(0.5, 0, 1, -6)
-SidebarCredits.BackgroundTransparency = 1
+SidebarCredits.Position = UDim2.new(0.5, 0, 1, -2)
+SidebarCredits.BackgroundColor3 = Theme.BackgroundSecondary
+SidebarCredits.BackgroundTransparency = 0.28
 SidebarCredits.BorderSizePixel = 0
 SidebarCredits.ZIndex = 6
+Instance.new("UICorner", SidebarCredits).CornerRadius = UDim.new(0, 8)
 SidebarCreditAvatar = Instance.new("ImageLabel", SidebarCredits)
-SidebarCreditAvatar.Size = UDim2.new(0, IsMobile and 30 or 34, 0, IsMobile and 30 or 34)
-SidebarCreditAvatar.Position = UDim2.new(0.5, -(IsMobile and 15 or 17), 0, 4)
+SidebarCreditAvatar.Size = UDim2.new(0, IsMobile and 38 or 42, 0, IsMobile and 38 or 42)
+SidebarCreditAvatar.Position = UDim2.new(0, 10, 0, 9)
 SidebarCreditAvatar.BackgroundColor3 = Theme.BackgroundSecondary
 SidebarCreditAvatar.BackgroundTransparency = 0
 SidebarCreditAvatar.BorderSizePixel = 0
@@ -2986,30 +2990,30 @@ SidebarCreditAvatarStroke.Color = Theme.Accent
 SidebarCreditAvatarStroke.Thickness = 1
 
 SidebarCreditTitle = Instance.new("TextLabel", SidebarCredits)
-SidebarCreditTitle.Size = UDim2.new(1, 0, 0, IsMobile and 14 or 16)
-SidebarCreditTitle.Position = UDim2.new(0, 0, 0, IsMobile and 38 or 42)
+SidebarCreditTitle.Size = UDim2.new(1, -(IsMobile and 58 or 64), 0, IsMobile and 16 or 18)
+SidebarCreditTitle.Position = UDim2.new(0, IsMobile and 56 or 62, 0, 11)
 SidebarCreditTitle.BackgroundTransparency = 1
 SidebarCreditTitle.Text = "Ovei"
 SidebarCreditTitle.TextColor3 = Theme.TextPrimary
 SidebarCreditTitle.Font = Enum.Font.GothamBold
-SidebarCreditTitle.TextSize = IsMobile and 10 or 12
-SidebarCreditTitle.TextXAlignment = Enum.TextXAlignment.Center
+SidebarCreditTitle.TextSize = IsMobile and 11 or 13
+SidebarCreditTitle.TextXAlignment = Enum.TextXAlignment.Left
 SidebarCreditTitle.ZIndex = 7
 
 SidebarCreditRole = Instance.new("TextLabel", SidebarCredits)
-SidebarCreditRole.Size = UDim2.new(1, 0, 0, IsMobile and 11 or 12)
-SidebarCreditRole.Position = UDim2.new(0, 0, 0, IsMobile and 53 or 58)
+SidebarCreditRole.Size = UDim2.new(1, -(IsMobile and 58 or 64), 0, IsMobile and 12 or 14)
+SidebarCreditRole.Position = UDim2.new(0, IsMobile and 56 or 62, 0, 30)
 SidebarCreditRole.BackgroundTransparency = 1
 SidebarCreditRole.Text = "Velox Hub Developer"
 SidebarCreditRole.TextColor3 = Theme.TextSecondary
 SidebarCreditRole.Font = Enum.Font.GothamMedium
 SidebarCreditRole.TextSize = IsMobile and 7 or 8
-SidebarCreditRole.TextXAlignment = Enum.TextXAlignment.Center
+SidebarCreditRole.TextXAlignment = Enum.TextXAlignment.Left
 SidebarCreditRole.ZIndex = 7
 
 SidebarSubscribe = Instance.new("TextButton", SidebarCredits)
 SidebarSubscribe.Size = UDim2.new(1, -14, 0, IsMobile and 22 or 26)
-SidebarSubscribe.Position = UDim2.new(0, 7, 0, IsMobile and 68 or 70)
+SidebarSubscribe.Position = UDim2.new(0, 7, 0, IsMobile and 56 or 59)
 SidebarSubscribe.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
 SidebarSubscribe.BackgroundTransparency = 0.02
 SidebarSubscribe.BorderSizePixel = 0
@@ -3036,7 +3040,7 @@ SidebarSubscribeIcon.ZIndex = 8
 
 SidebarDiscord = Instance.new("TextButton", SidebarCredits)
 SidebarDiscord.Size = UDim2.new(1, -14, 0, IsMobile and 22 or 26)
-SidebarDiscord.Position = UDim2.new(0, 7, 0, IsMobile and 94 or 100)
+SidebarDiscord.Position = UDim2.new(0, 7, 0, IsMobile and 82 or 88)
 SidebarDiscord.BackgroundColor3 = Color3.fromRGB(37, 99, 235)
 SidebarDiscord.BackgroundTransparency = 0.02
 SidebarDiscord.BorderSizePixel = 0
@@ -3667,6 +3671,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		return connection
 	end
 	local card = Instance.new("TextButton")
+	card.AnchorPoint = Vector2.new(0, 0)
 	card.Size = UDim2.new(1, 0, 0, 0); card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = tagConfig.CardColor; card.Text = ""
 	card.AutoButtonColor = false; card.ClipsDescendants = true
