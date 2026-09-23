@@ -2799,7 +2799,7 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 end))
 TabIndicator = Instance.new("Frame", TabContainer)
 TabIndicator.Size = UDim2.new(0, IsMobile and 64 or 96, 0, 2)
-TabIndicator.Position = UDim2.new(0, 6, 1, -2)
+TabIndicator.Position = UDim2.new(0, IsMobile and 6 or 6, 1, -2)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
@@ -2822,7 +2822,7 @@ function CreateTab(name, index)
 	local icon = Instance.new("ImageLabel", btn)
 	icon.Name = "TabIcon"
 	icon.Size = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 18 or 22)
-	icon.Position = UDim2.new(0, IsMobile and 7 or 8, 0.5, -(IsMobile and 9 or 11))
+	icon.Position = UDim2.new(0, IsMobile and 6 or 7, 0.5, -(IsMobile and 9 or 11))
 	icon.BackgroundTransparency = 1
 	icon.BorderSizePixel = 0
 	icon.Image = TabIconAssetIds[name] or ""
@@ -2833,13 +2833,13 @@ function CreateTab(name, index)
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
-	label.Size = UDim2.new(1, -(IsMobile and 30 or 36), 1, 0)
-	label.Position = UDim2.new(0, IsMobile and 30 or 34, 0, 0)
+	label.Size = UDim2.new(1, -(IsMobile and 29 or 32), 1, 0)
+	label.Position = UDim2.new(0, IsMobile and 29 or 32, 0, 0)
 	label.BackgroundTransparency = 1
 	label.Text = name
 	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
 	label.Font = Enum.Font.GothamMedium
-	label.TextSize = IsMobile and 9 or 13
+	label.TextSize = IsMobile and 10 or 14
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.TextTruncate = Enum.TextTruncate.AtEnd
 	label.Active = false
@@ -2849,7 +2849,7 @@ function CreateTab(name, index)
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, IsMobile and 10 or 12)
-		div.Position = UDim2.new(0, xOffset - (IsMobile and 4 or 5), 0.5, -(IsMobile and 5 or 6))
+		div.Position = UDim2.new(0, xOffset - (IsMobile and 2 or 3), 0.5, -(IsMobile and 5 or 6))
 		div.BackgroundColor3 = Theme.Stroke
 		div.BackgroundTransparency = 0.42
 		div.BorderSizePixel = 0
@@ -2860,9 +2860,11 @@ function CreateTab(name, index)
 		if isDestroying or currentTab == name then return end
 		currentTab = name
 		DropdownContainer.Visible = false
-		TabIndicator.Size = UDim2.new(0, tabWidth - 12, 0, 2)
+		local indicatorWidth = tabWidth - 12
+		local indicatorOffset = (tabWidth - indicatorWidth) * 0.5
+		TabIndicator.Size = UDim2.new(0, indicatorWidth, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
-		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, xOffset + 6, 1, -2) })
+		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, xOffset + indicatorOffset, 1, -2) })
 		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Credits") and "Credits" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SectionHeaderLabel.Visible = name ~= "Credits"
 		SearchRow.Visible = (name == "Scripts")
