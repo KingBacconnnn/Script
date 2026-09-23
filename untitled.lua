@@ -965,7 +965,7 @@ end
 function GetPanelSize()
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	local maxWidth = IsMobile and 480 or 920
+	local maxWidth = IsMobile and 560 or 1040
 	local maxHeight = IsMobile and 360 or 580
 	local width = math.max(180, math.min(maxWidth, viewport.X - 12))
 	local height = math.max(220, math.min(maxHeight, viewport.Y - 12))
@@ -2395,11 +2395,8 @@ function CreateCanvas(name)
 	return scroll
 end
 ChangelogsView = CreateCanvas("Changelog")
-CreditsView = CreateCanvas("Credits")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
-CreditsView.Position = IsMobile and UDim2.new(0, 14, 0, 94) or UDim2.new(0, 14, 0, 108)
-CreditsView.Size = IsMobile and UDim2.new(1, -28, 1, -100) or UDim2.new(1, -28, 1, -116)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 138) or UDim2.new(0, 14, 0, 156)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -146) or UDim2.new(1, -28, 1, -166)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
@@ -2893,13 +2890,17 @@ function CreateTab(name, index)
 	TabButtonCache[name] = btn
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 	_VH_RegConn(btn.Activated:Connect(function()
-		if isDestroying or currentTab == name then return end
+		if isDestroying then return end
+		if currentTab == name then
+			_VH_SafeTween(TabIndicator, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
+			return
+		end
 		currentTab = name
 		DropdownContainer.Visible = false
 		TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
-		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Credits") and "Credits" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
-		SectionHeaderLabel.Visible = name ~= "Credits"
+		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
+		SectionHeaderLabel.Visible = true
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
 			UpdateFilter()
@@ -2924,8 +2925,64 @@ function CreateTab(name, index)
 		end
 	end))
 end
-CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3); CreateTab("Credits", 4)
+CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
+SidebarCredits = Instance.new("Frame", Sidebar)
+SidebarCredits.Size = UDim2.new(1, -20, 0, IsMobile and 92 or 106)
+SidebarCredits.Position = UDim2.new(0, 10, 1, -(IsMobile and 102 or 116))
+SidebarCredits.BackgroundTransparency = 1
+SidebarCredits.BorderSizePixel = 0
+SidebarCredits.ZIndex = 6
+SidebarCreditName = Instance.new("TextLabel", SidebarCredits)
+SidebarCreditName.Size = UDim2.new(1, 0, 0, IsMobile and 18 or 20)
+SidebarCreditName.Position = UDim2.new(0, 0, 0, 0)
+SidebarCreditName.BackgroundTransparency = 1
+SidebarCreditName.Text = "Developer: Ovei"
+SidebarCreditName.TextColor3 = Theme.TextPrimary
+SidebarCreditName.Font = Enum.Font.GothamBold
+SidebarCreditName.TextSize = IsMobile and 10 or 12
+SidebarCreditName.TextXAlignment = Enum.TextXAlignment.Left
+SidebarCreditName.ZIndex = 7
+SidebarSubscribe = Instance.new("TextButton", SidebarCredits)
+SidebarSubscribe.Size = UDim2.new(1, 0, 0, IsMobile and 25 or 28)
+SidebarSubscribe.Position = UDim2.new(0, 0, 0, IsMobile and 22 or 24)
+SidebarSubscribe.BackgroundColor3 = Theme.CardHover
+SidebarSubscribe.BackgroundTransparency = 0.05
+SidebarSubscribe.BorderSizePixel = 0
+SidebarSubscribe.Text = "Subscribe"
+SidebarSubscribe.TextColor3 = Color3.fromRGB(255, 255, 255)
+SidebarSubscribe.Font = Enum.Font.GothamBold
+SidebarSubscribe.TextSize = IsMobile and 9 or 10
+SidebarSubscribe.AutoButtonColor = false
+SidebarSubscribe.ZIndex = 7
+Instance.new("UICorner", SidebarSubscribe).CornerRadius = UDim.new(0, 6)
+SidebarSubscribeStroke = Instance.new("UIStroke", SidebarSubscribe)
+SidebarSubscribeStroke.Color = Theme.Stroke
+SidebarSubscribeStroke.Thickness = 1
+SidebarDiscord = Instance.new("TextButton", SidebarCredits)
+SidebarDiscord.Size = UDim2.new(1, 0, 0, IsMobile and 25 or 28)
+SidebarDiscord.Position = UDim2.new(0, 0, 0, IsMobile and 52 or 56)
+SidebarDiscord.BackgroundColor3 = Theme.BackgroundSecondary
+SidebarDiscord.BackgroundTransparency = 0.15
+SidebarDiscord.BorderSizePixel = 0
+SidebarDiscord.Text = "Join Discord"
+SidebarDiscord.TextColor3 = Theme.TextPrimary
+SidebarDiscord.Font = Enum.Font.GothamBold
+SidebarDiscord.TextSize = IsMobile and 9 or 10
+SidebarDiscord.AutoButtonColor = false
+SidebarDiscord.ZIndex = 7
+Instance.new("UICorner", SidebarDiscord).CornerRadius = UDim.new(0, 6)
+SidebarDiscordStroke = Instance.new("UIStroke", SidebarDiscord)
+SidebarDiscordStroke.Color = Theme.Stroke
+SidebarDiscordStroke.Thickness = 1
+ApplyInteractiveAnimations(SidebarSubscribe, Theme.CardHover, Theme.Accent, Theme.CardHover, SidebarSubscribeStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(SidebarDiscord, Theme.BackgroundSecondary, Theme.CardHover, Theme.CardHover, SidebarDiscordStroke, Theme.Stroke, Theme.Accent)
+_VH_RegConn(SidebarSubscribe.Activated:Connect(_VH_CreateDebounce(0.2, function()
+	_VH_OpenCreditLink("https://www.youtube.com/@Ovei-d5s", "YouTube link opened.")
+end)))
+_VH_RegConn(SidebarDiscord.Activated:Connect(_VH_CreateDebounce(0.2, function()
+	_VH_OpenCreditLink("https://discord.gg/duXxnUp4Vq", "Discord link opened.")
+end)))
 function CreateParagraph(title, desc, parentView, order)
 	block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
@@ -2947,253 +3004,9 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Credits, Icons & UI Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Credits, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Added matching Community, Video, and Developer role icons to the Credits tab while keeping the developer avatar slot configurable.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Tightened Credits spacing, moved decorative shapes inward, and improved tab separator spacing and active indicator alignment.\n• Forced Credits action-button labels to remain bright white for clearer contrast.\n• Added the supplied O-circle asset as the Ovei avatar mark.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Credits, Icons & UI Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Moved creator credits into the left sidebar with Developer, Subscribe, and Join Discord actions.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Tightened sidebar credits spacing and improved tab active-indicator alignment.\n• Kept sidebar credit actions bright white for clearer contrast.\n• Added the supplied O-circle asset as the Ovei avatar mark.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
-do
-	CreditsView.ClipsDescendants = true
-	local creditsLayout = CreditsView:FindFirstChildOfClass("UIListLayout")
-	if creditsLayout then
-		creditsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	end
-	local contentPad = CreditsView:FindFirstChildOfClass("UIPadding")
-	if contentPad then
-		contentPad.PaddingLeft = UDim.new(0, 4)
-		contentPad.PaddingRight = UDim.new(0, 8)
-		contentPad.PaddingTop = UDim.new(0, 4)
-		contentPad.PaddingBottom = UDim.new(0, 16)
-	end
-	local header = Instance.new("Frame", CreditsView)
-	header.Size = UDim2.new(1, -12, 0, IsMobile and 54 or 58)
-	header.BackgroundTransparency = 1
-	header.LayoutOrder = 1
-	local title = Instance.new("TextLabel", header)
-	title.Size = UDim2.new(1, 0, 0, 28)
-	title.BackgroundTransparency = 1
-	title.Text = "Credits"
-	title.TextColor3 = Theme.TextPrimary
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = IsMobile and 19 or 23
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	local subtitle = Instance.new("TextLabel", header)
-	subtitle.Size = UDim2.new(1, 0, 0, IsMobile and 24 or 25)
-	subtitle.Position = UDim2.new(0, 0, 0, 29)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Meet the creator behind Velox Hub and the community that helps it grow."
-	subtitle.TextColor3 = Theme.TextSecondary
-	subtitle.Font = Enum.Font.Gotham
-	subtitle.TextSize = IsMobile and 9 or 11
-	subtitle.TextWrapped = true
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-end
-
-CreditsAvatarAssetId = VeloxIcons.OveiAvatar
-CreditsDiscordIconAssetId = VeloxIcons.Community
-CreditsYouTubeIconAssetId = VeloxIcons.Video
-
-do
-	local profile = Instance.new("Frame", CreditsView)
-	profile.Size = UDim2.new(1, -16, 0, IsMobile and 156 or 164)
-	profile.BackgroundColor3 = Color3.fromRGB(10, 28, 68)
-	profile.LayoutOrder = 2
-	profile.ClipsDescendants = true
-	profile.ZIndex = 1
-	Instance.new("UICorner", profile).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke", profile)
-	stroke.Color = Theme.Accent
-	stroke.Thickness = 1
-	local gradient = Instance.new("UIGradient", profile)
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 38, 90)),
-		ColorSequenceKeypoint.new(0.7, Color3.fromRGB(7, 20, 52)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 28, 65))
-	})
-	gradient.Rotation = 10
-
-	local shape1 = Instance.new("Frame", profile)
-	shape1.Size = UDim2.new(0, IsMobile and 62 or 86, 0, IsMobile and 62 or 86)
-	shape1.Position = UDim2.new(1, IsMobile and -124 or -148, 0, IsMobile and 58 or 34)
-	shape1.BackgroundColor3 = Theme.Accent
-	shape1.BackgroundTransparency = 0.9
-	shape1.Rotation = 35
-	shape1.BorderSizePixel = 0
-	shape1.ZIndex = 1
-	Instance.new("UICorner", shape1).CornerRadius = UDim.new(0, 16)
-
-	local shape2 = Instance.new("Frame", profile)
-	shape2.Size = UDim2.new(0, IsMobile and 50 or 70, 0, IsMobile and 50 or 70)
-	shape2.Position = UDim2.new(1, IsMobile and -164 or -194, 0, IsMobile and 76 or 52)
-	shape2.BackgroundColor3 = Color3.fromRGB(55, 90, 255)
-	shape2.BackgroundTransparency = 0.93
-	shape2.Rotation = -35
-	shape2.BorderSizePixel = 0
-	shape2.ZIndex = 1
-	Instance.new("UICorner", shape2).CornerRadius = UDim.new(0, 16)
-
-	local avatar = Instance.new("ImageLabel", profile)
-	avatar.Size = UDim2.new(0, IsMobile and 72 or 86, 0, IsMobile and 72 or 86)
-	avatar.Position = UDim2.new(0, IsMobile and 16 or 22, 0, IsMobile and 18 or 22)
-	avatar.BackgroundColor3 = Color3.fromRGB(64, 72, 220)
-	avatar.BackgroundTransparency = 0
-	avatar.Image = CreditsAvatarAssetId
-	avatar.ScaleType = Enum.ScaleType.Fit
-	avatar.ZIndex = 3
-	Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
-	local avatarStroke = Instance.new("UIStroke", avatar)
-	avatarStroke.Color = Theme.Accent
-	avatarStroke.Thickness = 1.5
-	local avatarFallback = Instance.new("TextLabel", avatar)
-	avatarFallback.Size = UDim2.new(1, 0, 1, 0)
-	avatarFallback.BackgroundTransparency = 1
-	avatarFallback.Text = "O"
-	avatarFallback.TextColor3 = Color3.fromRGB(255, 255, 255)
-	avatarFallback.Font = Enum.Font.GothamBold
-	avatarFallback.TextSize = IsMobile and 30 or 38
-	avatarFallback.Visible = CreditsAvatarAssetId == ""
-	avatarFallback.ZIndex = 4
-
-	local nameLabel = Instance.new("TextLabel", profile)
-	nameLabel.Size = UDim2.new(1, IsMobile and -102 or -122, 0, 24)
-	nameLabel.Position = UDim2.new(0, IsMobile and 100 or 126, 0, IsMobile and 20 or 26)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = "Ovei"
-	nameLabel.TextColor3 = Theme.TextPrimary
-	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = IsMobile and 18 or 22
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.ZIndex = 4
-
-	local roleIcon = Instance.new("ImageLabel", profile)
-	roleIcon.Size = UDim2.new(0, 13, 0, 13)
-	roleIcon.Position = UDim2.new(0, IsMobile and 100 or 126, 0, IsMobile and 51 or 57)
-	roleIcon.BackgroundTransparency = 1
-	roleIcon.Image = VeloxIcons.Role
-	roleIcon.ImageColor3 = Theme.Accent
-	roleIcon.ScaleType = Enum.ScaleType.Fit
-	roleIcon.ZIndex = 4
-
-	local roleLabel = Instance.new("TextLabel", profile)
-	roleLabel.Size = UDim2.new(1, IsMobile and -120 or -140, 0, 20)
-	roleLabel.Position = UDim2.new(0, IsMobile and 118 or 144, 0, IsMobile and 48 or 54)
-	roleLabel.BackgroundTransparency = 1
-	roleLabel.Text = "Developer  •  Velox Hub"
-	roleLabel.TextColor3 = Theme.Accent
-	roleLabel.Font = Enum.Font.GothamMedium
-	roleLabel.TextSize = IsMobile and 10 or 12
-	roleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	roleLabel.ZIndex = 4
-
-	local bioLabel = Instance.new("TextLabel", profile)
-	bioLabel.Size = UDim2.new(1, -32, 0, IsMobile and 42 or 40)
-	bioLabel.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 110)
-	bioLabel.BackgroundTransparency = 1
-	bioLabel.Text = "Created and developed Velox Hub. Thanks for using the project and supporting the creator. Your support means a lot!"
-	bioLabel.TextColor3 = Theme.TextSecondary
-	bioLabel.Font = Enum.Font.Gotham
-	bioLabel.TextSize = IsMobile and 9 or 11
-	bioLabel.TextWrapped = true
-	bioLabel.TextXAlignment = Enum.TextXAlignment.Left
-	bioLabel.TextYAlignment = Enum.TextYAlignment.Top
-	bioLabel.ZIndex = 4
-end
-
-do
-	local row = Instance.new("Frame", CreditsView)
-	row.Size = UDim2.new(1, -16, 0, IsMobile and 128 or 134)
-	row.BackgroundTransparency = 1
-	row.LayoutOrder = 3
-	row.ZIndex = 1
-
-	local function addCard(titleText, descText, buttonText, iconText, buttonColor, url, x)
-		local card = Instance.new("Frame", row)
-		card.Size = UDim2.new(0.5, -6, 1, 0)
-		card.Position = UDim2.new(x, x == 0 and 0 or 6, 0, 0)
-		card.BackgroundColor3 = Color3.fromRGB(9, 23, 54)
-		card.ClipsDescendants = true
-		card.ZIndex = 2
-		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-		local cardStroke = Instance.new("UIStroke", card)
-		cardStroke.Color = Theme.Stroke
-		cardStroke.Thickness = 1
-
-		local iconLabel = Instance.new("ImageLabel", card)
-		iconLabel.Name = "SocialIcon"
-		iconLabel.Size = UDim2.new(0, 36, 0, 36)
-		iconLabel.Position = UDim2.new(0, 14, 0, 14)
-		iconLabel.BackgroundTransparency = 1
-		iconLabel.BorderSizePixel = 0
-		iconLabel.Image = iconText
-		iconLabel.ScaleType = Enum.ScaleType.Fit
-		iconLabel.ImageColor3 = Color3.fromRGB(255, 255, 255)
-		iconLabel.ZIndex = 4
-
-		local cardTitle = Instance.new("TextLabel", card)
-		cardTitle.Size = UDim2.new(1, -70, 0, 20)
-		cardTitle.Position = UDim2.new(0, 60, 0, 12)
-		cardTitle.BackgroundTransparency = 1
-		cardTitle.Text = titleText
-		cardTitle.TextColor3 = Theme.TextPrimary
-		cardTitle.Font = Enum.Font.GothamBold
-		cardTitle.TextSize = 12
-		cardTitle.TextXAlignment = Enum.TextXAlignment.Left
-		cardTitle.ZIndex = 4
-
-		local cardDesc = Instance.new("TextLabel", card)
-		cardDesc.Size = UDim2.new(1, -78, 0, 34)
-		cardDesc.Position = UDim2.new(0, 60, 0, 34)
-		cardDesc.BackgroundTransparency = 1
-		cardDesc.Text = descText
-		cardDesc.TextColor3 = Theme.TextSecondary
-		cardDesc.Font = Enum.Font.Gotham
-		cardDesc.TextSize = 9
-		cardDesc.TextWrapped = true
-		cardDesc.TextXAlignment = Enum.TextXAlignment.Left
-		cardDesc.TextYAlignment = Enum.TextYAlignment.Top
-		cardDesc.ZIndex = 4
-
-		local button = Instance.new("TextButton", card)
-		button.Size = UDim2.new(1, -24, 0, 30)
-		button.Position = UDim2.new(0, 12, 1, -42)
-		button.BackgroundColor3 = buttonColor
-		button.Text = ""
-		button.AutoButtonColor = false
-		button.ZIndex = 5
-		pcall(function() button.Interactable = true end)
-		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
-		local buttonLabel = Instance.new("TextLabel", button)
-		buttonLabel.Size = UDim2.new(1, -12, 1, 0)
-		buttonLabel.Position = UDim2.new(0, 6, 0, 0)
-		buttonLabel.BackgroundTransparency = 1
-		buttonLabel.Text = buttonText
-		buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		buttonLabel.TextTransparency = 0
-		buttonLabel.Font = Enum.Font.GothamBold
-		buttonLabel.TextSize = 10
-		buttonLabel.TextXAlignment = Enum.TextXAlignment.Center
-		buttonLabel.TextYAlignment = Enum.TextYAlignment.Center
-		buttonLabel.Active = false
-		buttonLabel.ZIndex = 6
-		local buttonGradient = Instance.new("UIGradient", button)
-		buttonGradient.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, buttonColor),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(
-				math.max(0, math.floor(buttonColor.R * 255 - 28)),
-				math.max(0, math.floor(buttonColor.G * 255 - 28)),
-				math.max(0, math.floor(buttonColor.B * 255 - 28))
-			))
-		})
-		ApplyInteractiveAnimations(button, buttonColor, Theme.CardHover, Theme.CardHover, nil, nil, nil)
-		_VH_RegConn(button.Activated:Connect(_VH_CreateDebounce(0.2, function()
-			if isDestroying then return end
-			_VH_OpenCreditLink(url, titleText .. " link opened.")
-		end)))
-	end
-
-	addCard("Discord", "Join the official community for updates, support and more.", "Join Discord", CreditsDiscordIconAssetId, Color3.fromRGB(88, 101, 242), "https://discord.gg/duXxnUp4Vq", 0)
-	addCard("YouTube", "Subscribe for Velox Hub videos, updates and new releases.", "Subscribe", CreditsYouTubeIconAssetId, Color3.fromRGB(235, 55, 115), "https://www.youtube.com/@Ovei-d5s", 0.5)
-end
-
-
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
 	if GuiService and type(GuiService.OpenBrowserWindow) == "function" then
@@ -4882,7 +4695,7 @@ end))
 TabViews["Changelog"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
-TabIndicator.Position = UDim2.new(0, 6, 1, -2)
+TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SectionHeaderLabel.Text = "Updates"
 SectionHeaderLabel.Visible = true
 MainPanel.Visible = true
