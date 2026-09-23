@@ -961,7 +961,7 @@ end
 function GetPanelSize()
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	local maxWidth = IsMobile and 560 or 1040
+	local maxWidth = IsMobile and 580 or 1080
 	local maxHeight = IsMobile and 360 or 580
 	local width = math.max(180, math.min(maxWidth, viewport.X - 12))
 	local height = math.max(220, math.min(maxHeight, viewport.Y - 12))
