@@ -134,6 +134,7 @@ VeloxIcons = {
 	ClearUICache = "rbxassetid://133176370689043",
 	Community = "rbxassetid://73104754353273",
 	Video = "rbxassetid://89271504290896",
+	OveiAvatar = "rbxassetid://119507576166773",
 	Role = "rbxassetid://117352853470938",
 	Search = "rbxassetid://110668972393459",
 	Favorite = "rbxassetid://106060923892368",
@@ -2355,6 +2356,8 @@ ChangelogsView = CreateCanvas("Changelog")
 CreditsView = CreateCanvas("Credits")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
+CreditsView.Position = IsMobile and UDim2.new(0, 16, 0, 96) or UDim2.new(0, 16, 0, 114)
+CreditsView.Size = IsMobile and UDim2.new(1, -32, 1, -104) or UDim2.new(1, -32, 1, -124)
 ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
 ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
@@ -2795,9 +2798,8 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	end
 end))
 TabIndicator = Instance.new("Frame", TabContainer)
-TabIndicator.Size = UDim2.new(0, IsMobile and 60 or 97, 0, 2)
-TabIndicator.Position = UDim2.new(0, 4, 1, -2)
-TabIndicator.Size = UDim2.new(0, (IsMobile and 68 or 105) - 8, 0, 2)
+TabIndicator.Size = UDim2.new(0, IsMobile and 64 or 96, 0, 2)
+TabIndicator.Position = UDim2.new(0, 6, 1, -2)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
@@ -2805,8 +2807,8 @@ Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
 TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Credits = VeloxIcons.Credits, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
 TabButtonCache = {}
 function CreateTab(name, index)
-	local tabStep = IsMobile and 72 or 115
-	local tabWidth = IsMobile and 68 or 105
+	local tabStep = IsMobile and 82 or 118
+	local tabWidth = IsMobile and 76 or 108
 	local xOffset = (index - 1) * tabStep
 	local btn = Instance.new("TextButton", TabContainer)
 	btn.Size = UDim2.new(0, tabWidth, 1, 0)
@@ -2820,7 +2822,7 @@ function CreateTab(name, index)
 	local icon = Instance.new("ImageLabel", btn)
 	icon.Name = "TabIcon"
 	icon.Size = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 18 or 22)
-	icon.Position = UDim2.new(0, 2, 0.5, -(IsMobile and 9 or 11))
+	icon.Position = UDim2.new(0, IsMobile and 7 or 8, 0.5, -(IsMobile and 9 or 11))
 	icon.BackgroundTransparency = 1
 	icon.BorderSizePixel = 0
 	icon.Image = TabIconAssetIds[name] or ""
@@ -2831,8 +2833,8 @@ function CreateTab(name, index)
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
-	label.Size = UDim2.new(1, -(IsMobile and 25 or 27), 1, 0)
-	label.Position = UDim2.new(0, IsMobile and 26 or 29, 0, 0)
+	label.Size = UDim2.new(1, -(IsMobile and 30 or 36), 1, 0)
+	label.Position = UDim2.new(0, IsMobile and 30 or 34, 0, 0)
 	label.BackgroundTransparency = 1
 	label.Text = name
 	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
@@ -2847,7 +2849,7 @@ function CreateTab(name, index)
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, IsMobile and 10 or 12)
-		div.Position = UDim2.new(0, xOffset - 4, 0.5, -(IsMobile and 5 or 6))
+		div.Position = UDim2.new(0, xOffset - (IsMobile and 8 or 9), 0.5, -(IsMobile and 5 or 6))
 		div.BackgroundColor3 = Theme.Stroke
 		div.BackgroundTransparency = 0.42
 		div.BorderSizePixel = 0
@@ -2858,9 +2860,9 @@ function CreateTab(name, index)
 		if isDestroying or currentTab == name then return end
 		currentTab = name
 		DropdownContainer.Visible = false
-		TabIndicator.Size = UDim2.new(0, tabWidth - 8, 0, 2)
+		TabIndicator.Size = UDim2.new(0, tabWidth - 12, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
-		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, xOffset + 4, 1, -2) })
+		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, xOffset + 6, 1, -2) })
 		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Credits") and "Credits" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SectionHeaderLabel.Visible = name ~= "Credits"
 		SearchRow.Visible = (name == "Scripts")
@@ -2907,7 +2909,9 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Credits & Icon System Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Credits, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Added matching Community, Video, and Developer role icons to the Credits tab while keeping the developer avatar slot configurable.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Preserved the balanced Credits layout and existing v2.0.5 UI fixes.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Credits, Icons & UI Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Credits, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Added matching Community, Video, and Developer role icons to the Credits tab while keeping the developer avatar slot configurable.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Tightened Credits spacing, moved decorative shapes inward, and improved tab separator spacing and active indicator alignment.
+• Forced Credits action-button labels to remain bright white for clearer contrast.
+• Added the supplied O-circle asset as the Ovei avatar mark.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 do
@@ -2947,13 +2951,13 @@ do
 	subtitle.TextXAlignment = Enum.TextXAlignment.Left
 end
 
-CreditsAvatarAssetId = ""
+CreditsAvatarAssetId = VeloxIcons.OveiAvatar
 CreditsDiscordIconAssetId = VeloxIcons.Community
 CreditsYouTubeIconAssetId = VeloxIcons.Video
 
 do
 	local profile = Instance.new("Frame", CreditsView)
-	profile.Size = UDim2.new(1, -16, 0, IsMobile and 164 or 172)
+	profile.Size = UDim2.new(1, -16, 0, IsMobile and 156 or 164)
 	profile.BackgroundColor3 = Color3.fromRGB(10, 28, 68)
 	profile.LayoutOrder = 2
 	profile.ClipsDescendants = true
@@ -2972,7 +2976,7 @@ do
 
 	local shape1 = Instance.new("Frame", profile)
 	shape1.Size = UDim2.new(0, IsMobile and 62 or 86, 0, IsMobile and 62 or 86)
-	shape1.Position = UDim2.new(1, IsMobile and -86 or -108, 0, IsMobile and 66 or 38)
+	shape1.Position = UDim2.new(1, IsMobile and -124 or -148, 0, IsMobile and 58 or 34)
 	shape1.BackgroundColor3 = Theme.Accent
 	shape1.BackgroundTransparency = 0.9
 	shape1.Rotation = 35
@@ -2982,7 +2986,7 @@ do
 
 	local shape2 = Instance.new("Frame", profile)
 	shape2.Size = UDim2.new(0, IsMobile and 50 or 70, 0, IsMobile and 50 or 70)
-	shape2.Position = UDim2.new(1, IsMobile and -130 or -154, 0, IsMobile and 84 or 56)
+	shape2.Position = UDim2.new(1, IsMobile and -164 or -194, 0, IsMobile and 76 or 52)
 	shape2.BackgroundColor3 = Color3.fromRGB(55, 90, 255)
 	shape2.BackgroundTransparency = 0.93
 	shape2.Rotation = -35
@@ -2994,9 +2998,9 @@ do
 	avatar.Size = UDim2.new(0, IsMobile and 72 or 86, 0, IsMobile and 72 or 86)
 	avatar.Position = UDim2.new(0, IsMobile and 16 or 22, 0, IsMobile and 18 or 22)
 	avatar.BackgroundColor3 = Color3.fromRGB(64, 72, 220)
-	avatar.BackgroundTransparency = 0.05
+	avatar.BackgroundTransparency = 0
 	avatar.Image = CreditsAvatarAssetId
-	avatar.ScaleType = Enum.ScaleType.Crop
+	avatar.ScaleType = Enum.ScaleType.Fit
 	avatar.ZIndex = 3
 	Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
 	local avatarStroke = Instance.new("UIStroke", avatar)
@@ -3059,7 +3063,7 @@ end
 
 do
 	local row = Instance.new("Frame", CreditsView)
-	row.Size = UDim2.new(1, -16, 0, IsMobile and 132 or 138)
+	row.Size = UDim2.new(1, -16, 0, IsMobile and 128 or 134)
 	row.BackgroundTransparency = 1
 	row.LayoutOrder = 3
 	row.ZIndex = 1
@@ -3115,13 +3119,24 @@ do
 		button.Size = UDim2.new(1, -24, 0, 30)
 		button.Position = UDim2.new(0, 12, 1, -42)
 		button.BackgroundColor3 = buttonColor
-		button.Text = buttonText
-		button.TextColor3 = Color3.fromRGB(255, 255, 255)
-		button.Font = Enum.Font.GothamBold
-		button.TextSize = 10
+		button.Text = ""
 		button.AutoButtonColor = false
 		button.ZIndex = 5
+		pcall(function() button.Interactable = true end)
 		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+		local buttonLabel = Instance.new("TextLabel", button)
+		buttonLabel.Size = UDim2.new(1, -12, 1, 0)
+		buttonLabel.Position = UDim2.new(0, 6, 0, 0)
+		buttonLabel.BackgroundTransparency = 1
+		buttonLabel.Text = buttonText
+		buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		buttonLabel.TextTransparency = 0
+		buttonLabel.Font = Enum.Font.GothamBold
+		buttonLabel.TextSize = 10
+		buttonLabel.TextXAlignment = Enum.TextXAlignment.Center
+		buttonLabel.TextYAlignment = Enum.TextYAlignment.Center
+		buttonLabel.Active = false
+		buttonLabel.ZIndex = 6
 		local buttonGradient = Instance.new("UIGradient", button)
 		buttonGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, buttonColor),
