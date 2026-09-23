@@ -121,6 +121,26 @@ Theme = {
 	Stroke = Color3.fromRGB(51, 65, 85),
 	ToggleOff = Color3.fromRGB(71, 85, 105)
 }
+VeloxIcons = {
+	Changelog = "rbxassetid://132233084740467",
+	Credits = "rbxassetid://117352853470938",
+	Scripts = "rbxassetid://71381493834012",
+	Settings = "rbxassetid://72089331699313",
+	ToggleUI = "rbxassetid://93155327616766",
+	AntiAFK = "rbxassetid://110726630994696",
+	UIScale = "rbxassetid://99583318883826",
+	RefreshCatalog = "rbxassetid://129652027568082",
+	UnloadHub = "rbxassetid://72565694105823",
+	ClearUICache = "rbxassetid://133176370689043",
+	Community = "rbxassetid://73104754353273",
+	Video = "rbxassetid://89271504290896",
+	Role = "rbxassetid://117352853470938",
+	Search = "rbxassetid://110668972393459",
+	Favorite = "rbxassetid://106060923892368",
+	FavoriteFill = "rbxassetid://78868362140764",
+	Sort = "rbxassetid://78004328083097",
+	Close = "rbxassetid://92183221721602"
+}
 VeloxConnections = {}
 RegisteredScripts = {}
 PendingTasks = {}
@@ -2351,8 +2371,12 @@ SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 2 + gap * 2), 1, 0); Sear
 SearchContainer.ClipsDescendants = true; SearchContainer.ZIndex = 51
 Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 6)
 SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Color3.fromRGB(51, 65, 85); SearchStroke.Thickness = 1
+SearchIcon = Instance.new("ImageLabel", SearchContainer)
+SearchIcon.Name = "SearchIcon"
+SearchIcon.Size = UDim2.new(0, 16, 0, 16); SearchIcon.Position = UDim2.new(0, 10, 0.5, -8)
+SearchIcon.BackgroundTransparency = 1; SearchIcon.Image = VeloxIcons.Search; SearchIcon.ImageColor3 = Theme.TextSecondary; SearchIcon.ScaleType = Enum.ScaleType.Fit
 SearchInput = Instance.new("TextBox", SearchContainer)
-SearchInput.Size = UDim2.new(1, -40, 1, 0); SearchInput.Position = UDim2.new(0, 12, 0, 0); SearchInput.BackgroundTransparency = 1
+SearchInput.Size = UDim2.new(1, -64, 1, 0); SearchInput.Position = UDim2.new(0, 34, 0, 0); SearchInput.BackgroundTransparency = 1
 SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts by name..."
 SearchInput.PlaceholderColor3 = Color3.fromRGB(203, 213, 225); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
@@ -2365,26 +2389,32 @@ ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
 ClearSearchBtn.Position = UDim2.new(1, -28, 0.5, -12)
 ClearSearchBtn.BackgroundTransparency = 1
-ClearSearchBtn.Text = "×"
-ClearSearchBtn.TextColor3 = Color3.fromRGB(203, 213, 225)
-ClearSearchBtn.TextSize = 18
-ClearSearchBtn.Font = Enum.Font.GothamBold
+ClearSearchBtn.Text = ""
+ClearSearchIcon = Instance.new("ImageLabel", ClearSearchBtn)
+ClearSearchIcon.Size = UDim2.new(0, 13, 0, 13); ClearSearchIcon.Position = UDim2.new(0.5, -6.5, 0.5, -6.5)
+ClearSearchIcon.BackgroundTransparency = 1; ClearSearchIcon.Image = VeloxIcons.Close; ClearSearchIcon.ImageColor3 = Theme.TextSecondary; ClearSearchIcon.ScaleType = Enum.ScaleType.Fit
 ClearSearchBtn.ZIndex = 53
 ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 _VH_RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
 _VH_RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
 FavFilterBtn = Instance.new("TextButton", SearchRow)
 FavFilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FavFilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
-FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = "☆"
-FavFilterBtn.TextColor3 = Color3.fromRGB(203, 213, 225); FavFilterBtn.TextSize = 15
-FavFilterBtn.Font = Enum.Font.GothamBold; FavFilterBtn.ZIndex = 51
+FavFilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FavFilterBtn.Text = ""
+FavFilterBtn.ZIndex = 51
+FavFilterIcon = Instance.new("ImageLabel", FavFilterBtn)
+FavFilterIcon.Name = "FavoriteIcon"
+FavFilterIcon.Size = UDim2.new(0, 15, 0, 15); FavFilterIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
+FavFilterIcon.BackgroundTransparency = 1; FavFilterIcon.Image = VeloxIcons.Favorite; FavFilterIcon.ImageColor3 = Color3.fromRGB(203, 213, 225); FavFilterIcon.ScaleType = Enum.ScaleType.Fit
 Instance.new("UICorner", FavFilterBtn).CornerRadius = UDim.new(0, 6)
 FavFilterStroke = Instance.new("UIStroke", FavFilterBtn); FavFilterStroke.Color = Color3.fromRGB(51, 65, 85)
 SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
-SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = "↕"
-SortDropdownBtn.TextColor3 = Theme.TextSecondary; SortDropdownBtn.TextSize = 15
-SortDropdownBtn.Font = Enum.Font.GothamBold; SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true
+SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = ""
+SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true
+SortIcon = Instance.new("ImageLabel", SortDropdownBtn)
+SortIcon.Name = "SortIcon"
+SortIcon.Size = UDim2.new(0, 15, 0, 15); SortIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
+SortIcon.BackgroundTransparency = 1; SortIcon.Image = VeloxIcons.Sort; SortIcon.ImageColor3 = Theme.TextSecondary; SortIcon.ScaleType = Enum.ScaleType.Fit
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 6)
 SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
@@ -2772,7 +2802,7 @@ TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
 Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
-TabIconAssetIds = { Changelog = "", Credits = "", Scripts = "", Settings = "" }
+TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Credits = VeloxIcons.Credits, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
 TabButtonCache = {}
 function CreateTab(name, index)
 	local tabStep = IsMobile and 72 or 115
@@ -2877,7 +2907,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Credits & UI Polish", "• Added a redesigned Credits tab with one balanced developer card and two side-by-side social cards.\n• Added blank asset slots for the developer avatar, tab icons, Discord icon, and YouTube icon.\n• Removed boxed tab icons and replaced them with clean ImageLabels using configurable Roblox asset IDs.\n• Fixed the Credits title duplication and kept the section heading hidden while Credits is active.\n• Fixed tab indicator alignment so it stays centered under the selected tab.\n• Improved Credits spacing, card widths, scroll insets, and decorative shape placement.\n• Kept the decorative artwork clipped inside the developer card so it scrolls with the content and stays away from the scrollbar.\n• Added official Discord and YouTube buttons with browser-opening and clipboard fallback behavior.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Credits & Icon System Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Credits, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Added matching Community, Video, and Developer role icons to the Credits tab while keeping the developer avatar slot configurable.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Preserved the balanced Credits layout and existing v2.0.5 UI fixes.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 do
@@ -2918,8 +2948,8 @@ do
 end
 
 CreditsAvatarAssetId = ""
-CreditsDiscordIconAssetId = ""
-CreditsYouTubeIconAssetId = ""
+CreditsDiscordIconAssetId = VeloxIcons.Community
+CreditsYouTubeIconAssetId = VeloxIcons.Video
 
 do
 	local profile = Instance.new("Frame", CreditsView)
@@ -2993,11 +3023,20 @@ do
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.ZIndex = 4
 
+	local roleIcon = Instance.new("ImageLabel", profile)
+	roleIcon.Size = UDim2.new(0, 13, 0, 13)
+	roleIcon.Position = UDim2.new(0, IsMobile and 100 or 126, 0, IsMobile and 51 or 57)
+	roleIcon.BackgroundTransparency = 1
+	roleIcon.Image = VeloxIcons.Role
+	roleIcon.ImageColor3 = Theme.Accent
+	roleIcon.ScaleType = Enum.ScaleType.Fit
+	roleIcon.ZIndex = 4
+
 	local roleLabel = Instance.new("TextLabel", profile)
-	roleLabel.Size = UDim2.new(1, IsMobile and -102 or -122, 0, 20)
-	roleLabel.Position = UDim2.new(0, IsMobile and 100 or 126, 0, IsMobile and 48 or 54)
+	roleLabel.Size = UDim2.new(1, IsMobile and -120 or -140, 0, 20)
+	roleLabel.Position = UDim2.new(0, IsMobile and 118 or 144, 0, IsMobile and 48 or 54)
 	roleLabel.BackgroundTransparency = 1
-	roleLabel.Text = "♛  Developer  •  Velox Hub"
+	roleLabel.Text = "Developer  •  Velox Hub"
 	roleLabel.TextColor3 = Theme.Accent
 	roleLabel.Font = Enum.Font.GothamMedium
 	roleLabel.TextSize = IsMobile and 10 or 12
@@ -4441,7 +4480,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	iconImg.Size = UDim2.new(0, 18, 0, 18)
 	iconImg.Position = UDim2.new(0.5, -9, 0.5, -9)
 	iconImg.BackgroundTransparency = 1
-	iconImg.Image = iconAsset or "rbxassetid://10709782497"
+	iconImg.Image = iconAsset or VeloxIcons.Scripts
 	iconImg.ImageColor3 = Theme.Accent
 	textContainer = Instance.new("Frame", row)
 	textContainer.Size = UDim2.new(1, -165, 1, 0)
@@ -4570,7 +4609,7 @@ if ScreenGui and ScreenGui.Parent then
 	end
 end
 prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
-_, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
+_, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", VeloxIcons.ToggleUI, 1)
 KeybindButton = Instance.new("TextButton", kbRightContainer)
 KeybindButton.Size = UDim2.new(0, 95, 0, 26)
 KeybindButton.Position = UDim2.new(1, -95, 0.5, -13)
@@ -4672,7 +4711,7 @@ DisableAntiAFK = function()
 		AntiAFKDisabledConnections[i] = nil
 	end
 end
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxassetid://10734898592", 2, SavedData.Settings.AntiAFK, function(val)
+CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", VeloxIcons.AntiAFK, 2, SavedData.Settings.AntiAFK, function(val)
 	SavedData.Settings.AntiAFK = val
 	SaveConfiguration()
 	if val then
@@ -4684,7 +4723,7 @@ CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", "rbxas
 	end
 end)
 
-scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", "rbxassetid://10734940376", 3)
+scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
 scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -4739,7 +4778,7 @@ _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() Set
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", "rbxassetid://10734976528", "Refresh", 1, false, function(btn)
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
 			return
@@ -4770,7 +4809,7 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 		end)
 	end)
 end)
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", "rbxassetid://10709753149", "Unload", 2, true, function()
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", VeloxIcons.UnloadHub, "Unload", 2, true, function()
 	task.wait(0.3)
 	CloseUI()
 end)
@@ -4800,7 +4839,7 @@ SearchRow.Visible = false
 FloatingBtn.Visible = false
 if IsMobile then
 	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
-	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", "rbxassetid://10734940376", "Reset", 1, true, function()
+	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", VeloxIcons.ClearUICache, "Reset", 1, true, function()
 		if isDestroying then return end
 		table.clear(OriginalCache)
 		MainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
