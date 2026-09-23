@@ -2330,7 +2330,7 @@ _VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	fpsCount = 0
 end))
 TabContainer = Instance.new("Frame", PanelGroup)
-TabContainer.Size = UDim2.new(0, IsMobile and 322 or 462, 0, 24); TabContainer.Position = UDim2.new(0.5, IsMobile and -161 or -231, 0, IsMobile and 58 or 72); TabContainer.BackgroundTransparency = 1; TabContainer.Active = false; TabContainer.ClipsDescendants = true
+TabContainer.Size = UDim2.new(1, -32, 0, 24); TabContainer.Position = UDim2.new(0, 16, 0, IsMobile and 58 or 72); TabContainer.BackgroundTransparency = 1; TabContainer.Active = false; TabContainer.ClipsDescendants = true
 SectionHeaderLabel = Instance.new("TextLabel", PanelGroup)
 SectionHeaderLabel.Size = UDim2.new(1, -32, 0, IsMobile and 16 or 20); SectionHeaderLabel.Position = UDim2.new(0, 16, 0, IsMobile and 88 or 104); SectionHeaderLabel.BackgroundTransparency = 1
 SectionHeaderLabel.Text = "Updates"; SectionHeaderLabel.TextColor3 = Theme.TextPrimary
@@ -2849,7 +2849,7 @@ function CreateTab(name, index)
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, IsMobile and 10 or 12)
-		div.Position = UDim2.new(0, xOffset - (IsMobile and 8 or 9), 0.5, -(IsMobile and 5 or 6))
+		div.Position = UDim2.new(0, xOffset - (IsMobile and 4 or 5), 0.5, -(IsMobile and 5 or 6))
 		div.BackgroundColor3 = Theme.Stroke
 		div.BackgroundTransparency = 0.42
 		div.BorderSizePixel = 0
