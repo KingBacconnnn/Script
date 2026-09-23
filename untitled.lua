@@ -965,8 +965,8 @@ end
 function GetPanelSize()
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	local maxWidth = IsMobile and 480 or 560
-	local maxHeight = IsMobile and 360 or 515
+	local maxWidth = IsMobile and 480 or 920
+	local maxHeight = IsMobile and 360 or 580
 	local width = math.max(180, math.min(maxWidth, viewport.X - 12))
 	local height = math.max(220, math.min(maxHeight, viewport.Y - 12))
 	return UDim2.fromOffset(width, height)
@@ -1089,6 +1089,48 @@ PanelGroup = Instance.new("Frame", MainPanel)
 PanelGroup.Size = UDim2.new(1, 0, 1, 0)
 PanelGroup.BackgroundTransparency = 1
 PanelGroup.Active = false
+SideWidth = IsMobile and 118 or 208
+MainContent = Instance.new("Frame", PanelGroup)
+MainContent.Size = UDim2.new(1, -SideWidth, 1, 0)
+MainContent.Position = UDim2.new(0, SideWidth, 0, 0)
+MainContent.BackgroundTransparency = 1
+MainContent.ClipsDescendants = true
+Sidebar = Instance.new("Frame", PanelGroup)
+Sidebar.Size = UDim2.new(0, SideWidth, 1, 0)
+Sidebar.Position = UDim2.new(0, 0, 0, 0)
+Sidebar.BackgroundColor3 = Theme.BackgroundSecondary
+Sidebar.BackgroundTransparency = 0.16
+Sidebar.BorderSizePixel = 0
+Sidebar.ClipsDescendants = true
+SidebarDivider = Instance.new("Frame", Sidebar)
+SidebarDivider.Size = UDim2.new(0, 1, 1, 0)
+SidebarDivider.Position = UDim2.new(1, -1, 0, 0)
+SidebarDivider.BackgroundColor3 = Theme.Stroke
+SidebarDivider.BackgroundTransparency = 0.3
+SidebarDivider.BorderSizePixel = 0
+SidebarBrand = Instance.new("Frame", Sidebar)
+SidebarBrand.Size = UDim2.new(1, -20, 0, 52)
+SidebarBrand.Position = UDim2.new(0, 10, 0, 10)
+SidebarBrand.BackgroundTransparency = 1
+SidebarBrand.Active = false
+SidebarBrandTitle = Instance.new("TextLabel", SidebarBrand)
+SidebarBrandTitle.Size = UDim2.new(1, 0, 0, 24)
+SidebarBrandTitle.Position = UDim2.new(0, 0, 0, 2)
+SidebarBrandTitle.BackgroundTransparency = 1
+SidebarBrandTitle.Text = "Velox Hub"
+SidebarBrandTitle.TextColor3 = Theme.TextPrimary
+SidebarBrandTitle.Font = Enum.Font.GothamBold
+SidebarBrandTitle.TextSize = IsMobile and 14 or 17
+SidebarBrandTitle.TextXAlignment = Enum.TextXAlignment.Left
+SidebarBrandVersion = Instance.new("TextLabel", SidebarBrand)
+SidebarBrandVersion.Size = UDim2.new(1, 0, 0, 18)
+SidebarBrandVersion.Position = UDim2.new(0, 0, 0, 28)
+SidebarBrandVersion.BackgroundTransparency = 1
+SidebarBrandVersion.Text = "v2.0.5"
+SidebarBrandVersion.TextColor3 = Theme.Accent
+SidebarBrandVersion.Font = Enum.Font.GothamMedium
+SidebarBrandVersion.TextSize = IsMobile and 9 or 11
+SidebarBrandVersion.TextXAlignment = Enum.TextXAlignment.Left
 Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 Instance.new("UIStroke", MainPanel).Color = Theme.Stroke
 PanelUIScale = Instance.new("UIScale", MainPanel)
@@ -2178,9 +2220,9 @@ function CloseUI()
 	isDestroying = true
 	GlobalEnv[_G_Identifier]()
 end
-HeaderContainer = Instance.new("Frame", PanelGroup)
-HeaderContainer.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 56)
-HeaderContainer.Position = UDim2.new(0, 16, 0, IsMobile and 6 or 10)
+HeaderContainer = Instance.new("Frame", MainContent)
+HeaderContainer.Size = UDim2.new(1, -28, 0, IsMobile and 48 or 56)
+HeaderContainer.Position = UDim2.new(0, 14, 0, IsMobile and 6 or 10)
 HeaderContainer.BackgroundTransparency = 1
 HeaderContainer.Active = true
 mainDragStart, mainStartPos = nil, nil
@@ -2329,18 +2371,27 @@ _VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	end
 	fpsCount = 0
 end))
-TabContainer = Instance.new("Frame", PanelGroup)
-TabContainer.Size = UDim2.new(1, -32, 0, 24); TabContainer.Position = UDim2.new(0, 16, 0, IsMobile and 58 or 72); TabContainer.BackgroundTransparency = 1; TabContainer.Active = false; TabContainer.ClipsDescendants = true
-SectionHeaderLabel = Instance.new("TextLabel", PanelGroup)
-SectionHeaderLabel.Size = UDim2.new(1, -32, 0, IsMobile and 16 or 20); SectionHeaderLabel.Position = UDim2.new(0, 16, 0, IsMobile and 88 or 104); SectionHeaderLabel.BackgroundTransparency = 1
-SectionHeaderLabel.Text = "Updates"; SectionHeaderLabel.TextColor3 = Theme.TextPrimary
-SectionHeaderLabel.Font = Enum.Font.GothamBold; SectionHeaderLabel.TextSize = IsMobile and 13 or 16; SectionHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+TabContainer = Instance.new("Frame", Sidebar)
+TabContainer.Size = UDim2.new(1, -20, 0, IsMobile and 180 or 212)
+TabContainer.Position = UDim2.new(0, 10, 0, IsMobile and 78 or 86)
+TabContainer.BackgroundTransparency = 1
+TabContainer.Active = false
+TabContainer.ClipsDescendants = true
+SectionHeaderLabel = Instance.new("TextLabel", MainContent)
+SectionHeaderLabel.Size = UDim2.new(1, -28, 0, IsMobile and 18 or 22)
+SectionHeaderLabel.Position = UDim2.new(0, 14, 0, IsMobile and 72 or 82)
+SectionHeaderLabel.BackgroundTransparency = 1
+SectionHeaderLabel.Text = "Updates"
+SectionHeaderLabel.TextColor3 = Theme.TextPrimary
+SectionHeaderLabel.Font = Enum.Font.GothamBold
+SectionHeaderLabel.TextSize = IsMobile and 14 or 18
+SectionHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
 TabViews = {}
 currentTab = "Changelog"
 function CreateCanvas(name)
-	local scroll = Instance.new("ScrollingFrame", PanelGroup)
-	scroll.Size = UDim2.new(1, -32, 1, IsMobile and -116 or -138)
-	scroll.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
+	local scroll = Instance.new("ScrollingFrame", MainContent)
+	scroll.Size = UDim2.new(1, -28, 1, IsMobile and -112 or -120)
+	scroll.Position = UDim2.new(0, 14, 0, IsMobile and 98 or 112)
 	scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 2; scroll.ScrollBarImageColor3 = Theme.Stroke
 	scroll.Visible = (name == currentTab)
@@ -2356,16 +2407,16 @@ ChangelogsView = CreateCanvas("Changelog")
 CreditsView = CreateCanvas("Credits")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
-CreditsView.Position = IsMobile and UDim2.new(0, 16, 0, 96) or UDim2.new(0, 16, 0, 114)
-CreditsView.Size = IsMobile and UDim2.new(1, -32, 1, -104) or UDim2.new(1, -32, 1, -124)
-ScriptsView.Position = IsMobile and UDim2.new(0, 16, 0, 144) or UDim2.new(0, 16, 0, 168)
-ScriptsView.Size = IsMobile and UDim2.new(1, -32, 1, -152) or UDim2.new(1, -32, 1, -178)
+CreditsView.Position = IsMobile and UDim2.new(0, 14, 0, 94) or UDim2.new(0, 14, 0, 108)
+CreditsView.Size = IsMobile and UDim2.new(1, -28, 1, -100) or UDim2.new(1, -28, 1, -116)
+ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 138) or UDim2.new(0, 14, 0, 156)
+ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -146) or UDim2.new(1, -28, 1, -166)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
 EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
-SearchRow = Instance.new("Frame", PanelGroup)
-SearchRow.Size = UDim2.new(1, -32, 0, IsMobile and 28 or 32); SearchRow.Position = UDim2.new(0, 16, 0, IsMobile and 108 or 128)
+SearchRow = Instance.new("Frame", MainContent)
+SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 28 or 32); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 98 or 112)
 SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Active = false; SearchRow.ZIndex = 50
 filterBtnWidth = IsMobile and 28 or 32
 gap = 8
@@ -2798,8 +2849,8 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	end
 end))
 TabIndicator = Instance.new("Frame", TabContainer)
-TabIndicator.Size = UDim2.new(0, IsMobile and 60 or 92, 0, 2)
-TabIndicator.Position = UDim2.new(0, 8, 1, -2)
+TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
+TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
@@ -2807,22 +2858,25 @@ Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
 TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Credits = VeloxIcons.Credits, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
 TabButtonCache = {}
 function CreateTab(name, index)
-	local tabStep = IsMobile and 82 or 118
-	local tabWidth = IsMobile and 76 or 108
-	local xOffset = (index - 1) * tabStep
+	local tabHeight = IsMobile and 36 or 40
+	local tabStep = tabHeight + (IsMobile and 4 or 6)
+	local yOffset = (index - 1) * tabStep
 	local btn = Instance.new("TextButton", TabContainer)
-	btn.Size = UDim2.new(0, tabWidth, 1, 0)
-	btn.Position = UDim2.new(0, xOffset, 0, 0)
-	btn.BackgroundTransparency = 1
+	btn.Size = UDim2.new(1, -10, 0, tabHeight)
+	btn.Position = UDim2.new(0, 5, 0, yOffset)
+	btn.BackgroundColor3 = (name == currentTab) and Theme.CardHover or Theme.BackgroundSecondary
+	btn.BackgroundTransparency = (name == currentTab) and 0.05 or 0.62
+	btn.BorderSizePixel = 0
 	btn.Text = ""
 	btn.AutoButtonColor = false
 	btn.ClipsDescendants = true
 	btn.ZIndex = 5
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
 
 	local icon = Instance.new("ImageLabel", btn)
 	icon.Name = "TabIcon"
-	icon.Size = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 18 or 22)
-	icon.Position = UDim2.new(0, IsMobile and 6 or 7, 0.5, -(IsMobile and 9 or 11))
+	icon.Size = UDim2.new(0, IsMobile and 18 or 20, 0, IsMobile and 18 or 20)
+	icon.Position = UDim2.new(0, IsMobile and 10 or 12, 0.5, -(IsMobile and 9 or 10))
 	icon.BackgroundTransparency = 1
 	icon.BorderSizePixel = 0
 	icon.Image = TabIconAssetIds[name] or ""
@@ -2833,38 +2887,26 @@ function CreateTab(name, index)
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
-	label.Size = UDim2.new(1, -(IsMobile and 28 or 31), 1, 0)
-	label.Position = UDim2.new(0, IsMobile and 28 or 31, 0, 0)
+	label.Size = UDim2.new(1, -(IsMobile and 40 or 46), 1, 0)
+	label.Position = UDim2.new(0, IsMobile and 36 or 40, 0, 0)
 	label.BackgroundTransparency = 1
 	label.Text = name
 	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
 	label.Font = Enum.Font.GothamMedium
-	label.TextSize = IsMobile and 10 or 14
+	label.TextSize = IsMobile and 10 or 13
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.TextTruncate = Enum.TextTruncate.AtEnd
 	label.Active = false
 	label.ZIndex = 6
 
 	TabButtonCache[name] = btn
-	if index > 1 then
-		local div = Instance.new("Frame", TabContainer)
-		div.Size = UDim2.new(0, 1, 0, IsMobile and 10 or 12)
-		div.Position = UDim2.new(0, xOffset - 1, 0.5, -(IsMobile and 5 or 6))
-		div.BackgroundColor3 = Theme.Stroke
-		div.BackgroundTransparency = 0.42
-		div.BorderSizePixel = 0
-		div.ZIndex = 4
-	end
 	ApplyInteractiveAnimations(btn, nil, nil, nil, nil, nil, nil)
 	_VH_RegConn(btn.Activated:Connect(function()
 		if isDestroying or currentTab == name then return end
 		currentTab = name
 		DropdownContainer.Visible = false
-		local indicatorWidth = tabWidth - 16
-		local indicatorOffset = (tabWidth - indicatorWidth) * 0.5
-		TabIndicator.Size = UDim2.new(0, indicatorWidth, 0, 2)
-		TabIndicator.BackgroundTransparency = 0
-		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, xOffset + indicatorOffset, 1, -2) })
+		TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
+		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
 		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Credits") and "Credits" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
 		SectionHeaderLabel.Visible = name ~= "Credits"
 		SearchRow.Visible = (name == "Scripts")
@@ -2882,6 +2924,8 @@ function CreateTab(name, index)
 		for tName, tBtn in pairs(TabButtonCache) do
 			local active = tName == currentTab
 			local activeColor = active and Theme.TextPrimary or Theme.TextSecondary
+			tBtn.BackgroundColor3 = active and Theme.CardHover or Theme.BackgroundSecondary
+			tBtn.BackgroundTransparency = active and 0.05 or 0.62
 			local childIcon = tBtn:FindFirstChild("TabIcon")
 			local childLabel = tBtn:FindFirstChild("TabLabel")
 			if childIcon and childIcon:IsA("ImageLabel") then childIcon.ImageColor3 = activeColor end
@@ -2889,7 +2933,8 @@ function CreateTab(name, index)
 		end
 	end))
 end
-CreateTab("Changelog", 1); CreateTab("Credits", 2); CreateTab("Scripts", 3); CreateTab("Settings", 4)
+CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3); CreateTab("Credits", 4)
+TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 function CreateParagraph(title, desc, parentView, order)
 	block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
