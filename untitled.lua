@@ -3375,7 +3375,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			nameLabel.TextColor3 = Theme.TextPrimary
 			nameLabel.Font = Enum.Font.GothamBold
 			nameLabel.TextSize = IsMobile and 8 or 10
-			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLabel.TextTruncate = Enum.TextTruncate.None
 			nameLabel.TextWrapped = true
 			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 			nameLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -3418,9 +3418,13 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 			reasonLabel.TextColor3 = Color3.fromRGB(215, 223, 236)
 			reasonLabel.Font = Enum.Font.GothamMedium
 			reasonLabel.TextSize = IsMobile and 7 or 8
-			reasonLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			reasonLabel.TextTruncate = Enum.TextTruncate.None
 			reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
+			reasonLabel.TextScaled = true
 			reasonLabel.ZIndex = 8
+			local reasonTextConstraint = Instance.new("UITextSizeConstraint", reasonLabel)
+			reasonTextConstraint.MinTextSize = IsMobile and 5 or 6
+			reasonTextConstraint.MaxTextSize = IsMobile and 7 or 8
 
 			RecommendationConnections[#RecommendationConnections + 1] = button.Activated:Connect(function()
 				if isDestroying or not entry.Instance or not entry.Instance.Parent then return end
