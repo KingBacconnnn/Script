@@ -2432,14 +2432,14 @@ end
 ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
-ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 138) or UDim2.new(0, 14, 0, 156)
-ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -146) or UDim2.new(1, -28, 1, -166)
+ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
+ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
 EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
 SearchRow = Instance.new("Frame", MainContent)
-SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 28 or 32); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 98 or 112)
+SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 28 or 32); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 118)
 SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Active = false; SearchRow.ZIndex = 50
 filterBtnWidth = IsMobile and 28 or 32
 gap = 8
