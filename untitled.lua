@@ -5,14 +5,23 @@ if type(getgenv) == "function" then
 		GlobalEnv = env
 	end
 end
-function _VH_GenerateRandomString(len)
+function _VH_GenerateRandomString(length)
+	length = math.floor(tonumber(length) or 16)
+	if length < 1 then length = 1 end
 	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local str = ""
-	for i = 1, len do
-		local r = math.random(1, #chars)
-		str = str .. string.sub(chars, r, r)
+	local parts = {}
+	for i = 1, length do
+		local index = math.random(1, #chars)
+		parts[i] = string.sub(chars, index, index)
 	end
-	return str
+	return table.concat(parts)
+end
+function _VH_GenerateUniqueGuiName(parent, length)
+	local name
+	repeat
+		name = _VH_GenerateRandomString(length)
+	until not parent or not parent:FindFirstChild(name)
+	return name
 end
 _G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 if GlobalEnv[_G_Identifier] then
@@ -890,7 +899,7 @@ for _, child in ipairs(TargetParent:GetChildren()) do
 	end
 end
 ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "VeloxHub_Main"
+ScreenGui.Name = _VH_GenerateUniqueGuiName(TargetParent, 20)
 ScreenGui:SetAttribute("VeloxHubManaged", true)
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -4268,6 +4277,13 @@ function AnimateRefreshButton(button, state)
 	end
 end
 function BuildSettings()
+if ScreenGui and ScreenGui.Parent then
+	for _, child in ipairs(ScreenGui:GetChildren()) do
+		pcall(function()
+			child.Name = _VH_GenerateUniqueGuiName(ScreenGui, 14)
+		end)
+	end
+end
 prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", "rbxassetid://10709790537", 1)
 KeybindButton = Instance.new("TextButton", kbRightContainer)
@@ -4510,3 +4526,10 @@ if IsMobile then
 end
 end
 BuildSettings()
+if ScreenGui and ScreenGui.Parent then
+	for _, child in ipairs(ScreenGui:GetChildren()) do
+		pcall(function()
+			child.Name = _VH_GenerateUniqueGuiName(ScreenGui, 14)
+		end)
+	end
+end
