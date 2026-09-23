@@ -2777,9 +2777,31 @@ function CreateTab(name, index)
 	local btn = Instance.new("TextButton", TabContainer)
 	btn.Size = UDim2.new(0, tabWidth, 1, 0)
 	btn.Position = UDim2.new(0, xOffset, 0, 0); btn.BackgroundTransparency = 1
-	btn.Text = name; btn.Font = Enum.Font.GothamMedium; btn.TextSize = IsMobile and 11 or 13
-	btn.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
-	btn.ClipsDescendants = true; TabButtonCache[name] = btn
+	btn.Text = ""; btn.AutoButtonColor = false; btn.ClipsDescendants = true
+	local icon = Instance.new("TextLabel", btn)
+	icon.Name = "TabIcon"
+	icon.Size = UDim2.new(0, IsMobile and 15 or 18, 1, 0)
+	icon.Position = UDim2.new(0, 2, 0, 0)
+	icon.BackgroundTransparency = 1
+	icon.Text = (name == "Changelog" and "▤") or (name == "Credits" and "♟") or (name == "Scripts" and "</>") or "⚙"
+	icon.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+	icon.Font = Enum.Font.GothamBold
+	icon.TextSize = IsMobile and 10 or 12
+	icon.TextXAlignment = Enum.TextXAlignment.Center
+	icon.Active = false
+	local label = Instance.new("TextLabel", btn)
+	label.Name = "TabLabel"
+	label.Size = UDim2.new(1, -(IsMobile and 19 or 23), 1, 0)
+	label.Position = UDim2.new(0, IsMobile and 18 or 22, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = name
+	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = IsMobile and 9 or 13
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label.Active = false
+	TabButtonCache[name] = btn
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, 10); div.Position = UDim2.new(0, xOffset - 3, 0.5, -5)
@@ -2806,15 +2828,19 @@ function CreateTab(name, index)
 			if view.Visible then view.CanvasPosition = Vector2.new(0, 0) end
 		end
 		for tName, tBtn in pairs(TabButtonCache) do
-			tBtn.TextColor3 = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+			local activeColor = (tName == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+			tBtn.TextColor3 = activeColor
+			for _, child in ipairs(tBtn:GetChildren()) do
+				if child:IsA("TextLabel") then child.TextColor3 = activeColor end
+			end
 		end
 	end))
 end
 CreateTab("Changelog", 1); CreateTab("Credits", 2); CreateTab("Scripts", 3); CreateTab("Settings", 4)
-function CreateParagraph(title, desc, parentView)
+function CreateParagraph(title, desc, parentView, order)
 	block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
-	block.BackgroundColor3 = Theme.CardHover
+	block.BackgroundColor3 = Theme.CardHover; block.LayoutOrder = order or 0
 	Instance.new("UICorner", block).CornerRadius = UDim.new(0, 8)
 	Instance.new("UIStroke", block).Color = Color3.fromRGB(33, 43, 61)
 	pad = Instance.new("UIPadding", block)
@@ -2832,64 +2858,193 @@ function CreateParagraph(title, desc, parentView)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Credits & Community", "• Added a dedicated Credits tab highlighting Ovei as the developer of Velox Hub.\n• Added official Discord and YouTube buttons with browser-opening and clipboard fallback behavior.\n• Added a cleaner developer profile card and official links section designed to match the existing Velox Hub theme.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Credits & UI Polish", "• Added a redesigned Credits tab with a developer spotlight card, community section, and official social cards.\n• Added a blank Credits avatar asset slot so the developer image can be added later.\n• Added clean icons to Changelog, Credits, Scripts, and Settings tabs with active-state highlighting.\n• Added official Discord and YouTube buttons with browser-opening and clipboard fallback behavior.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
-CreateParagraph("About Velox Hub", "Velox Hub is a community-focused Roblox script hub built around a clean catalog, useful automation tools, recommendations, and a lightweight mobile-friendly interface.", CreditsView)
+do
+	local header = Instance.new("Frame", CreditsView)
+	header.Size = UDim2.new(1, 0, 0, 58)
+	header.BackgroundTransparency = 1
+	header.LayoutOrder = 1
+	local title = Instance.new("TextLabel", header)
+	title.Size = UDim2.new(1, 0, 0, 28)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Text = "Credits"
+	title.TextColor3 = Theme.TextPrimary
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = IsMobile and 20 or 24
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	local subtitle = Instance.new("TextLabel", header)
+	subtitle.Size = UDim2.new(1, 0, 0, 24)
+	subtitle.Position = UDim2.new(0, 0, 0, 30)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "Meet the creator behind Velox Hub and the community that helps it grow."
+	subtitle.TextColor3 = Theme.TextSecondary
+	subtitle.Font = Enum.Font.Gotham
+	subtitle.TextSize = IsMobile and 10 or 12
+	subtitle.TextWrapped = true
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+end
+
+CreditsAvatarAssetId = ""
 
 do
 	local profile = Instance.new("Frame", CreditsView)
-	profile.Size = UDim2.new(1, 0, 0, 116)
-	profile.BackgroundColor3 = Theme.CardHover
+	profile.Size = UDim2.new(1, 0, 0, IsMobile and 156 or 144)
+	profile.BackgroundColor3 = Color3.fromRGB(10, 28, 68)
 	profile.LayoutOrder = 2
-	Instance.new("UICorner", profile).CornerRadius = UDim.new(0, 10)
-	local profileStroke = Instance.new("UIStroke", profile)
-	profileStroke.Color = Theme.Stroke
-	profileStroke.Thickness = 1
-	local avatar = Instance.new("Frame", profile)
-	avatar.Size = UDim2.new(0, 54, 0, 54)
-	avatar.Position = UDim2.new(0, 14, 0, 14)
-	avatar.BackgroundColor3 = Theme.Accent
+	profile.ClipsDescendants = true
+	Instance.new("UICorner", profile).CornerRadius = UDim.new(0, 12)
+	local stroke = Instance.new("UIStroke", profile)
+	stroke.Color = Theme.Accent
+	stroke.Thickness = 1
+	local gradient = Instance.new("UIGradient", profile)
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 38, 90)),
+		ColorSequenceKeypoint.new(0.7, Color3.fromRGB(7, 20, 52)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 28, 65))
+	})
+	gradient.Rotation = 10
+	local shape1 = Instance.new("Frame", profile)
+	shape1.Size = UDim2.new(0, IsMobile and 86 or 120, 0, IsMobile and 86 or 120)
+	shape1.Position = UDim2.new(1, IsMobile and -48 or -66, 0.5, IsMobile and -22 or -50)
+	shape1.BackgroundColor3 = Theme.Accent
+	shape1.BackgroundTransparency = 0.82
+	shape1.Rotation = 35
+	Instance.new("UICorner", shape1).CornerRadius = UDim.new(0, 18)
+	local shape2 = Instance.new("Frame", profile)
+	shape2.Size = UDim2.new(0, IsMobile and 72 or 102, 0, IsMobile and 72 or 102)
+	shape2.Position = UDim2.new(1, IsMobile and -84 or -112, 0.5, IsMobile and 12 or -8)
+	shape2.BackgroundColor3 = Color3.fromRGB(55, 90, 255)
+	shape2.BackgroundTransparency = 0.88
+	shape2.Rotation = -35
+	Instance.new("UICorner", shape2).CornerRadius = UDim.new(0, 18)
+	local avatar = Instance.new("ImageLabel", profile)
+	avatar.Size = UDim2.new(0, IsMobile and 72 or 86, 0, IsMobile and 72 or 86)
+	avatar.Position = UDim2.new(0, IsMobile and 14 or 18, 0, IsMobile and 16 or 18)
+	avatar.BackgroundColor3 = Color3.fromRGB(64, 72, 220)
+	avatar.BackgroundTransparency = 0.05
+	avatar.Image = CreditsAvatarAssetId
+	avatar.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
-	local avatarText = Instance.new("TextLabel", avatar)
-	avatarText.Size = UDim2.new(1, 0, 1, 0)
-	avatarText.BackgroundTransparency = 1
-	avatarText.Text = "O"
-	avatarText.TextColor3 = Color3.fromRGB(255, 255, 255)
-	avatarText.Font = Enum.Font.GothamBold
-	avatarText.TextSize = 24
+	local avatarStroke = Instance.new("UIStroke", avatar)
+	avatarStroke.Color = Theme.Accent
+	avatarStroke.Thickness = 1.5
+	local avatarFallback = Instance.new("TextLabel", avatar)
+	avatarFallback.Size = UDim2.new(1, 0, 1, 0)
+	avatarFallback.BackgroundTransparency = 1
+	avatarFallback.Text = "O"
+	avatarFallback.TextColor3 = Color3.fromRGB(255, 255, 255)
+	avatarFallback.Font = Enum.Font.GothamBold
+	avatarFallback.TextSize = IsMobile and 30 or 38
+	avatarFallback.Visible = CreditsAvatarAssetId == ""
 	local nameLabel = Instance.new("TextLabel", profile)
-	nameLabel.Size = UDim2.new(1, -88, 0, 20)
-	nameLabel.Position = UDim2.new(0, 80, 0, 12)
+	nameLabel.Size = UDim2.new(1, IsMobile and -102 or -122, 0, 24)
+	nameLabel.Position = UDim2.new(0, IsMobile and 100 or 120, 0, IsMobile and 18 or 22)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = "Ovei"
 	nameLabel.TextColor3 = Theme.TextPrimary
 	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 16
+	nameLabel.TextSize = IsMobile and 18 or 22
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	local roleLabel = Instance.new("TextLabel", profile)
-	roleLabel.Size = UDim2.new(1, -88, 0, 18)
-	roleLabel.Position = UDim2.new(0, 80, 0, 32)
+	roleLabel.Size = UDim2.new(1, IsMobile and -102 or -122, 0, 20)
+	roleLabel.Position = UDim2.new(0, IsMobile and 100 or 120, 0, IsMobile and 43 or 49)
 	roleLabel.BackgroundTransparency = 1
-	roleLabel.Text = "Developer • Velox Hub"
+	roleLabel.Text = "♛  Developer  •  Velox Hub"
 	roleLabel.TextColor3 = Theme.Accent
 	roleLabel.Font = Enum.Font.GothamMedium
-	roleLabel.TextSize = 11
+	roleLabel.TextSize = IsMobile and 10 or 12
 	roleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	local bioLabel = Instance.new("TextLabel", profile)
-	bioLabel.Size = UDim2.new(1, -32, 0, 36)
-	bioLabel.Position = UDim2.new(0, 16, 0, 72)
+	bioLabel.Size = UDim2.new(1, -32, 0, IsMobile and 48 or 42)
+	bioLabel.Position = UDim2.new(0, 16, 0, IsMobile and 96 or 88)
 	bioLabel.BackgroundTransparency = 1
-	bioLabel.Text = "Creator and developer of Velox Hub. Thanks for using the project and supporting its continued updates."
+	bioLabel.Text = "Created and developed Velox Hub. Thanks for using the project and supporting the creator. Your support means a lot!"
 	bioLabel.TextColor3 = Theme.TextSecondary
 	bioLabel.Font = Enum.Font.Gotham
-	bioLabel.TextSize = 10
+	bioLabel.TextSize = IsMobile and 9 or 11
 	bioLabel.TextWrapped = true
 	bioLabel.TextXAlignment = Enum.TextXAlignment.Left
 	bioLabel.TextYAlignment = Enum.TextYAlignment.Top
 end
 
-CreateParagraph("Community & Feedback", "Special thanks to the Velox Hub community for testing updates, reporting bugs, sharing suggestions, and helping the project improve over time.", CreditsView)
+do
+	local row = Instance.new("Frame", CreditsView)
+	row.Size = UDim2.new(1, 0, 0, IsMobile and 222 or 128)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = 3
+	local function addCard(titleText, descText, buttonText, iconText, buttonColor, url)
+		local card = Instance.new("Frame", row)
+		card.Size = IsMobile and UDim2.new(1, 0, 0, 104) or UDim2.new(0.5, -6, 1, 0)
+		card.Position = IsMobile and UDim2.new(0, 0, 0, titleText == "Discord" and 0 or 112) or UDim2.new(titleText == "Discord" and 0 or 0.5, titleText == "Discord" and 0 or 6, 0, 0)
+		card.BackgroundColor3 = Color3.fromRGB(9, 23, 54)
+		card.ClipsDescendants = true
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+		local cardStroke = Instance.new("UIStroke", card)
+		cardStroke.Color = Theme.Stroke
+		cardStroke.Thickness = 1
+		local iconBg = Instance.new("Frame", card)
+		iconBg.Size = UDim2.new(0, 42, 0, 42)
+		iconBg.Position = UDim2.new(0, 12, 0, 12)
+		iconBg.BackgroundColor3 = buttonColor
+		iconBg.BackgroundTransparency = 0.72
+		Instance.new("UICorner", iconBg).CornerRadius = UDim.new(1, 0)
+		local iconLabel = Instance.new("TextLabel", iconBg)
+		iconLabel.Size = UDim2.new(1, 0, 1, 0)
+		iconLabel.BackgroundTransparency = 1
+		iconLabel.Text = iconText
+		iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		iconLabel.Font = Enum.Font.GothamBold
+		iconLabel.TextSize = 18
+		local cardTitle = Instance.new("TextLabel", card)
+		cardTitle.Size = UDim2.new(1, -70, 0, 20)
+		cardTitle.Position = UDim2.new(0, 66, 0, 10)
+		cardTitle.BackgroundTransparency = 1
+		cardTitle.Text = titleText
+		cardTitle.TextColor3 = Theme.TextPrimary
+		cardTitle.Font = Enum.Font.GothamBold
+		cardTitle.TextSize = 12
+		cardTitle.TextXAlignment = Enum.TextXAlignment.Left
+		local cardDesc = Instance.new("TextLabel", card)
+		cardDesc.Size = UDim2.new(1, -78, 0, 32)
+		cardDesc.Position = UDim2.new(0, 66, 0, 32)
+		cardDesc.BackgroundTransparency = 1
+		cardDesc.Text = descText
+		cardDesc.TextColor3 = Theme.TextSecondary
+		cardDesc.Font = Enum.Font.Gotham
+		cardDesc.TextSize = 9
+		cardDesc.TextWrapped = true
+		cardDesc.TextXAlignment = Enum.TextXAlignment.Left
+		cardDesc.TextYAlignment = Enum.TextYAlignment.Top
+		local button = Instance.new("TextButton", card)
+		button.Size = UDim2.new(1, -24, 0, 30)
+		button.Position = UDim2.new(0, 12, 1, -42)
+		button.BackgroundColor3 = buttonColor
+		button.Text = buttonText
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		button.Font = Enum.Font.GothamBold
+		button.TextSize = 10
+		button.AutoButtonColor = false
+		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+		local buttonGradient = Instance.new("UIGradient", button)
+		buttonGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, buttonColor),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(math.max(0, buttonColor.R * 255 - 28), math.max(0, buttonColor.G * 255 - 28), math.max(0, buttonColor.B * 255 - 28)))
+		})
+		ApplyInteractiveAnimations(button, buttonColor, Theme.CardHover, Theme.CardHover, nil, nil, nil)
+		_VH_RegConn(button.Activated:Connect(_VH_CreateDebounce(0.2, function()
+			if isDestroying then return end
+			_VH_OpenCreditLink(url, titleText .. " link opened.")
+		end)))
+	end
+	addCard("Discord", "Join the official community for updates, support and more.", "Join Discord", "D", Color3.fromRGB(88, 101, 242), "https://discord.gg/duXxnUp4Vq")
+	addCard("YouTube", "Subscribe for Velox Hub videos, updates and new releases.", "Subscribe", "▶", Color3.fromRGB(235, 55, 115), "https://www.youtube.com/@Ovei-d5s")
+end
+
+CreateParagraph("Community & Feedback", "Special thanks to the Velox Hub community for testing updates, reporting bugs, sharing suggestions, and helping the project improve over time.", CreditsView, 4)
+CreateParagraph("Official Links", "Developer links are also available above. Use the buttons to open them or copy the URL when browser access is unavailable.", CreditsView, 5)
 
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
@@ -2903,59 +3058,6 @@ function _VH_OpenCreditLink(url, successText)
 	end
 	ShowNotification(successText or "Opening link...", "Success")
 end
-
-function CreateCreditLink(parent, title, desc, buttonText, url, order)
-	local row = Instance.new("Frame", parent)
-	row.Size = UDim2.new(1, 0, 0, 58)
-	row.BackgroundColor3 = Theme.CardHover
-	row.LayoutOrder = order
-	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
-	local stroke = Instance.new("UIStroke", row)
-	stroke.Color = Theme.Stroke
-	stroke.Thickness = 1
-	local titleLabel = Instance.new("TextLabel", row)
-	titleLabel.Size = UDim2.new(1, -126, 0, 18)
-	titleLabel.Position = UDim2.new(0, 12, 0, 9)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = title
-	titleLabel.TextColor3 = Theme.TextPrimary
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.TextSize = 11
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	local descLabel = Instance.new("TextLabel", row)
-	descLabel.Size = UDim2.new(1, -126, 0, 16)
-	descLabel.Position = UDim2.new(0, 12, 0, 29)
-	descLabel.BackgroundTransparency = 1
-	descLabel.Text = desc
-	descLabel.TextColor3 = Theme.TextSecondary
-	descLabel.Font = Enum.Font.Gotham
-	descLabel.TextSize = 9
-	descLabel.TextXAlignment = Enum.TextXAlignment.Left
-	local button = Instance.new("TextButton", row)
-	button.Size = UDim2.new(0, 102, 0, 28)
-	button.Position = UDim2.new(1, -114, 0.5, -14)
-	button.BackgroundColor3 = Theme.BackgroundMain
-	button.BackgroundTransparency = 0.15
-	button.Text = buttonText
-	button.TextColor3 = Theme.TextPrimary
-	button.Font = Enum.Font.GothamMedium
-	button.TextSize = 10
-	button.AutoButtonColor = false
-	Instance.new("UICorner", button).CornerRadius = UDim.new(0, 6)
-	local buttonStroke = Instance.new("UIStroke", button)
-	buttonStroke.Color = Theme.Stroke
-	buttonStroke.Thickness = 1
-	ApplyInteractiveAnimations(button, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), buttonStroke, buttonStroke.Color, Theme.Accent)
-	_VH_RegConn(button.Activated:Connect(_VH_CreateDebounce(0.2, function()
-		if isDestroying then return end
-		_VH_OpenCreditLink(url, title .. " link opened.")
-	end)))
-end
-
-CreateParagraph("Official Links", "Follow the official Velox Hub developer channels for updates, announcements, and project news.", CreditsView)
-CreateCreditLink(CreditsView, "Discord", "Join the official Velox Hub community.", "Join Discord", "https://discord.gg/duXxnUp4Vq", 5)
-CreateCreditLink(CreditsView, "YouTube", "Subscribe for Velox Hub content and updates.", "Subscribe", "https://www.youtube.com/@Ovei-d5s", 6)
-
 function StableScriptId(data)
 	if type(data) ~= "table" then return nil end
 	if type(data.Id) == "string" and string.gsub(data.Id, "^%s*(.-)%s*$", "%1") ~= "" then
