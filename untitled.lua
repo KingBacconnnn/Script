@@ -2928,55 +2928,111 @@ end
 CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SidebarCredits = Instance.new("Frame", Sidebar)
-SidebarCredits.Size = UDim2.new(1, -20, 0, IsMobile and 92 or 106)
-SidebarCredits.Position = UDim2.new(0, 10, 1, -(IsMobile and 102 or 116))
-SidebarCredits.BackgroundTransparency = 1
+SidebarCredits.Size = UDim2.new(1, -18, 0, IsMobile and 94 or 112)
+SidebarCredits.Position = UDim2.new(0, 9, 1, -(IsMobile and 101 or 119))
+SidebarCredits.BackgroundColor3 = Theme.Card
+SidebarCredits.BackgroundTransparency = 0.18
 SidebarCredits.BorderSizePixel = 0
 SidebarCredits.ZIndex = 6
-SidebarCreditName = Instance.new("TextLabel", SidebarCredits)
-SidebarCreditName.Size = UDim2.new(1, 0, 0, IsMobile and 18 or 20)
-SidebarCreditName.Position = UDim2.new(0, 0, 0, 0)
-SidebarCreditName.BackgroundTransparency = 1
-SidebarCreditName.Text = "Developer: Ovei"
-SidebarCreditName.TextColor3 = Theme.TextPrimary
-SidebarCreditName.Font = Enum.Font.GothamBold
-SidebarCreditName.TextSize = IsMobile and 10 or 12
-SidebarCreditName.TextXAlignment = Enum.TextXAlignment.Left
-SidebarCreditName.ZIndex = 7
+Instance.new("UICorner", SidebarCredits).CornerRadius = UDim.new(0, 8)
+SidebarCreditsStroke = Instance.new("UIStroke", SidebarCredits)
+SidebarCreditsStroke.Color = Theme.Stroke
+SidebarCreditsStroke.Thickness = 1
+SidebarCreditsStroke.Transparency = 0.25
+
+SidebarCreditAvatar = Instance.new("ImageLabel", SidebarCredits)
+SidebarCreditAvatar.Size = UDim2.new(0, IsMobile and 28 or 32, 0, IsMobile and 28 or 32)
+SidebarCreditAvatar.Position = UDim2.new(0, 8, 0, 8)
+SidebarCreditAvatar.BackgroundColor3 = Theme.BackgroundSecondary
+SidebarCreditAvatar.BackgroundTransparency = 0
+SidebarCreditAvatar.BorderSizePixel = 0
+SidebarCreditAvatar.Image = VeloxIcons.OveiAvatar
+SidebarCreditAvatar.ImageColor3 = Color3.fromRGB(255, 255, 255)
+SidebarCreditAvatar.ScaleType = Enum.ScaleType.Fit
+SidebarCreditAvatar.ZIndex = 7
+Instance.new("UICorner", SidebarCreditAvatar).CornerRadius = UDim.new(1, 0)
+SidebarCreditAvatarStroke = Instance.new("UIStroke", SidebarCreditAvatar)
+SidebarCreditAvatarStroke.Color = Theme.Accent
+SidebarCreditAvatarStroke.Thickness = 1
+
+SidebarCreditTitle = Instance.new("TextLabel", SidebarCredits)
+SidebarCreditTitle.Size = UDim2.new(1, -(IsMobile and 48 or 54), 0, IsMobile and 15 or 17)
+SidebarCreditTitle.Position = UDim2.new(0, IsMobile and 42 or 48, 0, 6)
+SidebarCreditTitle.BackgroundTransparency = 1
+SidebarCreditTitle.Text = "Developer: Ovei"
+SidebarCreditTitle.TextColor3 = Theme.TextPrimary
+SidebarCreditTitle.Font = Enum.Font.GothamBold
+SidebarCreditTitle.TextSize = IsMobile and 9 or 11
+SidebarCreditTitle.TextXAlignment = Enum.TextXAlignment.Left
+SidebarCreditTitle.ZIndex = 7
+
+SidebarCreditRole = Instance.new("TextLabel", SidebarCredits)
+SidebarCreditRole.Size = UDim2.new(1, -(IsMobile and 48 or 54), 0, IsMobile and 12 or 14)
+SidebarCreditRole.Position = UDim2.new(0, IsMobile and 42 or 48, 0, IsMobile and 20 or 22)
+SidebarCreditRole.BackgroundTransparency = 1
+SidebarCreditRole.Text = "Velox Hub Developer"
+SidebarCreditRole.TextColor3 = Theme.TextSecondary
+SidebarCreditRole.Font = Enum.Font.GothamMedium
+SidebarCreditRole.TextSize = IsMobile and 7 or 8
+SidebarCreditRole.TextXAlignment = Enum.TextXAlignment.Left
+SidebarCreditRole.ZIndex = 7
+
 SidebarSubscribe = Instance.new("TextButton", SidebarCredits)
-SidebarSubscribe.Size = UDim2.new(1, 0, 0, IsMobile and 25 or 28)
-SidebarSubscribe.Position = UDim2.new(0, 0, 0, IsMobile and 22 or 24)
-SidebarSubscribe.BackgroundColor3 = Theme.CardHover
-SidebarSubscribe.BackgroundTransparency = 0.05
+SidebarSubscribe.Size = UDim2.new(0.5, -9, 0, IsMobile and 27 or 31)
+SidebarSubscribe.Position = UDim2.new(0, 6, 1, -(IsMobile and 35 or 39))
+SidebarSubscribe.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+SidebarSubscribe.BackgroundTransparency = 0.02
 SidebarSubscribe.BorderSizePixel = 0
-SidebarSubscribe.Text = "Subscribe"
+SidebarSubscribe.Text = "  Subscribe"
 SidebarSubscribe.TextColor3 = Color3.fromRGB(255, 255, 255)
 SidebarSubscribe.Font = Enum.Font.GothamBold
-SidebarSubscribe.TextSize = IsMobile and 9 or 10
+SidebarSubscribe.TextSize = IsMobile and 8 or 9
 SidebarSubscribe.AutoButtonColor = false
 SidebarSubscribe.ZIndex = 7
 Instance.new("UICorner", SidebarSubscribe).CornerRadius = UDim.new(0, 6)
 SidebarSubscribeStroke = Instance.new("UIStroke", SidebarSubscribe)
-SidebarSubscribeStroke.Color = Theme.Stroke
+SidebarSubscribeStroke.Color = Color3.fromRGB(239, 68, 68)
+SidebarSubscribeStroke.Transparency = 0.35
 SidebarSubscribeStroke.Thickness = 1
+SidebarSubscribeIcon = Instance.new("ImageLabel", SidebarSubscribe)
+SidebarSubscribeIcon.Size = UDim2.new(0, IsMobile and 12 or 14, 0, IsMobile and 12 or 14)
+SidebarSubscribeIcon.Position = UDim2.new(0, IsMobile and 10 or 12, 0.5, -(IsMobile and 6 or 7))
+SidebarSubscribeIcon.BackgroundTransparency = 1
+SidebarSubscribeIcon.BorderSizePixel = 0
+SidebarSubscribeIcon.Image = VeloxIcons.Video
+SidebarSubscribeIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+SidebarSubscribeIcon.ScaleType = Enum.ScaleType.Fit
+SidebarSubscribeIcon.ZIndex = 8
+
 SidebarDiscord = Instance.new("TextButton", SidebarCredits)
-SidebarDiscord.Size = UDim2.new(1, 0, 0, IsMobile and 25 or 28)
-SidebarDiscord.Position = UDim2.new(0, 0, 0, IsMobile and 52 or 56)
-SidebarDiscord.BackgroundColor3 = Theme.BackgroundSecondary
-SidebarDiscord.BackgroundTransparency = 0.15
+SidebarDiscord.Size = UDim2.new(0.5, -9, 0, IsMobile and 27 or 31)
+SidebarDiscord.Position = UDim2.new(0.5, 3, 1, -(IsMobile and 35 or 39))
+SidebarDiscord.BackgroundColor3 = Color3.fromRGB(37, 99, 235)
+SidebarDiscord.BackgroundTransparency = 0.02
 SidebarDiscord.BorderSizePixel = 0
-SidebarDiscord.Text = "Join Discord"
-SidebarDiscord.TextColor3 = Theme.TextPrimary
+SidebarDiscord.Text = "  Join Discord"
+SidebarDiscord.TextColor3 = Color3.fromRGB(255, 255, 255)
 SidebarDiscord.Font = Enum.Font.GothamBold
-SidebarDiscord.TextSize = IsMobile and 9 or 10
+SidebarDiscord.TextSize = IsMobile and 8 or 9
 SidebarDiscord.AutoButtonColor = false
 SidebarDiscord.ZIndex = 7
 Instance.new("UICorner", SidebarDiscord).CornerRadius = UDim.new(0, 6)
 SidebarDiscordStroke = Instance.new("UIStroke", SidebarDiscord)
-SidebarDiscordStroke.Color = Theme.Stroke
+SidebarDiscordStroke.Color = Color3.fromRGB(96, 165, 250)
+SidebarDiscordStroke.Transparency = 0.35
 SidebarDiscordStroke.Thickness = 1
-ApplyInteractiveAnimations(SidebarSubscribe, Theme.CardHover, Theme.Accent, Theme.CardHover, SidebarSubscribeStroke, Theme.Stroke, Theme.Accent)
-ApplyInteractiveAnimations(SidebarDiscord, Theme.BackgroundSecondary, Theme.CardHover, Theme.CardHover, SidebarDiscordStroke, Theme.Stroke, Theme.Accent)
+SidebarDiscordIcon = Instance.new("ImageLabel", SidebarDiscord)
+SidebarDiscordIcon.Size = UDim2.new(0, IsMobile and 12 or 14, 0, IsMobile and 12 or 14)
+SidebarDiscordIcon.Position = UDim2.new(0, IsMobile and 9 or 11, 0.5, -(IsMobile and 6 or 7))
+SidebarDiscordIcon.BackgroundTransparency = 1
+SidebarDiscordIcon.BorderSizePixel = 0
+SidebarDiscordIcon.Image = VeloxIcons.Community
+SidebarDiscordIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+SidebarDiscordIcon.ScaleType = Enum.ScaleType.Fit
+SidebarDiscordIcon.ZIndex = 8
+
+ApplyInteractiveAnimations(SidebarSubscribe, Color3.fromRGB(220, 38, 38), Color3.fromRGB(239, 68, 68), Color3.fromRGB(185, 28, 28), SidebarSubscribeStroke, Color3.fromRGB(239, 68, 68), Color3.fromRGB(255, 255, 255))
+ApplyInteractiveAnimations(SidebarDiscord, Color3.fromRGB(37, 99, 235), Color3.fromRGB(59, 130, 246), Color3.fromRGB(29, 78, 216), SidebarDiscordStroke, Color3.fromRGB(96, 165, 250), Color3.fromRGB(255, 255, 255))
 _VH_RegConn(SidebarSubscribe.Activated:Connect(_VH_CreateDebounce(0.2, function()
 	_VH_OpenCreditLink("https://www.youtube.com/@Ovei-d5s", "YouTube link opened.")
 end)))
