@@ -123,7 +123,6 @@ Theme = {
 }
 VeloxIcons = {
 	Changelog = "rbxassetid://132233084740467",
-	Credits = "rbxassetid://117352853470938",
 	Scripts = "rbxassetid://71381493834012",
 	Settings = "rbxassetid://72089331699313",
 	ToggleUI = "rbxassetid://93155327616766",
@@ -134,11 +133,8 @@ VeloxIcons = {
 	ClearUICache = "rbxassetid://133176370689043",
 	Community = "rbxassetid://73104754353273",
 	Video = "rbxassetid://89271504290896",
-	OveiAvatar = "rbxassetid://119507576166773",
-	Role = "rbxassetid://117352853470938",
 	Search = "rbxassetid://110668972393459",
 	Favorite = "rbxassetid://106060923892368",
-	FavoriteFill = "rbxassetid://78868362140764",
 	Sort = "rbxassetid://78004328083097",
 	Close = "rbxassetid://92183221721602"
 }
@@ -2880,7 +2876,7 @@ TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
 Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
-TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Credits = VeloxIcons.Credits, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
+TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
 TabButtonCache = {}
 function CreateTab(name, index)
 	local tabHeight = IsMobile and 36 or 40
@@ -3094,8 +3090,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Credits, Icons & UI Polish", "• Added a centralized icon system using the supplied Apple SF Symbols asset library.\n• Replaced Changelog, Scripts, and Settings tab icons with consistent Roblox asset images.\n• Replaced Settings icons for Toggle UI, Anti-AFK, UI Scale, Refresh Catalog, Unload Hub, and Clear UI Cache with purpose-matched assets.\n• Moved creator credits into the left sidebar with Developer, Subscribe, and Join Discord actions.\n• Kept tab icons border-free with consistent sizing and tinting.\n• Replaced Search, Favorites, Sort, and Clear controls with matching image icons for a cleaner UI.\n• Tightened sidebar credits spacing and improved tab active-indicator alignment.\n• Kept sidebar credit actions bright white for clearer contrast.\n• Added the supplied O-circle asset as the Ovei avatar mark.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
-CreateParagraph("v2.0.4 - Final Stability & Compatibility", "• Finalized the execution notification flow: Starting, Successfully executed, and Execution failed now report distinct execution states without redundant success toasts.\n• Reduced notification noise by consolidating refresh and Auto Execute result messages and preventing rapid duplicate toasts.\n• Preserved PlaceId = 0 as Universal and normalized saved Auto Execute entries to the catalog compatibility rules.\n• Hardened Auto Execute migration so duplicate script names cannot migrate settings to an arbitrary entry.\n• Fixed camera and viewport connection cleanup and re-clamped the main hub and floating button after viewport changes.\n• Preserved the native text-size constraint protection and responsive panel sizing for small screens.\n• Kept the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI fallbacks, with additional requestfunc and protect_gui compatibility paths.\n• Removed temporary global variables from small utility and Anti-AFK functions and removed the unnecessary PANEL_SIZE variable without expanding the large card's local register footprint.\n• Kept Recommended for You, FOR YOU, Favorites, Script Details, confirmation dialogs, Auto Execute, UI Scale, catalog caching, Smart Refresh, and recovery behavior intact.", ChangelogsView)
+CreateParagraph("v2.0.5 - Final UI Polish & Cleanup", "• Moved creator credits into a compact left-sidebar section with Ovei, Subscribe, and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Standardized the supplied Roblox asset icons across tabs and Settings actions with border-free presentation.\n• Improved tab alignment, active-indicator positioning, and touch targets without changing the sidebar navigation concept.\n• Refined the Scripts layout and preserved its left-aligned placement.\n• Widened the hub where needed to reduce content collisions and kept responsive sizing for smaller screens.\n• Removed unnecessary outer UI outlines and kept the compact Credits area visually clean.\n• Preserved the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI compatibility fallbacks without replacing already-working paths.\n• Removed stale icon mappings left behind by the removed Credits tab and kept the final source free of comment-only lines.\n• Kept the existing recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems intact.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
