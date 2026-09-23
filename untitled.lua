@@ -221,6 +221,8 @@ function _VH_CancelTrackedTasks()
 end
 typingTask = nil
 function _VH_CleanUpMemory()
+	LastNotificationSignature = nil
+	LastNotificationAt = 0
 	isDestroying = true
 	GlobalEnv[_G_Identifier] = nil
 	if typingTask then pcall(task.cancel, typingTask); typingTask = nil end
@@ -1142,6 +1144,8 @@ ToastLayout.FillDirection = Enum.FillDirection.Vertical
 NOTIF_DURATION = 3.5
 MAX_VISIBLE_NOTIFICATIONS = IsMobile and 3 or 5
 NotificationSequence = 0
+LastNotificationSignature = nil
+LastNotificationAt = 0
 
 NotificationTypeInfo = {
 	Success = {
@@ -1227,7 +1231,8 @@ function GetNotificationTitle(notifType, message)
 	elseif notifType == "System" then
 		if string.find(lowerMessage, "catalog") then return "Catalog update" end
 	elseif notifType == "Execution" then
-		if string.find(lowerMessage, "execut") then return "Script executed" end
+		if string.find(lowerMessage, "starting", 1, true) then return "Starting script" end
+		if string.find(lowerMessage, "execut", 1, true) then return "Script execution" end
 	end
 
 	return info.Title
@@ -1271,12 +1276,13 @@ function StandaloneBannerNotification(msg, notifType)
 		return
 	end
 
+	local bannerGui = nil
 	local success = pcall(function()
 		local message = GetNotificationMessage(msg)
 		local typeInfo = NotificationTypeInfo[NormalizeNotificationType(notifType)] or NotificationTypeInfo.Info
 		local title = GetNotificationTitle(NormalizeNotificationType(notifType), message)
 
-		local bannerGui = Instance.new("ScreenGui")
+		bannerGui = Instance.new("ScreenGui")
 		bannerGui.Name = "VeloxBanner_" .. _VH_GenerateRandomString(8)
 		bannerGui.DisplayOrder = 9999
 		bannerGui.ResetOnSpawn = false
@@ -1342,6 +1348,7 @@ function StandaloneBannerNotification(msg, notifType)
 	end)
 
 	if not success then
+		if bannerGui and bannerGui.Parent then pcall(function() bannerGui:Destroy() end) end
 		EmergencyFallbackNotification(msg, GetNotificationTitle(notifType, GetNotificationMessage(msg)))
 	end
 end
@@ -1353,15 +1360,21 @@ function ShowNotification(msg, notifType)
 	local message = GetNotificationMessage(msg)
 	local title = GetNotificationTitle(nType, message)
 	local indicatorColor = typeInfo.Color
+	local signature = nType .. "\31" .. message
+	local now = os.clock()
+	if signature == LastNotificationSignature and now - LastNotificationAt < 0.18 then return end
+	LastNotificationSignature = signature
+	LastNotificationAt = now
 
 	if not ToastContainer or not ToastContainer.Parent then
 		StandaloneBannerNotification(message, nType)
 		return
 	end
 
+	local wrapper = nil
 	local success = pcall(function()
 		NotificationSequence = NotificationSequence + 1
-		local wrapper = Instance.new("Frame", ToastContainer)
+		wrapper = Instance.new("Frame", ToastContainer)
 		wrapper.Name = "Notification_" .. tostring(NotificationSequence)
 		wrapper:SetAttribute("VeloxNotification", true)
 		wrapper.LayoutOrder = NotificationSequence
@@ -1513,7 +1526,7 @@ function ShowNotification(msg, notifType)
 		introTween:Play()
 		introTween.Completed:Connect(function() pcall(function() introTween:Destroy() end) end)
 
-		_VH_ClearTextOutlines(bannerGui)
+		_VH_ClearTextOutlines(wrapper)
 
 		progressTween = TweenService:Create(progressFill, TweenInfo.new(NOTIF_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, 0, 1, 0)
@@ -1527,6 +1540,7 @@ function ShowNotification(msg, notifType)
 	end)
 
 	if not success then
+		if wrapper and wrapper.Parent then pcall(function() wrapper:Destroy() end) end
 		StandaloneBannerNotification(message, nType)
 	end
 end
@@ -3315,7 +3329,7 @@ function RefreshAllCardStates()
 		end
 	end
 end
-function ExecuteSandboxed(code, scriptName)
+function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 	if type(CompileFunction) ~= "function" then
 		ShowNotification("Execution unavailable: this executor does not provide loadstring/load.", "Error")
 		return false, "no compatible Lua compiler"
@@ -3327,11 +3341,16 @@ function ExecuteSandboxed(code, scriptName)
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
-		ShowNotification("Started [" .. tostring(scriptName) .. "] successfully.", "Success")
 		_VH_TrackTask(function()
 			local success = pcall(chunk)
-			if not success and not isDestroying then
-				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+			if not isDestroying then
+				if success then
+					if not suppressSuccessNotification then
+						ShowNotification("Successfully executed [" .. tostring(scriptName) .. "]!", "Success")
+					end
+				else
+					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
+				end
 			end
 		end)
 		return true, "Script started successfully"
@@ -3993,7 +4012,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
-								if ExecuteSandboxed(scrRaw, scriptData.Name) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
@@ -4009,6 +4028,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			StatusText.TextColor3 = Theme.Success
 			if isAutoRefresh then
 				ShowNotification("Catalog updated.", "Success")
+			elseif force == true then
+				ShowNotification("Successfully refreshed latest script.", "Success")
 			else
 				ShowNotification("Script catalog loaded successfully!", "Success")
 			end
@@ -4439,10 +4460,8 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			if btn and btn.Parent and not isDestroying then
 				if StatusText.Text == "Online" then
 					AnimateRefreshButton(btn, "success")
-					ShowNotification("Successfully refreshed latest script.", "Success")
 				else
 					AnimateRefreshButton(btn, "error")
-					ShowNotification("Catalog refresh failed.", "Error")
 				end
 			end
 		end)
