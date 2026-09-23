@@ -929,11 +929,13 @@ GlobalEnv[_G_Identifier] = function()
 	if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 function GetPanelSize()
-	camera = workspace.CurrentCamera
-	viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	maxWidth = IsMobile and 480 or 560
-	maxHeight = IsMobile and 360 or 515
-	return UDim2.fromOffset(math.max(320, math.min(maxWidth, viewport.X - 20)), math.max(300, math.min(maxHeight, viewport.Y - 20)))
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local maxWidth = IsMobile and 480 or 560
+	local maxHeight = IsMobile and 360 or 515
+	local width = math.max(180, math.min(maxWidth, viewport.X - 12))
+	local height = math.max(220, math.min(maxHeight, viewport.Y - 12))
+	return UDim2.fromOffset(width, height)
 end
 PANEL_SIZE = GetPanelSize()
 function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, strokeObj, originalStroke, hoverStroke, connectionRegistry)
@@ -2080,7 +2082,7 @@ function _VH_OpenScriptDetails(data, entry)
 	_VH_SetDetailsMetaRow(4, "Game", gameText, placeId == 0 and Theme.Success or (placeId == PlaceId and Theme.Success or Theme.Warning))
 	_VH_SetDetailsMetaRow(5, "Compatibility", compatibility and "Compatible" or "Configured for another game", compatibility and Theme.Success or Theme.Warning)
 	_VH_SetDetailsMetaRow(6, "Favorite", SavedData.Favorites[entry.Id] and "Favorited" or "Not favorited", SavedData.Favorites[entry.Id] and Color3.fromRGB(250, 204, 21) or Theme.TextPrimary)
-	local autoOn = compatibility and SavedData.AutoExecutes[entry.Id] ~= nil
+	local autoOn = compatibility and _VH_IsAutoExecuteActive(entry.Id)
 	_VH_SetDetailsMetaRow(7, "Auto Execute", autoOn and "ON" or "OFF", autoOn and Theme.Success or Theme.TextPrimary)
 	local tagTypeValue = NormalizeTagType(data.TagType)
 	_VH_SetDetailsMetaRow(8, "Status", tagTypeValue ~= "NONE" and tagTypeValue or "Standard")
@@ -2569,15 +2571,21 @@ function BindCamera()
 				viewport = cam.ViewportSize
 				halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
 				halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				currentOffsetX = MainPanel.Position.X.Offset
-				currentOffsetY = MainPanel.Position.Y.Offset
-				if MainPanel.Position.X.Scale ~= 0 or MainPanel.Position.Y.Scale ~= 0 then
-					currentOffsetX = MainPanel.Position.X.Scale * viewport.X + currentOffsetX
-					currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + currentOffsetY
-				end
+				currentOffsetX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+				currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
 				targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
 				targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
+			end
+			if FloatingBtn and FloatingBtn.Parent then
+				viewport = cam.ViewportSize
+				halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
+				halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
+				currentOffsetX = FloatingBtn.Position.X.Scale * viewport.X + FloatingBtn.Position.X.Offset
+				currentOffsetY = FloatingBtn.Position.Y.Scale * viewport.Y + FloatingBtn.Position.Y.Offset
+				targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
+				targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
+				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
 		end))
 	end
@@ -2597,12 +2605,7 @@ function RefreshViewportLayout()
 	currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
 	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
 end
-function BindViewportSizeChanged(camera)
-	if not camera then return end
-	_VH_RegConn(camera:GetPropertyChangedSignal("ViewportSize"):Connect(RefreshViewportLayout))
-	RefreshViewportLayout()
-end
-BindViewportSizeChanged(workspace.CurrentCamera)
+RefreshViewportLayout()
 FilterFavoritesActive = false
 filterVersion = 0
 SortMode = "Most Relevant"
@@ -2647,9 +2650,9 @@ function UpdateFilter()
 				elseif currentSort == "Favorites" then
 					filterPass = SavedData.Favorites[scr.Id] == true
 				elseif currentSort == "Auto Execute: ON" then
-					filterPass = SavedData.AutoExecutes[scr.Id] ~= nil
+					filterPass = _VH_IsAutoExecuteActive(scr.Id)
 				elseif currentSort == "Auto Execute: OFF" then
-					filterPass = SavedData.AutoExecutes[scr.Id] == nil
+					filterPass = not _VH_IsAutoExecuteActive(scr.Id)
 				end
 			end
 			local visible = isMatch and filterPass
@@ -3219,29 +3222,36 @@ function _VH_GetSavedAutoExecute(scriptData)
 	end
 	local targetName = _VH_NormalizeAutoExecuteName(scriptData.ExactName or scriptData.Name)
 	if targetName == "" then return nil, false end
+	local candidate, candidateKey, candidateCount = nil, nil, 0
 	for key, entry in pairs(SavedData.AutoExecutes) do
 		if type(entry) == "table" then
 			local savedName = _VH_NormalizeAutoExecuteName(entry.Name)
 			local keyName = _VH_NormalizeAutoExecuteName(key)
 			if (savedName ~= "" and savedName == targetName) or keyName == targetName then
-				if scriptId ~= "" then
-					SavedData.AutoExecutes[scriptId] = entry
-					SavedData.AutoExecutes[key] = nil
-					entry.Name = scriptData.ExactName or scriptData.Name
-				end
-				return entry, true
+				candidate, candidateKey = entry, key
+				candidateCount = candidateCount + 1
 			end
 		end
 	end
-	return nil, false
+	if candidateCount ~= 1 then return nil, false end
+	if scriptId ~= "" then
+		SavedData.AutoExecutes[scriptId] = candidate
+		SavedData.AutoExecutes[candidateKey] = nil
+		candidate.Name = scriptData.ExactName or scriptData.Name
+	end
+	return candidate, true
 end
 function _VH_AutoExecuteGameMatches(entry)
 	if type(entry) ~= "table" then return false end
-	local savedGame = tonumber(entry.GameId)
-	local savedPlace = tonumber(entry.PlaceId)
-	if savedGame and savedGame ~= 0 and savedGame == GameId then return true end
-	if savedPlace and savedPlace ~= 0 and savedPlace == PlaceId then return true end
-	return false
+	local savedGame = tonumber(entry.GameId) or 0
+	local savedPlace = tonumber(entry.PlaceId) or 0
+	if savedGame ~= 0 then return savedGame == GameId end
+	if savedPlace ~= 0 then return savedPlace == PlaceId end
+	return true
+end
+function _VH_IsAutoExecuteActive(scriptId)
+	local entry = type(scriptId) == "string" and SavedData.AutoExecutes[scriptId] or nil
+	return type(entry) == "table" and _VH_AutoExecuteGameMatches(entry)
 end
 function IsCalendarDay(timestamp)
 	local value = tonumber(timestamp)
@@ -3278,20 +3288,24 @@ function _VH_ScheduleFavoriteRecommendationRefresh()
 	end)
 end
 function MigrateSavedEntries(entries)
+	local changed = false
 	for _, data in ipairs(entries) do
-		id = data.Id
-		name = data.Name
+		local id = data.Id
+		local name = data.Name
 		if id and name and id ~= name then
 			if SavedData.Favorites[id] == nil and SavedData.Favorites[name] ~= nil then
 				SavedData.Favorites[id] = SavedData.Favorites[name]
 				SavedData.Favorites[name] = nil
+				changed = true
 			end
 			if SavedData.AutoExecutes[id] == nil and SavedData.AutoExecutes[name] ~= nil then
 				SavedData.AutoExecutes[id] = SavedData.AutoExecutes[name]
 				SavedData.AutoExecutes[name] = nil
+				changed = true
 			end
 		end
 	end
+	return changed
 end
 function RefreshAllCardStates()
 	for _, scrData in ipairs(RegisteredScripts) do
@@ -3313,17 +3327,14 @@ function ExecuteSandboxed(code, scriptName)
 
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
+		ShowNotification("Started [" .. tostring(scriptName) .. "] successfully.", "Success")
 		_VH_TrackTask(function()
 			local success = pcall(chunk)
-			if not isDestroying then
-				if success then
-					ShowNotification("Successfully executed [" .. tostring(scriptName) .. "]!", "Execution")
-				else
-					ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
-				end
+			if not success and not isDestroying then
+				ShowNotification("Execution Error in [" .. tostring(scriptName) .. "]: Check F9 Console.", "Error")
 			end
 		end)
-		return true, "Script dispatched successfully"
+		return true, "Script started successfully"
 	end
 
 	local detail = tostring(compileErr or chunk or "unknown compiler error")
@@ -3562,7 +3573,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[scriptId]
 		local compatible = IsScriptCompatible(data)
-		local isON = compatible and SavedData.AutoExecutes[scriptId] ~= nil
+		local isON = compatible and _VH_IsAutoExecuteActive(scriptId)
 		ApplyTagBorder(card, tagType, cardStroke)
 		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
 		cardStroke.Thickness = isRecommended and 1.5 or 1
@@ -3636,13 +3647,15 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			ShowNotification("This script is only compatible with its configured Roblox experience.", "Warning")
 			return
 		end
-		local previousEntry = SavedData.AutoExecutes[scriptId]
+		local existingEntry = SavedData.AutoExecutes[scriptId]
+		local previousEntry = _VH_IsAutoExecuteActive(scriptId) and existingEntry or nil
 		if previousEntry then
 			SavedData.AutoExecutes[scriptId] = nil
 		else
+			local catalogPlaceId = tonumber(data.PlaceId) or 0
 			SavedData.AutoExecutes[scriptId] = {
-				PlaceId = PlaceId,
-				GameId = GameId,
+				PlaceId = catalogPlaceId,
+				GameId = 0,
 				Name = exactName
 			}
 		end
@@ -3668,7 +3681,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				ShowNotification("Execution disabled: this executor does not provide loadstring/load.", "Error")
 				return
 			end
-			ShowNotification("Starting [" .. tostring(exactName) .. "]...", "Execution")
+			ShowNotification("Starting [" .. exactName .. "]...", "Execution")
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
 				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
@@ -3685,7 +3698,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 				end
 			end)
 		end
-		if SavedData.AutoExecutes[scriptId] ~= nil then
+		if _VH_IsAutoExecuteActive(scriptId) then
 			AttemptActionWithCooldown(executeScript)
 		else
 			OpenConfirmDialog(exactName, executeScript)
@@ -3701,6 +3714,7 @@ CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs
 CATALOG_REFRESH_INTERVAL = 300
 dbRefreshing = false
 CatalogRefreshQueued = false
+CatalogRefreshQueueScheduled = false
 LastCatalogFingerprint = nil
 function BuildCatalogFingerprint(entries)
 	local parts = {}
@@ -3737,6 +3751,20 @@ function RestoreCatalogCardsAfterRefreshFailure()
 	end
 	UpdateFilter()
 end
+function _VH_ScheduleQueuedCatalogRefresh()
+	if CatalogRefreshQueueScheduled or isDestroying then return end
+	CatalogRefreshQueueScheduled = true
+	task.delay(math.max(0, 5 - (os.clock() - LastCatalogRefreshAt)), function()
+		CatalogRefreshQueueScheduled = false
+		if isDestroying or dbRefreshing or not CatalogRefreshQueued then return end
+		local queuedForce = PendingTasks.__CatalogRefreshForce == true
+		local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
+		CatalogRefreshQueued = false
+		PendingTasks.__CatalogRefreshForce = false
+		PendingTasks.__CatalogRefreshAuto = false
+		PendingTasks.__LoadCatalog(queuedForce, queuedAuto)
+	end)
+end
 PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	if isDestroying then return false end
 	if dbRefreshing then
@@ -3748,6 +3776,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	local now = os.clock()
 	if not force and now - LastCatalogRefreshAt < 5 then
 		CatalogRefreshQueued = true
+		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
+		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
+		_VH_ScheduleQueuedCatalogRefresh()
 		return false
 	end
 	LastCatalogRefreshAt = now
@@ -3770,14 +3801,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			LastCatalogRefreshAt = os.clock()
 		end
 		if CatalogRefreshQueued and not isDestroying then
-			local queuedForce = PendingTasks.__CatalogRefreshForce == true
-			local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
-			CatalogRefreshQueued = false
-			PendingTasks.__CatalogRefreshForce = false
-			PendingTasks.__CatalogRefreshAuto = false
-			task.defer(function()
-				if not isDestroying then PendingTasks.__LoadCatalog(queuedForce, queuedAuto) end
-			end)
+			_VH_ScheduleQueuedCatalogRefresh()
 		end
 	end
 	activeBuildFolder = nil
@@ -3849,7 +3873,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 					end
 				end
 			end
-			MigrateSavedEntries(validEntries)
+			local savedEntriesMigrated = MigrateSavedEntries(validEntries)
+			if savedEntriesMigrated and ConfigurationLoaded then SaveConfiguration() end
 			if validationIssueCount > 0 and #validEntries == 0 then
 				ShowNotification("Catalog validation failed: no usable scripts were found.", "Error")
 			end
@@ -3961,21 +3986,21 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				if #autoQueue > 0 then
 					_VH_TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
-						successList, failList = {}, {}
+						startedList, failList = {}, {}
 						ShowNotification("Processing " .. #autoQueue .. " auto-execute script(s)...", "Info")
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
 							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
-								if ExecuteSandboxed(scrRaw, scriptData.Name) then successList[#successList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
+								if ExecuteSandboxed(scrRaw, scriptData.Name) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
 							end
 							task.wait(0.3)
 						end
-						if #successList > 0 then ShowNotification("Auto-executed: " .. table.concat(successList, ", "), "Success") end
-						if #failList > 0 then ShowNotification("Auto-execution failed for: " .. table.concat(failList, ", "), "Warning") end
+						if #startedList > 0 then ShowNotification("Auto-started: " .. table.concat(startedList, ", "), "Success") end
+						if #failList > 0 then ShowNotification("Auto-execution failed to start for: " .. table.concat(failList, ", "), "Warning") end
 					end)
 				end
 			end
