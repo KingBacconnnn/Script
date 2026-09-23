@@ -2798,8 +2798,8 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	end
 end))
 TabIndicator = Instance.new("Frame", TabContainer)
-TabIndicator.Size = UDim2.new(0, IsMobile and 64 or 96, 0, 2)
-TabIndicator.Position = UDim2.new(0, IsMobile and 6 or 6, 1, -2)
+TabIndicator.Size = UDim2.new(0, IsMobile and 60 or 92, 0, 2)
+TabIndicator.Position = UDim2.new(0, 8, 1, -2)
 TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
@@ -2833,8 +2833,8 @@ function CreateTab(name, index)
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
-	label.Size = UDim2.new(1, -(IsMobile and 29 or 32), 1, 0)
-	label.Position = UDim2.new(0, IsMobile and 29 or 32, 0, 0)
+	label.Size = UDim2.new(1, -(IsMobile and 28 or 31), 1, 0)
+	label.Position = UDim2.new(0, IsMobile and 28 or 31, 0, 0)
 	label.BackgroundTransparency = 1
 	label.Text = name
 	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
@@ -2849,7 +2849,7 @@ function CreateTab(name, index)
 	if index > 1 then
 		local div = Instance.new("Frame", TabContainer)
 		div.Size = UDim2.new(0, 1, 0, IsMobile and 10 or 12)
-		div.Position = UDim2.new(0, xOffset - (IsMobile and 2 or 3), 0.5, -(IsMobile and 5 or 6))
+		div.Position = UDim2.new(0, xOffset - 1, 0.5, -(IsMobile and 5 or 6))
 		div.BackgroundColor3 = Theme.Stroke
 		div.BackgroundTransparency = 0.42
 		div.BorderSizePixel = 0
@@ -2860,7 +2860,7 @@ function CreateTab(name, index)
 		if isDestroying or currentTab == name then return end
 		currentTab = name
 		DropdownContainer.Visible = false
-		local indicatorWidth = tabWidth - 12
+		local indicatorWidth = tabWidth - 16
 		local indicatorOffset = (tabWidth - indicatorWidth) * 0.5
 		TabIndicator.Size = UDim2.new(0, indicatorWidth, 0, 2)
 		TabIndicator.BackgroundTransparency = 0
