@@ -3794,26 +3794,138 @@ end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
 CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked normal-word search to rank relevant results across script names, game names, descriptions, categories, and tags without special query syntax.\n• Rebuilt Filters as a compact mobile-friendly panel with multi-select Categories, Tags, Status, and Favorites plus a Clear action and indigo active states.\n• Rebuilt Sort Scripts as a modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added viewport-safe positioning for the sort and filter panels and clamped the main and floating controls so outlines and panels stay on-screen.\n• Fixed the viewport refresh callback ordering that could produce the nil-function error shown in the console.\n• Removed stale v2.0.5 source comments and redundant temporary helper globals while preserving required executor fallbacks.\n• Preserved the existing GUI-parent, protected-GUI, HTTP request, file I/O, compiler, and cloneref compatibility fallbacks because they were already broad and working.\n• Kept Favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and the existing Velox Hub layout intact.\n• Reduced unnecessary shared scratch state and avoided adding a new local-heavy execution path that could increase compiler register pressure.\n• Kept the visible version label at v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+function _VH_HowToCard(parent, title, desc, order)
+	local block = Instance.new("Frame", parent)
+	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
+	block.BackgroundColor3 = Theme.CardHover; block.LayoutOrder = order or 0
+	Instance.new("UICorner", block).CornerRadius = UDim.new(0, 9)
+	local stroke = Instance.new("UIStroke", block); stroke.Color = Theme.Stroke; stroke.Transparency = 0.28; stroke.Thickness = 1
+	local pad = Instance.new("UIPadding", block)
+	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
+	local lay = Instance.new("UIListLayout", block); lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder
+	local t = Instance.new("TextLabel", block)
+	t.Size = UDim2.new(1, 0, 0, 18); t.BackgroundTransparency = 1; t.Text = title
+	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.LayoutOrder = 1
+	local d = Instance.new("TextLabel", block)
+	d.Size = UDim2.new(1, 0, 0, 0); d.AutomaticSize = Enum.AutomaticSize.Y; d.BackgroundTransparency = 1; d.Text = desc
+	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextWrapped = true; d.TextXAlignment = Enum.TextXAlignment.Left; d.LayoutOrder = 2
+	return block
+end
+function _VH_HowToPill(parent, text, background, textColor, width, order)
+	local pill = Instance.new("Frame", parent)
+	pill.Size = UDim2.new(0, width or 82, 0, 22); pill.BackgroundColor3 = background; pill.LayoutOrder = order or 0
+	Instance.new("UICorner", pill).CornerRadius = UDim.new(0, 7)
+	local st = Instance.new("UIStroke", pill); st.Color = textColor; st.Transparency = 0.45; st.Thickness = 0.8
+	local lbl = Instance.new("TextLabel", pill)
+	lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = textColor
+	lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 9; lbl.TextXAlignment = Enum.TextXAlignment.Center
+	return pill
+end
+function _VH_HowToLabel(parent, text, color, width, order)
+	local lbl = Instance.new("TextLabel", parent)
+	lbl.Size = UDim2.new(0, width or 78, 0, 22); lbl.BackgroundTransparency = 1; lbl.Text = text
+	lbl.TextColor3 = color or Theme.TextSecondary; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 10
+	lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.LayoutOrder = order or 0
+	return lbl
+end
 function CreateHowToUseContent()
-CreateParagraph("Welcome to Velox Hub", "This tab explains what the main controls, labels, filters, sorting options, script cards, settings, and status indicators mean. It is designed as a quick reference, especially on mobile.", HowToUseView, 1)
-CreateParagraph("Legend", "INDIGO / HIGHLIGHTED = active, selected, or currently open.\nWHITE OUTLINE = available but not currently selected.\nCHECKMARK = the option currently selected.\nBADGE / NUMBER = count of active filters, notices, or items.\nGREYED TEXT = secondary information or an inactive state.\nGREEN = success or enabled.\nYELLOW / ORANGE = warning or attention.\nRED = error, destructive action, or something that needs attention.", HowToUseView, 2)
-CreateParagraph("Navigation Tabs", "Changelog: view Velox Hub updates and version changes.\nScripts: browse the script catalog, search, filter, sort, favorite, and open script details.\nSettings: change the toggle keybind, Anti-AFK, UI scale, refresh the catalog, unload the hub, and access saved-data tools.\nHow to Use: this guide and legend.", HowToUseView, 3)
-CreateParagraph("Search", "Type normal words such as a game name, script name, feature, category, or tag. Search does not require special commands or syntax. Results are ranked by relevance, with stronger matches in script names and game names appearing before weaker matches in descriptions and metadata.", HowToUseView, 4)
-CreateParagraph("Filters", "Tap the Filter button to open the filter panel. Favorites, Categories, Tags, and Status can be selected together. Tap an already-selected filter to remove it. Multiple values can remain selected at once. The indigo badge shows how many filter choices are active. Use Clear to remove all active filters.", HowToUseView, 5)
-CreateParagraph("Sort Scripts", "Tap the Sort button to choose one ordering: Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, or Updated This Month. The active option uses an indigo highlight and checkmark. The panel is positioned inside the available screen area so it remains usable across different screen sizes.", HowToUseView, 6)
-CreateParagraph("Script Cards", "A script card shows the script name and available catalog information. Tap the main card/action area to use the available script action. The information button opens more details when available. Metadata can include category, tags, game, status, last update, favorite state, and Auto Execute state.", HowToUseView, 7)
-CreateParagraph("Favorites", "Use the favorite control on a script to save it for quick access. Favorited scripts can also be shown with the Favorites filter and may influence recommendation results. Favorites are saved in the hub configuration when the current environment supports the required storage functions.", HowToUseView, 8)
-CreateParagraph("Auto Execute", "When available on a script, Auto Execute remembers that script as an automatic execution choice for the matching game or PlaceId. The details view shows whether Auto Execute is ON or OFF. The setting is intended to persist across normal unload and rejoin flows when the required storage and execution support are available.", HowToUseView, 9)
-CreateParagraph("Recommended Scripts", "The recommendation area can surface scripts related to the current game or your saved activity. Current-game recommendations use catalog metadata and matching PlaceId information. Additional recommendations can use factors such as favorites, game metadata, recent updates, and related catalog information.", HowToUseView, 10)
-CreateParagraph("Status & Diagnostics", "The header/status area can show connection or catalog state. The diagnostics display can show FPS and network ping while the hub is active. These values are informational and can change during gameplay. A connection or catalog problem does not automatically mean the local UI is broken.", HowToUseView, 11)
-CreateParagraph("Settings", "Toggle UI: change or hide/show the hub with the configured keybind.\nAnti-AFK: attempts to reduce idle kick behavior when enabled and supported.\nUI Scale: adjust the hub from 80% to 120%.\nRefresh Catalog: fetch the latest available catalog data.\nUnload Hub: remove Velox Hub from the current session.\nClear UI Cache: restore cached UI position/layout values when available.", HowToUseView, 12)
-CreateParagraph("Notifications", "Toast messages explain actions and results. Success messages normally confirm a completed action, Info messages provide neutral information, Warning messages indicate something needs attention, and Error messages indicate a failed operation. Countdown progress can show how long a notification remains visible.", HowToUseView, 13)
-CreateParagraph("Buttons & Touch", "Most buttons are designed for both mouse and touch. Tap once to activate a control. For toggle-style controls, tapping the same control again switches it back off. Panels can close when tapping outside them. On mobile, the interface uses smaller spacing and touch-friendly controls where possible.", HowToUseView, 14)
-CreateParagraph("Catalog Refresh", "A catalog refresh updates the script list from the configured data source. Refresh feedback may show loading, success, failure, or already-up-to-date states. The hub avoids unnecessary UI recreation during refreshes so the catalog can update without rebuilding everything on every action.", HowToUseView, 15)
-CreateParagraph("Executor / Environment Compatibility", "Velox Hub checks several common execution-environment fallbacks for GUI parenting, protected GUI support, HTTP requests, file access, code compilation, and cloneref-style references. Not every environment exposes the same functions, so some features can be unavailable or fall back to another supported method.", HowToUseView, 16)
-CreateParagraph("Errors and Limitations", "If a feature does not work, check the notification first and then the developer console for the exact error. Missing environment APIs, blocked HTTP requests, unavailable file functions, compiler restrictions, game changes, or catalog data problems can affect specific features. A fallback being present does not guarantee identical behavior in every environment.", HowToUseView, 17)
-CreateParagraph("Bug Reports", "When reporting an issue, include the game, what you tapped or searched for, what you expected, what happened, and the developer-console error if one appeared. Small details such as the screen size, whether you were on touch or mouse input, and which filter or sort option was active can make troubleshooting faster.", HowToUseView, 18)
-CreateParagraph("Quick Reference", "Search = find relevant scripts.\nFilter = narrow results.\nSort = change result order.\nFavorite = save a script for quick access.\nInfo = view script details.\nCheckmark = current selection.\nIndigo = active state.\nRefresh = update catalog data.\nSettings = change hub behavior.\nUnload = close and remove the hub.", HowToUseView, 19)
+	local intro = _VH_HowToCard(HowToUseView, "Welcome to Velox Hub", "This tab is a visual legend and quick reference. The examples below use the same controls, colors, badges, outlines, and states used in the actual hub so you can recognize what each element means.", 1)
+	local introAccent = Instance.new("Frame", intro)
+	introAccent.Size = UDim2.new(0, 4, 0, 42); introAccent.Position = UDim2.new(0, 0, 0, 0); introAccent.BackgroundColor3 = Theme.Accent; introAccent.BorderSizePixel = 0; introAccent.ZIndex = 3
+	Instance.new("UICorner", introAccent).CornerRadius = UDim.new(1, 0)
+
+	local tabs = _VH_HowToCard(HowToUseView, "Navigation Tabs", "Each tab opens a different section. The active tab uses the indigo accent; inactive tabs keep a subtle white outline.", 2)
+	local tabsRow = Instance.new("Frame", tabs); tabsRow.Size = UDim2.new(1, 0, 0, 34); tabsRow.BackgroundTransparency = 1; tabsRow.LayoutOrder = 3
+	local tabsLayout = Instance.new("UIListLayout", tabsRow); tabsLayout.FillDirection = Enum.FillDirection.Horizontal; tabsLayout.Padding = UDim.new(0, 6); tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local tabNames = {"Changelog", "Scripts", "Settings", "How to Use"}
+	for i = 1, #tabNames do
+		local name = tabNames[i]
+		local b = Instance.new("Frame", tabsRow); b.Size = UDim2.new(0, IsMobile and 74 or 92, 0, 30); b.BackgroundColor3 = name == "Scripts" and Theme.CardHover or Theme.BackgroundSecondary; b.BackgroundTransparency = name == "Scripts" and 0.05 or 0.42
+		b.LayoutOrder = i; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+		local bs = Instance.new("UIStroke", b); bs.Color = name == "Scripts" and Theme.Accent or Color3.fromRGB(255, 255, 255); bs.Transparency = name == "Scripts" and 0.28 or 0.72; bs.Thickness = 1
+		local l = Instance.new("TextLabel", b); l.Size = UDim2.new(1, 0, 1, 0); l.BackgroundTransparency = 1; l.Text = name; l.TextColor3 = name == "Scripts" and Theme.TextPrimary or Theme.TextSecondary; l.Font = Enum.Font.GothamMedium; l.TextSize = IsMobile and 8 or 10; l.TextXAlignment = Enum.TextXAlignment.Center
+	end
+
+	local search = _VH_HowToCard(HowToUseView, "Search", "Type normal words only. Search checks script name, game name, description, category, and tags, then ranks the closest matches.", 3)
+	local searchRow = Instance.new("Frame", search); searchRow.Size = UDim2.new(1, 0, 0, 34); searchRow.BackgroundTransparency = 1; searchRow.LayoutOrder = 3
+	local searchBox = Instance.new("Frame", searchRow); searchBox.Size = UDim2.new(1, -48, 0, 32); searchBox.BackgroundColor3 = Theme.BackgroundSecondary
+	Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 7); local searchStroke = Instance.new("UIStroke", searchBox); searchStroke.Color = Theme.Stroke; searchStroke.Transparency = 0.12; searchStroke.Thickness = 1
+	local searchIcon = Instance.new("TextLabel", searchBox); searchIcon.Size = UDim2.new(0, 24, 1, 0); searchIcon.BackgroundTransparency = 1; searchIcon.Text = "⌕"; searchIcon.TextColor3 = Theme.TextSecondary; searchIcon.Font = Enum.Font.GothamBold; searchIcon.TextSize = 18
+	local searchText = Instance.new("TextLabel", searchBox); searchText.Size = UDim2.new(1, -34, 1, 0); searchText.Position = UDim2.new(0, 30, 0, 0); searchText.BackgroundTransparency = 1; searchText.Text = "auto farm coins"; searchText.TextColor3 = Theme.TextSecondary; searchText.Font = Enum.Font.Gotham; searchText.TextSize = 10; searchText.TextXAlignment = Enum.TextXAlignment.Left
+	_VH_HowToPill(searchRow, "RELEVANT", Theme.Accent, Color3.fromRGB(255, 255, 255), 44, 2)
+
+	local filters = _VH_HowToCard(HowToUseView, "Filters", "Filters can be selected together. Tap a selected filter again to remove it. Indigo means active. Clear removes all active filters.", 4)
+	local filterRow = Instance.new("Frame", filters); filterRow.Size = UDim2.new(1, 0, 0, 56); filterRow.BackgroundTransparency = 1; filterRow.LayoutOrder = 3
+	local filterLayout = Instance.new("UIListLayout", filterRow); filterLayout.FillDirection = Enum.FillDirection.Horizontal; filterLayout.Padding = UDim.new(0, 6); filterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local fb = Instance.new("Frame", filterRow); fb.Size = UDim2.new(0, IsMobile and 64 or 76, 0, 32); fb.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", fb).CornerRadius = UDim.new(0, 7)
+	local fs = Instance.new("UIStroke", fb); fs.Color = Color3.fromRGB(255, 255, 255); fs.Transparency = 0.7; fs.Thickness = 1
+	local fl = Instance.new("TextLabel", fb); fl.Size = UDim2.new(1, 0, 1, 0); fl.BackgroundTransparency = 1; fl.Text = "Filter 3"; fl.TextColor3 = Theme.TextPrimary; fl.Font = Enum.Font.GothamBold; fl.TextSize = 9
+	_VH_HowToPill(filterRow, "Favorites", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 68, 2)
+	_VH_HowToPill(filterRow, "Anime", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 54, 3)
+	_VH_HowToPill(filterRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 42, 4)
+	local clear = _VH_HowToPill(filterRow, "CLEAR", Theme.BackgroundSecondary, Theme.TextSecondary, 48, 5)
+	local clearStroke = clear:FindFirstChildOfClass("UIStroke"); if clearStroke then clearStroke.Color = Color3.fromRGB(255, 255, 255); clearStroke.Transparency = 0.76 end
+
+	local sort = _VH_HowToCard(HowToUseView, "Sort Scripts", "The sort modal changes result order. The highlighted row is the selected option and the checkmark confirms the current choice.", 5)
+	local sortBox = Instance.new("Frame", sort); sortBox.Size = UDim2.new(1, 0, 0, 84); sortBox.BackgroundColor3 = Theme.BackgroundSecondary; sortBox.LayoutOrder = 3; Instance.new("UICorner", sortBox).CornerRadius = UDim.new(0, 8)
+	local sortStroke = Instance.new("UIStroke", sortBox); sortStroke.Color = Theme.Stroke; sortStroke.Transparency = 0.3; sortStroke.Thickness = 1
+	local sortList = Instance.new("UIListLayout", sortBox); sortList.Padding = UDim.new(0, 2); sortList.SortOrder = Enum.SortOrder.LayoutOrder
+	local sortItems = {"Most Relevant", "A-Z", "Newest"}
+	for i = 1, #sortItems do
+		local row = Instance.new("Frame", sortBox); row.Size = UDim2.new(1, -6, 0, 25); row.LayoutOrder = i; row.BackgroundColor3 = i == 1 and Theme.CardHover or Theme.BackgroundSecondary; row.BackgroundTransparency = i == 1 and 0.05 or 1
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+		local txt = Instance.new("TextLabel", row); txt.Size = UDim2.new(1, -34, 1, 0); txt.Position = UDim2.new(0, 8, 0, 0); txt.BackgroundTransparency = 1; txt.Text = sortItems[i]; txt.TextColor3 = i == 1 and Theme.TextPrimary or Theme.TextSecondary; txt.Font = Enum.Font.GothamMedium; txt.TextSize = 9; txt.TextXAlignment = Enum.TextXAlignment.Left
+		local check = Instance.new("TextLabel", row); check.Size = UDim2.new(0, 22, 1, 0); check.Position = UDim2.new(1, -26, 0, 0); check.BackgroundTransparency = 1; check.Text = i == 1 and "✓" or ""; check.TextColor3 = Theme.Accent; check.Font = Enum.Font.GothamBold; check.TextSize = 13
+	end
+
+	local badges = _VH_HowToCard(HowToUseView, "Script Card Badges", "These small elements tell you why a script is surfaced and what update/status label it has.", 6)
+	local badgeRow = Instance.new("Frame", badges); badgeRow.Size = UDim2.new(1, 0, 0, 30); badgeRow.BackgroundTransparency = 1; badgeRow.LayoutOrder = 3
+	local badgeLayout = Instance.new("UIListLayout", badgeRow); badgeLayout.FillDirection = Enum.FillDirection.Horizontal; badgeLayout.Padding = UDim.new(0, 6); badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	_VH_HowToPill(badgeRow, "YOU MAY LIKE", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 92, 1)
+	_VH_HowToPill(badgeRow, "FOR YOU", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 64, 2)
+	_VH_HowToPill(badgeRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 42, 3)
+	_VH_HowToPill(badgeRow, "NEW", Theme.Success, Color3.fromRGB(255, 255, 255), 42, 4)
+
+	local compat = _VH_HowToCard(HowToUseView, "Game Compatibility & Script Actions", "The action row shows whether a script can run in the current experience. Wrong Game means the script is not configured for the current game.", 7)
+	local compatRow = Instance.new("Frame", compat); compatRow.Size = UDim2.new(1, 0, 0, 48); compatRow.BackgroundTransparency = 1; compatRow.LayoutOrder = 3
+	local compatLayout = Instance.new("UIListLayout", compatRow); compatLayout.FillDirection = Enum.FillDirection.Horizontal; compatLayout.Padding = UDim.new(0, 6); compatLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local action = Instance.new("Frame", compatRow); action.Size = UDim2.new(0, IsMobile and 108 or 122, 0, 28); action.BackgroundColor3 = Theme.BackgroundMain; Instance.new("UICorner", action).CornerRadius = UDim.new(0, 6)
+	local actionStroke = Instance.new("UIStroke", action); actionStroke.Color = Theme.Warning; actionStroke.Transparency = 0.35; actionStroke.Thickness = 1
+	local actionText = Instance.new("TextLabel", action); actionText.Size = UDim2.new(1, -34, 1, 0); actionText.BackgroundTransparency = 1; actionText.Text = "Wrong Game"; actionText.TextColor3 = Theme.TextPrimary; actionText.Font = Enum.Font.GothamBold; actionText.TextSize = 9; actionText.TextXAlignment = Enum.TextXAlignment.Left
+	actionText.Position = UDim2.new(0, 9, 0, 0)
+	local x = Instance.new("Frame", action); x.Size = UDim2.new(0, 22, 0, 18); x.Position = UDim2.new(1, -26, 0.5, -9); x.BackgroundColor3 = Theme.Warning; Instance.new("UICorner", x).CornerRadius = UDim.new(0, 5)
+	local xl = Instance.new("TextLabel", x); xl.Size = UDim2.new(1, 0, 1, 0); xl.BackgroundTransparency = 1; xl.Text = "X"; xl.TextColor3 = Color3.fromRGB(15, 18, 28); xl.Font = Enum.Font.GothamBold; xl.TextSize = 9
+	_VH_HowToPill(compatRow, "View Details", Theme.BackgroundMain, Theme.TextPrimary, 82, 2)
+	_VH_HowToPill(compatRow, "★", Theme.BackgroundMain, Color3.fromRGB(250, 204, 21), 30, 3)
+	_VH_HowToPill(compatRow, "ON", Theme.Success, Color3.fromRGB(255, 255, 255), 36, 4)
+	_VH_HowToPill(compatRow, "OFF", Theme.ToggleOff, Color3.fromRGB(226, 232, 240), 38, 5)
+
+	local states = _VH_HowToCard(HowToUseView, "Status States", "Colors are reused across the hub so the meaning stays consistent.", 8)
+	local stateRow = Instance.new("Frame", states); stateRow.Size = UDim2.new(1, 0, 0, 74); stateRow.BackgroundTransparency = 1; stateRow.LayoutOrder = 3
+	local stateGrid = Instance.new("UIGridLayout", stateRow); stateGrid.CellSize = UDim2.new(0, IsMobile and 96 or 115, 0, 30); stateGrid.CellPadding = UDim2.new(0, 6, 0, 6); stateGrid.HorizontalAlignment = Enum.HorizontalAlignment.Left; stateGrid.VerticalAlignment = Enum.VerticalAlignment.Top
+	local stateItems = {{"ACTIVE", Theme.Accent, "Selected"}, {"AVAILABLE", Color3.fromRGB(255, 255, 255), "Not selected"}, {"ON", Theme.Success, "Enabled"}, {"WARNING", Theme.Warning, "Attention"}, {"ERROR", Theme.Error, "Failed"}, {"INFO", Theme.Info, "Information"}}
+	for i = 1, #stateItems do
+		local item = stateItems[i]
+		local box = Instance.new("Frame", stateRow); box.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+		local s = Instance.new("UIStroke", box); s.Color = item[2]; s.Transparency = item[1] == "AVAILABLE" and 0.65 or 0.38; s.Thickness = 1
+		local dot = Instance.new("Frame", box); dot.Size = UDim2.new(0, 7, 0, 7); dot.Position = UDim2.new(0, 8, 0.5, -3.5); dot.BackgroundColor3 = item[2]; Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+		local text = Instance.new("TextLabel", box); text.Size = UDim2.new(1, -22, 1, 0); text.Position = UDim2.new(0, 18, 0, 0); text.BackgroundTransparency = 1; text.Text = item[1] .. "  •  " .. item[3]; text.TextColor3 = Theme.TextSecondary; text.Font = Enum.Font.GothamMedium; text.TextSize = 8; text.TextXAlignment = Enum.TextXAlignment.Left
+	end
+
+	local misc = _VH_HowToCard(HowToUseView, "Other Elements", "Small controls can carry important meaning even when they have little text.", 9)
+	local miscRow = Instance.new("Frame", misc); miscRow.Size = UDim2.new(1, 0, 0, 52); miscRow.BackgroundTransparency = 1; miscRow.LayoutOrder = 3
+	local miscLayout = Instance.new("UIListLayout", miscRow); miscLayout.FillDirection = Enum.FillDirection.Horizontal; miscLayout.Padding = UDim.new(0, 8); miscLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local info = Instance.new("Frame", miscRow); info.Size = UDim2.new(0, 32, 0, 32); info.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", info).CornerRadius = UDim.new(0, 7)
+	local infoStroke = Instance.new("UIStroke", info); infoStroke.Color = Color3.fromRGB(255, 255, 255); infoStroke.Transparency = 0.6; infoStroke.Thickness = 1
+	local il = Instance.new("TextLabel", info); il.Size = UDim2.new(1, 0, 1, 0); il.BackgroundTransparency = 1; il.Text = "i"; il.TextColor3 = Theme.TextSecondary; il.Font = Enum.Font.GothamBold; il.TextSize = 15
+	local star = Instance.new("TextLabel", miscRow); star.Size = UDim2.new(0, 32, 0, 32); star.BackgroundTransparency = 1; star.Text = "★"; star.TextColor3 = Color3.fromRGB(250, 204, 21); star.Font = Enum.Font.GothamBold; star.TextSize = 20
+	local check = Instance.new("TextLabel", miscRow); check.Size = UDim2.new(0, 32, 0, 32); check.BackgroundTransparency = 1; check.Text = "✓"; check.TextColor3 = Theme.Accent; check.Font = Enum.Font.GothamBold; check.TextSize = 20
+	local online = Instance.new("Frame", miscRow); online.Size = UDim2.new(0, 78, 0, 28); online.BackgroundTransparency = 1
+	local onlineDot = Instance.new("Frame", online); onlineDot.Size = UDim2.new(0, 8, 0, 8); onlineDot.Position = UDim2.new(0, 4, 0.5, -4); onlineDot.BackgroundColor3 = Theme.Success; Instance.new("UICorner", onlineDot).CornerRadius = UDim.new(1, 0)
+	local onlineText = Instance.new("TextLabel", online); onlineText.Size = UDim2.new(1, -18, 1, 0); onlineText.Position = UDim2.new(0, 16, 0, 0); onlineText.BackgroundTransparency = 1; onlineText.Text = "Online"; onlineText.TextColor3 = Theme.Success; onlineText.Font = Enum.Font.GothamBold; onlineText.TextSize = 10; onlineText.TextXAlignment = Enum.TextXAlignment.Left
+	local metrics = Instance.new("TextLabel", miscRow); metrics.Size = UDim2.new(0, 128, 0, 28); metrics.BackgroundTransparency = 1; metrics.Text = "FPS: 57 | Ping: 88ms"; metrics.TextColor3 = Theme.TextSecondary; metrics.Font = Enum.Font.GothamMedium; metrics.TextSize = 9; metrics.TextXAlignment = Enum.TextXAlignment.Left
+
+	_VH_HowToCard(HowToUseView, "Quick Reference", "Search = find relevant scripts. Filter = narrow results. Sort = change order. ★ = favorite. i = details. ✓ = selected. Indigo = active. White outline = available. Green = enabled/success. Orange = warning or Wrong Game. Red = error. Online + FPS/Ping = live status information.", 10)
 end
 CreateHowToUseContent()
 function _VH_OpenCreditLink(url, successText)
