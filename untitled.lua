@@ -2440,6 +2440,7 @@ end
 ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
+HowToUseView = CreateCanvas("How to Use")
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
@@ -3542,7 +3543,7 @@ TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
 Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
-TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings }
+TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings, ["How to Use"] = VeloxIcons.Changelog }
 TabButtonCache = {}
 function CreateTab(name, index)
 	local tabHeight = IsMobile and 36 or 40
@@ -3577,6 +3578,22 @@ function CreateTab(name, index)
 	icon.ScaleType = Enum.ScaleType.Fit
 	icon.Active = false
 	icon.ZIndex = 6
+	if name == "How to Use" then
+		icon.Visible = false
+		local helpIcon = Instance.new("TextLabel", btn)
+		helpIcon.Name = "TabHelpIcon"
+		helpIcon.Size = UDim2.new(0, IsMobile and 18 or 20, 0, IsMobile and 18 or 20)
+		helpIcon.Position = UDim2.new(0, IsMobile and 10 or 12, 0.5, -(IsMobile and 9 or 10))
+		helpIcon.BackgroundTransparency = 1
+		helpIcon.Text = "?"
+		helpIcon.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
+		helpIcon.Font = Enum.Font.GothamBold
+		helpIcon.TextSize = IsMobile and 14 or 16
+		helpIcon.TextXAlignment = Enum.TextXAlignment.Center
+		helpIcon.TextYAlignment = Enum.TextYAlignment.Center
+		helpIcon.Active = false
+		helpIcon.ZIndex = 6
+	end
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
@@ -3605,7 +3622,7 @@ function CreateTab(name, index)
 		if FilterPanel then FilterPanel.Visible = false end
 		TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
-		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
+		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or (name == "Settings") and "Settings Hub" or "How to Use"
 		SectionHeaderLabel.Visible = true
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
@@ -3632,11 +3649,13 @@ function CreateTab(name, index)
 			local childIcon = tBtn:FindFirstChild("TabIcon")
 			local childLabel = tBtn:FindFirstChild("TabLabel")
 			if childIcon and childIcon:IsA("ImageLabel") then childIcon.ImageColor3 = activeColor end
+			local childHelpIcon = tBtn:FindFirstChild("TabHelpIcon")
+			if childHelpIcon and childHelpIcon:IsA("TextLabel") then childHelpIcon.TextColor3 = activeColor end
 			if childLabel then childLabel.TextColor3 = activeColor end
 		end
 	end))
 end
-CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
+CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3); CreateTab("How to Use", 4)
 _VH_UpdateFilterControl()
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SidebarCredits = Instance.new("Frame", Sidebar)
@@ -3775,6 +3794,28 @@ end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
 CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked normal-word search to rank relevant results across script names, game names, descriptions, categories, and tags without special query syntax.\n• Rebuilt Filters as a compact mobile-friendly panel with multi-select Categories, Tags, Status, and Favorites plus a Clear action and indigo active states.\n• Rebuilt Sort Scripts as a modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added viewport-safe positioning for the sort and filter panels and clamped the main and floating controls so outlines and panels stay on-screen.\n• Fixed the viewport refresh callback ordering that could produce the nil-function error shown in the console.\n• Removed stale v2.0.5 source comments and redundant temporary helper globals while preserving required executor fallbacks.\n• Preserved the existing GUI-parent, protected-GUI, HTTP request, file I/O, compiler, and cloneref compatibility fallbacks because they were already broad and working.\n• Kept Favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and the existing Velox Hub layout intact.\n• Reduced unnecessary shared scratch state and avoided adding a new local-heavy execution path that could increase compiler register pressure.\n• Kept the visible version label at v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+function CreateHowToUseContent()
+CreateParagraph("Welcome to Velox Hub", "This tab explains what the main controls, labels, filters, sorting options, script cards, settings, and status indicators mean. It is designed as a quick reference, especially on mobile.", HowToUseView, 1)
+CreateParagraph("Legend", "INDIGO / HIGHLIGHTED = active, selected, or currently open.\nWHITE OUTLINE = available but not currently selected.\nCHECKMARK = the option currently selected.\nBADGE / NUMBER = count of active filters, notices, or items.\nGREYED TEXT = secondary information or an inactive state.\nGREEN = success or enabled.\nYELLOW / ORANGE = warning or attention.\nRED = error, destructive action, or something that needs attention.", HowToUseView, 2)
+CreateParagraph("Navigation Tabs", "Changelog: view Velox Hub updates and version changes.\nScripts: browse the script catalog, search, filter, sort, favorite, and open script details.\nSettings: change the toggle keybind, Anti-AFK, UI scale, refresh the catalog, unload the hub, and access saved-data tools.\nHow to Use: this guide and legend.", HowToUseView, 3)
+CreateParagraph("Search", "Type normal words such as a game name, script name, feature, category, or tag. Search does not require special commands or syntax. Results are ranked by relevance, with stronger matches in script names and game names appearing before weaker matches in descriptions and metadata.", HowToUseView, 4)
+CreateParagraph("Filters", "Tap the Filter button to open the filter panel. Favorites, Categories, Tags, and Status can be selected together. Tap an already-selected filter to remove it. Multiple values can remain selected at once. The indigo badge shows how many filter choices are active. Use Clear to remove all active filters.", HowToUseView, 5)
+CreateParagraph("Sort Scripts", "Tap the Sort button to choose one ordering: Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, or Updated This Month. The active option uses an indigo highlight and checkmark. The panel is positioned inside the available screen area so it remains usable across different screen sizes.", HowToUseView, 6)
+CreateParagraph("Script Cards", "A script card shows the script name and available catalog information. Tap the main card/action area to use the available script action. The information button opens more details when available. Metadata can include category, tags, game, status, last update, favorite state, and Auto Execute state.", HowToUseView, 7)
+CreateParagraph("Favorites", "Use the favorite control on a script to save it for quick access. Favorited scripts can also be shown with the Favorites filter and may influence recommendation results. Favorites are saved in the hub configuration when the current environment supports the required storage functions.", HowToUseView, 8)
+CreateParagraph("Auto Execute", "When available on a script, Auto Execute remembers that script as an automatic execution choice for the matching game or PlaceId. The details view shows whether Auto Execute is ON or OFF. The setting is intended to persist across normal unload and rejoin flows when the required storage and execution support are available.", HowToUseView, 9)
+CreateParagraph("Recommended Scripts", "The recommendation area can surface scripts related to the current game or your saved activity. Current-game recommendations use catalog metadata and matching PlaceId information. Additional recommendations can use factors such as favorites, game metadata, recent updates, and related catalog information.", HowToUseView, 10)
+CreateParagraph("Status & Diagnostics", "The header/status area can show connection or catalog state. The diagnostics display can show FPS and network ping while the hub is active. These values are informational and can change during gameplay. A connection or catalog problem does not automatically mean the local UI is broken.", HowToUseView, 11)
+CreateParagraph("Settings", "Toggle UI: change or hide/show the hub with the configured keybind.\nAnti-AFK: attempts to reduce idle kick behavior when enabled and supported.\nUI Scale: adjust the hub from 80% to 120%.\nRefresh Catalog: fetch the latest available catalog data.\nUnload Hub: remove Velox Hub from the current session.\nClear UI Cache: restore cached UI position/layout values when available.", HowToUseView, 12)
+CreateParagraph("Notifications", "Toast messages explain actions and results. Success messages normally confirm a completed action, Info messages provide neutral information, Warning messages indicate something needs attention, and Error messages indicate a failed operation. Countdown progress can show how long a notification remains visible.", HowToUseView, 13)
+CreateParagraph("Buttons & Touch", "Most buttons are designed for both mouse and touch. Tap once to activate a control. For toggle-style controls, tapping the same control again switches it back off. Panels can close when tapping outside them. On mobile, the interface uses smaller spacing and touch-friendly controls where possible.", HowToUseView, 14)
+CreateParagraph("Catalog Refresh", "A catalog refresh updates the script list from the configured data source. Refresh feedback may show loading, success, failure, or already-up-to-date states. The hub avoids unnecessary UI recreation during refreshes so the catalog can update without rebuilding everything on every action.", HowToUseView, 15)
+CreateParagraph("Executor / Environment Compatibility", "Velox Hub checks several common execution-environment fallbacks for GUI parenting, protected GUI support, HTTP requests, file access, code compilation, and cloneref-style references. Not every environment exposes the same functions, so some features can be unavailable or fall back to another supported method.", HowToUseView, 16)
+CreateParagraph("Errors and Limitations", "If a feature does not work, check the notification first and then the developer console for the exact error. Missing environment APIs, blocked HTTP requests, unavailable file functions, compiler restrictions, game changes, or catalog data problems can affect specific features. A fallback being present does not guarantee identical behavior in every environment.", HowToUseView, 17)
+CreateParagraph("Bug Reports", "When reporting an issue, include the game, what you tapped or searched for, what you expected, what happened, and the developer-console error if one appeared. Small details such as the screen size, whether you were on touch or mouse input, and which filter or sort option was active can make troubleshooting faster.", HowToUseView, 18)
+CreateParagraph("Quick Reference", "Search = find relevant scripts.\nFilter = narrow results.\nSort = change result order.\nFavorite = save a script for quick access.\nInfo = view script details.\nCheckmark = current selection.\nIndigo = active state.\nRefresh = update catalog data.\nSettings = change hub behavior.\nUnload = close and remove the hub.", HowToUseView, 19)
+end
+CreateHowToUseContent()
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
 	if GuiService and type(GuiService.OpenBrowserWindow) == "function" then
@@ -5469,6 +5510,7 @@ end))
 TabViews["Changelog"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
+TabViews["How to Use"].Visible = false
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SectionHeaderLabel.Text = "Updates"
 SectionHeaderLabel.Visible = true
