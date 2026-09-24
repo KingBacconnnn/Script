@@ -946,8 +946,29 @@ function _VH_ApplyTextLayoutGuard(obj)
 	obj:SetAttribute("VeloxTextConstraintBound", true)
 end
 function _VH_DisableTextOutline(object)
-	if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+	if not object then return end
+	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
 		object.TextStrokeTransparency = 1
+		pcall(function() object.TextStrokeColor3 = object.TextColor3 end)
+		for _, child in ipairs(object:GetChildren()) do
+			if child:IsA("UIStroke") and child.Name ~= "VeloxKeepTextStroke" then
+				pcall(function() child:Destroy() end)
+			end
+		end
+	end
+end
+function _VH_ClearTextOutlines(root)
+	if not root then return end
+	_VH_DisableTextOutline(root)
+	for _, object in ipairs(root:GetDescendants()) do
+		_VH_DisableTextOutline(object)
+		if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+			for _, child in ipairs(object:GetChildren()) do
+				if child:IsA("UIStroke") and child.Name ~= "VeloxKeepTextStroke" then
+					pcall(function() child:Destroy() end)
+				end
+			end
+		end
 	end
 end
 function _VH_ClearTextOutlines(root)
@@ -958,7 +979,12 @@ function _VH_ClearTextOutlines(root)
 	end
 end
 _VH_ClearTextOutlines(ScreenGui)
-_VH_RegConn(ScreenGui.DescendantAdded:Connect(_VH_DisableTextOutline))
+_VH_RegConn(ScreenGui.DescendantAdded:Connect(function(object)
+	_VH_DisableTextOutline(object)
+	if object and object.Parent and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+		_VH_DisableTextOutline(object.Parent)
+	end
+end))
 pcall(function() protectgui(ScreenGui) end)
 GlobalEnv[_G_Identifier] = function()
 	_VH_CleanUpMemory()
@@ -2403,7 +2429,7 @@ TabContainer.Size = UDim2.new(1, -20, 0, IsMobile and 180 or 212)
 TabContainer.Position = UDim2.new(0, 10, 0, IsMobile and 58 or 86)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Active = true
-TabContainer.ClipsDescendants = true
+TabContainer.ClipsDescendants = false
 TabContainer.ZIndex = 10
 SectionHeaderLabel = Instance.new("TextLabel", MainContent)
 SectionHeaderLabel.Size = UDim2.new(1, -28, 0, IsMobile and 18 or 22)
@@ -2425,7 +2451,7 @@ function CreateCanvas(name)
 	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.Active = true
 	local layout = Instance.new("UIListLayout", scroll)
-	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	layout.Padding = UDim.new(0, IsMobile and 8 or 10); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
 	local pad = Instance.new("UIPadding", scroll)
 	pad.PaddingRight = UDim.new(0, 4); pad.PaddingBottom = UDim.new(0, 16)
 	TabViews[name] = scroll
@@ -2435,8 +2461,8 @@ ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
-ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 178) or UDim2.new(0, 14, 0, 204)
-ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -186) or UDim2.new(1, -28, 1, -214)
+ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 142) or UDim2.new(0, 14, 0, 162)
+ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -150) or UDim2.new(1, -28, 1, -172)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
@@ -2492,7 +2518,7 @@ Instance.new("UICorner", FilterCountBadge).CornerRadius = UDim.new(1, 0)
 SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
 SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); SortDropdownBtn.Text = ""
-SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true; SortDropdownBtn.AutoButtonColor = false
+SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = false; SortDropdownBtn.AutoButtonColor = false
 SortIcon = Instance.new("ImageLabel", SortDropdownBtn)
 SortIcon.Name = "SortIcon"
 SortIcon.Size = UDim2.new(0, 15, 0, 15); SortIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
@@ -2512,7 +2538,7 @@ FilterPanel.BackgroundColor3 = Color3.fromRGB(12, 18, 34)
 FilterPanel.BorderSizePixel = 0
 FilterPanel.Visible = false
 FilterPanel.ZIndex = 1050
-FilterPanel.ClipsDescendants = true
+FilterPanel.ClipsDescendants = false
 Instance.new("UICorner", FilterPanel).CornerRadius = UDim.new(0, 12)
 FilterPanelStroke = Instance.new("UIStroke", FilterPanel)
 FilterPanelStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -2744,7 +2770,7 @@ DropdownContainer.BackgroundColor3 = Color3.fromRGB(11, 17, 32)
 DropdownContainer.Visible = false
 DropdownContainer.ZIndex = 1100
 DropdownContainer.BorderSizePixel = 0
-DropdownContainer.ClipsDescendants = true
+DropdownContainer.ClipsDescendants = false
 Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 12)
 
 SortPanelStroke = Instance.new("UIStroke", DropdownContainer)
@@ -3264,11 +3290,20 @@ _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 		local abstractSize = SortDropdownBtn.AbsoluteSize
 		local camera = workspace.CurrentCamera
 		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local dropWidth, dropHeight = 190, 210
-		local posX = math.max(10, math.min(abstractPos.X + abstractSize.X - dropWidth, math.max(10, viewportSize.X - dropWidth - 10)))
-		local posY = abstractPos.Y + abstractSize.Y + 4
-		if posY + dropHeight > viewportSize.Y - 10 then posY = abstractPos.Y - dropHeight - 4 end
-		if posY < 10 then posY = 10 end
+		local dropWidth = math.max(1, DropdownContainer.AbsoluteSize.X)
+		local dropHeight = math.max(1, DropdownContainer.AbsoluteSize.Y)
+		local margin = 10
+		local minX = margin
+		local maxX = math.max(minX, viewportSize.X - dropWidth - margin)
+		local posX = math.clamp(abstractPos.X + abstractSize.X - dropWidth, minX, maxX)
+		local belowY = abstractPos.Y + abstractSize.Y + 6
+		local aboveY = abstractPos.Y - dropHeight - 6
+		local posY = belowY
+		if posY + dropHeight > viewportSize.Y - margin and aboveY >= margin then
+			posY = aboveY
+		elseif posY + dropHeight > viewportSize.Y - margin then
+			posY = math.max(margin, viewportSize.Y - dropHeight - margin)
+		end
 		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
 		DropdownContainer.Visible = true
 		FilterPanel.Visible = false
@@ -3315,7 +3350,7 @@ function CreateTab(name, index)
 	btn.BorderSizePixel = 0
 	btn.Text = ""
 	btn.AutoButtonColor = false
-	btn.ClipsDescendants = true
+	btn.ClipsDescendants = false
 	btn.ZIndex = 12
 	btn.Active = true
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
@@ -3533,7 +3568,10 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Search, Filters & UI Polish", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Added a subtle white outer outline around the Changelog, Scripts, and Settings tabs while keeping the active tab indigo.\n• Rebuilt script search into a natural search experience across names, descriptions, categories, tags, and relevant metadata. Search results are relevance-ranked instead of relying on special query syntax.\n• Redesigned filtering into a Velox-style panel with toggleable Favorites, Categories, Tags, and Status chips. Tap once to select and tap again to unselect.\n• Added active-filter count feedback, Clear Filters, and dynamic filter options generated directly from the catalog.\n• Improved mobile spacing around the search and filter controls while preserving the existing recommendation and catalog layout.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Search, Filters & UI Polish", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Added a subtle white outer outline around the Changelog, Scripts, and Settings tabs while keeping the active tab indigo.\n• Rebuilt script search into a natural search experience across names, descriptions, categories, tags, and relevant metadata. Search results are relevance-ranked instead of relying on special query syntax.\n• Redesigned filtering into a Velox-style panel with toggleable Favorites, Categories, Tags, and Status chips. Tap once to select and tap again to unselect.\n• Added active-filter count feedback, Clear Filters, and dynamic filter options generated directly from the catalog.\n• Improved mobile spacing around the search and filter controls while preserving the existing recommendation and catalog layout.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Tightened catalog spacing so the Scripts view uses more of the available panel height and script cards use a more balanced image/content ratio.
+• Fixed sort/filter panel positioning and tab outlines so their borders are not clamped at screen or container edges.
+• Removed text-stroke/letter-outline artifacts from generated text elements where supported.
+• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
@@ -4124,15 +4162,17 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		card.BackgroundColor3 = Color3.fromRGB(31, 42, 55)
 	end
 	local pad = Instance.new("UIPadding", card)
-	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
-	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
+	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
+	pad.PaddingTop = UDim.new(0, 12); pad.PaddingBottom = UDim.new(0, 12)
 	local img = Instance.new("ImageLabel", card)
-	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
+	img.Size = UDim2.new(0, IsMobile and 72 or 82, 0, IsMobile and 72 or 82); img.BackgroundColor3 = Theme.BackgroundMain
 	img.BorderSizePixel = 0; img.Image = safeImageAssetId
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 	local content = Instance.new("Frame", card)
-	content.Size = UDim2.new(1, -76, 0, 0); content.Position = UDim2.new(0, 76, 0, 0)
+	local imageSize = IsMobile and 72 or 82
+	local imageGap = 10
+	content.Size = UDim2.new(1, -(imageSize + imageGap), 0, 0); content.Position = UDim2.new(0, imageSize + imageGap, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
 	local cLay = Instance.new("UIListLayout", content)
 	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 4)
@@ -4141,7 +4181,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	local metaWidth = IsMobile and 212 or 250
+	local metaWidth = IsMobile and 148 or 176
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -4230,7 +4270,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 112 or 128, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = FormatLastUpdatedLabel(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 1; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
@@ -4240,7 +4280,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if available <= 0 then return end
 		local target = metaWidth
 		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.46))) end
-		if tagType == "NONE" then target = math.max(125, target - 34) end
+		if tagType == "NONE" then target = math.max(IsMobile and 104 or 124, target - 22) end
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
