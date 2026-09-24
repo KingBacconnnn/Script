@@ -3201,6 +3201,36 @@ function BindCamera()
 		end))
 	end
 end
+
+-- Keep the main Velox Hub window inside the current viewport.
+-- This must be defined before the initial call below.
+function RefreshViewportLayout()
+	if isDestroying or not MainPanel or not MainPanel.Parent then return end
+	MainPanel.Size = GetPanelSize()
+
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local anchor = MainPanel.AnchorPoint or Vector2.new(0.5, 0.5)
+	local halfX = MainPanel.AbsoluteSize.X * anchor.X
+	local halfY = MainPanel.AbsoluteSize.Y * anchor.Y
+	local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
+	local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
+
+	local minX = halfX
+	local maxX = math.max(minX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
+	local minY = halfY
+	local maxY = math.max(minY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
+
+	currentX = math.clamp(currentX, minX, maxX)
+	currentY = math.clamp(currentY, minY, maxY)
+	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
+
+	-- Re-evaluate popup placement after the main panel changes size.
+	if PositionOpenPanels then
+		PositionOpenPanels()
+	end
+end
+
 BindCamera()
 
 RefreshViewportLayout()
