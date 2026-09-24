@@ -1,8 +1,8 @@
 GlobalEnv = _G
 if type(getgenv) == "function" then
-	ok, env = pcall(getgenv)
-	if ok and type(env) == "table" then
-		GlobalEnv = env
+	local getGenOk, executorEnv = pcall(getgenv)
+	if getGenOk and type(executorEnv) == "table" then
+		GlobalEnv = executorEnv
 	end
 end
 function _VH_GenerateRandomString(length)
@@ -185,7 +185,7 @@ DisableAntiAFK = nil
 function _VH_CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
-		c = {}
+		local c = {}
 		if obj:IsA("GuiObject") then
 			c.BackgroundTransparency = obj.BackgroundTransparency
 			c.Size = obj.Size
@@ -807,7 +807,7 @@ function _VH_GetRecommendationContext(entries)
 end
 function GetOrCreateCardStroke(card)
 	if not card or not card:IsA("GuiObject") then return nil end
-	stroke = card:FindFirstChild("TagTypeStroke")
+	local stroke = card:FindFirstChild("TagTypeStroke")
 	if stroke and stroke:IsA("UIStroke") then return stroke end
 	if stroke then pcall(function() stroke:Destroy() end) end
 	stroke = Instance.new("UIStroke")
@@ -819,14 +819,14 @@ function ApplyTagBorder(card, tagType, stroke)
 	if not card or not card.Parent then return end
 	stroke = stroke or GetOrCreateCardStroke(card)
 	if not stroke or not stroke.Parent then return end
-	normalized = NormalizeTagType(tagType)
-	config = TagTypeConfig[normalized] or TagTypeConfig.NONE
+	local normalized = NormalizeTagType(tagType)
+	local config = TagTypeConfig[normalized] or TagTypeConfig.NONE
 	stroke.Color = config.StrokeColor
 	stroke.Transparency = 0
 	stroke.Enabled = true
 end
 function GetSafeTimestamp(value)
-	timestamp = tonumber(value)
+	local timestamp = tonumber(value)
 	if type(timestamp) ~= "number" or timestamp ~= timestamp then return 0 end
 	return timestamp
 end
@@ -1062,7 +1062,10 @@ _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 				targetY = math.max(halfY, math.min(targetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
 				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
 			end
-			if RefreshViewportLayout then RefreshViewportLayout() end
+			if MainPanel and MainPanel.Parent then
+				local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+				_VH_ClampGuiToViewport(MainPanel, viewport)
+			end
 		end))
 	end
 end))
@@ -2494,7 +2497,6 @@ FilterBtn.ZIndex = 51; FilterBtn.AutoButtonColor = false
 Instance.new("UICorner", FilterBtn).CornerRadius = UDim.new(0, 8)
 FilterBtnStroke = Instance.new("UIStroke", FilterBtn); FilterBtnStroke.Color = Theme.Stroke; FilterBtnStroke.Thickness = 1
 
--- Compact funnel icon built from simple frames so the control stays sharp on every device.
 FilterIcon = Instance.new("Frame", FilterBtn)
 FilterIcon.Name = "FilterIcon"
 FilterIcon.Size = UDim2.new(0, 16, 0, 16); FilterIcon.Position = UDim2.new(0.5, -8, 0.5, -8)
@@ -3171,68 +3173,46 @@ function PositionOpenPanels()
 	end
 end
 
+function _VH_ClampGuiToViewport(gui, viewport)
+	if not gui or not gui.Parent then return end
+	local size = gui.AbsoluteSize
+	local anchor = gui.AnchorPoint or Vector2.new(0.5, 0.5)
+	local halfX = size.X * anchor.X
+	local halfY = size.Y * anchor.Y
+	local currentX = gui.Position.X.Scale * viewport.X + gui.Position.X.Offset
+	local currentY = gui.Position.Y.Scale * viewport.Y + gui.Position.Y.Offset
+	local minX = halfX
+	local maxX = math.max(minX, viewport.X - (size.X - halfX))
+	local minY = halfY
+	local maxY = math.max(minY, viewport.Y - (size.Y - halfY))
+	gui.Position = UDim2.new(0, math.clamp(currentX, minX, maxX), 0, math.clamp(currentY, minY, maxY))
+end
+
+function RefreshViewportLayout()
+	if isDestroying or not MainPanel or not MainPanel.Parent then return end
+	MainPanel.Size = GetPanelSize()
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	_VH_ClampGuiToViewport(MainPanel, viewport)
+	if PositionOpenPanels then PositionOpenPanels() end
+end
+
 viewportConn = nil
 function BindCamera()
 	if viewportConn then _VH_UnregConn(viewportConn); viewportConn = nil end
 	local cam = workspace.CurrentCamera
-	if cam then
-		viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			PositionOpenPanels()
-			local viewport = cam.ViewportSize
-			if MainPanel and MainPanel.Parent then
-				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-				local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-				local currentOffsetX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-				local currentOffsetY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-				local targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
-				local targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
-				MainPanel.Position = UDim2.new(0, targetX, 0, targetY)
-			end
-			if FloatingBtn and FloatingBtn.Parent then
-				local halfX = FloatingBtn.AbsoluteSize.X * FloatingBtn.AnchorPoint.X
-				local halfY = FloatingBtn.AbsoluteSize.Y * FloatingBtn.AnchorPoint.Y
-				local currentOffsetX = FloatingBtn.Position.X.Scale * viewport.X + FloatingBtn.Position.X.Offset
-				local currentOffsetY = FloatingBtn.Position.Y.Scale * viewport.Y + FloatingBtn.Position.Y.Offset
-				local targetX = math.max(halfX, math.min(currentOffsetX, math.max(halfX, viewport.X - (FloatingBtn.AbsoluteSize.X - halfX))))
-				local targetY = math.max(halfY, math.min(currentOffsetY, math.max(halfY, viewport.Y - (FloatingBtn.AbsoluteSize.Y - halfY))))
-				FloatingBtn.Position = UDim2.new(0, targetX, 0, targetY)
-			end
-			if RefreshViewportLayout then RefreshViewportLayout() end
-		end))
-	end
-end
-
--- Keep the main Velox Hub window inside the current viewport.
--- This must be defined before the initial call below.
-function RefreshViewportLayout()
-	if isDestroying or not MainPanel or not MainPanel.Parent then return end
-	MainPanel.Size = GetPanelSize()
-
-	local camera = workspace.CurrentCamera
-	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	local anchor = MainPanel.AnchorPoint or Vector2.new(0.5, 0.5)
-	local halfX = MainPanel.AbsoluteSize.X * anchor.X
-	local halfY = MainPanel.AbsoluteSize.Y * anchor.Y
-	local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-	local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-
-	local minX = halfX
-	local maxX = math.max(minX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))
-	local minY = halfY
-	local maxY = math.max(minY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))
-
-	currentX = math.clamp(currentX, minX, maxX)
-	currentY = math.clamp(currentY, minY, maxY)
-	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
-
-	-- Re-evaluate popup placement after the main panel changes size.
-	if PositionOpenPanels then
+	if not cam then return end
+	viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		if isDestroying then return end
+		local viewport = cam.ViewportSize
+		_VH_ClampGuiToViewport(MainPanel, viewport)
+		_VH_ClampGuiToViewport(FloatingBtn, viewport)
+		RefreshViewportLayout()
 		PositionOpenPanels()
-	end
+	end))
 end
 
 BindCamera()
-
 RefreshViewportLayout()
 filterVersion = 0
 SortMode = "Most Relevant"
@@ -3793,7 +3773,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Final Cleanup & Stability", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Preserved the left-aligned Scripts section and widened the hub slightly to reduce content collisions.\n• Improved Recommended for You text wrapping so titles and status labels display without unwanted truncation.\n• Removed unnecessary outer UI outlines while keeping the compact Credits section clean and separated by a subtle divider.\n• Cleaned stale UI leftovers and redundant child-renaming work from the final build.\n• Kept the established HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI compatibility fallbacks because they were already broadly compatible.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked normal-word search to rank relevant results across script names, game names, descriptions, categories, and tags without special query syntax.\n• Rebuilt Filters as a compact mobile-friendly panel with multi-select Categories, Tags, Status, and Favorites plus a Clear action and indigo active states.\n• Rebuilt Sort Scripts as a modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added viewport-safe positioning for the sort and filter panels and clamped the main and floating controls so outlines and panels stay on-screen.\n• Fixed the viewport refresh callback ordering that could produce the nil-function error shown in the console.\n• Removed stale v2.0.5 source comments and redundant temporary helper globals while preserving required executor fallbacks.\n• Preserved the existing GUI-parent, protected-GUI, HTTP request, file I/O, compiler, and cloneref compatibility fallbacks because they were already broad and working.\n• Kept Favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and the existing Velox Hub layout intact.\n• Reduced unnecessary shared scratch state and avoided adding a new local-heavy execution path that could increase compiler register pressure.\n• Kept the visible version label at v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
@@ -4471,12 +4451,12 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	recommendBadge.LayoutOrder = 1
 
 	if tagType ~= "NONE" then
-		tag = Instance.new("Frame", badgeRow)
+		local tag = Instance.new("Frame", badgeRow)
 		tag.AutomaticSize = Enum.AutomaticSize.X; tag.Size = UDim2.new(0, 0, 0, 20)
 		Instance.new("UICorner", tag).CornerRadius = UDim.new(0, 6)
-		tPad = Instance.new("UIPadding", tag)
+		local tPad = Instance.new("UIPadding", tag)
 		tPad.PaddingLeft = UDim.new(0, 7); tPad.PaddingRight = UDim.new(0, 7)
-		tText = Instance.new("TextLabel", tag)
+		local tText = Instance.new("TextLabel", tag)
 		tText.AutomaticSize = Enum.AutomaticSize.X; tText.Size = UDim2.new(0, 0, 1, 0)
 		tText.BackgroundTransparency = 1; tText.Text = tagType
 		tText.TextColor3 = Color3.fromRGB(255, 255, 255); tText.Font = Enum.Font.GothamBold; tText.TextSize = IsMobile and 8 or 9
@@ -5442,8 +5422,8 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scrip
 			return
 		end
 		AnimateRefreshButton(btn, true)
-		started = false
-		ok = pcall(function()
+		local started = false
+		local ok = pcall(function()
 			started = PendingTasks.__LoadCatalog(true) == true
 		end)
 		if not ok or (not started and not dbRefreshing) then
