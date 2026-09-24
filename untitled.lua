@@ -2491,15 +2491,19 @@ FilterCountBadge.Font = Enum.Font.GothamBold; FilterCountBadge.TextSize = 8; Fil
 Instance.new("UICorner", FilterCountBadge).CornerRadius = UDim.new(1, 0)
 SortDropdownBtn = Instance.new("TextButton", SearchRow)
 SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
-SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = ""
+SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); SortDropdownBtn.Text = ""
 SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true; SortDropdownBtn.AutoButtonColor = false
 SortIcon = Instance.new("ImageLabel", SortDropdownBtn)
 SortIcon.Name = "SortIcon"
 SortIcon.Size = UDim2.new(0, 15, 0, 15); SortIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
 SortIcon.BackgroundTransparency = 1; SortIcon.Image = VeloxIcons.Sort; SortIcon.ImageColor3 = Theme.TextSecondary; SortIcon.ScaleType = Enum.ScaleType.Fit
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 8)
-SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke
-ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
+SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn)
+SortBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+SortBtnStroke.Color = Color3.fromRGB(255, 255, 255)
+SortBtnStroke.Transparency = 0.55
+SortBtnStroke.Thickness = 1
+ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(30, 41, 59), Color3.fromRGB(45, 57, 83), Color3.fromRGB(24, 33, 50), SortBtnStroke, Color3.fromRGB(255, 255, 255), Theme.Accent)
 
 FilterPanel = Instance.new("Frame", ScreenGui)
 FilterPanel.Name = "VeloxFilterPanel"
@@ -2512,7 +2516,7 @@ FilterPanel.ClipsDescendants = true
 Instance.new("UICorner", FilterPanel).CornerRadius = UDim.new(0, 12)
 FilterPanelStroke = Instance.new("UIStroke", FilterPanel)
 FilterPanelStroke.Color = Color3.fromRGB(255, 255, 255)
-FilterPanelStroke.Transparency = 0.78
+FilterPanelStroke.Transparency = 0.50
 FilterPanelStroke.Thickness = 1
 FilterPanelGradient = Instance.new("UIGradient", FilterPanel)
 FilterPanelGradient.Rotation = 90
@@ -2733,13 +2737,79 @@ ApplyInteractiveAnimations(RecommendationSeeMoreButton, RecommendationSeeMoreBut
 ApplyInteractiveAnimations(RecommendationPrevButton, RecommendationPrevButton.BackgroundColor3, Color3.fromRGB(40, 52, 84), Color3.fromRGB(17, 24, 42), RecommendationPrevStroke, RecommendationPrevStroke.Color, Theme.Accent)
 ApplyInteractiveAnimations(RecommendationNextButton, RecommendationNextButton.BackgroundColor3, Color3.fromRGB(40, 52, 84), Color3.fromRGB(17, 24, 42), RecommendationNextStroke, RecommendationNextStroke.Color, Theme.Accent)
 
-DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
-DropdownContainer.Size = UDim2.new(0, 190, 0, 210); DropdownContainer.BackgroundColor3 = Theme.BackgroundMain
-DropdownContainer.Visible = false; DropdownContainer.ZIndex = 1000; DropdownContainer.BorderSizePixel = 0
-DropdownContainer.ScrollBarThickness = 2; DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", DropdownContainer).Color = Theme.Accent
-DDLayout = Instance.new("UIListLayout", DropdownContainer); DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
+DropdownContainer = Instance.new("Frame", ScreenGui)
+DropdownContainer.Name = "VeloxSortPanel"
+DropdownContainer.Size = UDim2.new(0, IsMobile and 226 or 252, 0, IsMobile and 282 or 306)
+DropdownContainer.BackgroundColor3 = Color3.fromRGB(11, 17, 32)
+DropdownContainer.Visible = false
+DropdownContainer.ZIndex = 1100
+DropdownContainer.BorderSizePixel = 0
+DropdownContainer.ClipsDescendants = true
+Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 12)
+
+SortPanelStroke = Instance.new("UIStroke", DropdownContainer)
+SortPanelStroke.Name = "SortPanelStroke"
+SortPanelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+SortPanelStroke.Color = Color3.fromRGB(255, 255, 255)
+SortPanelStroke.Transparency = 0.42
+SortPanelStroke.Thickness = 1
+
+SortPanelGradient = Instance.new("UIGradient", DropdownContainer)
+SortPanelGradient.Rotation = 90
+SortPanelGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 33, 59)),
+	ColorSequenceKeypoint.new(0.48, Color3.fromRGB(14, 21, 39)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 14, 26))
+})
+
+SortPanelHeader = Instance.new("TextLabel", DropdownContainer)
+SortPanelHeader.Size = UDim2.new(1, -28, 0, 20)
+SortPanelHeader.Position = UDim2.new(0, 14, 0, 12)
+SortPanelHeader.BackgroundTransparency = 1
+SortPanelHeader.Text = "Sort Scripts"
+SortPanelHeader.TextColor3 = Theme.TextPrimary
+SortPanelHeader.Font = Enum.Font.GothamBold
+SortPanelHeader.TextSize = 14
+SortPanelHeader.TextXAlignment = Enum.TextXAlignment.Left
+SortPanelHeader.ZIndex = 1101
+
+SortPanelSub = Instance.new("TextLabel", DropdownContainer)
+SortPanelSub.Size = UDim2.new(1, -28, 0, 16)
+SortPanelSub.Position = UDim2.new(0, 14, 0, 32)
+SortPanelSub.BackgroundTransparency = 1
+SortPanelSub.Text = "Choose how your scripts are arranged"
+SortPanelSub.TextColor3 = Theme.TextSecondary
+SortPanelSub.Font = Enum.Font.Gotham
+SortPanelSub.TextSize = 9
+SortPanelSub.TextXAlignment = Enum.TextXAlignment.Left
+SortPanelSub.ZIndex = 1101
+
+SortPanelDivider = Instance.new("Frame", DropdownContainer)
+SortPanelDivider.Size = UDim2.new(1, -28, 0, 1)
+SortPanelDivider.Position = UDim2.new(0, 14, 0, 57)
+SortPanelDivider.BackgroundColor3 = Color3.fromRGB(60, 72, 102)
+SortPanelDivider.BackgroundTransparency = 0.45
+SortPanelDivider.BorderSizePixel = 0
+SortPanelDivider.ZIndex = 1101
+
+SortOptionsFrame = Instance.new("ScrollingFrame", DropdownContainer)
+SortOptionsFrame.Name = "Options"
+SortOptionsFrame.Size = UDim2.new(1, -16, 1, -70)
+SortOptionsFrame.Position = UDim2.new(0, 8, 0, 66)
+SortOptionsFrame.BackgroundTransparency = 1
+SortOptionsFrame.BorderSizePixel = 0
+SortOptionsFrame.ScrollBarThickness = 2
+SortOptionsFrame.ScrollBarImageColor3 = Theme.Stroke
+SortOptionsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+SortOptionsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+SortOptionsFrame.ZIndex = 1101
+
+DDLayout = Instance.new("UIListLayout", SortOptionsFrame)
+DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
+DDLayout.Padding = UDim.new(0, 5)
+local sortBottomPad = Instance.new("UIPadding", SortOptionsFrame)
+sortBottomPad.PaddingBottom = UDim.new(0, 6)
+
 viewportConn = nil
 function BindCamera()
 	if viewportConn then _VH_UnregConn(viewportConn); viewportConn = nil end
@@ -3102,22 +3172,90 @@ _VH_RegConn(FilterBtn.Activated:Connect(function()
 		DropdownContainer.Visible = false
 	end
 end))
-for _, opt in ipairs(SortOptions) do
-	local btn = Instance.new("TextButton", DropdownContainer)
-	btn.Size = UDim2.new(1, 0, 0, 28); btn.BackgroundTransparency = 1
-	btn.Text = "  " .. opt; btn.TextXAlignment = Enum.TextXAlignment.Left
-	btn.TextColor3 = (opt == SortMode) and Theme.Accent or Theme.TextPrimary
-	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 11; btn.ZIndex = 1001
-	_VH_RegConn(btn.Activated:Connect(function()
-		SortMode = opt
-		DropdownContainer.Visible = false
-		for _, child in ipairs(DropdownContainer:GetChildren()) do
-			if child:IsA("TextButton") then child.TextColor3 = Theme.TextPrimary end
+SortOptionButtons = {}
+function _VH_BuildSortOptions()
+	for _, child in ipairs(SortOptionsFrame:GetChildren()) do
+		if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+			child:Destroy()
 		end
-		btn.TextColor3 = Theme.Accent
-		UpdateFilter()
-	end))
+	end
+	table.clear(SortOptionButtons)
+
+	for order, opt in ipairs(SortOptions) do
+		local selected = opt == SortMode
+		local row = Instance.new("TextButton", SortOptionsFrame)
+		row.Name = "SortOption_" .. tostring(order)
+		row.Size = UDim2.new(1, -4, 0, IsMobile and 34 or 36)
+		row.BackgroundColor3 = selected and Color3.fromRGB(46, 43, 105) or Color3.fromRGB(20, 29, 49)
+		row.BackgroundTransparency = selected and 0.05 or 0.18
+		row.Text = ""
+		row.AutoButtonColor = false
+		row.ZIndex = 1102
+		row.LayoutOrder = order
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+		local rowStroke = Instance.new("UIStroke", row)
+		rowStroke.Name = "SortOptionStroke"
+		rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		rowStroke.Color = selected and Color3.fromRGB(151, 160, 255) or Color3.fromRGB(66, 79, 112)
+		rowStroke.Transparency = selected and 0.18 or 0.55
+		rowStroke.Thickness = 1
+
+		local marker = Instance.new("Frame", row)
+		marker.Name = "SelectionMarker"
+		marker.Size = UDim2.new(0, 3, 0, 16)
+		marker.Position = UDim2.new(0, 7, 0.5, -8)
+		marker.BackgroundColor3 = Theme.Accent
+		marker.BackgroundTransparency = selected and 0 or 1
+		marker.BorderSizePixel = 0
+		marker.ZIndex = 1103
+		Instance.new("UICorner", marker).CornerRadius = UDim.new(1, 0)
+
+		local textLabel = Instance.new("TextLabel", row)
+		textLabel.Size = UDim2.new(1, -52, 1, 0)
+		textLabel.Position = UDim2.new(0, 18, 0, 0)
+		textLabel.BackgroundTransparency = 1
+		textLabel.Text = opt
+		textLabel.TextColor3 = selected and Theme.TextPrimary or Theme.TextSecondary
+		textLabel.Font = selected and Enum.Font.GothamBold or Enum.Font.GothamMedium
+		textLabel.TextSize = IsMobile and 10 or 11
+		textLabel.TextXAlignment = Enum.TextXAlignment.Left
+		textLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		textLabel.ZIndex = 1103
+
+		local check = Instance.new("TextLabel", row)
+		check.Size = UDim2.new(0, 20, 1, 0)
+		check.Position = UDim2.new(1, -28, 0, 0)
+		check.BackgroundTransparency = 1
+		check.Text = selected and "✓" or ""
+		check.TextColor3 = Theme.Accent
+		check.Font = Enum.Font.GothamBold
+		check.TextSize = 13
+		check.TextXAlignment = Enum.TextXAlignment.Center
+		check.ZIndex = 1103
+
+		ApplyInteractiveAnimations(
+			row,
+			row.BackgroundColor3,
+			Color3.fromRGB(37, 48, 76),
+			Color3.fromRGB(57, 55, 126),
+			rowStroke,
+			rowStroke.Color,
+			Color3.fromRGB(151, 160, 255)
+		)
+
+		_VH_RegConn(row.Activated:Connect(function()
+			if isDestroying then return end
+			SortMode = opt
+			DropdownContainer.Visible = false
+			_VH_BuildSortOptions()
+			UpdateFilter()
+		end))
+
+		SortOptionButtons[opt] = row
+	end
 end
+_VH_BuildSortOptions()
 _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
 	if DropdownContainer.Visible then
 		DropdownContainer.Visible = false
@@ -3183,9 +3321,10 @@ function CreateTab(name, index)
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
 	local tabOutline = Instance.new("UIStroke", btn)
 	tabOutline.Name = "TabOuterOutline"
+	tabOutline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	tabOutline.Color = Color3.fromRGB(255, 255, 255)
-	tabOutline.Transparency = (name == currentTab) and 0.32 or 0.68
-	tabOutline.Thickness = 1
+	tabOutline.Transparency = (name == currentTab) and 0.10 or 0.40
+	tabOutline.Thickness = 1.2
 
 	local icon = Instance.new("ImageLabel", btn)
 	icon.Name = "TabIcon"
@@ -3246,7 +3385,11 @@ function CreateTab(name, index)
 			tBtn.BackgroundColor3 = active and Color3.fromRGB(43, 51, 85) or Theme.BackgroundSecondary
 			tBtn.BackgroundTransparency = active and 0.08 or 0.68
 			local outline = tBtn:FindFirstChild("TabOuterOutline")
-			if outline and outline:IsA("UIStroke") then outline.Transparency = active and 0.30 or 0.68 end
+			if outline and outline:IsA("UIStroke") then
+				outline.Color = Color3.fromRGB(255, 255, 255)
+				outline.Transparency = active and 0.10 or 0.40
+				outline.Thickness = 1.2
+			end
 			local childIcon = tBtn:FindFirstChild("TabIcon")
 			local childLabel = tBtn:FindFirstChild("TabLabel")
 			if childIcon and childIcon:IsA("ImageLabel") then childIcon.ImageColor3 = activeColor end
