@@ -23,7 +23,7 @@ function _VH_GenerateUniqueGuiName(parent, length)
 	until not parent or not parent:FindFirstChild(name)
 	return name
 end
-_G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
+_G_Identifier = "VeloxHub_Core_Cleanup_V3_7"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
@@ -609,6 +609,70 @@ function FetchWithRetry(url, retries, cacheBust)
 		if i < retries then task.wait(math.pow(2, i - 1)) end
 	end
 	return nil, lastStatus, lastError
+end
+function _VH_NormalizeScriptSource(source)
+	if type(source) ~= "string" then return nil, "source is not a string" end
+	local normalized = source
+	local bom = string.char(239, 187, 191)
+	normalized = string.gsub(normalized, "^" .. bom, "")
+	normalized = string.gsub(normalized, bom, "")
+	normalized = string.gsub(normalized, string.char(0), "")
+	normalized = string.gsub(normalized, "\r\n", "\n")
+	normalized = string.gsub(normalized, "\r", "\n")
+	-- Some mirrors accidentally wrap raw Lua in Markdown fences. Strip only a complete outer fence.
+	local fenced = string.match(normalized, "^%s*```[%w_%-]*\n(.*)\n```%s*$")
+	if fenced then normalized = fenced end
+	return normalized, nil
+end
+
+function _VH_IsClearlyInvalidScriptSource(source)
+	if type(source) ~= "string" then return true, "source is not text" end
+	local sample = string.lower(string.sub(source, 1, math.min(#source, 1200)))
+	if string.find(sample, "<!doctype html", 1, true) or string.find(sample, "<html", 1, true) or string.find(sample, "<head", 1, true) then
+		return true, "download returned HTML instead of Lua source"
+	end
+	if string.match(sample, "^%s*404:%s*not found") or string.match(sample, "^%s*repository not found") then
+		return true, "download returned a not-found response"
+	end
+	return false, nil
+end
+
+function _VH_CompileSource(source, scriptName)
+	local normalized, normalizeErr = _VH_NormalizeScriptSource(source)
+	if not normalized then return false, nil, normalizeErr or "could not normalize source" end
+	local invalid, invalidErr = _VH_IsClearlyInvalidScriptSource(normalized)
+	if invalid then return false, nil, invalidErr end
+	local ok, chunk, err = pcall(CompileFunction, normalized, "=" .. tostring(scriptName or "VeloxScript"))
+	if ok and type(chunk) == "function" then
+		return true, chunk, nil, normalized
+	end
+	return false, nil, tostring(err or chunk or "compiler rejected source"), normalized
+end
+
+function _VH_FormatCompileError(detail)
+	local message = tostring(detail or "unknown compiler error")
+	message = string.gsub(message, "\r", " ")
+	message = string.gsub(message, "\n", " ")
+	message = string.gsub(message, "%s+", " ")
+	-- Keep notifications readable on mobile while preserving the most useful part of the compiler message.
+	if #message > 180 then message = string.sub(message, 1, 177) .. "..." end
+	return message
+end
+
+function _VH_FetchScriptSource(url, scriptName)
+	local raw, status, fetchErr = FetchWithRetry(url, 2)
+	if not raw then return nil, fetchErr or (status and ("HTTP " .. tostring(status)) or "request failed") end
+	local compiled, chunk, compileErr, normalized = _VH_CompileSource(raw, scriptName)
+	if compiled then return normalized, chunk, nil end
+	-- Retry once with a cache-busted request. This handles stale/truncated CDN responses without altering valid source.
+	local freshUrl = AddCacheBuster(url)
+	local freshRaw = FetchWithRetry(freshUrl, 1, false)
+	if type(freshRaw) == "string" and freshRaw ~= raw then
+		local freshCompiled, freshChunk, freshErr, freshNormalized = _VH_CompileSource(freshRaw, scriptName)
+		if freshCompiled then return freshNormalized, freshChunk, nil end
+		compileErr = freshErr or compileErr
+	end
+	return nil, nil, _VH_FormatCompileError(compileErr)
 end
 TagTypeConfig = {
 	UPDATED = {
@@ -4106,24 +4170,25 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		return false, "empty script source"
 	end
 
-	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
-	if ok and type(chunk) == "function" then
+	local compiled, chunk, compileErr = _VH_CompileSource(code, scriptName)
+	if compiled and type(chunk) == "function" then
 		_VH_TrackTask(function()
-			local success = pcall(chunk)
+			local runOk, runErr = pcall(chunk)
 			if not isDestroying then
-				if success then
+				if runOk then
 					if not suppressSuccessNotification then
 						ShowNotification("Successfully executed [" .. tostring(scriptName) .. "]!", "Success")
 					end
 				else
-					ShowNotification("Execution failed [" .. tostring(scriptName) .. "]. Check F9.", "Error")
+					local runtimeMessage = _VH_FormatCompileError(runErr or "unknown runtime error")
+					ShowNotification("Execution failed [" .. tostring(scriptName) .. "]: " .. runtimeMessage, "Error")
 				end
 			end
 		end)
 		return true, "Script started successfully"
 	end
 
-	local detail = tostring(compileErr or chunk or "unknown compiler error")
+	local detail = _VH_FormatCompileError(compileErr)
 	local normalized = string.lower(detail)
 	if string.find(normalized, "out of local", 1, true)
 		or string.find(normalized, "registers", 1, true)
@@ -4474,12 +4539,11 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			ShowNotification("Starting [" .. exactName .. "]...", "Execution")
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
+				local url = type(data.RawUrl) == "string" and data.RawUrl or ""
+				local raw, precompiledChunk, fetchCompileErr = _VH_FetchScriptSource(url, exactName)
 				if isDestroying then return end
 				if not raw then
-					ShowNotification("Could not download [" .. exactName .. "]" .. (status and " (" .. tostring(status) .. ")" or "") .. ".", "Error")
-				elseif #string.gsub(raw, "%s+", "") == 0 then
-					ShowNotification("Empty script source for [" .. exactName .. "].", "Error")
+					ShowNotification("Could not start [" .. exactName .. "]: " .. tostring(fetchCompileErr or "invalid script source"), "Error")
 				else
 					ExecuteSandboxed(raw, exactName)
 				end
@@ -4780,12 +4844,13 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 						startedList, failList = {}, {}
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
+							local scrRaw, _, fetchCompileErr = _VH_FetchScriptSource(scriptData.RawUrl, scriptData.Name)
 							if not _VH_IsTaskCurrent(generation) then return end
-							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
+							if scrRaw then
 								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
+								if fetchCompileErr then ShowNotification("Auto-execute skipped [" .. tostring(scriptData.Name) .. "]: " .. tostring(fetchCompileErr), "Warning") end
 							end
 							task.wait(0.3)
 						end
