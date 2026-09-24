@@ -3095,7 +3095,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Final UI Polish & Cleanup", "• Moved creator credits into a compact left-sidebar section with Ovei, Subscribe, and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Standardized the supplied Roblox asset icons across tabs and Settings actions with border-free presentation.\n• Improved tab alignment, active-indicator positioning, and touch targets without changing the sidebar navigation concept.\n• Refined the Scripts layout and preserved its left-aligned placement.\n• Widened the hub where needed to reduce content collisions and kept responsive sizing for smaller screens.\n• Removed unnecessary outer UI outlines and kept the compact Credits area visually clean.\n• Preserved the existing HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI compatibility fallbacks without replacing already-working paths.\n• Removed stale icon mappings left behind by the removed Credits tab and kept the final source free of comment-only lines.\n• Kept the existing recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems intact.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Final Cleanup & Stability", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Preserved the left-aligned Scripts section and widened the hub slightly to reduce content collisions.\n• Improved Recommended for You text wrapping so titles and status labels display without unwanted truncation.\n• Removed unnecessary outer UI outlines while keeping the compact Credits section clean and separated by a subtle divider.\n• Cleaned stale UI leftovers and redundant child-renaming work from the final build.\n• Kept the established HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI compatibility fallbacks because they were already broadly compatible.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
@@ -4560,13 +4560,6 @@ function AnimateRefreshButton(button, state)
 	end
 end
 function BuildSettings()
-if ScreenGui and ScreenGui.Parent then
-	for _, child in ipairs(ScreenGui:GetChildren()) do
-		pcall(function()
-			child.Name = _VH_GenerateUniqueGuiName(ScreenGui, 14)
-		end)
-	end
-end
 prefGroup = CreateSettingsGroup("User Preferences", SettingsView, 1)
 _, kbRightContainer = CreateSettingRowInGroup(prefGroup, "Toggle UI", "Keybind to show or hide hub.", VeloxIcons.ToggleUI, 1)
 KeybindButton = Instance.new("TextButton", kbRightContainer)
@@ -4665,7 +4658,7 @@ DisableAntiAFK = function()
 		AntiAFKConnection = nil
 	end
 	for i = #AntiAFKDisabledConnections, 1, -1 do
-		connection = AntiAFKDisabledConnections[i]
+		local connection = AntiAFKDisabledConnections[i]
 		if connection and connection.Enable then pcall(function() connection:Enable() end) end
 		AntiAFKDisabledConnections[i] = nil
 	end
