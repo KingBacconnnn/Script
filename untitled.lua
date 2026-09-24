@@ -23,7 +23,7 @@ function _VH_GenerateUniqueGuiName(parent, length)
 	until not parent or not parent:FindFirstChild(name)
 	return name
 end
-_G_Identifier = "VeloxHub_Core_Cleanup_V3_7"
+_G_Identifier = "VeloxHub_Core_Cleanup_V3_6"
 if GlobalEnv[_G_Identifier] then
 	pcall(function() GlobalEnv[_G_Identifier]() end)
 end
@@ -160,7 +160,6 @@ FavoriteRecommendationRefreshDelay = 0.35
 FavoriteRecommendationRefreshGeneration = 0
 AutoExecuteRanThisSession = false
 InteractiveElements = setmetatable({}, { __mode = "k" })
-FilterConnections = {}
 isDestroying = false
 isMinimized = false
 isTransitioning = false
@@ -171,6 +170,7 @@ activeMainDragInput, activeFloatDragInput = nil, nil
 ToggleKeybindConnection = nil
 KeybindCaptureConnection = nil
 DropdownContainer = nil
+FilterPanel = nil
 ToastContainer = nil
 ConfirmOverlay = nil
 ScriptDetailsOverlay = nil
@@ -267,6 +267,10 @@ function _VH_CleanUpMemory()
 		end
 	end
 	table.clear(VeloxConnections)
+	for _, connection in ipairs(FilterPanelConnections or {}) do
+		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
+	end
+	table.clear(FilterPanelConnections or {})
 	for _, tweenData in pairs(ActiveTweens) do
 		if type(tweenData) == "table" then
 			if tweenData.Connection then pcall(function() tweenData.Connection:Disconnect() end) end
@@ -278,12 +282,8 @@ function _VH_CleanUpMemory()
 			end
 		end
 	end
-	for i = #FilterConnections, 1, -1 do
-		local connection = FilterConnections[i]
-		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
-		FilterConnections[i] = nil
-	end
 	if DropdownContainer and DropdownContainer.Parent then pcall(function() DropdownContainer:Destroy() end) end
+	if FilterPanel and FilterPanel.Parent then pcall(function() FilterPanel:Destroy() end) end
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if ScriptDetailsOverlay and ScriptDetailsOverlay.Parent then pcall(function() ScriptDetailsOverlay:Destroy() end) end
@@ -609,70 +609,6 @@ function FetchWithRetry(url, retries, cacheBust)
 		if i < retries then task.wait(math.pow(2, i - 1)) end
 	end
 	return nil, lastStatus, lastError
-end
-function _VH_NormalizeScriptSource(source)
-	if type(source) ~= "string" then return nil, "source is not a string" end
-	local normalized = source
-	local bom = string.char(239, 187, 191)
-	normalized = string.gsub(normalized, "^" .. bom, "")
-	normalized = string.gsub(normalized, bom, "")
-	normalized = string.gsub(normalized, string.char(0), "")
-	normalized = string.gsub(normalized, "\r\n", "\n")
-	normalized = string.gsub(normalized, "\r", "\n")
-	-- Some mirrors accidentally wrap raw Lua in Markdown fences. Strip only a complete outer fence.
-	local fenced = string.match(normalized, "^%s*```[%w_%-]*\n(.*)\n```%s*$")
-	if fenced then normalized = fenced end
-	return normalized, nil
-end
-
-function _VH_IsClearlyInvalidScriptSource(source)
-	if type(source) ~= "string" then return true, "source is not text" end
-	local sample = string.lower(string.sub(source, 1, math.min(#source, 1200)))
-	if string.find(sample, "<!doctype html", 1, true) or string.find(sample, "<html", 1, true) or string.find(sample, "<head", 1, true) then
-		return true, "download returned HTML instead of Lua source"
-	end
-	if string.match(sample, "^%s*404:%s*not found") or string.match(sample, "^%s*repository not found") then
-		return true, "download returned a not-found response"
-	end
-	return false, nil
-end
-
-function _VH_CompileSource(source, scriptName)
-	local normalized, normalizeErr = _VH_NormalizeScriptSource(source)
-	if not normalized then return false, nil, normalizeErr or "could not normalize source" end
-	local invalid, invalidErr = _VH_IsClearlyInvalidScriptSource(normalized)
-	if invalid then return false, nil, invalidErr end
-	local ok, chunk, err = pcall(CompileFunction, normalized, "=" .. tostring(scriptName or "VeloxScript"))
-	if ok and type(chunk) == "function" then
-		return true, chunk, nil, normalized
-	end
-	return false, nil, tostring(err or chunk or "compiler rejected source"), normalized
-end
-
-function _VH_FormatCompileError(detail)
-	local message = tostring(detail or "unknown compiler error")
-	message = string.gsub(message, "\r", " ")
-	message = string.gsub(message, "\n", " ")
-	message = string.gsub(message, "%s+", " ")
-	-- Keep notifications readable on mobile while preserving the most useful part of the compiler message.
-	if #message > 180 then message = string.sub(message, 1, 177) .. "..." end
-	return message
-end
-
-function _VH_FetchScriptSource(url, scriptName)
-	local raw, status, fetchErr = FetchWithRetry(url, 2)
-	if not raw then return nil, fetchErr or (status and ("HTTP " .. tostring(status)) or "request failed") end
-	local compiled, chunk, compileErr, normalized = _VH_CompileSource(raw, scriptName)
-	if compiled then return normalized, chunk, nil end
-	-- Retry once with a cache-busted request. This handles stale/truncated CDN responses without altering valid source.
-	local freshUrl = AddCacheBuster(url)
-	local freshRaw = FetchWithRetry(freshUrl, 1, false)
-	if type(freshRaw) == "string" and freshRaw ~= raw then
-		local freshCompiled, freshChunk, freshErr, freshNormalized = _VH_CompileSource(freshRaw, scriptName)
-		if freshCompiled then return freshNormalized, freshChunk, nil end
-		compileErr = freshErr or compileErr
-	end
-	return nil, nil, _VH_FormatCompileError(compileErr)
 end
 TagTypeConfig = {
 	UPDATED = {
@@ -1010,29 +946,8 @@ function _VH_ApplyTextLayoutGuard(obj)
 	obj:SetAttribute("VeloxTextConstraintBound", true)
 end
 function _VH_DisableTextOutline(object)
-	if not object then return end
-	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+	if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
 		object.TextStrokeTransparency = 1
-		pcall(function() object.TextStrokeColor3 = object.TextColor3 end)
-		for _, child in ipairs(object:GetChildren()) do
-			if child:IsA("UIStroke") and child.Name ~= "VeloxKeepTextStroke" then
-				pcall(function() child:Destroy() end)
-			end
-		end
-	end
-end
-function _VH_ClearTextOutlines(root)
-	if not root then return end
-	_VH_DisableTextOutline(root)
-	for _, object in ipairs(root:GetDescendants()) do
-		_VH_DisableTextOutline(object)
-		if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
-			for _, child in ipairs(object:GetChildren()) do
-				if child:IsA("UIStroke") and child.Name ~= "VeloxKeepTextStroke" then
-					pcall(function() child:Destroy() end)
-				end
-			end
-		end
 	end
 end
 function _VH_ClearTextOutlines(root)
@@ -1043,12 +958,7 @@ function _VH_ClearTextOutlines(root)
 	end
 end
 _VH_ClearTextOutlines(ScreenGui)
-_VH_RegConn(ScreenGui.DescendantAdded:Connect(function(object)
-	_VH_DisableTextOutline(object)
-	if object and object.Parent and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
-		_VH_DisableTextOutline(object.Parent)
-	end
-end))
+_VH_RegConn(ScreenGui.DescendantAdded:Connect(_VH_DisableTextOutline))
 pcall(function() protectgui(ScreenGui) end)
 GlobalEnv[_G_Identifier] = function()
 	_VH_CleanUpMemory()
@@ -1274,6 +1184,9 @@ function ToggleUI()
 	isTransitioning = true
 	if DropdownContainer and DropdownContainer.Visible then
 		DropdownContainer.Visible = false
+	end
+	if FilterPanel and FilterPanel.Visible then
+		FilterPanel.Visible = false
 	end
 	if not isMinimized then
 		isMinimized = true
@@ -2493,7 +2406,7 @@ TabContainer.Size = UDim2.new(1, -20, 0, IsMobile and 180 or 212)
 TabContainer.Position = UDim2.new(0, 10, 0, IsMobile and 58 or 86)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Active = true
-TabContainer.ClipsDescendants = false
+TabContainer.ClipsDescendants = true
 TabContainer.ZIndex = 10
 SectionHeaderLabel = Instance.new("TextLabel", MainContent)
 SectionHeaderLabel.Size = UDim2.new(1, -28, 0, IsMobile and 18 or 22)
@@ -2515,7 +2428,7 @@ function CreateCanvas(name)
 	scroll.Visible = (name == currentTab)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.Active = true
 	local layout = Instance.new("UIListLayout", scroll)
-	layout.Padding = UDim.new(0, IsMobile and 8 or 10); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
 	local pad = Instance.new("UIPadding", scroll)
 	pad.PaddingRight = UDim.new(0, 4); pad.PaddingBottom = UDim.new(0, 16)
 	TabViews[name] = scroll
@@ -2525,37 +2438,44 @@ ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
-ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 142) or UDim2.new(0, 14, 0, 162)
-ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -150) or UDim2.new(1, -28, 1, -172)
+ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
+ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
 EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
+
 SearchRow = Instance.new("Frame", MainContent)
 SearchRow.AnchorPoint = Vector2.new(0, 0)
 SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 30 or 34); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 118)
 SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Active = false; SearchRow.ZIndex = 50
-filterBtnWidth = IsMobile and 30 or 34
-gap = 8
+
+filterBtnWidth = IsMobile and 38 or 42
+sortBtnWidth = IsMobile and 30 or 34
+gap = IsMobile and 6 or 8
+
 SearchContainer = Instance.new("Frame", SearchRow)
-SearchContainer.Size = UDim2.new(1, -(filterBtnWidth * 2 + gap * 2), 1, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+SearchContainer.Size = UDim2.new(1, -(filterBtnWidth + sortBtnWidth + gap * 2), 1, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(27, 37, 58)
 SearchContainer.ClipsDescendants = true; SearchContainer.ZIndex = 51
 Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 8)
 SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Theme.Stroke; SearchStroke.Thickness = 1
+
 SearchIcon = Instance.new("ImageLabel", SearchContainer)
 SearchIcon.Name = "SearchIcon"
 SearchIcon.Size = UDim2.new(0, 16, 0, 16); SearchIcon.Position = UDim2.new(0, 10, 0.5, -8)
 SearchIcon.BackgroundTransparency = 1; SearchIcon.Image = VeloxIcons.Search; SearchIcon.ImageColor3 = Theme.TextSecondary; SearchIcon.ScaleType = Enum.ScaleType.Fit
+
 SearchInput = Instance.new("TextBox", SearchContainer)
 SearchInput.Size = UDim2.new(1, -64, 1, 0); SearchInput.Position = UDim2.new(0, 34, 0, 0); SearchInput.BackgroundTransparency = 1
 SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts, games, tags..."
-SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Theme.TextPrimary
-SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
+SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
+SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = IsMobile and 11 or 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
 SearchInput.ClearTextOnFocus = false
 pcall(function() SearchInput.TextEditable = true end)
 pcall(function() SearchInput.Interactable = true end)
 SearchInput.ZIndex = 52
 Instance.new("UIPadding", SearchInput).PaddingRight = UDim.new(0, 10)
+
 ClearSearchBtn = Instance.new("TextButton", SearchContainer)
 ClearSearchBtn.Size = UDim2.new(0, 24, 0, 24)
 ClearSearchBtn.Position = UDim2.new(1, -28, 0.5, -12)
@@ -2565,93 +2485,53 @@ ClearSearchIcon = Instance.new("ImageLabel", ClearSearchBtn)
 ClearSearchIcon.Size = UDim2.new(0, 13, 0, 13); ClearSearchIcon.Position = UDim2.new(0.5, -6.5, 0.5, -6.5)
 ClearSearchIcon.BackgroundTransparency = 1; ClearSearchIcon.Image = VeloxIcons.Close; ClearSearchIcon.ImageColor3 = Theme.TextSecondary; ClearSearchIcon.ScaleType = Enum.ScaleType.Fit
 ClearSearchBtn.ZIndex = 53
-ClearSearchBtn.Visible = false
-_VH_RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
-_VH_RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
+ClearSearchBtn.Visible = (SearchInput.Text ~= "")
+
 FilterBtn = Instance.new("TextButton", SearchRow)
-FilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FilterBtn.Position = UDim2.new(1, -(filterBtnWidth * 2 + gap), 0, 0)
-FilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FilterBtn.Text = "≡"; FilterBtn.TextColor3 = Theme.TextSecondary
-FilterBtn.Font = Enum.Font.GothamBold; FilterBtn.TextSize = IsMobile and 17 or 18; FilterBtn.ZIndex = 51; FilterBtn.AutoButtonColor = false
+FilterBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); FilterBtn.Position = UDim2.new(1, -(filterBtnWidth + sortBtnWidth + gap), 0, 0)
+FilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FilterBtn.Text = ""
+FilterBtn.ZIndex = 51; FilterBtn.AutoButtonColor = false
 Instance.new("UICorner", FilterBtn).CornerRadius = UDim.new(0, 8)
 FilterBtnStroke = Instance.new("UIStroke", FilterBtn); FilterBtnStroke.Color = Theme.Stroke; FilterBtnStroke.Thickness = 1
-FilterCountBadge = Instance.new("TextLabel", FilterBtn)
-FilterCountBadge.Size = UDim2.new(0, 14, 0, 14); FilterCountBadge.Position = UDim2.new(1, -12, 0, -2)
-FilterCountBadge.BackgroundColor3 = Theme.Accent; FilterCountBadge.TextColor3 = Color3.fromRGB(255, 255, 255)
-FilterCountBadge.Font = Enum.Font.GothamBold; FilterCountBadge.TextSize = 8; FilterCountBadge.Text = ""; FilterCountBadge.Visible = false; FilterCountBadge.ZIndex = 53
-Instance.new("UICorner", FilterCountBadge).CornerRadius = UDim.new(1, 0)
+
+-- Compact funnel icon built from simple frames so the control stays sharp on every device.
+FilterIcon = Instance.new("Frame", FilterBtn)
+FilterIcon.Name = "FilterIcon"
+FilterIcon.Size = UDim2.new(0, 16, 0, 16); FilterIcon.Position = UDim2.new(0.5, -8, 0.5, -8)
+FilterIcon.BackgroundTransparency = 1; FilterIcon.ZIndex = 52
+for index, width in ipairs({14, 9, 4}) do
+	local bar = Instance.new("Frame", FilterIcon)
+	bar.Name = "Bar" .. index
+	bar.Size = UDim2.new(0, width, 0, 2)
+	bar.Position = UDim2.new(0.5, -math.floor(width / 2), 0, (index - 1) * 5 + 2)
+	bar.BackgroundColor3 = Theme.TextSecondary
+	bar.BorderSizePixel = 0
+	bar.ZIndex = 53
+	Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+end
+
+FilterBadge = Instance.new("TextLabel", FilterBtn)
+FilterBadge.Name = "FilterBadge"
+FilterBadge.Size = UDim2.new(0, 14, 0, 14); FilterBadge.Position = UDim2.new(1, -15, 0, -2)
+FilterBadge.BackgroundColor3 = Theme.Accent; FilterBadge.TextColor3 = Color3.new(1, 1, 1)
+FilterBadge.Font = Enum.Font.GothamBold; FilterBadge.TextSize = 8; FilterBadge.Text = ""
+FilterBadge.Visible = false; FilterBadge.ZIndex = 54
+Instance.new("UICorner", FilterBadge).CornerRadius = UDim.new(1, 0)
+
 SortDropdownBtn = Instance.new("TextButton", SearchRow)
-SortDropdownBtn.Size = UDim2.new(0, filterBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -filterBtnWidth, 0, 0)
-SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); SortDropdownBtn.Text = ""
-SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = false; SortDropdownBtn.AutoButtonColor = false
+SortDropdownBtn.Size = UDim2.new(0, sortBtnWidth, 1, 0); SortDropdownBtn.Position = UDim2.new(1, -sortBtnWidth, 0, 0)
+SortDropdownBtn.BackgroundColor3 = Color3.fromRGB(38, 51, 74); SortDropdownBtn.Text = ""
+SortDropdownBtn.ZIndex = 51; SortDropdownBtn.ClipsDescendants = true; SortDropdownBtn.AutoButtonColor = false
 SortIcon = Instance.new("ImageLabel", SortDropdownBtn)
 SortIcon.Name = "SortIcon"
 SortIcon.Size = UDim2.new(0, 15, 0, 15); SortIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
 SortIcon.BackgroundTransparency = 1; SortIcon.Image = VeloxIcons.Sort; SortIcon.ImageColor3 = Theme.TextSecondary; SortIcon.ScaleType = Enum.ScaleType.Fit
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 8)
-SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn)
-SortBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-SortBtnStroke.Color = Color3.fromRGB(255, 255, 255)
-SortBtnStroke.Transparency = 0.55
-SortBtnStroke.Thickness = 1
-ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(30, 41, 59), Color3.fromRGB(45, 57, 83), Color3.fromRGB(24, 33, 50), SortBtnStroke, Color3.fromRGB(255, 255, 255), Theme.Accent)
+SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke; SortBtnStroke.Thickness = 1
+ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
-FilterPanel = Instance.new("Frame", ScreenGui)
-FilterPanel.Name = "VeloxFilterPanel"
-FilterPanel.Size = UDim2.new(0, IsMobile and 304 or 360, 0, IsMobile and 300 or 306)
-FilterPanel.BackgroundColor3 = Color3.fromRGB(12, 18, 34)
-FilterPanel.BorderSizePixel = 0
-FilterPanel.Visible = false
-FilterPanel.ZIndex = 1050
-FilterPanel.ClipsDescendants = false
-Instance.new("UICorner", FilterPanel).CornerRadius = UDim.new(0, 12)
-FilterPanelStroke = Instance.new("UIStroke", FilterPanel)
-FilterPanelStroke.Color = Color3.fromRGB(255, 255, 255)
-FilterPanelStroke.Transparency = 0.50
-FilterPanelStroke.Thickness = 1
-FilterPanelGradient = Instance.new("UIGradient", FilterPanel)
-FilterPanelGradient.Rotation = 90
-FilterPanelGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 29, 55)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(12, 18, 34)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 14, 26))
-})
-FilterPanelHeader = Instance.new("TextLabel", FilterPanel)
-FilterPanelHeader.Size = UDim2.new(1, -90, 0, 22); FilterPanelHeader.Position = UDim2.new(0, 14, 0, 12)
-FilterPanelHeader.BackgroundTransparency = 1; FilterPanelHeader.Text = "Filters"; FilterPanelHeader.TextColor3 = Theme.TextPrimary
-FilterPanelHeader.Font = Enum.Font.GothamBold; FilterPanelHeader.TextSize = 14; FilterPanelHeader.TextXAlignment = Enum.TextXAlignment.Left
-FilterPanelHeader.ZIndex = 1051
-FilterClearBtn = Instance.new("TextButton", FilterPanel)
-FilterClearBtn.Size = UDim2.new(0, 62, 0, 22); FilterClearBtn.Position = UDim2.new(1, -76, 0, 10)
-FilterClearBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59); FilterClearBtn.Text = "Clear"; FilterClearBtn.TextColor3 = Theme.TextSecondary
-FilterClearBtn.Font = Enum.Font.GothamBold; FilterClearBtn.TextSize = 9; FilterClearBtn.AutoButtonColor = false; FilterClearBtn.ZIndex = 1052
-Instance.new("UICorner", FilterClearBtn).CornerRadius = UDim.new(0, 7)
-FilterClearStroke = Instance.new("UIStroke", FilterClearBtn); FilterClearStroke.Color = Theme.Stroke; FilterClearStroke.Thickness = 1
-ApplyInteractiveAnimations(FilterClearBtn, Color3.fromRGB(30, 41, 59), Color3.fromRGB(46, 61, 87), Theme.BackgroundSecondary, FilterClearStroke, Theme.Stroke, Theme.Accent)
-FilterSubtitle = Instance.new("TextLabel", FilterPanel)
-FilterSubtitle.Size = UDim2.new(1, -28, 0, 18); FilterSubtitle.Position = UDim2.new(0, 14, 0, 36)
-FilterSubtitle.BackgroundTransparency = 1; FilterSubtitle.Text = "Tap a filter to apply it. Tap again to remove it."; FilterSubtitle.TextColor3 = Theme.TextSecondary
-FilterSubtitle.Font = Enum.Font.Gotham; FilterSubtitle.TextSize = 9; FilterSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-FilterSubtitle.ZIndex = 1051
-function CreateFilterSection(parent, title, y, height)
-	local titleLabel = Instance.new("TextLabel", parent)
-	titleLabel.Size = UDim2.new(1, -28, 0, 18); titleLabel.Position = UDim2.new(0, 14, 0, y)
-	titleLabel.BackgroundTransparency = 1; titleLabel.Text = title; titleLabel.TextColor3 = Theme.TextPrimary
-	titleLabel.Font = Enum.Font.GothamBold; titleLabel.TextSize = 10; titleLabel.TextXAlignment = Enum.TextXAlignment.Left; titleLabel.ZIndex = 1051
-	local scroll = Instance.new("ScrollingFrame", parent)
-	scroll.Size = UDim2.new(1, -28, 0, height); scroll.Position = UDim2.new(0, 14, 0, y + 18)
-	scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0; scroll.ScrollBarThickness = 2; scroll.ScrollBarImageColor3 = Theme.Stroke
-	scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.AutomaticCanvasSize = Enum.AutomaticSize.X
-	scroll.ScrollingDirection = Enum.ScrollingDirection.X
-	scroll.ZIndex = 1051
-	local layout = Instance.new("UIListLayout", scroll)
-	layout.FillDirection = Enum.FillDirection.Horizontal; layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.Padding = UDim.new(0, 6); layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	Instance.new("UIPadding", scroll).PaddingRight = UDim.new(0, 4)
-	return scroll
-end
-QuickFilterScroll = CreateFilterSection(FilterPanel, "QUICK FILTERS", 54, 28)
-CategoryFilterScroll = CreateFilterSection(FilterPanel, "CATEGORIES", 106, 32)
-TagFilterScroll = CreateFilterSection(FilterPanel, "TAGS", 162, 48)
-StatusFilterScroll = CreateFilterSection(FilterPanel, "STATUS", 234, 34)
+_VH_RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
+_VH_RegConn(SearchInput.FocusLost:Connect(function() SearchStroke.Color = Theme.Stroke end))
 
 RecommendationPanel = Instance.new("Frame", ScriptsView)
 RecommendationPanel.Name = "RecommendedForYouPanel"
@@ -2827,78 +2707,469 @@ ApplyInteractiveAnimations(RecommendationSeeMoreButton, RecommendationSeeMoreBut
 ApplyInteractiveAnimations(RecommendationPrevButton, RecommendationPrevButton.BackgroundColor3, Color3.fromRGB(40, 52, 84), Color3.fromRGB(17, 24, 42), RecommendationPrevStroke, RecommendationPrevStroke.Color, Theme.Accent)
 ApplyInteractiveAnimations(RecommendationNextButton, RecommendationNextButton.BackgroundColor3, Color3.fromRGB(40, 52, 84), Color3.fromRGB(17, 24, 42), RecommendationNextStroke, RecommendationNextStroke.Color, Theme.Accent)
 
-DropdownContainer = Instance.new("Frame", ScreenGui)
-DropdownContainer.Name = "VeloxSortPanel"
-DropdownContainer.Size = UDim2.new(0, IsMobile and 226 or 252, 0, IsMobile and 282 or 306)
-DropdownContainer.BackgroundColor3 = Color3.fromRGB(11, 17, 32)
+DropdownContainer = Instance.new("ScrollingFrame", ScreenGui)
+DropdownContainer.Name = "SortScriptsPanel"
+DropdownContainer.Size = UDim2.new(0, 220, 0, 302)
+DropdownContainer.BackgroundColor3 = Color3.fromRGB(13, 20, 38)
 DropdownContainer.Visible = false
-DropdownContainer.ZIndex = 1100
+DropdownContainer.ZIndex = 1600
 DropdownContainer.BorderSizePixel = 0
-DropdownContainer.ClipsDescendants = false
-Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 12)
-
+DropdownContainer.ScrollBarThickness = 2
+DropdownContainer.ScrollBarImageColor3 = Color3.fromRGB(86, 96, 154)
+DropdownContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+DropdownContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+DropdownContainer.ClipsDescendants = true
+Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 10)
 SortPanelStroke = Instance.new("UIStroke", DropdownContainer)
-SortPanelStroke.Name = "SortPanelStroke"
-SortPanelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-SortPanelStroke.Color = Color3.fromRGB(255, 255, 255)
-SortPanelStroke.Transparency = 0.42
+SortPanelStroke.Color = Color3.fromRGB(120, 125, 255)
+SortPanelStroke.Transparency = 0.18
 SortPanelStroke.Thickness = 1
 
-SortPanelGradient = Instance.new("UIGradient", DropdownContainer)
-SortPanelGradient.Rotation = 90
-SortPanelGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 33, 59)),
-	ColorSequenceKeypoint.new(0.48, Color3.fromRGB(14, 21, 39)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 14, 26))
-})
-
-SortPanelHeader = Instance.new("TextLabel", DropdownContainer)
-SortPanelHeader.Size = UDim2.new(1, -28, 0, 20)
-SortPanelHeader.Position = UDim2.new(0, 14, 0, 12)
+SortPanelHeader = Instance.new("Frame", DropdownContainer)
+SortPanelHeader.Size = UDim2.new(1, -16, 0, 34)
+SortPanelHeader.Position = UDim2.new(0, 8, 0, 6)
 SortPanelHeader.BackgroundTransparency = 1
-SortPanelHeader.Text = "Sort Scripts"
-SortPanelHeader.TextColor3 = Theme.TextPrimary
-SortPanelHeader.Font = Enum.Font.GothamBold
-SortPanelHeader.TextSize = 14
-SortPanelHeader.TextXAlignment = Enum.TextXAlignment.Left
-SortPanelHeader.ZIndex = 1101
+SortPanelHeader.ZIndex = 1602
 
-SortPanelSub = Instance.new("TextLabel", DropdownContainer)
-SortPanelSub.Size = UDim2.new(1, -28, 0, 16)
-SortPanelSub.Position = UDim2.new(0, 14, 0, 32)
+SortPanelTitle = Instance.new("TextLabel", SortPanelHeader)
+SortPanelTitle.Size = UDim2.new(1, 0, 0, 16)
+SortPanelTitle.Position = UDim2.new(0, 0, 0, 0)
+SortPanelTitle.BackgroundTransparency = 1
+SortPanelTitle.Text = "Sort Scripts"
+SortPanelTitle.TextColor3 = Theme.TextPrimary
+SortPanelTitle.Font = Enum.Font.GothamBold
+SortPanelTitle.TextSize = IsMobile and 12 or 13
+SortPanelTitle.TextXAlignment = Enum.TextXAlignment.Left
+SortPanelTitle.ZIndex = 1603
+
+SortPanelSub = Instance.new("TextLabel", SortPanelHeader)
+SortPanelSub.Size = UDim2.new(1, 0, 0, 14)
+SortPanelSub.Position = UDim2.new(0, 0, 0, 17)
 SortPanelSub.BackgroundTransparency = 1
-SortPanelSub.Text = "Choose how your scripts are arranged"
-SortPanelSub.TextColor3 = Theme.TextSecondary
+SortPanelSub.Text = "Choose how scripts are ordered"
+SortPanelSub.TextColor3 = Color3.fromRGB(148, 163, 184)
 SortPanelSub.Font = Enum.Font.Gotham
 SortPanelSub.TextSize = 9
 SortPanelSub.TextXAlignment = Enum.TextXAlignment.Left
-SortPanelSub.ZIndex = 1101
+SortPanelSub.ZIndex = 1603
 
-SortPanelDivider = Instance.new("Frame", DropdownContainer)
-SortPanelDivider.Size = UDim2.new(1, -28, 0, 1)
-SortPanelDivider.Position = UDim2.new(0, 14, 0, 57)
-SortPanelDivider.BackgroundColor3 = Color3.fromRGB(60, 72, 102)
-SortPanelDivider.BackgroundTransparency = 0.45
-SortPanelDivider.BorderSizePixel = 0
-SortPanelDivider.ZIndex = 1101
+SortList = Instance.new("Frame", DropdownContainer)
+SortList.Name = "SortList"
+SortList.Size = UDim2.new(1, -16, 0, 0)
+SortList.Position = UDim2.new(0, 8, 0, 44)
+SortList.BackgroundTransparency = 1
+SortList.ZIndex = 1602
+SortList.AutomaticSize = Enum.AutomaticSize.Y
 
-SortOptionsFrame = Instance.new("ScrollingFrame", DropdownContainer)
-SortOptionsFrame.Name = "Options"
-SortOptionsFrame.Size = UDim2.new(1, -16, 1, -70)
-SortOptionsFrame.Position = UDim2.new(0, 8, 0, 66)
-SortOptionsFrame.BackgroundTransparency = 1
-SortOptionsFrame.BorderSizePixel = 0
-SortOptionsFrame.ScrollBarThickness = 2
-SortOptionsFrame.ScrollBarImageColor3 = Theme.Stroke
-SortOptionsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-SortOptionsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-SortOptionsFrame.ZIndex = 1101
+SortListLayout = Instance.new("UIListLayout", SortList)
+SortListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+SortListLayout.Padding = UDim.new(0, 4)
 
-DDLayout = Instance.new("UIListLayout", SortOptionsFrame)
-DDLayout.SortOrder = Enum.SortOrder.LayoutOrder
-DDLayout.Padding = UDim.new(0, 5)
-local sortBottomPad = Instance.new("UIPadding", SortOptionsFrame)
-sortBottomPad.PaddingBottom = UDim.new(0, 6)
+FilterPanel = Instance.new("Frame", ScreenGui)
+FilterPanel.Name = "ScriptFilterPanel"
+FilterPanel.Size = UDim2.new(0, 250, 0, 330)
+FilterPanel.BackgroundColor3 = Color3.fromRGB(13, 20, 38)
+FilterPanel.Visible = false
+FilterPanel.ZIndex = 1550
+FilterPanel.BorderSizePixel = 0
+FilterPanel.ClipsDescendants = true
+Instance.new("UICorner", FilterPanel).CornerRadius = UDim.new(0, 10)
+FilterPanelStroke = Instance.new("UIStroke", FilterPanel)
+FilterPanelStroke.Color = Color3.fromRGB(120, 125, 255)
+FilterPanelStroke.Transparency = 0.18
+FilterPanelStroke.Thickness = 1
+
+FilterHeader = Instance.new("Frame", FilterPanel)
+FilterHeader.Size = UDim2.new(1, -16, 0, 38)
+FilterHeader.Position = UDim2.new(0, 8, 0, 6)
+FilterHeader.BackgroundTransparency = 1
+FilterHeader.ZIndex = 1552
+
+FilterTitle = Instance.new("TextLabel", FilterHeader)
+FilterTitle.Size = UDim2.new(1, -68, 0, 17)
+FilterTitle.Position = UDim2.new(0, 0, 0, 0)
+FilterTitle.BackgroundTransparency = 1
+FilterTitle.Text = "Filters"
+FilterTitle.TextColor3 = Theme.TextPrimary
+FilterTitle.Font = Enum.Font.GothamBold
+FilterTitle.TextSize = IsMobile and 12 or 13
+FilterTitle.TextXAlignment = Enum.TextXAlignment.Left
+FilterTitle.ZIndex = 1553
+
+FilterSubtitle = Instance.new("TextLabel", FilterHeader)
+FilterSubtitle.Size = UDim2.new(1, -68, 0, 14)
+FilterSubtitle.Position = UDim2.new(0, 0, 0, 18)
+FilterSubtitle.BackgroundTransparency = 1
+FilterSubtitle.Text = "Refine your script results"
+FilterSubtitle.TextColor3 = Color3.fromRGB(148, 163, 184)
+FilterSubtitle.Font = Enum.Font.Gotham
+FilterSubtitle.TextSize = 9
+FilterSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+FilterSubtitle.ZIndex = 1553
+
+FilterClearButton = Instance.new("TextButton", FilterHeader)
+FilterClearButton.Size = UDim2.new(0, 52, 0, 24)
+FilterClearButton.Position = UDim2.new(1, -52, 0, 4)
+FilterClearButton.BackgroundColor3 = Color3.fromRGB(29, 37, 62)
+FilterClearButton.BackgroundTransparency = 0
+FilterClearButton.BorderSizePixel = 0
+FilterClearButton.AutoButtonColor = false
+FilterClearButton.Text = "Clear"
+FilterClearButton.TextColor3 = Theme.TextSecondary
+FilterClearButton.Font = Enum.Font.GothamBold
+FilterClearButton.TextSize = 9
+FilterClearButton.ZIndex = 1554
+Instance.new("UICorner", FilterClearButton).CornerRadius = UDim.new(0, 7)
+FilterClearStroke = Instance.new("UIStroke", FilterClearButton)
+FilterClearStroke.Color = Theme.Stroke
+FilterClearStroke.Thickness = 1
+
+FilterScroll = Instance.new("ScrollingFrame", FilterPanel)
+FilterScroll.Name = "FilterScroll"
+FilterScroll.Size = UDim2.new(1, -16, 1, -50)
+FilterScroll.Position = UDim2.new(0, 8, 0, 48)
+FilterScroll.BackgroundTransparency = 1
+FilterScroll.BorderSizePixel = 0
+FilterScroll.ScrollBarThickness = 2
+FilterScroll.ScrollBarImageColor3 = Color3.fromRGB(86, 96, 154)
+FilterScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+FilterScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+FilterScroll.ZIndex = 1552
+
+FilterList = Instance.new("Frame", FilterScroll)
+FilterList.Size = UDim2.new(1, 0, 0, 0)
+FilterList.BackgroundTransparency = 1
+FilterList.AutomaticSize = Enum.AutomaticSize.Y
+FilterList.ZIndex = 1553
+FilterListLayout = Instance.new("UIListLayout", FilterList)
+FilterListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+FilterListLayout.Padding = UDim.new(0, 6)
+
+FilterState = {
+	Favorites = false,
+	Categories = {},
+	Tags = {},
+	Status = {}
+}
+FilterPanelConnections = {}
+function _VH_FilterRegConn(connection)
+	if connection and typeof(connection) == "RBXScriptConnection" then
+		table.insert(FilterPanelConnections, connection)
+	end
+	return connection
+end
+
+function _VH_NormalizeFilterKey(value)
+	if type(value) ~= "string" then return "" end
+	value = string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
+	value = string.gsub(value, "%s+", " ")
+	return value
+end
+
+function _VH_GetScriptTags(data)
+	local result, seen = {}, {}
+	local function add(value)
+		local clean = _VH_NormalizeFilterKey(value)
+		if clean ~= "" and not seen[clean] then
+			seen[clean] = true
+			result[#result + 1] = clean
+		end
+	end
+	if type(data) == "table" then
+		if type(data.Tags) == "table" then
+			for _, item in ipairs(data.Tags) do add(item) end
+		elseif type(data.Tags) == "string" then
+			for item in string.gmatch(data.Tags, "[^,;|]+") do add(item) end
+		end
+	end
+	return result
+end
+
+function _VH_GetFilterOptions()
+	local categories, tags, status = {}, {}, {}
+	local categoryLabels, tagLabels = {}, {}
+	local function add(map, labels, value)
+		local key = _VH_NormalizeFilterKey(value)
+		if key == "" then return end
+		map[key] = true
+		labels[key] = value
+	end
+	for _, scr in ipairs(RegisteredScripts) do
+		local data = scr and scr.Data
+		if type(data) == "table" then
+			add(categories, categoryLabels, data.Category)
+			for _, tag in ipairs(_VH_GetScriptTags(data)) do add(tags, tagLabels, tag) end
+			local tagType = NormalizeTagType(data.TagType)
+			if tagType ~= "NONE" then add(status, status, tagType) end
+		end
+		if scr then
+			if scr.Compatible then add(status, status, "Compatible") else add(status, status, "Game Only") end
+			if _VH_IsAutoExecuteActive(scr.Id) then add(status, status, "Auto Execute ON") end
+			if scr.Compatible and not _VH_IsAutoExecuteActive(scr.Id) then add(status, status, "Auto Execute OFF") end
+		end
+	end
+	local function toList(map, labels)
+		local out = {}
+		for key in pairs(map) do out[#out + 1] = { Key = key, Label = labels[key] or key } end
+		table.sort(out, function(a, b) return string.lower(a.Label) < string.lower(b.Label) end)
+		return out
+	end
+	return toList(categories, categoryLabels), toList(tags, tagLabels), toList(status, status)
+end
+
+function _VH_FilterMapHasSelection(map)
+	for _, enabled in pairs(map or {}) do
+		if enabled then return true end
+	end
+	return false
+end
+
+function _VH_FilterMapPass(map, key)
+	if not _VH_FilterMapHasSelection(map) then return true end
+	return map[key] == true
+end
+
+function _VH_StatusPass(scr)
+	if not _VH_FilterMapHasSelection(FilterState.Status) then return true end
+	for key, enabled in pairs(FilterState.Status) do
+		if enabled then
+			local pass = false
+			if key == "compatible" then
+				pass = scr.Compatible == true
+			elseif key == "game only" then
+				pass = scr.Compatible ~= true
+			elseif key == "auto execute on" then
+				pass = _VH_IsAutoExecuteActive(scr.Id) == true
+			elseif key == "auto execute off" then
+				pass = scr.Compatible == true and not _VH_IsAutoExecuteActive(scr.Id)
+			elseif key == string.lower(NormalizeTagType(scr.TagType)) then
+				pass = true
+			end
+			if pass then return true end
+		end
+	end
+	return false
+end
+
+function _VH_GetFilterCount()
+	local count = FilterState.Favorites and 1 or 0
+	for _, group in pairs({FilterState.Categories, FilterState.Tags, FilterState.Status}) do
+		for _, enabled in pairs(group) do
+			if enabled then count = count + 1 end
+		end
+	end
+	return count
+end
+
+function _VH_UpdateFilterControl()
+	local count = _VH_GetFilterCount()
+	local active = count > 0
+	FilterBtn.BackgroundColor3 = active and Color3.fromRGB(42, 37, 100) or Color3.fromRGB(30, 41, 59)
+	FilterBtnStroke.Color = active and Theme.Accent or Theme.Stroke
+	FilterBadge.Visible = count > 0
+	FilterBadge.Text = count > 9 and "9+" or tostring(count)
+	for _, bar in ipairs(FilterIcon:GetChildren()) do
+		if bar:IsA("Frame") then bar.BackgroundColor3 = active and Color3.fromRGB(190, 192, 255) or Theme.TextSecondary end
+	end
+end
+
+function _VH_ClearFilterButtons()
+	for _, connection in ipairs(FilterPanelConnections) do
+		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
+	end
+	table.clear(FilterPanelConnections)
+	for _, child in ipairs(FilterList:GetChildren()) do
+		if child ~= FilterListLayout then child:Destroy() end
+	end
+end
+
+function _VH_AddFilterSection(title, options, stateMap, layoutOrder, singleToggle)
+	if #options == 0 then return end
+	local section = Instance.new("Frame", FilterList)
+	section.Size = UDim2.new(1, 0, 0, 0)
+	section.BackgroundTransparency = 1
+	section.AutomaticSize = Enum.AutomaticSize.Y
+	section.LayoutOrder = layoutOrder
+	section.ZIndex = 1554
+
+	local header = Instance.new("TextLabel", section)
+	header.Size = UDim2.new(1, 0, 0, 16)
+	header.Position = UDim2.new(0, 0, 0, 0)
+	header.BackgroundTransparency = 1
+	header.Text = string.upper(title)
+	header.TextColor3 = Color3.fromRGB(148, 163, 184)
+	header.Font = Enum.Font.GothamBold
+	header.TextSize = 8
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.ZIndex = 1555
+
+	local list = Instance.new("Frame", section)
+	list.Size = UDim2.new(1, 0, 0, 0)
+	list.Position = UDim2.new(0, 0, 0, 19)
+	list.BackgroundTransparency = 1
+	list.AutomaticSize = Enum.AutomaticSize.Y
+	list.ZIndex = 1554
+
+	local layout = Instance.new("UIListLayout", list)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 3)
+
+	for order, option in ipairs(options) do
+		local key = option.Key
+		local label = option.Label
+		local button = Instance.new("TextButton", list)
+		button.Name = "Filter_" .. tostring(order)
+		button.Size = UDim2.new(1, 0, 0, IsMobile and 28 or 30)
+		button.BackgroundColor3 = Theme.BackgroundSecondary
+		button.BackgroundTransparency = 0
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Text = ""
+		button.ZIndex = 1556
+		Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
+		local stroke = Instance.new("UIStroke", button)
+		stroke.Color = Theme.Stroke
+		stroke.Transparency = 0.35
+		stroke.Thickness = 1
+
+		local labelObject = Instance.new("TextLabel", button)
+		labelObject.Size = UDim2.new(1, -42, 1, 0)
+		labelObject.Position = UDim2.new(0, 10, 0, 0)
+		labelObject.BackgroundTransparency = 1
+		labelObject.Text = label
+		labelObject.TextColor3 = Theme.TextPrimary
+		labelObject.Font = Enum.Font.GothamMedium
+		labelObject.TextSize = 9
+		labelObject.TextXAlignment = Enum.TextXAlignment.Left
+		labelObject.TextTruncate = Enum.TextTruncate.AtEnd
+		labelObject.ZIndex = 1557
+
+		local check = Instance.new("TextLabel", button)
+		check.Size = UDim2.new(0, 20, 1, 0)
+		check.Position = UDim2.new(1, -25, 0, 0)
+		check.BackgroundTransparency = 1
+		check.Text = "✓"
+		check.TextColor3 = Theme.Accent
+		check.Font = Enum.Font.GothamBold
+		check.TextSize = 12
+		check.Visible = false
+		check.ZIndex = 1557
+
+		local function refresh()
+			local active = stateMap[key] == true
+			button.BackgroundColor3 = active and Color3.fromRGB(43, 38, 95) or Theme.BackgroundSecondary
+			stroke.Color = active and Theme.Accent or Theme.Stroke
+			stroke.Transparency = active and 0.15 or 0.35
+			labelObject.TextColor3 = active and Color3.fromRGB(224, 225, 255) or Theme.TextPrimary
+			check.Visible = active
+		end
+
+		refresh()
+		_VH_FilterRegConn(button.Activated:Connect(function()
+			if singleToggle then
+				FilterState.Favorites = not FilterState.Favorites
+			else
+				stateMap[key] = not stateMap[key]
+				if not stateMap[key] then stateMap[key] = nil end
+			end
+			refresh()
+			_VH_UpdateFilterControl()
+			UpdateFilter()
+		end))
+	end
+end
+
+function RebuildFilterPanel()
+	if not FilterPanel or not FilterPanel.Parent then return end
+	_VH_ClearFilterButtons()
+
+	local favoriteSection = Instance.new("Frame", FilterList)
+	favoriteSection.Size = UDim2.new(1, 0, 0, 0)
+	favoriteSection.BackgroundTransparency = 1
+	favoriteSection.AutomaticSize = Enum.AutomaticSize.Y
+	favoriteSection.LayoutOrder = 1
+	favoriteSection.ZIndex = 1554
+
+	local favButton = Instance.new("TextButton", favoriteSection)
+	favButton.Size = UDim2.new(1, 0, 0, IsMobile and 28 or 30)
+	favButton.BackgroundColor3 = FilterState.Favorites and Color3.fromRGB(43, 38, 95) or Theme.BackgroundSecondary
+	favButton.BorderSizePixel = 0
+	favButton.AutoButtonColor = false
+	favButton.Text = ""
+	favButton.ZIndex = 1556
+	Instance.new("UICorner", favButton).CornerRadius = UDim.new(0, 7)
+	local favStroke = Instance.new("UIStroke", favButton)
+	favStroke.Color = FilterState.Favorites and Theme.Accent or Theme.Stroke
+	favStroke.Transparency = 0.2
+	local favText = Instance.new("TextLabel", favButton)
+	favText.Size = UDim2.new(1, -42, 1, 0); favText.Position = UDim2.new(0, 10, 0, 0)
+	favText.BackgroundTransparency = 1; favText.Text = "Favorites"; favText.TextColor3 = Theme.TextPrimary
+	favText.Font = Enum.Font.GothamMedium; favText.TextSize = 9; favText.TextXAlignment = Enum.TextXAlignment.Left; favText.ZIndex = 1557
+	local favCheck = Instance.new("TextLabel", favButton)
+	favCheck.Size = UDim2.new(0, 20, 1, 0); favCheck.Position = UDim2.new(1, -25, 0, 0)
+	favCheck.BackgroundTransparency = 1; favCheck.Text = "★"; favCheck.TextColor3 = Color3.fromRGB(250, 204, 21)
+	favCheck.Font = Enum.Font.GothamBold; favCheck.TextSize = 12; favCheck.Visible = FilterState.Favorites; favCheck.ZIndex = 1557
+
+	_VH_FilterRegConn(favButton.Activated:Connect(function()
+		FilterState.Favorites = not FilterState.Favorites
+		RebuildFilterPanel()
+		_VH_UpdateFilterControl()
+		UpdateFilter()
+	end))
+
+	local categories, tags, status = _VH_GetFilterOptions()
+	_VH_AddFilterSection("Categories", categories, FilterState.Categories, 2, false)
+	_VH_AddFilterSection("Tags", tags, FilterState.Tags, 3, false)
+	_VH_AddFilterSection("Status", status, FilterState.Status, 4, false)
+	_VH_UpdateFilterControl()
+	task.defer(function()
+		if isDestroying or not FilterPanel or not FilterPanel.Parent then return end
+		local camera = workspace.CurrentCamera
+		local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+		local maxHeight = math.min(IsMobile and 318 or 330, math.max(150, viewport.Y - 20))
+		local desiredHeight = math.clamp(FilterList.AbsoluteSize.Y + 62, 150, maxHeight)
+		FilterPanel.Size = UDim2.new(0, IsMobile and 236 or 250, 0, desiredHeight)
+		if FilterPanel.Visible then PositionOpenPanels() end
+	end)
+end
+
+function _VH_SetPopupPosition(panel, anchor, preferredWidth, preferredHeight, margin)
+	if not panel or not panel.Parent or not anchor or not anchor.Parent then return end
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	margin = margin or 10
+	local width = math.min(preferredWidth, math.max(160, viewport.X - margin * 2))
+	local height = math.min(preferredHeight, math.max(150, viewport.Y - margin * 2))
+	if viewport.X - margin * 2 < 160 then width = math.max(120, viewport.X - margin * 2) end
+	if viewport.Y - margin * 2 < 150 then height = math.max(110, viewport.Y - margin * 2) end
+	panel.Size = UDim2.new(0, width, 0, height)
+	local absPos = anchor.AbsolutePosition
+	local absSize = anchor.AbsoluteSize
+	local posX = absPos.X + absSize.X - width
+	if posX < margin then posX = margin end
+	if posX + width > viewport.X - margin then posX = viewport.X - width - margin end
+
+	local belowY = absPos.Y + absSize.Y + 6
+	local aboveY = absPos.Y - height - 6
+	local posY = belowY
+	if belowY + height > viewport.Y - margin and aboveY >= margin then
+		posY = aboveY
+	elseif belowY + height > viewport.Y - margin then
+		posY = math.max(margin, viewport.Y - height - margin)
+	end
+	posX = math.max(margin, math.min(posX, math.max(margin, viewport.X - width - margin)))
+	posY = math.max(margin, math.min(posY, math.max(margin, viewport.Y - height - margin)))
+	panel.Position = UDim2.new(0, posX, 0, posY)
+end
+
+function PositionOpenPanels()
+	if DropdownContainer and DropdownContainer.Visible then
+		_VH_SetPopupPosition(DropdownContainer, SortDropdownBtn, 220, 302, 10)
+	end
+	if FilterPanel and FilterPanel.Visible then
+		_VH_SetPopupPosition(FilterPanel, FilterBtn, IsMobile and 236 or 250, IsMobile and 318 or 330, 10)
+	end
+end
 
 viewportConn = nil
 function BindCamera()
@@ -2906,9 +3177,7 @@ function BindCamera()
 	local cam = workspace.CurrentCamera
 	if cam then
 		viewportConn = _VH_RegConn(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			if DropdownContainer and DropdownContainer.Visible then
-				DropdownContainer.Visible = false
-			end
+			PositionOpenPanels()
 			local viewport = cam.ViewportSize
 			if MainPanel and MainPanel.Parent then
 				local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
@@ -2932,227 +3201,116 @@ function BindCamera()
 		end))
 	end
 end
-_VH_RegConn(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCamera))
 BindCamera()
-function RefreshViewportLayout()
-	if isDestroying or not MainPanel or not MainPanel.Parent then return end
-	MainPanel.Size = GetPanelSize()
-	local camera = workspace.CurrentCamera
-	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-	local halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-	local halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
-	local currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-	local currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-	currentX = math.max(halfX, math.min(currentX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
-	currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
-	MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
-end
+
 RefreshViewportLayout()
-FilterFavoritesActive = false
-ActiveCategoryFilters = {}
-ActiveTagFilters = {}
-ActiveStatusFilters = {}
 filterVersion = 0
 SortMode = "Most Relevant"
 SortOptions = {
 	"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest",
-	"Updated Today", "Updated This Week", "Updated This Month",
-	"Favorites", "Auto Execute: ON", "Auto Execute: OFF"
+	"Updated Today", "Updated This Week", "Updated This Month"
 }
+
 function _VH_NormalizeSearchText(value)
 	if type(value) ~= "string" then return "" end
 	value = string.lower(value)
-	value = string.gsub(value, "[^%w%s%+%-]", " ")
-	return string.gsub(value, "%s+", " "):match("^%s*(.-)%s*$") or ""
+	value = string.gsub(value, "[^%w%s%._%-]+", " ")
+	value = string.gsub(value, "_", " ")
+	value = string.gsub(value, "%s+", " ")
+	return string.gsub(value, "^%s*(.-)%s*$", "%1")
 end
-function _VH_GetSearchWords(query)
-	local words = {}
-	for word in string.gmatch(query, "%S+") do
-		if #word >= 1 then words[#words + 1] = word end
+
+function _VH_FieldMatchScore(value, token, exactWeight, prefixWeight, containsWeight)
+	if type(value) ~= "string" or value == "" then return 0 end
+	local field = _VH_NormalizeSearchText(value)
+	if field == token then return exactWeight end
+	if string.sub(field, 1, #token) == token then return prefixWeight end
+	if string.find(field, token, 1, true) then return containsWeight end
+	for word in string.gmatch(field, "%S+") do
+		if word == token then return exactWeight end
+		if string.sub(word, 1, #token) == token then return prefixWeight end
 	end
-	return words
+	return 0
 end
-function _VH_GetScriptSearchScore(scr, query)
+
+function _VH_SearchRelevance(scr, query)
+	if not scr then return 0, false end
+	query = _VH_NormalizeSearchText(query)
 	if query == "" then return 0, true end
-	local title = scr.SearchTitle or ""
-	local desc = scr.SearchDesc or ""
-	local meta = scr.SearchMeta or ""
-	local words = _VH_GetSearchWords(query)
+
+	local fields = {
+		Title = _VH_NormalizeSearchText(scr.SearchTitle),
+		Game = _VH_NormalizeSearchText(scr.SearchGame),
+		Description = _VH_NormalizeSearchText(scr.SearchDesc),
+		Category = _VH_NormalizeSearchText(scr.SearchCategory),
+		Tags = _VH_NormalizeSearchText(scr.SearchTags)
+	}
 	local score = 0
-	local matchedWords = 0
-	if string.find(title, query, 1, true) then
-		if title == query then score = score + 1200
-		elseif string.sub(title, 1, #query) == query then score = score + 900
-		else score = score + 700 end
-	end
-	if string.find(meta, query, 1, true) then score = score + 240 end
-	if string.find(desc, query, 1, true) then score = score + 100 end
-	for _, word in ipairs(words) do
-		local wordMatched = false
-		if string.find(title, word, 1, true) then
-			score = score + 220
-			wordMatched = true
+	local fullPhrase = query
+	if fields.Title == fullPhrase then score = score + 1400
+	elseif string.sub(fields.Title, 1, #fullPhrase) == fullPhrase then score = score + 1050
+	elseif string.find(fields.Title, fullPhrase, 1, true) then score = score + 850 end
+	if fields.Game == fullPhrase then score = score + 900
+	elseif string.sub(fields.Game, 1, #fullPhrase) == fullPhrase then score = score + 680
+	elseif string.find(fields.Game, fullPhrase, 1, true) then score = score + 520 end
+	if string.find(fields.Category, fullPhrase, 1, true) then score = score + 360 end
+	if string.find(fields.Tags, fullPhrase, 1, true) then score = score + 380 end
+	if string.find(fields.Description, fullPhrase, 1, true) then score = score + 200 end
+
+	local allTokensMatched = true
+	for token in string.gmatch(query, "%S+") do
+		local best = 0
+		best = math.max(best, _VH_FieldMatchScore(fields.Title, token, 220, 180, 150))
+		best = math.max(best, _VH_FieldMatchScore(fields.Game, token, 180, 145, 120))
+		best = math.max(best, _VH_FieldMatchScore(fields.Tags, token, 165, 135, 110))
+		best = math.max(best, _VH_FieldMatchScore(fields.Category, token, 150, 120, 95))
+		best = math.max(best, _VH_FieldMatchScore(fields.Description, token, 95, 70, 50))
+		if best <= 0 then
+			allTokensMatched = false
+			break
 		end
-		if string.find(meta, word, 1, true) then
-			score = score + 120
-			wordMatched = true
+		score = score + best
+	end
+	return score, allTokensMatched
+end
+
+local function _VH_MapMatch(map, key)
+	if not _VH_FilterMapHasSelection(map) then return true end
+	return map[_VH_NormalizeFilterKey(key)] == true
+end
+
+function _VH_ScriptPassesFilters(scr)
+	if FilterState.Favorites and SavedData.Favorites[scr.Id] ~= true then return false end
+
+	local data = scr.Data or {}
+	if _VH_FilterMapHasSelection(FilterState.Categories) then
+		if not _VH_MapMatch(FilterState.Categories, data.Category) then return false end
+	end
+
+	if _VH_FilterMapHasSelection(FilterState.Tags) then
+		local tagPass = false
+		for _, tag in ipairs(_VH_GetScriptTags(data)) do
+			if FilterState.Tags[tag] then tagPass = true break end
 		end
-		if string.find(desc, word, 1, true) then
-			score = score + 60
-			wordMatched = true
-		end
-		if wordMatched then matchedWords = matchedWords + 1 end
+		if not tagPass then return false end
 	end
-	return score + (matchedWords * 40), matchedWords == #words
-end
-function _VH_HasActiveFilterSet()
-	return FilterFavoritesActive or next(ActiveCategoryFilters) ~= nil or next(ActiveTagFilters) ~= nil or next(ActiveStatusFilters) ~= nil
-end
-function _VH_ActiveFilterCount()
-	local count = FilterFavoritesActive and 1 or 0
-	for _ in pairs(ActiveCategoryFilters) do count = count + 1 end
-	for _ in pairs(ActiveTagFilters) do count = count + 1 end
-	for _ in pairs(ActiveStatusFilters) do count = count + 1 end
-	return count
-end
-function _VH_SetFilterButtonVisuals()
-	local count = _VH_ActiveFilterCount()
-	FilterCountBadge.Text = count > 0 and tostring(math.min(count, 9)) or ""
-	FilterCountBadge.Visible = count > 0
-	if count > 0 then
-		FilterBtn.BackgroundColor3 = Color3.fromRGB(49, 46, 129)
-		FilterBtnStroke.Color = Theme.Accent
-		FilterBtn.TextColor3 = Theme.TextPrimary
-	else
-		FilterBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
-		FilterBtnStroke.Color = Theme.Stroke
-		FilterBtn.TextColor3 = Theme.TextSecondary
-	end
-end
-function _VH_ClearFilterTables()
-	FilterFavoritesActive = false
-	table.clear(ActiveCategoryFilters)
-	table.clear(ActiveTagFilters)
-	table.clear(ActiveStatusFilters)
-end
-function _VH_UpdateFilterChipVisual(button, selected)
-	if not button or not button.Parent then return end
-	button.BackgroundColor3 = selected and Color3.fromRGB(67, 56, 202) or Color3.fromRGB(24, 33, 50)
-	local stroke = button:FindFirstChild("FilterChipStroke")
-	if stroke and stroke:IsA("UIStroke") then
-		stroke.Color = selected and Color3.fromRGB(165, 180, 252) or Theme.Stroke
-		stroke.Transparency = selected and 0.05 or 0.38
-	end
-	button.TextColor3 = selected and Theme.TextPrimary or Theme.TextSecondary
-end
-function _VH_RegFilterConn(connection)
-	if connection and typeof(connection) == "RBXScriptConnection" then FilterConnections[#FilterConnections + 1] = connection end
-	return connection
-end
-function _VH_DisconnectFilterConnections()
-	for i = #FilterConnections, 1, -1 do
-		local connection = FilterConnections[i]
-		if typeof(connection) == "RBXScriptConnection" and connection.Connected then pcall(function() connection:Disconnect() end) end
-		FilterConnections[i] = nil
-	end
-end
-function _VH_CreateFilterChip(parent, text, key, group)
-	local width = math.clamp(24 + (#tostring(text) * 6), 68, 118)
-	local btn = Instance.new("TextButton", parent)
-	btn.Size = UDim2.new(0, width, 0, 28)
-	btn.BackgroundColor3 = Color3.fromRGB(24, 33, 50)
-	btn.Text = tostring(text)
-	btn.TextColor3 = Theme.TextSecondary
-	btn.Font = Enum.Font.GothamMedium; btn.TextSize = 9
-	btn.AutoButtonColor = false; btn.ZIndex = 1052
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-	local stroke = Instance.new("UIStroke", btn)
-	stroke.Name = "FilterChipStroke"; stroke.Color = Theme.Stroke; stroke.Transparency = 0.38; stroke.Thickness = 1
-	local selected = false
-	if group == "category" then selected = ActiveCategoryFilters[key] == true
-	elseif group == "tag" then selected = ActiveTagFilters[key] == true
-	elseif group == "status" then selected = ActiveStatusFilters[key] == true
-	elseif group == "favorite" then selected = FilterFavoritesActive
-	end
-	_VH_UpdateFilterChipVisual(btn, selected)
-	_VH_RegFilterConn(btn.Activated:Connect(_VH_CreateDebounce(0.08, function()
-		if isDestroying then return end
-		if group == "category" then
-			ActiveCategoryFilters[key] = not ActiveCategoryFilters[key] and true or nil
-		elseif group == "tag" then
-			ActiveTagFilters[key] = not ActiveTagFilters[key] and true or nil
-		elseif group == "status" then
-			ActiveStatusFilters[key] = not ActiveStatusFilters[key] and true or nil
-		elseif group == "favorite" then
-			FilterFavoritesActive = not FilterFavoritesActive
-		end
-		local nowSelected = group == "category" and ActiveCategoryFilters[key] == true or group == "tag" and ActiveTagFilters[key] == true or group == "status" and ActiveStatusFilters[key] == true or group == "favorite" and FilterFavoritesActive
-		_VH_UpdateFilterChipVisual(btn, nowSelected)
-		_VH_SetFilterButtonVisuals()
-		UpdateFilter()
-	end)))
-	return btn
-end
-function RebuildFilterOptions()
-	if isDestroying or not FilterPanel or not FilterPanel.Parent then return end
-	_VH_DisconnectFilterConnections()
-	for _, scroll in ipairs({QuickFilterScroll, CategoryFilterScroll, TagFilterScroll, StatusFilterScroll}) do
-		for _, child in ipairs(scroll:GetChildren()) do
-			if child:IsA("GuiObject") then child:Destroy() end
-		end
-	end
-	local categorySet, tagSet, statusSet = {}, {}, {}
-	for _, scr in ipairs(RegisteredScripts) do
-		local category = type(scr.Data.Category) == "string" and string.gsub(scr.Data.Category, "^%s*(.-)%s*$", "%1") or ""
-		if category ~= "" then categorySet[category] = true end
-		local tags = scr.Data.Tags
-		if type(tags) == "table" then
-			for _, tag in ipairs(tags) do if type(tag) == "string" and tag ~= "" then tagSet[tag] = true end end
-		elseif type(tags) == "string" and tags ~= "" then
-			for tag in string.gmatch(tags, "[^,;|]+") do tagSet[string.gsub(tag, "^%s*(.-)%s*$", "%1")] = true end
-		end
-		local status = NormalizeTagType(scr.TagType)
-		if status ~= "NONE" then statusSet[status] = true end
-	end
-	local function sortedKeys(set)
-		local list = {}
-		for key in pairs(set) do list[#list + 1] = key end
-		table.sort(list, function(a, b) return string.lower(a) < string.lower(b) end)
-		return list
-	end
-	_VH_CreateFilterChip(QuickFilterScroll, "Favorites", "Favorites", "favorite")
-	for _, key in ipairs(sortedKeys(categorySet)) do _VH_CreateFilterChip(CategoryFilterScroll, key, key, "category") end
-	for _, key in ipairs(sortedKeys(tagSet)) do _VH_CreateFilterChip(TagFilterScroll, key, key, "tag") end
-	for _, key in ipairs(sortedKeys(statusSet)) do _VH_CreateFilterChip(StatusFilterScroll, key, key, "status") end
-	if not FilterFavoritesActive then
-		local favChip = QuickFilterScroll:FindFirstChildOfClass("TextButton")
-		if favChip then _VH_UpdateFilterChipVisual(favChip, false) end
-	end
-	for key in pairs(ActiveCategoryFilters) do if not categorySet[key] then ActiveCategoryFilters[key] = nil end end
-	for key in pairs(ActiveTagFilters) do if not tagSet[key] then ActiveTagFilters[key] = nil end end
-	for key in pairs(ActiveStatusFilters) do if not statusSet[key] then ActiveStatusFilters[key] = nil end end
-	_VH_SetFilterButtonVisuals()
-end
-function _VH_ScriptMatchesFilters(scr)
-	if FilterFavoritesActive and SavedData.Favorites[scr.Id] ~= true then return false end
-	if next(ActiveCategoryFilters) ~= nil then
-		local category = type(scr.Data.Category) == "string" and scr.Data.Category or ""
-		if not ActiveCategoryFilters[category] then return false end
-	end
-	if next(ActiveStatusFilters) ~= nil then
-		if not ActiveStatusFilters[NormalizeTagType(scr.TagType)] then return false end
-	end
-	if next(ActiveTagFilters) ~= nil then
-		local tagSet = {}
-		if type(scr.Data.Tags) == "table" then
-			for _, tag in ipairs(scr.Data.Tags) do if type(tag) == "string" then tagSet[tag] = true end end
-		elseif type(scr.Data.Tags) == "string" then
-			for tag in string.gmatch(scr.Data.Tags, "[^,;|]+") do tagSet[string.gsub(tag, "^%s*(.-)%s*$", "%1")] = true end
-		end
-		for tag in pairs(ActiveTagFilters) do if not tagSet[tag] then return false end end
-	end
+
+	if not _VH_StatusPass(scr) then return false end
 	return true
 end
+
+function _VH_IsInSortWindow(timestamp, mode)
+	if mode == "Updated Today" then return IsCalendarDay(timestamp) end
+	if mode == "Updated This Week" then return IsCalendarWeek(timestamp) end
+	if mode == "Updated This Month" then return IsCalendarMonth(timestamp) end
+	return false
+end
+
+function _VH_SortPriority(scr, mode)
+	if not mode or mode == "Most Relevant" then return 0 end
+	return _VH_IsInSortWindow(scr.LastUpdatedNumber, mode) and 1 or 0
+end
+
 function UpdateFilter()
 	if isDestroying then return end
 	filterVersion = filterVersion + 1
@@ -3161,237 +3319,211 @@ function UpdateFilter()
 		if isDestroying or currentVersion ~= filterVersion then return end
 		local query = _VH_NormalizeSearchText(SearchInput.Text or "")
 		if RecommendationPanel and RecommendationPanel.Parent then
-			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and query == "" and not _VH_HasActiveFilterSet()
+			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and query == "" and _VH_GetFilterCount() == 0
 		end
+
 		local matches = {}
 		local currentSort = SortMode
+
 		for _, scr in ipairs(RegisteredScripts) do
 			if currentVersion ~= filterVersion then return end
-			local searchScore, searchRelevant = _VH_GetScriptSearchScore(scr, query)
-			local filterPass = _VH_ScriptMatchesFilters(scr)
-			if filterPass then
-				if currentSort == "Updated Today" then
-					filterPass = IsCalendarDay(scr.LastUpdatedNumber)
-				elseif currentSort == "Updated This Week" then
-					filterPass = IsCalendarWeek(scr.LastUpdatedNumber)
-				elseif currentSort == "Updated This Month" then
-					filterPass = IsCalendarMonth(scr.LastUpdatedNumber)
-				elseif currentSort == "Favorites" then
-					filterPass = SavedData.Favorites[scr.Id] == true
-				elseif currentSort == "Auto Execute: ON" then
-					filterPass = _VH_IsAutoExecuteActive(scr.Id)
-				elseif currentSort == "Auto Execute: OFF" then
-					filterPass = not _VH_IsAutoExecuteActive(scr.Id)
-				end
-			end
-		local visible = filterPass and (query == "" or searchRelevant)
-		if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
-		if visible then
-			if query ~= "" then scr.CurrentSearchScore = searchScore else scr.CurrentSearchScore = 0 end
-			matches[#matches + 1] = scr
+			local relevance, searchMatch = _VH_SearchRelevance(scr, query)
+			local filterPass = _VH_ScriptPassesFilters(scr)
+			local visible = searchMatch and filterPass
+			scr.SearchRelevance = relevance
+			if scr.Instance.Visible ~= visible then scr.Instance.Visible = visible end
+			if visible then matches[#matches + 1] = scr end
 		end
-	end
+
 		if currentVersion ~= filterVersion then return end
+
 		table.sort(matches, function(a, b)
-			if query ~= "" and currentSort == "Most Relevant" then
-				if (a.CurrentSearchScore or 0) ~= (b.CurrentSearchScore or 0) then return (a.CurrentSearchScore or 0) > (b.CurrentSearchScore or 0) end
-				if a.Recommended ~= b.Recommended then return a.Recommended == true end
+			if currentSort == "Most Relevant" and query ~= "" then
+				if a.SearchRelevance ~= b.SearchRelevance then return a.SearchRelevance > b.SearchRelevance end
 			end
+
 			if currentSort == "Most Relevant" then
 				if a.Recommended ~= b.Recommended then return a.Recommended == true end
 				if a.RecommendationScore ~= b.RecommendationScore then return a.RecommendationScore > b.RecommendationScore end
 				if a.RecommendationRank ~= b.RecommendationRank then return a.RecommendationRank < b.RecommendationRank end
-			end
-			if currentSort == "A-Z" then
+				if a.TagPriority ~= b.TagPriority then return a.TagPriority > b.TagPriority end
+				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
+			elseif currentSort == "A-Z" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			elseif currentSort == "Z-A" then
 				if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle > b.SearchTitle end
 			elseif currentSort == "Oldest" then
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber < b.LastUpdatedNumber end
-			elseif currentSort == "Newest" or currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
+			elseif currentSort == "Updated Today" or currentSort == "Updated This Week" or currentSort == "Updated This Month" then
+				local aWindow = _VH_SortPriority(a, currentSort)
+				local bWindow = _VH_SortPriority(b, currentSort)
+				if aWindow ~= bWindow then return aWindow > bWindow end
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
 			else
-				if a.TagPriority ~= b.TagPriority then return a.TagPriority > b.TagPriority end
 				if a.LastUpdatedNumber ~= b.LastUpdatedNumber then return a.LastUpdatedNumber > b.LastUpdatedNumber end
 			end
+
 			if a.SearchTitle ~= b.SearchTitle then return a.SearchTitle < b.SearchTitle end
 			return a.Id < b.Id
 		end)
+
 		for order, scr in ipairs(matches) do scr.Instance.LayoutOrder = order end
 		local shouldShowEmpty = #RegisteredScripts > 0 and #matches == 0
 		if EmptyStateMessage.Visible ~= shouldShowEmpty then EmptyStateMessage.Visible = shouldShowEmpty end
 		if shouldShowEmpty then
-			EmptyStateMessage.Text = query ~= "" and "No relevant scripts found." or "No scripts matched your filters."
-		elseif EmptyStateMessage.Text ~= "" then
+			EmptyStateMessage.Text = "No scripts matched your search or filters."
+		elseif EmptyStateMessage.Text == "No scripts matched your search or filters." then
 			EmptyStateMessage.Text = ""
 		end
 	end)
 end
+
+function _VH_RefreshFilterPanelSelection()
+	if FilterPanel and FilterPanel.Visible then RebuildFilterPanel() end
+end
+
 _VH_RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 	if typingTask then task.cancel(typingTask) end
-	typingTask = task.delay(0.15, function() UpdateFilter() end)
+	typingTask = task.delay(0.16, function() UpdateFilter() end)
 end))
+
 _VH_RegConn(ClearSearchBtn.Activated:Connect(function()
 	SearchInput.Text = ""
 	if SearchInput:IsFocused() then SearchInput:ReleaseFocus() end
 end))
-_VH_RegConn(FilterClearBtn.Activated:Connect(function()
-	_VH_ClearFilterTables()
-	RebuildFilterOptions()
-	UpdateFilter()
-end))
+
 _VH_RegConn(FilterBtn.Activated:Connect(function()
-	if SortDropdownBtn and SortDropdownBtn.Parent then SortDropdownBtn.Active = true end
-	if FilterPanel.Visible then
+	if isDestroying then return end
+	if DropdownContainer then DropdownContainer.Visible = false end
+	if FilterPanel and FilterPanel.Visible then
 		FilterPanel.Visible = false
 	else
-		local tabsPos = FilterBtn.AbsolutePosition
-		local tabsSize = FilterBtn.AbsoluteSize
-		local camera = workspace.CurrentCamera
-		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local panelWidth = FilterPanel.AbsoluteSize.X
-		local panelHeight = FilterPanel.AbsoluteSize.Y
-		local posX = math.max(8, math.min(tabsPos.X + tabsSize.X - panelWidth, math.max(8, viewportSize.X - panelWidth - 8)))
-		local posY = tabsPos.Y + tabsSize.Y + 6
-		if posY + panelHeight > viewportSize.Y - 8 then posY = tabsPos.Y - panelHeight - 6 end
-		if posY < 8 then posY = 8 end
-		FilterPanel.Position = UDim2.new(0, posX, 0, posY)
-		RebuildFilterOptions()
+		RebuildFilterPanel()
 		FilterPanel.Visible = true
-		DropdownContainer.Visible = false
+		PositionOpenPanels()
 	end
 end))
-SortOptionButtons = {}
-function _VH_BuildSortOptions()
-	for _, child in ipairs(SortOptionsFrame:GetChildren()) do
-		if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-			child:Destroy()
+
+_VH_RegConn(FilterClearButton.Activated:Connect(function()
+	FilterState.Favorites = false
+	table.clear(FilterState.Categories)
+	table.clear(FilterState.Tags)
+	table.clear(FilterState.Status)
+	RebuildFilterPanel()
+	_VH_UpdateFilterControl()
+	UpdateFilter()
+end))
+
+local function _VH_RefreshSortButtons()
+	for _, child in ipairs(SortList:GetChildren()) do
+		if child:IsA("TextButton") then
+			local active = child:GetAttribute("SortMode") == SortMode
+			child.BackgroundColor3 = active and Color3.fromRGB(43, 38, 95) or Theme.BackgroundSecondary
+			local stroke = child:FindFirstChild("SortStroke")
+			if stroke and stroke:IsA("UIStroke") then
+				stroke.Color = active and Theme.Accent or Theme.Stroke
+				stroke.Transparency = active and 0.08 or 0.35
+			end
+			local check = child:FindFirstChild("SortCheck")
+			if check and check:IsA("TextLabel") then check.Visible = active end
+			local label = child:FindFirstChild("SortLabel")
+			if label and label:IsA("TextLabel") then
+				label.TextColor3 = active and Color3.fromRGB(224, 225, 255) or Theme.TextPrimary
+			end
 		end
 	end
-	table.clear(SortOptionButtons)
-
-	for order, opt in ipairs(SortOptions) do
-		local selected = opt == SortMode
-		local row = Instance.new("TextButton", SortOptionsFrame)
-		row.Name = "SortOption_" .. tostring(order)
-		row.Size = UDim2.new(1, -4, 0, IsMobile and 34 or 36)
-		row.BackgroundColor3 = selected and Color3.fromRGB(46, 43, 105) or Color3.fromRGB(20, 29, 49)
-		row.BackgroundTransparency = selected and 0.05 or 0.18
-		row.Text = ""
-		row.AutoButtonColor = false
-		row.ZIndex = 1102
-		row.LayoutOrder = order
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
-
-		local rowStroke = Instance.new("UIStroke", row)
-		rowStroke.Name = "SortOptionStroke"
-		rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		rowStroke.Color = selected and Color3.fromRGB(151, 160, 255) or Color3.fromRGB(66, 79, 112)
-		rowStroke.Transparency = selected and 0.18 or 0.55
-		rowStroke.Thickness = 1
-
-		local marker = Instance.new("Frame", row)
-		marker.Name = "SelectionMarker"
-		marker.Size = UDim2.new(0, 3, 0, 16)
-		marker.Position = UDim2.new(0, 7, 0.5, -8)
-		marker.BackgroundColor3 = Theme.Accent
-		marker.BackgroundTransparency = selected and 0 or 1
-		marker.BorderSizePixel = 0
-		marker.ZIndex = 1103
-		Instance.new("UICorner", marker).CornerRadius = UDim.new(1, 0)
-
-		local textLabel = Instance.new("TextLabel", row)
-		textLabel.Size = UDim2.new(1, -52, 1, 0)
-		textLabel.Position = UDim2.new(0, 18, 0, 0)
-		textLabel.BackgroundTransparency = 1
-		textLabel.Text = opt
-		textLabel.TextColor3 = selected and Theme.TextPrimary or Theme.TextSecondary
-		textLabel.Font = selected and Enum.Font.GothamBold or Enum.Font.GothamMedium
-		textLabel.TextSize = IsMobile and 10 or 11
-		textLabel.TextXAlignment = Enum.TextXAlignment.Left
-		textLabel.TextTruncate = Enum.TextTruncate.AtEnd
-		textLabel.ZIndex = 1103
-
-		local check = Instance.new("TextLabel", row)
-		check.Size = UDim2.new(0, 20, 1, 0)
-		check.Position = UDim2.new(1, -28, 0, 0)
-		check.BackgroundTransparency = 1
-		check.Text = selected and "✓" or ""
-		check.TextColor3 = Theme.Accent
-		check.Font = Enum.Font.GothamBold
-		check.TextSize = 13
-		check.TextXAlignment = Enum.TextXAlignment.Center
-		check.ZIndex = 1103
-
-		ApplyInteractiveAnimations(
-			row,
-			row.BackgroundColor3,
-			Color3.fromRGB(37, 48, 76),
-			Color3.fromRGB(57, 55, 126),
-			rowStroke,
-			rowStroke.Color,
-			Color3.fromRGB(151, 160, 255)
-		)
-
-		_VH_RegConn(row.Activated:Connect(function()
-			if isDestroying then return end
-			SortMode = opt
-			DropdownContainer.Visible = false
-			_VH_BuildSortOptions()
-			UpdateFilter()
-		end))
-
-		SortOptionButtons[opt] = row
-	end
 end
-_VH_BuildSortOptions()
+
+for order, opt in ipairs(SortOptions) do
+	local btn = Instance.new("TextButton", SortList)
+	btn.Name = "Sort_" .. tostring(order)
+	btn.Size = UDim2.new(1, 0, 0, IsMobile and 28 or 30)
+	btn.BackgroundColor3 = Theme.BackgroundSecondary
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.Text = ""
+	btn.ZIndex = 1604
+	btn.LayoutOrder = order
+	btn:SetAttribute("SortMode", opt)
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+	local stroke = Instance.new("UIStroke", btn)
+	stroke.Name = "SortStroke"
+	stroke.Color = Theme.Stroke
+	stroke.Transparency = 0.35
+	stroke.Thickness = 1
+
+	local label = Instance.new("TextLabel", btn)
+	label.Name = "SortLabel"
+	label.Size = UDim2.new(1, -40, 1, 0)
+	label.Position = UDim2.new(0, 10, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = opt
+	label.TextColor3 = Theme.TextPrimary
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = 9
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.ZIndex = 1605
+
+	local check = Instance.new("TextLabel", btn)
+	check.Name = "SortCheck"
+	check.Size = UDim2.new(0, 20, 1, 0)
+	check.Position = UDim2.new(1, -25, 0, 0)
+	check.BackgroundTransparency = 1
+	check.Text = "✓"
+	check.TextColor3 = Theme.Accent
+	check.Font = Enum.Font.GothamBold
+	check.TextSize = 12
+	check.Visible = false
+	check.ZIndex = 1605
+
+	_VH_RegConn(btn.Activated:Connect(function()
+		SortMode = opt
+		DropdownContainer.Visible = false
+		_VH_RefreshSortButtons()
+		UpdateFilter()
+	end))
+end
+_VH_RefreshSortButtons()
+
 _VH_RegConn(SortDropdownBtn.Activated:Connect(function()
+	if isDestroying then return end
+	if FilterPanel then FilterPanel.Visible = false end
 	if DropdownContainer.Visible then
 		DropdownContainer.Visible = false
 	else
-		local abstractPos = SortDropdownBtn.AbsolutePosition
-		local abstractSize = SortDropdownBtn.AbsoluteSize
-		local camera = workspace.CurrentCamera
-		local viewportSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-		local dropWidth = math.max(1, DropdownContainer.AbsoluteSize.X)
-		local dropHeight = math.max(1, DropdownContainer.AbsoluteSize.Y)
-		local margin = 10
-		local minX = margin
-		local maxX = math.max(minX, viewportSize.X - dropWidth - margin)
-		local posX = math.clamp(abstractPos.X + abstractSize.X - dropWidth, minX, maxX)
-		local belowY = abstractPos.Y + abstractSize.Y + 6
-		local aboveY = abstractPos.Y - dropHeight - 6
-		local posY = belowY
-		if posY + dropHeight > viewportSize.Y - margin and aboveY >= margin then
-			posY = aboveY
-		elseif posY + dropHeight > viewportSize.Y - margin then
-			posY = math.max(margin, viewportSize.Y - dropHeight - margin)
-		end
-		DropdownContainer.Position = UDim2.new(0, posX, 0, posY)
 		DropdownContainer.Visible = true
-		FilterPanel.Visible = false
+		PositionOpenPanels()
 	end
 end))
+
 _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 	local pos = input.Position
-	if DropdownContainer.Visible then
+	local closed = false
+	if DropdownContainer and DropdownContainer.Visible then
 		local dPos, dSize = DropdownContainer.AbsolutePosition, DropdownContainer.AbsoluteSize
 		local sPos, sSize = SortDropdownBtn.AbsolutePosition, SortDropdownBtn.AbsoluteSize
+		local fPos, fSize = FilterBtn.AbsolutePosition, FilterBtn.AbsoluteSize
 		local insideDrop = pos.X >= dPos.X and pos.X <= dPos.X + dSize.X and pos.Y >= dPos.Y and pos.Y <= dPos.Y + dSize.Y
-		local insideBtn = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
-		if not insideDrop and not insideBtn then DropdownContainer.Visible = false end
-	end
-	if FilterPanel.Visible then
-		local fPos, fSize = FilterPanel.AbsolutePosition, FilterPanel.AbsoluteSize
-		local bPos, bSize = FilterBtn.AbsolutePosition, FilterBtn.AbsoluteSize
+		local insideSort = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
 		local insideFilter = pos.X >= fPos.X and pos.X <= fPos.X + fSize.X and pos.Y >= fPos.Y and pos.Y <= fPos.Y + fSize.Y
-		local insideFilterBtn = pos.X >= bPos.X and pos.X <= bPos.X + bSize.X and pos.Y >= bPos.Y and pos.Y <= bPos.Y + bSize.Y
-		if not insideFilter and not insideFilterBtn then FilterPanel.Visible = false end
+		if not insideDrop and not insideSort and not insideFilter then
+			DropdownContainer.Visible = false
+			closed = true
+		end
+	end
+	if FilterPanel and FilterPanel.Visible then
+		local dPos, dSize = FilterPanel.AbsolutePosition, FilterPanel.AbsoluteSize
+		local fPos, fSize = FilterBtn.AbsolutePosition, FilterBtn.AbsoluteSize
+		local sPos, sSize = SortDropdownBtn.AbsolutePosition, SortDropdownBtn.AbsoluteSize
+		local insidePanel = pos.X >= dPos.X and pos.X <= dPos.X + dSize.X and pos.Y >= dPos.Y and pos.Y <= dPos.Y + dSize.Y
+		local insideFilter = pos.X >= fPos.X and pos.X <= fPos.X + fSize.X and pos.Y >= fPos.Y and pos.Y <= fPos.Y + fSize.Y
+		local insideSort = pos.X >= sPos.X and pos.X <= sPos.X + sSize.X and pos.Y >= sPos.Y and pos.Y <= sPos.Y + sSize.Y
+		if not insidePanel and not insideFilter and not insideSort then FilterPanel.Visible = false end
 	end
 end))
-_VH_SetFilterButtonVisuals()
+
 
 TabIndicator = Instance.new("Frame", TabContainer)
 TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
@@ -3409,21 +3541,20 @@ function CreateTab(name, index)
 	local btn = Instance.new("TextButton", TabContainer)
 	btn.Size = UDim2.new(1, -10, 0, tabHeight)
 	btn.Position = UDim2.new(0, 5, 0, yOffset)
-	btn.BackgroundColor3 = (name == currentTab) and Color3.fromRGB(43, 51, 85) or Theme.BackgroundSecondary
-	btn.BackgroundTransparency = (name == currentTab) and 0.08 or 0.68
+	btn.BackgroundColor3 = (name == currentTab) and Theme.CardHover or Theme.BackgroundSecondary
+	btn.BackgroundTransparency = (name == currentTab) and 0.05 or 0.62
 	btn.BorderSizePixel = 0
 	btn.Text = ""
 	btn.AutoButtonColor = false
-	btn.ClipsDescendants = false
+	btn.ClipsDescendants = true
 	btn.ZIndex = 12
 	btn.Active = true
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-	local tabOutline = Instance.new("UIStroke", btn)
-	tabOutline.Name = "TabOuterOutline"
-	tabOutline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	tabOutline.Color = Color3.fromRGB(255, 255, 255)
-	tabOutline.Transparency = (name == currentTab) and 0.10 or 0.40
-	tabOutline.Thickness = 1.2
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	local tabStroke = Instance.new("UIStroke", btn)
+	tabStroke.Name = "TabOutline"
+	tabStroke.Color = (name == currentTab) and Theme.Accent or Color3.fromRGB(255, 255, 255)
+	tabStroke.Transparency = (name == currentTab) and 0.34 or 0.82
+	tabStroke.Thickness = 1
 
 	local icon = Instance.new("ImageLabel", btn)
 	icon.Name = "TabIcon"
@@ -3461,7 +3592,7 @@ function CreateTab(name, index)
 		end
 		currentTab = name
 		DropdownContainer.Visible = false
-		if FilterPanel and FilterPanel.Parent then FilterPanel.Visible = false end
+		if FilterPanel then FilterPanel.Visible = false end
 		TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
 		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or "Settings Hub"
@@ -3481,13 +3612,12 @@ function CreateTab(name, index)
 		for tName, tBtn in pairs(TabButtonCache) do
 			local active = tName == currentTab
 			local activeColor = active and Theme.TextPrimary or Theme.TextSecondary
-			tBtn.BackgroundColor3 = active and Color3.fromRGB(43, 51, 85) or Theme.BackgroundSecondary
-			tBtn.BackgroundTransparency = active and 0.08 or 0.68
-			local outline = tBtn:FindFirstChild("TabOuterOutline")
-			if outline and outline:IsA("UIStroke") then
-				outline.Color = Color3.fromRGB(255, 255, 255)
-				outline.Transparency = active and 0.10 or 0.40
-				outline.Thickness = 1.2
+			tBtn.BackgroundColor3 = active and Theme.CardHover or Theme.BackgroundSecondary
+			tBtn.BackgroundTransparency = active and 0.05 or 0.62
+			local tabOutline = tBtn:FindFirstChild("TabOutline")
+			if tabOutline and tabOutline:IsA("UIStroke") then
+				tabOutline.Color = active and Theme.Accent or Color3.fromRGB(255, 255, 255)
+				tabOutline.Transparency = active and 0.34 or 0.82
 			end
 			local childIcon = tBtn:FindFirstChild("TabIcon")
 			local childLabel = tBtn:FindFirstChild("TabLabel")
@@ -3497,6 +3627,7 @@ function CreateTab(name, index)
 	end))
 end
 CreateTab("Changelog", 1); CreateTab("Scripts", 2); CreateTab("Settings", 3)
+_VH_UpdateFilterControl()
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SidebarCredits = Instance.new("Frame", Sidebar)
 SidebarCredits.Size = UDim2.new(1, -20, 0, IsMobile and 126 or 142)
@@ -3632,10 +3763,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Search, Filters & UI Polish", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Added a subtle white outer outline around the Changelog, Scripts, and Settings tabs while keeping the active tab indigo.\n• Rebuilt script search into a natural search experience across names, descriptions, categories, tags, and relevant metadata. Search results are relevance-ranked instead of relying on special query syntax.\n• Redesigned filtering into a Velox-style panel with toggleable Favorites, Categories, Tags, and Status chips. Tap once to select and tap again to unselect.\n• Added active-filter count feedback, Clear Filters, and dynamic filter options generated directly from the catalog.\n• Improved mobile spacing around the search and filter controls while preserving the existing recommendation and catalog layout.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Tightened catalog spacing so the Scripts view uses more of the available panel height and script cards use a more balanced image/content ratio.
-• Fixed sort/filter panel positioning and tab outlines so their borders are not clamped at screen or container edges.
-• Removed text-stroke/letter-outline artifacts from generated text elements where supported.
-• Updated the visible version label to v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Final Cleanup & Stability", "• Finalized the compact Ovei developer credits in the left sidebar with separate Subscribe and Join Discord actions.\n• Removed the separate Credits tab and kept the sidebar navigation focused on Changelog, Scripts, and Settings.\n• Refined tab spacing, active indicators, and touch interaction without changing the sidebar layout concept.\n• Preserved the left-aligned Scripts section and widened the hub slightly to reduce content collisions.\n• Improved Recommended for You text wrapping so titles and status labels display without unwanted truncation.\n• Removed unnecessary outer UI outlines while keeping the compact Credits section clean and separated by a subtle divider.\n• Cleaned stale UI leftovers and redundant child-renaming work from the final build.\n• Kept the established HTTP, compiler, GUI-parent, file, cloneref, and protected-GUI compatibility fallbacks because they were already broadly compatible.\n• Preserved the recommendation, Favorites, Auto Execute, catalog refresh, configuration recovery, and execution notification systems.\n• Updated the visible version label to v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
@@ -3827,7 +3955,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	end
 	local previewSignature = table.concat(previewParts, "\31")
 	if RecommendationRenderSignature == previewSignature then
-		local visible = #allItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and not _VH_HasActiveFilterSet()
+		local visible = #allItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and _VH_GetFilterCount() == 0
 		RecommendationPanel.Visible = visible
 		RecommendationPrevButton.Visible = RecommendationPageCount > 1 and #allItems > 0
 		RecommendationNextButton.Visible = RecommendationPageCount > 1 and #allItems > 0
@@ -3981,7 +4109,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	RecommendationPageLabel.Visible = hasMultiplePages and #RecommendationItems > 0
 	RecommendationPageLabel.Text = hasMultiplePages and (tostring(RecommendationPage) .. " / " .. tostring(RecommendationPageCount)) or ""
 
-	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and not _VH_HasActiveFilterSet()
+	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and _VH_GetFilterCount() == 0
 	RecommendationPanel.Visible = visible
 	if currentCount and currentCount > 0 then
 		RecommendationSubtitle.Text = "Based on your current game"
@@ -4170,25 +4298,24 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		return false, "empty script source"
 	end
 
-	local compiled, chunk, compileErr = _VH_CompileSource(code, scriptName)
-	if compiled and type(chunk) == "function" then
+	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
+	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
-			local runOk, runErr = pcall(chunk)
+			local success = pcall(chunk)
 			if not isDestroying then
-				if runOk then
+				if success then
 					if not suppressSuccessNotification then
 						ShowNotification("Successfully executed [" .. tostring(scriptName) .. "]!", "Success")
 					end
 				else
-					local runtimeMessage = _VH_FormatCompileError(runErr or "unknown runtime error")
-					ShowNotification("Execution failed [" .. tostring(scriptName) .. "]: " .. runtimeMessage, "Error")
+					ShowNotification("Execution failed [" .. tostring(scriptName) .. "]. Check F9.", "Error")
 				end
 			end
 		end)
 		return true, "Script started successfully"
 	end
 
-	local detail = _VH_FormatCompileError(compileErr)
+	local detail = tostring(compileErr or chunk or "unknown compiler error")
 	local normalized = string.lower(detail)
 	if string.find(normalized, "out of local", 1, true)
 		or string.find(normalized, "registers", 1, true)
@@ -4227,17 +4354,15 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		card.BackgroundColor3 = Color3.fromRGB(31, 42, 55)
 	end
 	local pad = Instance.new("UIPadding", card)
-	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12)
-	pad.PaddingTop = UDim.new(0, 12); pad.PaddingBottom = UDim.new(0, 12)
+	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
 	local img = Instance.new("ImageLabel", card)
-	img.Size = UDim2.new(0, IsMobile and 72 or 82, 0, IsMobile and 72 or 82); img.BackgroundColor3 = Theme.BackgroundMain
+	img.Size = UDim2.new(0, 68, 0, 68); img.BackgroundColor3 = Theme.BackgroundMain
 	img.BorderSizePixel = 0; img.Image = safeImageAssetId
 	img.ScaleType = Enum.ScaleType.Crop
 	Instance.new("UICorner", img).CornerRadius = UDim.new(0, 8)
 	local content = Instance.new("Frame", card)
-	local imageSize = IsMobile and 72 or 82
-	local imageGap = 10
-	content.Size = UDim2.new(1, -(imageSize + imageGap), 0, 0); content.Position = UDim2.new(0, imageSize + imageGap, 0, 0)
+	content.Size = UDim2.new(1, -76, 0, 0); content.Position = UDim2.new(0, 76, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
 	local cLay = Instance.new("UIListLayout", content)
 	cLay.SortOrder = Enum.SortOrder.LayoutOrder; cLay.Padding = UDim.new(0, 4)
@@ -4246,7 +4371,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	topRow.BackgroundTransparency = 1; topRow.LayoutOrder = 1
 	local trLay = Instance.new("UIListLayout", topRow)
 	trLay.FillDirection = Enum.FillDirection.Horizontal; trLay.SortOrder = Enum.SortOrder.LayoutOrder; trLay.VerticalAlignment = Enum.VerticalAlignment.Top
-	local metaWidth = IsMobile and 148 or 176
+	local metaWidth = IsMobile and 212 or 250
 	local titleContainer = Instance.new("Frame", topRow)
 	titleContainer.Size = UDim2.new(1, -metaWidth, 0, 0); titleContainer.AutomaticSize = Enum.AutomaticSize.Y
 	titleContainer.BackgroundTransparency = 1; titleContainer.LayoutOrder = 1
@@ -4335,7 +4460,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local mrLay = Instance.new("UIListLayout", metaRightContainer)
 	mrLay.FillDirection = Enum.FillDirection.Horizontal; mrLay.HorizontalAlignment = Enum.HorizontalAlignment.Right; mrLay.VerticalAlignment = Enum.VerticalAlignment.Center; mrLay.SortOrder = Enum.SortOrder.LayoutOrder; mrLay.Padding = UDim.new(0, 3)
 	local dateLbl = Instance.new("TextLabel", metaRightContainer)
-	dateLbl.Size = UDim2.new(0, IsMobile and 112 or 128, 1, 0)
+	dateLbl.Size = UDim2.new(0, IsMobile and 130 or 150, 1, 0)
 	dateLbl.BackgroundTransparency = 1; dateLbl.Text = FormatLastUpdatedLabel(data.LastUpdated)
 	dateLbl.TextColor3 = Theme.TextSecondary; dateLbl.Font = Enum.Font.GothamMedium
 	dateLbl.TextSize = 9; dateLbl.LayoutOrder = 1; dateLbl.TextXAlignment = Enum.TextXAlignment.Right
@@ -4345,7 +4470,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		if available <= 0 then return end
 		local target = metaWidth
 		if available < 440 then target = math.min(target, math.max(145, math.floor(available * 0.46))) end
-		if tagType == "NONE" then target = math.max(IsMobile and 104 or 124, target - 22) end
+		if tagType == "NONE" then target = math.max(125, target - 34) end
 		titleContainer.Size = UDim2.new(1, -target, 0, 0)
 		metaRightContainer.Size = UDim2.new(0, target, 0, 18)
 
@@ -4409,12 +4534,16 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	ApplyInteractiveAnimations(detailsBtn, Theme.BackgroundMain, Theme.BackgroundSecondary, Color3.fromRGB(10, 15, 30), detailsBtnStroke, detailsBtnStroke.Color, Theme.Accent, entryConnections)
 	ApplyInteractiveAnimations(starBtn, nil, nil, nil, nil, nil, nil, entryConnections)
 	local description = type(data.Description) == "string" and data.Description or ""
+	local gameName = type(data.GameName) == "string" and data.GameName or (type(data.GameTitle) == "string" and data.GameTitle or (type(data.ExperienceName) == "string" and data.ExperienceName or (type(data.Game) == "string" and data.Game or (type(data.PlaceName) == "string" and data.PlaceName or ""))))
+	local categorySearch = type(data.Category) == "string" and data.Category or ""
+	local tagsSearch = type(data.Tags) == "table" and table.concat(data.Tags, " ") or (type(data.Tags) == "string" and data.Tags or "")
 	local tagSearch = tagType
 	local scriptEntry = {
-		Instance = card, SearchTitle = string.lower(exactName), SearchDesc = string.lower(description),
-		SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagSearch, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", IsScriptCompatible(data) and "compatible" or "game-only", isRecommended and "recommended for you" or "you may like"}, " ")),
+		Instance = card, SearchTitle = string.lower(exactName), SearchGame = string.lower(gameName), SearchDesc = string.lower(description),
+		SearchCategory = string.lower(categorySearch), SearchTags = string.lower(tagsSearch), SearchStatus = string.lower(tagSearch .. " " .. (IsScriptCompatible(data) and "compatible" or "game-only")),
+		SearchMeta = string.lower(table.concat({categorySearch, type(data.Author) == "string" and data.Author or "", tagSearch, tagsSearch, IsScriptCompatible(data) and "compatible" or "game-only"}, " ")),
 		Data = data,
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(data.GameName or data.GameTitle or data.ExperienceName or data.Game or data.PlaceName or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -4436,7 +4565,11 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		recommendBadge.Visible = isRecommended
 		recommendText.Text = recommendationType == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 		badgeRow.Visible = isRecommended or tagType ~= "NONE"
-		scriptEntry.SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagType, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", compatible and "compatible" or "game-only", isRecommended and (recommendationType == "SMART" and "you may like" or "recommended for you") or ""}, " "))
+		scriptEntry.SearchGame = string.lower(type(data.GameName) == "string" and data.GameName or (type(data.GameTitle) == "string" and data.GameTitle or (type(data.ExperienceName) == "string" and data.ExperienceName or (type(data.Game) == "string" and data.Game or (type(data.PlaceName) == "string" and data.PlaceName or "")))))
+		scriptEntry.SearchCategory = string.lower(type(data.Category) == "string" and data.Category or "")
+		scriptEntry.SearchTags = string.lower(type(data.Tags) == "table" and table.concat(data.Tags, " ") or (type(data.Tags) == "string" and data.Tags or ""))
+		scriptEntry.SearchStatus = string.lower(table.concat({tagType, compatible and "compatible" or "game-only"}, " "))
+		scriptEntry.SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagType, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", compatible and "compatible" or "game-only"}, " "))
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
@@ -4539,11 +4672,12 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 			ShowNotification("Starting [" .. exactName .. "]...", "Execution")
 			titleLbl.Text = "Running script..."; titleLbl.TextColor3 = Theme.Accent
 			task.spawn(function()
-				local url = type(data.RawUrl) == "string" and data.RawUrl or ""
-				local raw, precompiledChunk, fetchCompileErr = _VH_FetchScriptSource(url, exactName)
+				local raw, status = FetchWithRetry(type(data.RawUrl) == "string" and data.RawUrl or "", 2)
 				if isDestroying then return end
 				if not raw then
-					ShowNotification("Could not start [" .. exactName .. "]: " .. tostring(fetchCompileErr or "invalid script source"), "Error")
+					ShowNotification("Could not download [" .. exactName .. "]" .. (status and " (" .. tostring(status) .. ")" or "") .. ".", "Error")
+				elseif #string.gsub(raw, "%s+", "") == 0 then
+					ShowNotification("Empty script source for [" .. exactName .. "].", "Error")
 				else
 					ExecuteSandboxed(raw, exactName)
 				end
@@ -4738,7 +4872,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 				end
 				_VH_RefreshRecommendations()
 				RefreshAllCardStates()
-				RebuildFilterOptions()
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
@@ -4812,7 +4945,6 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
-			RebuildFilterOptions()
 			_VH_RefreshRecommendations()
 			RefreshAllCardStates()
 			UpdateFilter()
@@ -4844,13 +4976,12 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 						startedList, failList = {}, {}
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							local scrRaw, _, fetchCompileErr = _VH_FetchScriptSource(scriptData.RawUrl, scriptData.Name)
+							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
-							if scrRaw then
+							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
 							else
 								failList[#failList + 1] = scriptData.Name
-								if fetchCompileErr then ShowNotification("Auto-execute skipped [" .. tostring(scriptData.Name) .. "]: " .. tostring(fetchCompileErr), "Warning") end
 							end
 							task.wait(0.3)
 						end
