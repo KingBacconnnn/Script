@@ -125,19 +125,50 @@ VeloxIcons = {
 	Changelog = "rbxassetid://132233084740467",
 	Scripts = "rbxassetid://71381493834012",
 	Settings = "rbxassetid://72089331699313",
-	ToggleUI = "rbxassetid://93155327616766",
-	AntiAFK = "rbxassetid://110726630994696",
+	HowToUse = "rbxassetid://121204007268320",
+	ToggleUI = "rbxassetid://90339742588515",
+	AntiAFK = "rbxassetid://133188122434047",
 	UIScale = "rbxassetid://99583318883826",
 	RefreshCatalog = "rbxassetid://129652027568082",
-	UnloadHub = "rbxassetid://72565694105823",
-	ClearUICache = "rbxassetid://133176370689043",
-	Community = "rbxassetid://73104754353273",
-	Video = "rbxassetid://89271504290896",
+	UnloadHub = "rbxassetid://125903368538682",
+	ClearUICache = "rbxassetid://115335545782295",
+	Community = "rbxassetid://72421199461362",
+	Video = "rbxassetid://109292590008276",
 	Search = "rbxassetid://110668972393459",
+	Filter = "rbxassetid://107670284051546",
 	Favorite = "rbxassetid://106060923892368",
-	Sort = "rbxassetid://78004328083097",
-	Close = "rbxassetid://92183221721602"
+	Sort = "rbxassetid://75323379119979",
+	Close = "rbxassetid://104914974782570",
+	Check = "rbxassetid://98454659316573",
+	Info = "rbxassetid://75677911587690",
+	Minus = "rbxassetid://133760664135962",
+	Plus = "rbxassetid://140457254849499",
+	ChevronLeft = "rbxassetid://109697704628633",
+	ChevronRight = "rbxassetid://78509085870539",
+	Flame = "rbxassetid://103638645213690",
+	Sparkles = "rbxassetid://100914317336916",
+	Heart = "rbxassetid://91267011731946",
+	Tag = "rbxassetid://125986815165844",
+	Book = "rbxassetid://128971810128936",
+	Checklist = "rbxassetid://109837415710773",
+	PlayCircle = "rbxassetid://109292590008276",
+	AppBadge = "rbxassetid://124163824604013"
 }
+function CreateVeloxIcon(parent, asset, size, color, position, anchor, zIndex, name)
+	local img = Instance.new("ImageLabel", parent)
+	img.Name = name or "VeloxIcon"
+	img.Size = UDim2.new(0, size or 18, 0, size or 18)
+	if position then img.Position = position else img.Position = UDim2.new(0, 0, 0, 0) end
+	if anchor then img.AnchorPoint = anchor end
+	img.BackgroundTransparency = 1
+	img.BorderSizePixel = 0
+	img.Image = asset or ""
+	img.ImageColor3 = color or Theme.TextPrimary
+	img.ScaleType = Enum.ScaleType.Fit
+	img.ZIndex = zIndex or 1
+	img.Active = false
+	return img
+end
 VeloxConnections = {}
 RegisteredScripts = {}
 PendingTasks = {}
@@ -1514,11 +1545,9 @@ function ShowNotification(msg, notifType)
 		closeButton.Position = UDim2.new(1, -27, 0, 5)
 		closeButton.BackgroundTransparency = 1
 		closeButton.AutoButtonColor = false
-		closeButton.Text = "×"
-		closeButton.TextColor3 = Theme.TextSecondary
-		closeButton.Font = Enum.Font.GothamBold
-		closeButton.TextSize = 14
+		closeButton.Text = ""
 		closeButton.ZIndex = 2006
+		CreateVeloxIcon(closeButton, VeloxIcons.Close, 11, Theme.TextSecondary, UDim2.new(0.5, -5.5, 0.5, -5.5), nil, 2007, "CloseIcon")
 
 		local description = Instance.new("TextLabel", box)
 		description.Name = "Description"
@@ -1755,16 +1784,7 @@ ConfirmIconStroke.Color = Theme.Accent
 ConfirmIconStroke.Transparency = 0.18
 ConfirmIconStroke.Thickness = 1
 
-ConfirmIconText = Instance.new("TextLabel", ConfirmIcon)
-ConfirmIconText.Size = UDim2.new(1, 0, 1, 0)
-ConfirmIconText.BackgroundTransparency = 1
-ConfirmIconText.Text = "?"
-ConfirmIconText.TextColor3 = Color3.fromRGB(224, 226, 255)
-ConfirmIconText.Font = Enum.Font.GothamBold
-ConfirmIconText.TextSize = 18
-ConfirmIconText.TextXAlignment = Enum.TextXAlignment.Center
-ConfirmIconText.TextYAlignment = Enum.TextYAlignment.Center
-ConfirmIconText.ZIndex = 404
+ConfirmIconText = CreateVeloxIcon(ConfirmIcon, VeloxIcons.HowToUse, 18, Color3.fromRGB(224, 226, 255), UDim2.new(0.5, -9, 0.5, -9), nil, 404, "ConfirmIconImage")
 
 ConfirmTitle = Instance.new("TextLabel", ConfirmHeader)
 ConfirmTitle.Size = UDim2.new(1, -46, 0, 20)
@@ -2007,10 +2027,8 @@ ScriptDetailsClose.Position = UDim2.new(1, -28, 0, 0)
 ScriptDetailsClose.BackgroundColor3 = Theme.Card
 ScriptDetailsClose.BorderSizePixel = 0
 ScriptDetailsClose.AutoButtonColor = false
-ScriptDetailsClose.Text = "×"
-ScriptDetailsClose.TextColor3 = Theme.TextPrimary
-ScriptDetailsClose.Font = Enum.Font.GothamBold
-ScriptDetailsClose.TextSize = 20
+ScriptDetailsClose.Text = ""
+CreateVeloxIcon(ScriptDetailsClose, VeloxIcons.Close, 13, Theme.TextPrimary, UDim2.new(0.5, -6.5, 0.5, -6.5), nil, 1, "CloseIcon")
 Instance.new("UICorner", ScriptDetailsClose).CornerRadius = UDim.new(1, 0)
 ScriptDetailsCloseStroke = Instance.new("UIStroke", ScriptDetailsClose)
 ScriptDetailsCloseStroke.Color = Theme.Stroke
@@ -2377,9 +2395,9 @@ task.spawn(function()
 	end
 end)
 MinBtn = Instance.new("TextButton", RightHeaderFrame)
-MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = "—"
-MinBtn.TextColor3 = Theme.TextSecondary; MinBtn.Font = Enum.Font.GothamBold; MinBtn.TextSize = IsMobile and 14 or 18; MinBtn.LayoutOrder = 3
+MinBtn.Size = UDim2.new(0, 28, 0, 28); MinBtn.BackgroundTransparency = 1; MinBtn.Text = ""; MinBtn.LayoutOrder = 3
 MinBtn.ClipsDescendants = true
+CreateVeloxIcon(MinBtn, VeloxIcons.Minus, 12, Theme.TextSecondary, UDim2.new(0.5, -6, 0.5, -6), nil, 2, "MinimizeIcon")
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 _VH_RegConn(MinBtn.Activated:Connect(function() ToggleUI() end))
 ApplyInteractiveAnimations(MinBtn, nil, Theme.CardHover, Theme.CardHover, nil, nil, nil)
@@ -2498,20 +2516,7 @@ FilterBtn.ZIndex = 51; FilterBtn.AutoButtonColor = false
 Instance.new("UICorner", FilterBtn).CornerRadius = UDim.new(0, 8)
 FilterBtnStroke = Instance.new("UIStroke", FilterBtn); FilterBtnStroke.Color = Theme.Stroke; FilterBtnStroke.Thickness = 1
 
-FilterIcon = Instance.new("Frame", FilterBtn)
-FilterIcon.Name = "FilterIcon"
-FilterIcon.Size = UDim2.new(0, 16, 0, 16); FilterIcon.Position = UDim2.new(0.5, -8, 0.5, -8)
-FilterIcon.BackgroundTransparency = 1; FilterIcon.ZIndex = 52
-for index, width in ipairs({14, 9, 4}) do
-	local bar = Instance.new("Frame", FilterIcon)
-	bar.Name = "Bar" .. index
-	bar.Size = UDim2.new(0, width, 0, 2)
-	bar.Position = UDim2.new(0.5, -math.floor(width / 2), 0, (index - 1) * 5 + 2)
-	bar.BackgroundColor3 = Theme.TextSecondary
-	bar.BorderSizePixel = 0
-	bar.ZIndex = 53
-	Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
-end
+FilterIcon = CreateVeloxIcon(FilterBtn, VeloxIcons.Filter, 16, Theme.TextSecondary, UDim2.new(0.5, -8, 0.5, -8), nil, 52, "FilterIcon")
 
 FilterBadge = Instance.new("TextLabel", FilterBtn)
 FilterBadge.Name = "FilterBadge"
@@ -2633,7 +2638,7 @@ RecommendationSeeMoreButton.Position = UDim2.new(1, -(IsMobile and 88 or 100), 0
 RecommendationSeeMoreButton.BackgroundColor3 = Color3.fromRGB(40, 34, 105)
 RecommendationSeeMoreButton.BorderSizePixel = 0
 RecommendationSeeMoreButton.AutoButtonColor = false
-RecommendationSeeMoreButton.Text = "See More >"
+RecommendationSeeMoreButton.Text = "See More"
 RecommendationSeeMoreButton.TextColor3 = Color3.fromRGB(216, 218, 255)
 RecommendationSeeMoreButton.Font = Enum.Font.GothamBold
 RecommendationSeeMoreButton.TextSize = IsMobile and 8 or 9
@@ -2667,11 +2672,9 @@ RecommendationPrevButton.Position = UDim2.new(0, IsMobile and 6 or 7, 0, IsMobil
 RecommendationPrevButton.BackgroundColor3 = Color3.fromRGB(26, 34, 57)
 RecommendationPrevButton.BorderSizePixel = 0
 RecommendationPrevButton.AutoButtonColor = false
-RecommendationPrevButton.Text = "<"
-RecommendationPrevButton.TextColor3 = Color3.fromRGB(222, 227, 245)
-RecommendationPrevButton.Font = Enum.Font.GothamBold
-RecommendationPrevButton.TextSize = IsMobile and 12 or 14
+RecommendationPrevButton.Text = ""
 RecommendationPrevButton.ZIndex = 10
+CreateVeloxIcon(RecommendationPrevButton, VeloxIcons.ChevronLeft, 12, Color3.fromRGB(222, 227, 245), UDim2.new(0.5, -6, 0.5, -6), nil, 11, "PrevIcon")
 Instance.new("UICorner", RecommendationPrevButton).CornerRadius = UDim.new(1, 0)
 RecommendationPrevStroke = Instance.new("UIStroke", RecommendationPrevButton)
 RecommendationPrevStroke.Color = Color3.fromRGB(69, 82, 118)
@@ -2684,11 +2687,9 @@ RecommendationNextButton.Position = UDim2.new(1, -(IsMobile and 30 or 35), 0, Is
 RecommendationNextButton.BackgroundColor3 = Color3.fromRGB(26, 34, 57)
 RecommendationNextButton.BorderSizePixel = 0
 RecommendationNextButton.AutoButtonColor = false
-RecommendationNextButton.Text = ">"
-RecommendationNextButton.TextColor3 = Color3.fromRGB(222, 227, 245)
-RecommendationNextButton.Font = Enum.Font.GothamBold
-RecommendationNextButton.TextSize = IsMobile and 12 or 14
+RecommendationNextButton.Text = ""
 RecommendationNextButton.ZIndex = 10
+CreateVeloxIcon(RecommendationNextButton, VeloxIcons.ChevronRight, 12, Color3.fromRGB(222, 227, 245), UDim2.new(0.5, -6, 0.5, -6), nil, 11, "NextIcon")
 Instance.new("UICorner", RecommendationNextButton).CornerRadius = UDim.new(1, 0)
 RecommendationNextStroke = Instance.new("UIStroke", RecommendationNextButton)
 RecommendationNextStroke.Color = Color3.fromRGB(69, 82, 118)
@@ -2971,8 +2972,8 @@ function _VH_UpdateFilterControl()
 	FilterBtnStroke.Color = active and Theme.Accent or Theme.Stroke
 	FilterBadge.Visible = count > 0
 	FilterBadge.Text = count > 9 and "9+" or tostring(count)
-	for _, bar in ipairs(FilterIcon:GetChildren()) do
-		if bar:IsA("Frame") then bar.BackgroundColor3 = active and Color3.fromRGB(190, 192, 255) or Theme.TextSecondary end
+	if FilterIcon and FilterIcon.Parent then
+		FilterIcon.ImageColor3 = active and Color3.fromRGB(190, 192, 255) or Theme.TextSecondary
 	end
 end
 
@@ -3047,16 +3048,8 @@ function _VH_AddFilterSection(title, options, stateMap, layoutOrder, singleToggl
 		labelObject.TextTruncate = Enum.TextTruncate.AtEnd
 		labelObject.ZIndex = 1557
 
-		local check = Instance.new("TextLabel", button)
-		check.Size = UDim2.new(0, 20, 1, 0)
-		check.Position = UDim2.new(1, -25, 0, 0)
-		check.BackgroundTransparency = 1
-		check.Text = "✓"
-		check.TextColor3 = Theme.Accent
-		check.Font = Enum.Font.GothamBold
-		check.TextSize = 12
+		local check = CreateVeloxIcon(button, VeloxIcons.Check, 12, Theme.Accent, UDim2.new(1, -25, 0.5, -6), nil, 1557, "FilterCheck")
 		check.Visible = false
-		check.ZIndex = 1557
 
 		local function refresh()
 			local active = stateMap[key] == true
@@ -3108,10 +3101,8 @@ function RebuildFilterPanel()
 	favText.Size = UDim2.new(1, -42, 1, 0); favText.Position = UDim2.new(0, 10, 0, 0)
 	favText.BackgroundTransparency = 1; favText.Text = "Favorites"; favText.TextColor3 = Theme.TextPrimary
 	favText.Font = Enum.Font.GothamMedium; favText.TextSize = 9; favText.TextXAlignment = Enum.TextXAlignment.Left; favText.ZIndex = 1557
-	local favCheck = Instance.new("TextLabel", favButton)
-	favCheck.Size = UDim2.new(0, 20, 1, 0); favCheck.Position = UDim2.new(1, -25, 0, 0)
-	favCheck.BackgroundTransparency = 1; favCheck.Text = "★"; favCheck.TextColor3 = Color3.fromRGB(250, 204, 21)
-	favCheck.Font = Enum.Font.GothamBold; favCheck.TextSize = 12; favCheck.Visible = FilterState.Favorites; favCheck.ZIndex = 1557
+	local favCheck = CreateVeloxIcon(favButton, VeloxIcons.Favorite, 13, Color3.fromRGB(250, 204, 21), UDim2.new(1, -26, 0.5, -6.5), nil, 1557, "FavoriteFilterIcon")
+	favCheck.Visible = FilterState.Favorites
 
 	_VH_FilterRegConn(favButton.Activated:Connect(function()
 		FilterState.Favorites = not FilterState.Favorites
@@ -3437,7 +3428,7 @@ local function _VH_RefreshSortButtons()
 				stroke.Transparency = active and 0.08 or 0.35
 			end
 			local check = child:FindFirstChild("SortCheck")
-			if check and check:IsA("TextLabel") then check.Visible = active end
+			if check and (check:IsA("ImageLabel") or check:IsA("ImageButton")) then check.Visible = active end
 			local label = child:FindFirstChild("SortLabel")
 			if label and label:IsA("TextLabel") then
 				label.TextColor3 = active and Color3.fromRGB(224, 225, 255) or Theme.TextPrimary
@@ -3476,17 +3467,8 @@ for order, opt in ipairs(SortOptions) do
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.ZIndex = 1605
 
-	local check = Instance.new("TextLabel", btn)
-	check.Name = "SortCheck"
-	check.Size = UDim2.new(0, 20, 1, 0)
-	check.Position = UDim2.new(1, -25, 0, 0)
-	check.BackgroundTransparency = 1
-	check.Text = "✓"
-	check.TextColor3 = Theme.Accent
-	check.Font = Enum.Font.GothamBold
-	check.TextSize = 12
+	local check = CreateVeloxIcon(btn, VeloxIcons.Check, 12, Theme.Accent, UDim2.new(1, -25, 0.5, -6), nil, 1605, "SortCheck")
 	check.Visible = false
-	check.ZIndex = 1605
 
 	_VH_RegConn(btn.Activated:Connect(function()
 		SortMode = opt
@@ -3543,7 +3525,7 @@ TabIndicator.BackgroundColor3 = Theme.Accent
 TabIndicator.BorderSizePixel = 0
 TabIndicator.ZIndex = 8
 Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(1, 0)
-TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings, ["How to Use"] = VeloxIcons.Changelog }
+TabIconAssetIds = { Changelog = VeloxIcons.Changelog, Scripts = VeloxIcons.Scripts, Settings = VeloxIcons.Settings, ["How to Use"] = VeloxIcons.HowToUse }
 TabButtonCache = {}
 function CreateTab(name, index)
 	local tabHeight = IsMobile and 36 or 40
@@ -3579,20 +3561,7 @@ function CreateTab(name, index)
 	icon.Active = false
 	icon.ZIndex = 6
 	if name == "How to Use" then
-		icon.Visible = false
-		local helpIcon = Instance.new("TextLabel", btn)
-		helpIcon.Name = "TabHelpIcon"
-		helpIcon.Size = UDim2.new(0, IsMobile and 18 or 20, 0, IsMobile and 18 or 20)
-		helpIcon.Position = UDim2.new(0, IsMobile and 10 or 12, 0.5, -(IsMobile and 9 or 10))
-		helpIcon.BackgroundTransparency = 1
-		helpIcon.Text = "?"
-		helpIcon.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
-		helpIcon.Font = Enum.Font.GothamBold
-		helpIcon.TextSize = IsMobile and 14 or 16
-		helpIcon.TextXAlignment = Enum.TextXAlignment.Center
-		helpIcon.TextYAlignment = Enum.TextYAlignment.Center
-		helpIcon.Active = false
-		helpIcon.ZIndex = 6
+		icon.Image = VeloxIcons.HowToUse
 	end
 
 	local label = Instance.new("TextLabel", btn)
@@ -3649,8 +3618,6 @@ function CreateTab(name, index)
 			local childIcon = tBtn:FindFirstChild("TabIcon")
 			local childLabel = tBtn:FindFirstChild("TabLabel")
 			if childIcon and childIcon:IsA("ImageLabel") then childIcon.ImageColor3 = activeColor end
-			local childHelpIcon = tBtn:FindFirstChild("TabHelpIcon")
-			if childHelpIcon and childHelpIcon:IsA("TextLabel") then childHelpIcon.TextColor3 = activeColor end
 			if childLabel then childLabel.TextColor3 = activeColor end
 		end
 	end))
@@ -3794,7 +3761,7 @@ end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
 CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked normal-word search to rank relevant results across script names, game names, descriptions, categories, and tags without special query syntax.\n• Rebuilt Filters as a compact mobile-friendly panel with multi-select Categories, Tags, Status, and Favorites plus a Clear action and indigo active states.\n• Rebuilt Sort Scripts as a modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added viewport-safe positioning for the sort and filter panels and clamped the main and floating controls so outlines and panels stay on-screen.\n• Fixed the viewport refresh callback ordering that could produce the nil-function error shown in the console.\n• Removed stale v2.0.5 source comments and redundant temporary helper globals while preserving required executor fallbacks.\n• Preserved the existing GUI-parent, protected-GUI, HTTP request, file I/O, compiler, and cloneref compatibility fallbacks because they were already broad and working.\n• Kept Favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and the existing Velox Hub layout intact.\n• Reduced unnecessary shared scratch state and avoided adding a new local-heavy execution path that could increase compiler register pressure.\n• Kept the visible version label at v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
-function _VH_HowToCard(parent, title, desc, order)
+function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover; block.LayoutOrder = order or 0
@@ -3802,23 +3769,28 @@ function _VH_HowToCard(parent, title, desc, order)
 	local stroke = Instance.new("UIStroke", block); stroke.Color = Theme.Stroke; stroke.Transparency = 0.28; stroke.Thickness = 1
 	local pad = Instance.new("UIPadding", block)
 	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-	local lay = Instance.new("UIListLayout", block); lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder
-	local t = Instance.new("TextLabel", block)
-	t.Size = UDim2.new(1, 0, 0, 18); t.BackgroundTransparency = 1; t.Text = title
-	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.LayoutOrder = 1
+	local lay = Instance.new("UIListLayout", block); lay.Padding = UDim.new(0, 5); lay.SortOrder = Enum.SortOrder.LayoutOrder
+	local titleRow = Instance.new("Frame", block)
+	titleRow.Size = UDim2.new(1, 0, 0, 22); titleRow.BackgroundTransparency = 1; titleRow.LayoutOrder = 1
+	CreateVeloxIcon(titleRow, iconAsset or VeloxIcons.Info, 17, Theme.Accent, UDim2.new(0, 0, 0.5, -8.5), nil, 3, "SectionIcon")
+	local t = Instance.new("TextLabel", titleRow)
+	t.Size = UDim2.new(1, -28, 1, 0); t.Position = UDim2.new(0, 26, 0, 0); t.BackgroundTransparency = 1; t.Text = title
+	t.TextColor3 = Theme.TextPrimary; t.Font = Enum.Font.GothamBold; t.TextSize = 13; t.TextXAlignment = Enum.TextXAlignment.Left; t.TextYAlignment = Enum.TextYAlignment.Center
 	local d = Instance.new("TextLabel", block)
 	d.Size = UDim2.new(1, 0, 0, 0); d.AutomaticSize = Enum.AutomaticSize.Y; d.BackgroundTransparency = 1; d.Text = desc
 	d.TextColor3 = Theme.TextSecondary; d.Font = Enum.Font.Gotham; d.TextSize = 11; d.TextWrapped = true; d.TextXAlignment = Enum.TextXAlignment.Left; d.LayoutOrder = 2
 	return block
 end
-function _VH_HowToPill(parent, text, background, textColor, width, order)
+function _VH_HowToPill(parent, text, background, textColor, width, order, iconAsset)
 	local pill = Instance.new("Frame", parent)
-	pill.Size = UDim2.new(0, width or 82, 0, 22); pill.BackgroundColor3 = background; pill.LayoutOrder = order or 0
+	pill.Size = UDim2.new(0, width or 82, 0, 26); pill.BackgroundColor3 = background; pill.LayoutOrder = order or 0
 	Instance.new("UICorner", pill).CornerRadius = UDim.new(0, 7)
 	local st = Instance.new("UIStroke", pill); st.Color = textColor; st.Transparency = 0.45; st.Thickness = 0.8
+	local textOffset = iconAsset and 21 or 0
+	if iconAsset then CreateVeloxIcon(pill, iconAsset, 12, textColor, UDim2.new(0, 7, 0.5, -6), nil, 3, "PillIcon") end
 	local lbl = Instance.new("TextLabel", pill)
-	lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = textColor
-	lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 9; lbl.TextXAlignment = Enum.TextXAlignment.Center
+	lbl.Size = UDim2.new(1, -(textOffset + 8), 1, 0); lbl.Position = UDim2.new(0, textOffset + 3, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = textColor
+	lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 9; lbl.TextXAlignment = iconAsset and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center; lbl.TextYAlignment = Enum.TextYAlignment.Center
 	return pill
 end
 function _VH_HowToLabel(parent, text, color, width, order)
@@ -3829,103 +3801,121 @@ function _VH_HowToLabel(parent, text, color, width, order)
 	return lbl
 end
 function CreateHowToUseContent()
-	local intro = _VH_HowToCard(HowToUseView, "Welcome to Velox Hub", "This tab is a visual legend and quick reference. The examples below use the same controls, colors, badges, outlines, and states used in the actual hub so you can recognize what each element means.", 1)
+	local intro = _VH_HowToCard(HowToUseView, "Welcome to Velox Hub", "This tab is a visual legend and quick reference. Every example below uses the same icon assets, colors, badges, outlines, and states as the live hub.", 1, VeloxIcons.HowToUse)
 	local introAccent = Instance.new("Frame", intro)
 	introAccent.Size = UDim2.new(0, 4, 0, 42); introAccent.Position = UDim2.new(0, 0, 0, 0); introAccent.BackgroundColor3 = Theme.Accent; introAccent.BorderSizePixel = 0; introAccent.ZIndex = 3
 	Instance.new("UICorner", introAccent).CornerRadius = UDim.new(1, 0)
 
-	local tabs = _VH_HowToCard(HowToUseView, "Navigation Tabs", "Each tab opens a different section. The active tab uses the indigo accent; inactive tabs keep a subtle white outline.", 2)
-	local tabsRow = Instance.new("Frame", tabs); tabsRow.Size = UDim2.new(1, 0, 0, 34); tabsRow.BackgroundTransparency = 1; tabsRow.LayoutOrder = 3
-	local tabsLayout = Instance.new("UIListLayout", tabsRow); tabsLayout.FillDirection = Enum.FillDirection.Horizontal; tabsLayout.Padding = UDim.new(0, 6); tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	local tabNames = {"Changelog", "Scripts", "Settings", "How to Use"}
-	for i = 1, #tabNames do
-		local name = tabNames[i]
-		local b = Instance.new("Frame", tabsRow); b.Size = UDim2.new(0, IsMobile and 74 or 92, 0, 30); b.BackgroundColor3 = name == "Scripts" and Theme.CardHover or Theme.BackgroundSecondary; b.BackgroundTransparency = name == "Scripts" and 0.05 or 0.42
-		b.LayoutOrder = i; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-		local bs = Instance.new("UIStroke", b); bs.Color = name == "Scripts" and Theme.Accent or Color3.fromRGB(255, 255, 255); bs.Transparency = name == "Scripts" and 0.28 or 0.72; bs.Thickness = 1
-		local l = Instance.new("TextLabel", b); l.Size = UDim2.new(1, 0, 1, 0); l.BackgroundTransparency = 1; l.Text = name; l.TextColor3 = name == "Scripts" and Theme.TextPrimary or Theme.TextSecondary; l.Font = Enum.Font.GothamMedium; l.TextSize = IsMobile and 8 or 10; l.TextXAlignment = Enum.TextXAlignment.Center
+	local tabs = _VH_HowToCard(HowToUseView, "Navigation Tabs", "Each tab opens a different section. The active tab uses indigo; inactive tabs keep a subtle white outline.", 2, VeloxIcons.AppBadge)
+	local tabsRow = Instance.new("Frame", tabs); tabsRow.Size = UDim2.new(1, 0, 0, IsMobile and 70 or 38); tabsRow.BackgroundTransparency = 1; tabsRow.LayoutOrder = 3
+	local tabsLayout
+	if IsMobile then
+		tabsLayout = Instance.new("UIGridLayout", tabsRow); tabsLayout.CellSize = UDim2.new(0.5, -3, 0, 30); tabsLayout.CellPadding = UDim2.new(0, 6, 0, 6); tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left; tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	else
+		tabsLayout = Instance.new("UIListLayout", tabsRow); tabsLayout.FillDirection = Enum.FillDirection.Horizontal; tabsLayout.Padding = UDim.new(0, 5); tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
+	local tabInfo = {{"Changelog", VeloxIcons.Changelog}, {"Scripts", VeloxIcons.Scripts}, {"Settings", VeloxIcons.Settings}, {"How to Use", VeloxIcons.HowToUse}}
+	for i, item in ipairs(tabInfo) do
+		local name, asset = item[1], item[2]
+		local active = name == "Scripts"
+		local width = IsMobile and (i == 4 and 0 or 0) or (i == 4 and 105 or 92)
+		local b = Instance.new("Frame", tabsRow); b.Size = IsMobile and UDim2.new(1, 0, 0, 30) or UDim2.new(0, width, 0, 32); b.BackgroundColor3 = active and Theme.CardHover or Theme.BackgroundSecondary; b.BackgroundTransparency = active and 0.05 or 0.42; b.LayoutOrder = i
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+		local bs = Instance.new("UIStroke", b); bs.Color = active and Theme.Accent or Color3.fromRGB(255, 255, 255); bs.Transparency = active and 0.28 or 0.72; bs.Thickness = 1
+		CreateVeloxIcon(b, asset, 15, active and Theme.TextPrimary or Theme.TextSecondary, UDim2.new(0, 7, 0.5, -7.5), nil, 3, "TabLegendIcon")
+		local l = Instance.new("TextLabel", b); l.Size = UDim2.new(1, -28, 1, 0); l.Position = UDim2.new(0, 25, 0, 0); l.BackgroundTransparency = 1; l.Text = name; l.TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary; l.Font = Enum.Font.GothamMedium; l.TextSize = IsMobile and 7 or 9; l.TextXAlignment = Enum.TextXAlignment.Left; l.TextYAlignment = Enum.TextYAlignment.Center
 	end
 
-	local search = _VH_HowToCard(HowToUseView, "Search", "Type normal words only. Search checks script name, game name, description, category, and tags, then ranks the closest matches.", 3)
-	local searchRow = Instance.new("Frame", search); searchRow.Size = UDim2.new(1, 0, 0, 34); searchRow.BackgroundTransparency = 1; searchRow.LayoutOrder = 3
-	local searchBox = Instance.new("Frame", searchRow); searchBox.Size = UDim2.new(1, -48, 0, 32); searchBox.BackgroundColor3 = Theme.BackgroundSecondary
+	local search = _VH_HowToCard(HowToUseView, "Search", "Type normal words only. Search checks script name, game name, description, category, and tags, then ranks the closest matches.", 3, VeloxIcons.Search)
+	local searchRow = Instance.new("Frame", search); searchRow.Size = UDim2.new(1, 0, 0, 36); searchRow.BackgroundTransparency = 1; searchRow.LayoutOrder = 3
+	local searchBox = Instance.new("Frame", searchRow); searchBox.Size = UDim2.new(1, -54, 0, 32); searchBox.BackgroundColor3 = Theme.BackgroundSecondary; searchBox.Position = UDim2.new(0, 0, 0.5, -16)
 	Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 7); local searchStroke = Instance.new("UIStroke", searchBox); searchStroke.Color = Theme.Stroke; searchStroke.Transparency = 0.12; searchStroke.Thickness = 1
-	local searchIcon = Instance.new("TextLabel", searchBox); searchIcon.Size = UDim2.new(0, 24, 1, 0); searchIcon.BackgroundTransparency = 1; searchIcon.Text = "⌕"; searchIcon.TextColor3 = Theme.TextSecondary; searchIcon.Font = Enum.Font.GothamBold; searchIcon.TextSize = 18
-	local searchText = Instance.new("TextLabel", searchBox); searchText.Size = UDim2.new(1, -34, 1, 0); searchText.Position = UDim2.new(0, 30, 0, 0); searchText.BackgroundTransparency = 1; searchText.Text = "auto farm coins"; searchText.TextColor3 = Theme.TextSecondary; searchText.Font = Enum.Font.Gotham; searchText.TextSize = 10; searchText.TextXAlignment = Enum.TextXAlignment.Left
-	_VH_HowToPill(searchRow, "RELEVANT", Theme.Accent, Color3.fromRGB(255, 255, 255), 44, 2)
+	CreateVeloxIcon(searchBox, VeloxIcons.Search, 15, Theme.TextSecondary, UDim2.new(0, 10, 0.5, -7.5), nil, 3, "SearchLegendIcon")
+	local searchText = Instance.new("TextLabel", searchBox); searchText.Size = UDim2.new(1, -38, 1, 0); searchText.Position = UDim2.new(0, 32, 0, 0); searchText.BackgroundTransparency = 1; searchText.Text = "auto farm coins"; searchText.TextColor3 = Theme.TextSecondary; searchText.Font = Enum.Font.Gotham; searchText.TextSize = 10; searchText.TextXAlignment = Enum.TextXAlignment.Left; searchText.TextYAlignment = Enum.TextYAlignment.Center
+	_VH_HowToPill(searchRow, "Relevant", Theme.Accent, Color3.fromRGB(255, 255, 255), 52, 2, VeloxIcons.Search)
 
-	local filters = _VH_HowToCard(HowToUseView, "Filters", "Filters can be selected together. Tap a selected filter again to remove it. Indigo means active. Clear removes all active filters.", 4)
-	local filterRow = Instance.new("Frame", filters); filterRow.Size = UDim2.new(1, 0, 0, 56); filterRow.BackgroundTransparency = 1; filterRow.LayoutOrder = 3
-	local filterLayout = Instance.new("UIListLayout", filterRow); filterLayout.FillDirection = Enum.FillDirection.Horizontal; filterLayout.Padding = UDim.new(0, 6); filterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	local fb = Instance.new("Frame", filterRow); fb.Size = UDim2.new(0, IsMobile and 64 or 76, 0, 32); fb.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", fb).CornerRadius = UDim.new(0, 7)
-	local fs = Instance.new("UIStroke", fb); fs.Color = Color3.fromRGB(255, 255, 255); fs.Transparency = 0.7; fs.Thickness = 1
-	local fl = Instance.new("TextLabel", fb); fl.Size = UDim2.new(1, 0, 1, 0); fl.BackgroundTransparency = 1; fl.Text = "Filter 3"; fl.TextColor3 = Theme.TextPrimary; fl.Font = Enum.Font.GothamBold; fl.TextSize = 9
-	_VH_HowToPill(filterRow, "Favorites", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 68, 2)
-	_VH_HowToPill(filterRow, "Anime", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 54, 3)
-	_VH_HowToPill(filterRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 42, 4)
-	local clear = _VH_HowToPill(filterRow, "CLEAR", Theme.BackgroundSecondary, Theme.TextSecondary, 48, 5)
-	local clearStroke = clear:FindFirstChildOfClass("UIStroke"); if clearStroke then clearStroke.Color = Color3.fromRGB(255, 255, 255); clearStroke.Transparency = 0.76 end
+	local filters = _VH_HowToCard(HowToUseView, "Filters", "Filters can be selected together. Tap a selected filter again to remove it. Indigo means active. Clear removes all active filters.", 4, VeloxIcons.Filter)
+	local filterRow = Instance.new("Frame", filters); filterRow.Size = UDim2.new(1, 0, 0, IsMobile and 66 or 40); filterRow.BackgroundTransparency = 1; filterRow.LayoutOrder = 3
+	local filterLayout
+	if IsMobile then
+		filterLayout = Instance.new("UIGridLayout", filterRow); filterLayout.CellSize = UDim2.new(0.32, -4, 0, 28); filterLayout.CellPadding = UDim2.new(0, 5, 0, 5); filterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left; filterLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	else
+		filterLayout = Instance.new("UIListLayout", filterRow); filterLayout.FillDirection = Enum.FillDirection.Horizontal; filterLayout.Padding = UDim.new(0, 6); filterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
+	_VH_HowToPill(filterRow, "Filter 3", Theme.BackgroundSecondary, Theme.TextPrimary, 72, 1, VeloxIcons.Filter)
+	_VH_HowToPill(filterRow, "Favorites", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 82, 2, VeloxIcons.Favorite)
+	_VH_HowToPill(filterRow, "Anime", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 68, 3, VeloxIcons.Tag)
+	_VH_HowToPill(filterRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 52, 4, VeloxIcons.Flame)
+	_VH_HowToPill(filterRow, "Clear", Theme.BackgroundSecondary, Theme.TextSecondary, 56, 5, VeloxIcons.Close)
 
-	local sort = _VH_HowToCard(HowToUseView, "Sort Scripts", "The sort modal changes result order. The highlighted row is the selected option and the checkmark confirms the current choice.", 5)
-	local sortBox = Instance.new("Frame", sort); sortBox.Size = UDim2.new(1, 0, 0, 84); sortBox.BackgroundColor3 = Theme.BackgroundSecondary; sortBox.LayoutOrder = 3; Instance.new("UICorner", sortBox).CornerRadius = UDim.new(0, 8)
+	local sort = _VH_HowToCard(HowToUseView, "Sort Scripts", "The sort modal changes result order. The highlighted row is selected and the checkmark confirms the current choice.", 5, VeloxIcons.Sort)
+	local sortBox = Instance.new("Frame", sort); sortBox.Size = UDim2.new(1, 0, 0, (IsMobile and 8 * 25 or 8 * 27) + 7); sortBox.BackgroundColor3 = Theme.BackgroundSecondary; sortBox.LayoutOrder = 3; Instance.new("UICorner", sortBox).CornerRadius = UDim.new(0, 8)
 	local sortStroke = Instance.new("UIStroke", sortBox); sortStroke.Color = Theme.Stroke; sortStroke.Transparency = 0.3; sortStroke.Thickness = 1
 	local sortList = Instance.new("UIListLayout", sortBox); sortList.Padding = UDim.new(0, 2); sortList.SortOrder = Enum.SortOrder.LayoutOrder
-	local sortItems = {"Most Relevant", "A-Z", "Newest"}
-	for i = 1, #sortItems do
-		local row = Instance.new("Frame", sortBox); row.Size = UDim2.new(1, -6, 0, 25); row.LayoutOrder = i; row.BackgroundColor3 = i == 1 and Theme.CardHover or Theme.BackgroundSecondary; row.BackgroundTransparency = i == 1 and 0.05 or 1
+	local sortItems = {"Most Relevant", "A-Z", "Z-A", "Newest", "Oldest", "Updated Today", "Updated This Week", "Updated This Month"}
+	for i, opt in ipairs(sortItems) do
+		local row = Instance.new("Frame", sortBox); row.Size = UDim2.new(1, -6, 0, IsMobile and 25 or 27); row.LayoutOrder = i; row.BackgroundColor3 = i == 1 and Theme.CardHover or Theme.BackgroundSecondary; row.BackgroundTransparency = i == 1 and 0.05 or 1
 		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
-		local txt = Instance.new("TextLabel", row); txt.Size = UDim2.new(1, -34, 1, 0); txt.Position = UDim2.new(0, 8, 0, 0); txt.BackgroundTransparency = 1; txt.Text = sortItems[i]; txt.TextColor3 = i == 1 and Theme.TextPrimary or Theme.TextSecondary; txt.Font = Enum.Font.GothamMedium; txt.TextSize = 9; txt.TextXAlignment = Enum.TextXAlignment.Left
-		local check = Instance.new("TextLabel", row); check.Size = UDim2.new(0, 22, 1, 0); check.Position = UDim2.new(1, -26, 0, 0); check.BackgroundTransparency = 1; check.Text = i == 1 and "✓" or ""; check.TextColor3 = Theme.Accent; check.Font = Enum.Font.GothamBold; check.TextSize = 13
+		CreateVeloxIcon(row, VeloxIcons.Sort, 11, i == 1 and Theme.Accent or Theme.TextSecondary, UDim2.new(0, 7, 0.5, -5.5), nil, 3, "SortRowIcon")
+		local txt = Instance.new("TextLabel", row); txt.Size = UDim2.new(1, -62, 1, 0); txt.Position = UDim2.new(0, 24, 0, 0); txt.BackgroundTransparency = 1; txt.Text = opt; txt.TextColor3 = i == 1 and Theme.TextPrimary or Theme.TextSecondary; txt.Font = Enum.Font.GothamMedium; txt.TextSize = 9; txt.TextXAlignment = Enum.TextXAlignment.Left; txt.TextYAlignment = Enum.TextYAlignment.Center
+		local check = CreateVeloxIcon(row, VeloxIcons.Check, 12, Theme.Accent, UDim2.new(1, -25, 0.5, -6), nil, 3, "SortLegendCheck"); check.Visible = i == 1
 	end
 
-	local badges = _VH_HowToCard(HowToUseView, "Script Card Badges", "These small elements tell you why a script is surfaced and what update/status label it has.", 6)
-	local badgeRow = Instance.new("Frame", badges); badgeRow.Size = UDim2.new(1, 0, 0, 30); badgeRow.BackgroundTransparency = 1; badgeRow.LayoutOrder = 3
-	local badgeLayout = Instance.new("UIListLayout", badgeRow); badgeLayout.FillDirection = Enum.FillDirection.Horizontal; badgeLayout.Padding = UDim.new(0, 6); badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	_VH_HowToPill(badgeRow, "YOU MAY LIKE", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 92, 1)
-	_VH_HowToPill(badgeRow, "FOR YOU", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 64, 2)
-	_VH_HowToPill(badgeRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 42, 3)
-	_VH_HowToPill(badgeRow, "NEW", Theme.Success, Color3.fromRGB(255, 255, 255), 42, 4)
+	local badges = _VH_HowToCard(HowToUseView, "Script Card Badges", "These small elements explain why a script is surfaced and what update/status label it carries.", 6, VeloxIcons.Tag)
+	local badgeRow = Instance.new("Frame", badges); badgeRow.Size = UDim2.new(1, 0, 0, IsMobile and 58 or 30); badgeRow.BackgroundTransparency = 1; badgeRow.LayoutOrder = 3
+	local badgeLayout
+	if IsMobile then
+		badgeLayout = Instance.new("UIGridLayout", badgeRow); badgeLayout.CellSize = UDim2.new(0.5, -3, 0, 26); badgeLayout.CellPadding = UDim2.new(0, 6, 0, 5); badgeLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left; badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	else
+		badgeLayout = Instance.new("UIListLayout", badgeRow); badgeLayout.FillDirection = Enum.FillDirection.Horizontal; badgeLayout.Padding = UDim.new(0, 6); badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
+	_VH_HowToPill(badgeRow, "YOU MAY LIKE", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 102, 1, VeloxIcons.Heart)
+	_VH_HowToPill(badgeRow, "FOR YOU", Color3.fromRGB(79, 70, 229), Color3.fromRGB(255, 255, 255), 78, 2, VeloxIcons.Sparkles)
+	_VH_HowToPill(badgeRow, "HOT", Color3.fromRGB(185, 45, 65), Color3.fromRGB(255, 255, 255), 52, 3, VeloxIcons.Flame)
+	_VH_HowToPill(badgeRow, "NEW", Theme.Success, Color3.fromRGB(255, 255, 255), 54, 4, VeloxIcons.Sparkles)
 
-	local compat = _VH_HowToCard(HowToUseView, "Game Compatibility & Script Actions", "The action row shows whether a script can run in the current experience. Wrong Game means the script is not configured for the current game.", 7)
-	local compatRow = Instance.new("Frame", compat); compatRow.Size = UDim2.new(1, 0, 0, 48); compatRow.BackgroundTransparency = 1; compatRow.LayoutOrder = 3
-	local compatLayout = Instance.new("UIListLayout", compatRow); compatLayout.FillDirection = Enum.FillDirection.Horizontal; compatLayout.Padding = UDim.new(0, 6); compatLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	local action = Instance.new("Frame", compatRow); action.Size = UDim2.new(0, IsMobile and 108 or 122, 0, 28); action.BackgroundColor3 = Theme.BackgroundMain; Instance.new("UICorner", action).CornerRadius = UDim.new(0, 6)
+	local compat = _VH_HowToCard(HowToUseView, "Game Compatibility & Script Actions", "The action row shows whether a script can run in the current experience. Wrong Game means the script is not configured for the current game.", 7, VeloxIcons.PlayCircle)
+	local compatRow = Instance.new("Frame", compat); compatRow.Size = UDim2.new(1, 0, 0, IsMobile and 66 or 48); compatRow.BackgroundTransparency = 1; compatRow.LayoutOrder = 3
+	local compatLayout
+	if IsMobile then
+		compatLayout = Instance.new("UIGridLayout", compatRow); compatLayout.CellSize = UDim2.new(0.32, -4, 0, 30); compatLayout.CellPadding = UDim2.new(0, 5, 0, 5); compatLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left; compatLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	else
+		compatLayout = Instance.new("UIListLayout", compatRow); compatLayout.FillDirection = Enum.FillDirection.Horizontal; compatLayout.Padding = UDim.new(0, 6); compatLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
+	local action = Instance.new("Frame", compatRow); action.Size = IsMobile and UDim2.new(1, 0, 0, 30) or UDim2.new(0, 122, 0, 30); action.BackgroundColor3 = Theme.BackgroundMain; Instance.new("UICorner", action).CornerRadius = UDim.new(0, 6)
 	local actionStroke = Instance.new("UIStroke", action); actionStroke.Color = Theme.Warning; actionStroke.Transparency = 0.35; actionStroke.Thickness = 1
-	local actionText = Instance.new("TextLabel", action); actionText.Size = UDim2.new(1, -34, 1, 0); actionText.BackgroundTransparency = 1; actionText.Text = "Wrong Game"; actionText.TextColor3 = Theme.TextPrimary; actionText.Font = Enum.Font.GothamBold; actionText.TextSize = 9; actionText.TextXAlignment = Enum.TextXAlignment.Left
-	actionText.Position = UDim2.new(0, 9, 0, 0)
-	local x = Instance.new("Frame", action); x.Size = UDim2.new(0, 22, 0, 18); x.Position = UDim2.new(1, -26, 0.5, -9); x.BackgroundColor3 = Theme.Warning; Instance.new("UICorner", x).CornerRadius = UDim.new(0, 5)
-	local xl = Instance.new("TextLabel", x); xl.Size = UDim2.new(1, 0, 1, 0); xl.BackgroundTransparency = 1; xl.Text = "X"; xl.TextColor3 = Color3.fromRGB(15, 18, 28); xl.Font = Enum.Font.GothamBold; xl.TextSize = 9
-	_VH_HowToPill(compatRow, "View Details", Theme.BackgroundMain, Theme.TextPrimary, 82, 2)
-	_VH_HowToPill(compatRow, "★", Theme.BackgroundMain, Color3.fromRGB(250, 204, 21), 30, 3)
-	_VH_HowToPill(compatRow, "ON", Theme.Success, Color3.fromRGB(255, 255, 255), 36, 4)
-	_VH_HowToPill(compatRow, "OFF", Theme.ToggleOff, Color3.fromRGB(226, 232, 240), 38, 5)
+	CreateVeloxIcon(action, VeloxIcons.Close, 11, Theme.Warning, UDim2.new(1, -31, 0.5, -5.5), nil, 3, "WrongGameIcon")
+	local actionText = Instance.new("TextLabel", action); actionText.Size = UDim2.new(1, -38, 1, 0); actionText.Position = UDim2.new(0, 9, 0, 0); actionText.BackgroundTransparency = 1; actionText.Text = "Wrong Game"; actionText.TextColor3 = Theme.TextPrimary; actionText.Font = Enum.Font.GothamBold; actionText.TextSize = 9; actionText.TextXAlignment = Enum.TextXAlignment.Left; actionText.TextYAlignment = Enum.TextYAlignment.Center
+	_VH_HowToPill(compatRow, "View Details", Theme.BackgroundMain, Theme.TextPrimary, 88, 2, VeloxIcons.Info)
+	_VH_HowToPill(compatRow, "Favorite", Theme.BackgroundMain, Color3.fromRGB(250, 204, 21), 80, 3, VeloxIcons.Favorite)
+	_VH_HowToPill(compatRow, "ON", Theme.Success, Color3.fromRGB(255, 255, 255), 44, 4, VeloxIcons.Check)
+	_VH_HowToPill(compatRow, "OFF", Theme.ToggleOff, Color3.fromRGB(226, 232, 240), 48, 5, VeloxIcons.Close)
 
-	local states = _VH_HowToCard(HowToUseView, "Status States", "Colors are reused across the hub so the meaning stays consistent.", 8)
+	local states = _VH_HowToCard(HowToUseView, "Status States", "Colors are reused across the hub so the meaning stays consistent.", 8, VeloxIcons.Info)
 	local stateRow = Instance.new("Frame", states); stateRow.Size = UDim2.new(1, 0, 0, 74); stateRow.BackgroundTransparency = 1; stateRow.LayoutOrder = 3
 	local stateGrid = Instance.new("UIGridLayout", stateRow); stateGrid.CellSize = UDim2.new(0, IsMobile and 96 or 115, 0, 30); stateGrid.CellPadding = UDim2.new(0, 6, 0, 6); stateGrid.HorizontalAlignment = Enum.HorizontalAlignment.Left; stateGrid.VerticalAlignment = Enum.VerticalAlignment.Top
-	local stateItems = {{"ACTIVE", Theme.Accent, "Selected"}, {"AVAILABLE", Color3.fromRGB(255, 255, 255), "Not selected"}, {"ON", Theme.Success, "Enabled"}, {"WARNING", Theme.Warning, "Attention"}, {"ERROR", Theme.Error, "Failed"}, {"INFO", Theme.Info, "Information"}}
-	for i = 1, #stateItems do
-		local item = stateItems[i]
+	local stateItems = {{"ACTIVE", Theme.Accent, "Selected", VeloxIcons.Check}, {"AVAILABLE", Color3.fromRGB(255, 255, 255), "Not selected", VeloxIcons.Info}, {"ON", Theme.Success, "Enabled", VeloxIcons.Check}, {"WARNING", Theme.Warning, "Attention", VeloxIcons.AppBadge}, {"ERROR", Theme.Error, "Failed", VeloxIcons.Close}, {"INFO", Theme.Info, "Information", VeloxIcons.Info}}
+	for _, item in ipairs(stateItems) do
 		local box = Instance.new("Frame", stateRow); box.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-		local s = Instance.new("UIStroke", box); s.Color = item[2]; s.Transparency = item[1] == "AVAILABLE" and 0.65 or 0.38; s.Thickness = 1
-		local dot = Instance.new("Frame", box); dot.Size = UDim2.new(0, 7, 0, 7); dot.Position = UDim2.new(0, 8, 0.5, -3.5); dot.BackgroundColor3 = item[2]; Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-		local text = Instance.new("TextLabel", box); text.Size = UDim2.new(1, -22, 1, 0); text.Position = UDim2.new(0, 18, 0, 0); text.BackgroundTransparency = 1; text.Text = item[1] .. "  •  " .. item[3]; text.TextColor3 = Theme.TextSecondary; text.Font = Enum.Font.GothamMedium; text.TextSize = 8; text.TextXAlignment = Enum.TextXAlignment.Left
+		local ss = Instance.new("UIStroke", box); ss.Color = item[2]; ss.Transparency = item[1] == "AVAILABLE" and 0.65 or 0.38; ss.Thickness = 1
+		CreateVeloxIcon(box, item[4], 10, item[2], UDim2.new(0, 7, 0.5, -5), nil, 3, "StateIcon")
+		local text = Instance.new("TextLabel", box); text.Size = UDim2.new(1, -25, 1, 0); text.Position = UDim2.new(0, 21, 0, 0); text.BackgroundTransparency = 1; text.Text = item[1] .. " - " .. item[3]; text.TextColor3 = Theme.TextSecondary; text.Font = Enum.Font.GothamMedium; text.TextSize = 8; text.TextXAlignment = Enum.TextXAlignment.Left; text.TextYAlignment = Enum.TextYAlignment.Center
 	end
 
-	local misc = _VH_HowToCard(HowToUseView, "Other Elements", "Small controls can carry important meaning even when they have little text.", 9)
-	local miscRow = Instance.new("Frame", misc); miscRow.Size = UDim2.new(1, 0, 0, 52); miscRow.BackgroundTransparency = 1; miscRow.LayoutOrder = 3
-	local miscLayout = Instance.new("UIListLayout", miscRow); miscLayout.FillDirection = Enum.FillDirection.Horizontal; miscLayout.Padding = UDim.new(0, 8); miscLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local misc = _VH_HowToCard(HowToUseView, "Other Elements", "Small controls can carry important meaning even when they have little text.", 9, VeloxIcons.AppBadge)
+	local miscRow = Instance.new("Frame", misc); miscRow.Size = UDim2.new(1, 0, 0, 48); miscRow.BackgroundTransparency = 1; miscRow.LayoutOrder = 3
+	local miscLayout = Instance.new("UIListLayout", miscRow); miscLayout.FillDirection = Enum.FillDirection.Horizontal; miscLayout.Padding = UDim.new(0, 6); miscLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	local info = Instance.new("Frame", miscRow); info.Size = UDim2.new(0, 32, 0, 32); info.BackgroundColor3 = Theme.BackgroundSecondary; Instance.new("UICorner", info).CornerRadius = UDim.new(0, 7)
 	local infoStroke = Instance.new("UIStroke", info); infoStroke.Color = Color3.fromRGB(255, 255, 255); infoStroke.Transparency = 0.6; infoStroke.Thickness = 1
-	local il = Instance.new("TextLabel", info); il.Size = UDim2.new(1, 0, 1, 0); il.BackgroundTransparency = 1; il.Text = "i"; il.TextColor3 = Theme.TextSecondary; il.Font = Enum.Font.GothamBold; il.TextSize = 15
-	local star = Instance.new("TextLabel", miscRow); star.Size = UDim2.new(0, 32, 0, 32); star.BackgroundTransparency = 1; star.Text = "★"; star.TextColor3 = Color3.fromRGB(250, 204, 21); star.Font = Enum.Font.GothamBold; star.TextSize = 20
-	local check = Instance.new("TextLabel", miscRow); check.Size = UDim2.new(0, 32, 0, 32); check.BackgroundTransparency = 1; check.Text = "✓"; check.TextColor3 = Theme.Accent; check.Font = Enum.Font.GothamBold; check.TextSize = 20
-	local online = Instance.new("Frame", miscRow); online.Size = UDim2.new(0, 78, 0, 28); online.BackgroundTransparency = 1
+	CreateVeloxIcon(info, VeloxIcons.Info, 15, Theme.TextSecondary, UDim2.new(0.5, -7.5, 0.5, -7.5), nil, 3, "InfoIcon")
+	local star = Instance.new("Frame", miscRow); star.Size = UDim2.new(0, 32, 0, 32); star.BackgroundTransparency = 1; CreateVeloxIcon(star, VeloxIcons.Favorite, 20, Color3.fromRGB(250, 204, 21), UDim2.new(0.5, -10, 0.5, -10), nil, 3, "StarIcon")
+	local check = Instance.new("Frame", miscRow); check.Size = UDim2.new(0, 32, 0, 32); check.BackgroundTransparency = 1; CreateVeloxIcon(check, VeloxIcons.Check, 19, Theme.Accent, UDim2.new(0.5, -9.5, 0.5, -9.5), nil, 3, "CheckIcon")
+	local online = Instance.new("Frame", miscRow); online.Size = UDim2.new(0, IsMobile and 68 or 78, 0, 28); online.BackgroundTransparency = 1
 	local onlineDot = Instance.new("Frame", online); onlineDot.Size = UDim2.new(0, 8, 0, 8); onlineDot.Position = UDim2.new(0, 4, 0.5, -4); onlineDot.BackgroundColor3 = Theme.Success; Instance.new("UICorner", onlineDot).CornerRadius = UDim.new(1, 0)
-	local onlineText = Instance.new("TextLabel", online); onlineText.Size = UDim2.new(1, -18, 1, 0); onlineText.Position = UDim2.new(0, 16, 0, 0); onlineText.BackgroundTransparency = 1; onlineText.Text = "Online"; onlineText.TextColor3 = Theme.Success; onlineText.Font = Enum.Font.GothamBold; onlineText.TextSize = 10; onlineText.TextXAlignment = Enum.TextXAlignment.Left
-	local metrics = Instance.new("TextLabel", miscRow); metrics.Size = UDim2.new(0, 128, 0, 28); metrics.BackgroundTransparency = 1; metrics.Text = "FPS: 57 | Ping: 88ms"; metrics.TextColor3 = Theme.TextSecondary; metrics.Font = Enum.Font.GothamMedium; metrics.TextSize = 9; metrics.TextXAlignment = Enum.TextXAlignment.Left
+	local onlineText = Instance.new("TextLabel", online); onlineText.Size = UDim2.new(1, -18, 1, 0); onlineText.Position = UDim2.new(0, 16, 0, 0); onlineText.BackgroundTransparency = 1; onlineText.Text = "Online"; onlineText.TextColor3 = Theme.Success; onlineText.Font = Enum.Font.GothamBold; onlineText.TextSize = 10; onlineText.TextXAlignment = Enum.TextXAlignment.Left; onlineText.TextYAlignment = Enum.TextYAlignment.Center
+	local metrics = Instance.new("TextLabel", miscRow); metrics.Size = UDim2.new(0, IsMobile and 100 or 128, 0, 28); metrics.BackgroundTransparency = 1; metrics.Text = "FPS: 57 | Ping: 88ms"; metrics.TextColor3 = Theme.TextSecondary; metrics.Font = Enum.Font.GothamMedium; metrics.TextSize = 9; metrics.TextXAlignment = Enum.TextXAlignment.Left; metrics.TextYAlignment = Enum.TextYAlignment.Center
 
-	_VH_HowToCard(HowToUseView, "Quick Reference", "Search = find relevant scripts. Filter = narrow results. Sort = change order. ★ = favorite. i = details. ✓ = selected. Indigo = active. White outline = available. Green = enabled/success. Orange = warning or Wrong Game. Red = error. Online + FPS/Ping = live status information.", 10)
+	_VH_HowToCard(HowToUseView, "Quick Reference", "Search = find relevant scripts. Filters = narrow results. Sort = change order. Favorite = save a script. Info = open details. Checkmark = selected or enabled. Indigo = active. White outline = available. Green = enabled/success. Orange = warning or Wrong Game. Red = error. Online + FPS/Ping = live status information.", 10, VeloxIcons.Checklist)
 end
 CreateHowToUseContent()
 function _VH_OpenCreditLink(url, successText)
@@ -5523,11 +5513,9 @@ scaleMinus = Instance.new("TextButton", scaleFrame)
 scaleMinus.Size = UDim2.new(0, 28, 0, 26)
 scaleMinus.Position = UDim2.new(0, 0, 0.5, -13)
 scaleMinus.BackgroundColor3 = Theme.BackgroundMain
-scaleMinus.Text = "−"
-scaleMinus.TextColor3 = Theme.TextPrimary
-scaleMinus.Font = Enum.Font.GothamBold
-scaleMinus.TextSize = 15
+scaleMinus.Text = ""
 scaleMinus.AutoButtonColor = false
+CreateVeloxIcon(scaleMinus, VeloxIcons.Minus, 11, Theme.TextPrimary, UDim2.new(0.5, -5.5, 0.5, -5.5), nil, 2, "MinusIcon")
 Instance.new("UICorner", scaleMinus).CornerRadius = UDim.new(0, 6)
 scaleMinusStroke = Instance.new("UIStroke", scaleMinus)
 scaleMinusStroke.Color = Theme.Stroke
@@ -5543,11 +5531,9 @@ scalePlus = Instance.new("TextButton", scaleFrame)
 scalePlus.Size = UDim2.new(0, 28, 0, 26)
 scalePlus.Position = UDim2.new(1, -28, 0.5, -13)
 scalePlus.BackgroundColor3 = Theme.BackgroundMain
-scalePlus.Text = "+"
-scalePlus.TextColor3 = Theme.TextPrimary
-scalePlus.Font = Enum.Font.GothamBold
-scalePlus.TextSize = 15
+scalePlus.Text = ""
 scalePlus.AutoButtonColor = false
+CreateVeloxIcon(scalePlus, VeloxIcons.Plus, 11, Theme.TextPrimary, UDim2.new(0.5, -5.5, 0.5, -5.5), nil, 2, "PlusIcon")
 Instance.new("UICorner", scalePlus).CornerRadius = UDim.new(0, 6)
 scalePlusStroke = Instance.new("UIStroke", scalePlus)
 scalePlusStroke.Color = Theme.Stroke
