@@ -2473,8 +2473,8 @@ do
 		end
 		padding.PaddingTop = UDim.new(0, px)
 	end
-	_VH_AddTopInset(ChangelogsView, IsMobile and 4 or 5)
-	_VH_AddTopInset(HowToUseView, IsMobile and 4 or 5)
+	_VH_AddTopInset(ChangelogsView, IsMobile and 7 or 8)
+	_VH_AddTopInset(HowToUseView, IsMobile and 7 or 8)
 end
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
