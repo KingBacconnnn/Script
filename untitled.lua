@@ -1750,7 +1750,8 @@ ConfirmBoxGradient.Color = ColorSequence.new({
 
 ConfirmBoxStroke = Instance.new("UIStroke", ConfirmBox)
 ConfirmBoxStroke.Color = Theme.Stroke
-ConfirmBoxStroke.Thickness = 1
+ConfirmBoxStroke.Thickness = 0.8
+pcall(function() ConfirmBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 
 ConfirmAccent = Instance.new("Frame", ConfirmBox)
 ConfirmAccent.Size = UDim2.new(1, -28, 0, 3)
@@ -1948,7 +1949,8 @@ Instance.new("UICorner", ScriptDetailsBox).CornerRadius = UDim.new(0, 14)
 ScriptDetailsStroke = Instance.new("UIStroke", ScriptDetailsBox)
 ScriptDetailsStroke.Color = Theme.Accent
 ScriptDetailsStroke.Transparency = 0.2
-ScriptDetailsStroke.Thickness = 1
+ScriptDetailsStroke.Thickness = 0.8
+pcall(function() ScriptDetailsStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 ScriptDetailsGradient = Instance.new("UIGradient", ScriptDetailsBox)
 ScriptDetailsGradient.Rotation = 135
 ScriptDetailsGradient.Color = ColorSequence.new({
@@ -2451,7 +2453,7 @@ function CreateCanvas(name)
 	local layout = Instance.new("UIListLayout", scroll)
 	layout.Padding = UDim.new(0, IsMobile and 8 or 12); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.HorizontalAlignment = Enum.HorizontalAlignment.Left; layout.VerticalAlignment = Enum.VerticalAlignment.Top
 	local pad = Instance.new("UIPadding", scroll)
-	pad.PaddingRight = UDim.new(0, 4); pad.PaddingBottom = UDim.new(0, 16)
+	pad.PaddingLeft = UDim.new(0, 3); pad.PaddingRight = UDim.new(0, 6); pad.PaddingBottom = UDim.new(0, 16)
 	TabViews[name] = scroll
 	return scroll
 end
@@ -2480,7 +2482,8 @@ SearchContainer = Instance.new("Frame", SearchRow)
 SearchContainer.Size = UDim2.new(1, -(filterBtnWidth + sortBtnWidth + gap * 2), 1, 0); SearchContainer.BackgroundColor3 = Color3.fromRGB(27, 37, 58)
 SearchContainer.ClipsDescendants = true; SearchContainer.ZIndex = 51
 Instance.new("UICorner", SearchContainer).CornerRadius = UDim.new(0, 8)
-SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Theme.Stroke; SearchStroke.Thickness = 1
+SearchStroke = Instance.new("UIStroke", SearchContainer); SearchStroke.Color = Theme.Stroke; SearchStroke.Thickness = 0.8
+pcall(function() SearchStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 
 SearchIcon = Instance.new("ImageLabel", SearchContainer)
 SearchIcon.Name = "SearchIcon"
@@ -2535,7 +2538,8 @@ SortIcon.Name = "SortIcon"
 SortIcon.Size = UDim2.new(0, 15, 0, 15); SortIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
 SortIcon.BackgroundTransparency = 1; SortIcon.Image = VeloxIcons.Sort; SortIcon.ImageColor3 = Theme.TextSecondary; SortIcon.ScaleType = Enum.ScaleType.Fit
 Instance.new("UICorner", SortDropdownBtn).CornerRadius = UDim.new(0, 8)
-SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke; SortBtnStroke.Thickness = 1
+SortBtnStroke = Instance.new("UIStroke", SortDropdownBtn); SortBtnStroke.Color = Theme.Stroke; SortBtnStroke.Thickness = 0.8
+pcall(function() SortBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 ApplyInteractiveAnimations(SortDropdownBtn, Color3.fromRGB(38, 51, 74), Color3.fromRGB(50, 68, 96), Theme.BackgroundSecondary, SortBtnStroke, Theme.Stroke, Theme.Accent)
 
 _VH_RegConn(SearchInput.Focused:Connect(function() SearchStroke.Color = Theme.Accent end))
@@ -2727,7 +2731,8 @@ Instance.new("UICorner", DropdownContainer).CornerRadius = UDim.new(0, 10)
 SortPanelStroke = Instance.new("UIStroke", DropdownContainer)
 SortPanelStroke.Color = Color3.fromRGB(120, 125, 255)
 SortPanelStroke.Transparency = 0.18
-SortPanelStroke.Thickness = 1
+SortPanelStroke.Thickness = 0.8
+pcall(function() SortPanelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 
 SortPanelHeader = Instance.new("Frame", DropdownContainer)
 SortPanelHeader.Size = UDim2.new(1, -16, 0, 34)
@@ -2781,7 +2786,8 @@ Instance.new("UICorner", FilterPanel).CornerRadius = UDim.new(0, 10)
 FilterPanelStroke = Instance.new("UIStroke", FilterPanel)
 FilterPanelStroke.Color = Color3.fromRGB(120, 125, 255)
 FilterPanelStroke.Transparency = 0.18
-FilterPanelStroke.Thickness = 1
+FilterPanelStroke.Thickness = 0.8
+pcall(function() FilterPanelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 
 FilterHeader = Instance.new("Frame", FilterPanel)
 FilterHeader.Size = UDim2.new(1, -16, 0, 38)
@@ -3763,7 +3769,7 @@ CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked norm
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
-	block.Size = UDim2.new(1, 0, 0, 0)
+	block.Size = UDim2.new(1, -2, 0, 0)
 	block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover
 	block.LayoutOrder = order or 0
@@ -3772,7 +3778,8 @@ function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local stroke = Instance.new("UIStroke", block)
 	stroke.Color = Theme.Stroke
 	stroke.Transparency = 0.22
-	stroke.Thickness = 1
+	stroke.Thickness = 0.8
+	pcall(function() stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 	local pad = Instance.new("UIPadding", block)
 	pad.PaddingLeft = UDim.new(0, IsMobile and 13 or 15)
 	pad.PaddingRight = UDim.new(0, IsMobile and 13 or 15)
@@ -3836,7 +3843,8 @@ function _VH_HowToExplain(parent, whatText, howText)
 		local lineStroke = Instance.new("UIStroke", box)
 		lineStroke.Color = accentColor
 		lineStroke.Transparency = 0.68
-		lineStroke.Thickness = 1
+		lineStroke.Thickness = 0.8
+		pcall(function() lineStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 		local boxPad = Instance.new("UIPadding", box)
 		boxPad.PaddingLeft = UDim.new(0, 10)
 		boxPad.PaddingRight = UDim.new(0, 10)
@@ -3897,7 +3905,8 @@ function _VH_HowToPill(parent, text, background, textColor, width, order, iconAs
 	local st = Instance.new("UIStroke", pill)
 	st.Color = textColor
 	st.Transparency = 0.42
-	st.Thickness = 0.8
+	st.Thickness = 0.7
+	pcall(function() st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
 	local textOffset = iconAsset and 22 or 0
 	if iconAsset then
 		CreateVeloxIcon(pill, iconAsset, 12, textColor, UDim2.new(0, 7, 0.5, -6), nil, 3, "PillIcon")
@@ -3914,6 +3923,21 @@ function _VH_HowToPill(parent, text, background, textColor, width, order, iconAs
 	lbl.TextXAlignment = iconAsset and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
 	lbl.TextYAlignment = Enum.TextYAlignment.Center
 	return pill
+end
+
+local function _VH_ApplySafeBorderStroke(stroke, thickness)
+	if not stroke or not stroke:IsA("UIStroke") then return end
+	pcall(function() stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border end)
+	pcall(function() stroke.Thickness = math.min(tonumber(stroke.Thickness) or 1, thickness or 0.9) end)
+end
+
+local function _VH_SafeTabBorders(root)
+	if not root then return end
+	for _, obj in ipairs(root:GetDescendants()) do
+		if obj:IsA("UIStroke") then
+			_VH_ApplySafeBorderStroke(obj, 0.9)
+		end
+	end
 end
 
 function CreateHowToUseContent()
@@ -4267,6 +4291,10 @@ function CreateHowToUseContent()
 	_VH_HowToCard(HowToUseView, "Quick Reference", "Search finds relevant scripts. Filters narrow results. Sort changes order. Favorite saves a script. Info opens details. Check means selected or enabled. Indigo means active. White outline means available. Green means enabled or success. Orange means warning or Wrong Game. Red means error. Blue means information. Online and FPS/Ping show live status.", 12, VeloxIcons.Checklist)
 end
 CreateHowToUseContent()
+_VH_SafeTabBorders(HowToUseView)
+_VH_SafeTabBorders(ChangelogsView)
+_VH_SafeTabBorders(ScriptsView)
+_VH_SafeTabBorders(SettingsView)
 
 function _VH_OpenCreditLink(url, successText)
 	local opened = false
