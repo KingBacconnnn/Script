@@ -2461,6 +2461,21 @@ ChangelogsView = CreateCanvas("Changelog")
 ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
 HowToUseView = CreateCanvas("How to Use")
+
+-- Add a very small top inset so the first bordered cards do not touch the ScrollFrame edge.
+do
+	local function _VH_AddTopInset(scroll, px)
+		if not scroll then return end
+		local padding = scroll:FindFirstChildOfClass("UIPadding")
+		if not padding then
+			padding = Instance.new("UIPadding")
+			padding.Parent = scroll
+		end
+		padding.PaddingTop = UDim.new(0, px)
+	end
+	_VH_AddTopInset(ChangelogsView, IsMobile and 4 or 5)
+	_VH_AddTopInset(HowToUseView, IsMobile and 4 or 5)
+end
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
