@@ -1070,7 +1070,6 @@ Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(1, 0)
 FloatStroke = Instance.new("UIStroke", FloatingBtn)
 FloatStroke.Color = Theme.Accent; FloatStroke.Thickness = 2
 
-
 floatStart, floatPos = nil, nil
 _VH_RegConn(FloatingBtn.InputBegan:Connect(function(input)
 	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not activeFloatDragInput then
@@ -1785,7 +1784,7 @@ ConfirmIconStroke.Color = Theme.Accent
 ConfirmIconStroke.Transparency = 0.18
 ConfirmIconStroke.Thickness = 1
 
-ConfirmIconText = CreateVeloxIcon(ConfirmIcon, VeloxIcons.HowToUse, 18, Color3.fromRGB(224, 226, 255), UDim2.new(0.5, -9, 0.5, -9), nil, 404, "ConfirmIconImage")
+CreateVeloxIcon(ConfirmIcon, VeloxIcons.HowToUse, 18, Color3.fromRGB(224, 226, 255), UDim2.new(0.5, -9, 0.5, -9), nil, 404, "ConfirmIconImage")
 
 ConfirmTitle = Instance.new("TextLabel", ConfirmHeader)
 ConfirmTitle.Size = UDim2.new(1, -46, 0, 20)
@@ -2462,20 +2461,8 @@ ScriptsView = CreateCanvas("Scripts")
 SettingsView = CreateCanvas("Settings")
 HowToUseView = CreateCanvas("How to Use")
 
--- Add a very small top inset so the first bordered cards do not touch the ScrollFrame edge.
-do
-	local function _VH_AddTopInset(scroll, px)
-		if not scroll then return end
-		local padding = scroll:FindFirstChildOfClass("UIPadding")
-		if not padding then
-			padding = Instance.new("UIPadding")
-			padding.Parent = scroll
-		end
-		padding.PaddingTop = UDim.new(0, px)
-	end
-	_VH_AddTopInset(ChangelogsView, IsMobile and 7 or 8)
-	_VH_AddTopInset(HowToUseView, IsMobile and 7 or 8)
-end
+ChangelogsView:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, IsMobile and 7 or 8)
+HowToUseView:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, IsMobile and 7 or 8)
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
@@ -3538,7 +3525,6 @@ _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
 	end
 end))
 
-
 TabIndicator = Instance.new("Frame", TabContainer)
 TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
@@ -3581,9 +3567,6 @@ function CreateTab(name, index)
 	icon.ScaleType = Enum.ScaleType.Fit
 	icon.Active = false
 	icon.ZIndex = 6
-	if name == "How to Use" then
-		icon.Image = VeloxIcons.HowToUse
-	end
 
 	local label = Instance.new("TextLabel", btn)
 	label.Name = "TabLabel"
@@ -3780,7 +3763,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Search, Filters, Sort & Stability", "• Reworked normal-word search to rank relevant results across script names, game names, descriptions, categories, and tags without special query syntax.\n• Rebuilt Filters as a compact mobile-friendly panel with multi-select Categories, Tags, Status, and Favorites plus a Clear action and indigo active states.\n• Rebuilt Sort Scripts as a modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added viewport-safe positioning for the sort and filter panels and clamped the main and floating controls so outlines and panels stay on-screen.\n• Fixed the viewport refresh callback ordering that could produce the nil-function error shown in the console.\n• Removed stale v2.0.5 source comments and redundant temporary helper globals while preserving required executor fallbacks.\n• Preserved the existing GUI-parent, protected-GUI, HTTP request, file I/O, compiler, and cloneref compatibility fallbacks because they were already broad and working.\n• Kept Favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and the existing Velox Hub layout intact.\n• Reduced unnecessary shared scratch state and avoided adding a new local-heavy execution path that could increase compiler register pressure.\n• Kept the visible version label at v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.5 - Final Search, Filters, Sort & UI Cleanup", "• Improved normal-word search with relevance ranking across script names, game names, descriptions, categories, and tags. No special search syntax is required.\n• Rebuilt Filters with multi-select Categories, Tags, Status, and Favorites, plus active indigo states and a Clear action.\n• Rebuilt Sort Scripts as a clean modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added safe viewport positioning and border-safe spacing so panels, cards, and outlines stay inside the available screen area on different sizes.\n• Added a visual How to Use guide with icon-based examples explaining navigation, search, filters, sorting, badges, compatibility states, actions, and status indicators.\n• Updated the How to Use layout with responsive spacing, wrapped explanations, and supplied rbxassetid icons instead of text-symbol UI icons.\n• Cleaned redundant UI assignments and the temporary top-inset helper while keeping required executor fallbacks intact.\n• Preserved GUI-parent, protected-GUI, HTTP request, file I/O, compiler, cloneref, favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and existing hub behavior.\n• Kept the execution path lean and avoided introducing a new local-heavy structure that would increase register pressure.\n• Visible version remains v2.0.5.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
