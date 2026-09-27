@@ -625,7 +625,7 @@ LanguageTranslations = {
 		["User Data"] = "User Data", ["Clear UI Cache"] = "Clear UI Cache", ["Resets layout position."] = "Resets layout position.", ["Reset"] = "Reset",
 		["No scripts currently available in catalog."] = "No scripts currently available in catalog.", ["No scripts matched your search or filters."] = "No scripts matched your search or filters.",
 		["Quick Start"] = "Quick Start", ["When Something Looks Wrong"] = "When Something Looks Wrong", ["Quick Reference"] = "Quick Reference",
-		["Online"] = "Online", ["Empty"] = "Empty", ["Connecting..."] = "Connecting...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Wrong Game",
+		["Online"] = "Online", ["Offline"] = "Offline", ["Empty"] = "Empty", ["Connecting..."] = "Connecting...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Wrong Game",
 		["Cancel"] = "Cancel", ["Execute"] = "Execute", ["Execute Script"] = "Execute Script", ["Script Details"] = "Script Details", ["View Details"] = "View Details", ["Close"] = "Close", ["Auto Execute"] = "Auto Execute",
 	},
 	Filipino = {
@@ -647,7 +647,7 @@ LanguageTranslations = {
 		["User Data"] = "User Data", ["Clear UI Cache"] = "I-clear ang UI Cache", ["Resets layout position."] = "Ire-reset ang posisyon ng layout.", ["Reset"] = "I-reset",
 		["No scripts currently available in catalog."] = "Walang available na scripts sa catalog.", ["No scripts matched your search or filters."] = "Walang script na tumugma sa paghahanap o filter.",
 		["Quick Start"] = "Mabilis na Simula", ["When Something Looks Wrong"] = "Kapag May Mukhang Mali", ["Quick Reference"] = "Mabilis na Gabay",
-		["Online"] = "Online", ["Empty"] = "Walang laman", ["Connecting..."] = "Kumokonekta...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Maling Laro",
+		["Online"] = "Online", ["Offline"] = "Offline", ["Empty"] = "Walang laman", ["Connecting..."] = "Kumokonekta...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Maling Laro",
 		["Cancel"] = "Kanselahin", ["Execute"] = "I-execute", ["Execute Script"] = "I-execute ang Script", ["Script Details"] = "Detalye ng Script", ["View Details"] = "Tingnan ang Detalye", ["Close"] = "Isara", ["Auto Execute"] = "Auto Execute",
 	},
 	Chinese = {
@@ -669,7 +669,7 @@ LanguageTranslations = {
 		["User Data"] = "用户数据", ["Clear UI Cache"] = "清除界面缓存", ["Resets layout position."] = "重置布局位置。", ["Reset"] = "重置",
 		["No scripts currently available in catalog."] = "目录中目前没有可用脚本。", ["No scripts matched your search or filters."] = "没有符合搜索或筛选条件的脚本。",
 		["Quick Start"] = "快速开始", ["When Something Looks Wrong"] = "出现问题时", ["Quick Reference"] = "快速参考",
-		["Online"] = "在线", ["Empty"] = "空", ["Connecting..."] = "连接中...", ["Data Error"] = "数据错误", ["Catalog Error"] = "目录错误", ["Wrong Game"] = "游戏不匹配",
+		["Online"] = "在线", ["Offline"] = "离线", ["Empty"] = "空", ["Connecting..."] = "连接中...", ["Data Error"] = "数据错误", ["Catalog Error"] = "目录错误", ["Wrong Game"] = "游戏不匹配",
 		["Cancel"] = "取消", ["Execute"] = "执行", ["Execute Script"] = "执行脚本", ["Script Details"] = "脚本详情", ["View Details"] = "查看详情", ["Close"] = "关闭", ["Auto Execute"] = "自动执行",
 	}
 }
@@ -678,12 +678,6 @@ if not LanguageTranslations[CurrentLanguage] then CurrentLanguage = "English" en
 function L(key)
 	local lang = LanguageTranslations[CurrentLanguage] or LanguageTranslations.English
 	return (lang and lang[key]) or (LanguageTranslations.English and LanguageTranslations.English[key]) or tostring(key)
-end
-function _VH_RegisterTranslation(obj, key)
-	if obj and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
-		obj:SetAttribute("VeloxTranslationKey", key)
-	end
-	return obj
 end
 function _VH_ApplyTranslations(root)
 	if not root then return end
@@ -2473,13 +2467,21 @@ Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
 StatusText = Instance.new("TextLabel", TopLeftRow)
 StatusText.AutomaticSize = Enum.AutomaticSize.X; StatusText.Size = UDim2.new(0, 0, 1, 0); StatusText.BackgroundTransparency = 1
 StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 11; StatusText.LayoutOrder = 3
+HubStatusKey = "Online"
+function SetHubStatus(key, color)
+	HubStatusKey = tostring(key or "Online")
+	StatusDot.BackgroundColor3 = color or Theme.Success
+	StatusText.Text = L(HubStatusKey)
+	StatusText.TextColor3 = color or Theme.Success
+	StatusText:SetAttribute("VeloxTranslationKey", HubStatusKey)
+end
 BtmLeftRow = Instance.new("Frame", LeftHeaderFrame)
 BtmLeftRow.Size = UDim2.new(1, 0, 0, 14); BtmLeftRow.BackgroundTransparency = 1; BtmLeftRow.LayoutOrder = 2
 BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.5 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.6 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -2780,9 +2782,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 		catalogUrl = string.gsub(catalogUrl, "^%s*(.-)%s*$", "%1")
 
 		if catalogUrl == "" then
-			StatusDot.BackgroundColor3 = Theme.Info
-			StatusText.Text = "Empty"
-			StatusText.TextColor3 = Theme.Info
+			SetHubStatus("Empty", Theme.Info)
 			SetScriptEmptyState("blank", category)
 			UpdateFilter()
 			return
@@ -2794,9 +2794,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 			else
 				HideScriptEmptyState()
 			end
-			StatusDot.BackgroundColor3 = Theme.Success
-			StatusText.Text = "Online"
-			StatusText.TextColor3 = Theme.Success
+			SetHubStatus("Online", Theme.Success)
 			UpdateFilter()
 			RefreshAllCardStates()
 			_VH_RefreshRecommendations()
@@ -3279,11 +3277,6 @@ function _VH_FilterMapHasSelection(map)
 	return false
 end
 
-function _VH_FilterMapPass(map, key)
-	if not _VH_FilterMapHasSelection(map) then return true end
-	return map[key] == true
-end
-
 function _VH_StatusPass(scr)
 	if not _VH_FilterMapHasSelection(FilterState.Status) then return true end
 	for key, enabled in pairs(FilterState.Status) do
@@ -3737,10 +3730,6 @@ function UpdateFilter()
 	end)
 end
 
-function _VH_RefreshFilterPanelSelection()
-	if FilterPanel and FilterPanel.Visible then RebuildFilterPanel() end
-end
-
 _VH_RegConn(SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
 	ClearSearchBtn.Visible = (SearchInput.Text ~= "")
 	if typingTask then task.cancel(typingTask) end
@@ -4115,7 +4104,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.5 - Final Search, Filters, Sort & UI Cleanup", "• Improved normal-word search with relevance ranking across script names, game names, descriptions, categories, and tags. No special search syntax is required.\n• Rebuilt Filters with multi-select Categories, Tags, Status, and Favorites, plus active indigo states and a Clear action.\n• Rebuilt Sort Scripts as a clean modal list with Most Relevant, A-Z, Z-A, Newest, Oldest, Updated Today, Updated This Week, and Updated This Month.\n• Added safe viewport positioning and border-safe spacing so panels, cards, and outlines stay inside the available screen area on different sizes.\n• Added a visual How to Use guide with icon-based examples explaining navigation, search, filters, sorting, badges, compatibility states, actions, and status indicators.\n• Updated the How to Use layout with responsive spacing, wrapped explanations, and supplied rbxassetid icons instead of text-symbol UI icons.\n• Cleaned redundant UI assignments and the temporary top-inset helper while keeping required executor fallbacks intact.\n• Preserved GUI-parent, protected-GUI, HTTP request, file I/O, compiler, cloneref, favorites, Auto Execute, recommendations, catalog refresh, configuration recovery, notifications, and existing hub behavior.\n• Kept the execution path lean and avoided introducing a new local-heavy structure that would increase register pressure.\n• Visible version remains v2.0.5.", ChangelogsView)
+CreateParagraph("v2.0.6 - Stability, Language & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized Offline status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Kept Recommended for You restricted to the Games catalog only.\n• Removed unused legacy helper functions left behind by earlier UI changes.\n• Removed unnecessary legacy code paths without changing the existing executor fallback layer.\n• Preserved the existing request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendations, notifications, and catalog-refresh compatibility paths.\n• Kept the script free of comments and avoided adding local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5710,9 +5699,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	if force == true then
 		ClearCatalogCardsForRefresh()
 	end
-	StatusDot.BackgroundColor3 = Theme.Warning
-	StatusText.Text = "Connecting..."
-	StatusText.TextColor3 = Theme.Warning
+	SetHubStatus("Connecting...", Theme.Warning)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
@@ -5734,9 +5721,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			if catalogUrl == "" then
 				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
-				StatusDot.BackgroundColor3 = Theme.Info
-				StatusText.Text = "Empty"
-				StatusText.TextColor3 = Theme.Info
+				SetHubStatus("Empty", Theme.Info)
 				SetScriptEmptyState("blank", refreshCategory)
 				FinishRefresh()
 				return
@@ -5747,9 +5732,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
 				if #RegisteredScripts == 0 then SetScriptEmptyState("error", refreshCategory, "Unable to reach the script catalog server.") end
-				StatusDot.BackgroundColor3 = Theme.Error
-				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
-				StatusText.TextColor3 = Theme.Error
+				SetHubStatus(catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline", Theme.Error)
 				ShowNotification(refreshCategory .. " catalog: could not connect to the server.", "Error")
 				FinishRefresh()
 				return
@@ -5759,9 +5742,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
 				if #RegisteredScripts == 0 then SetScriptEmptyState("error", refreshCategory, "The catalog data format could not be read.") end
-				StatusDot.BackgroundColor3 = Theme.Error
-				StatusText.Text = "Data Error"
-				StatusText.TextColor3 = Theme.Error
+				SetHubStatus("Data Error", Theme.Error)
 				ShowNotification(refreshCategory .. " catalog data format error.", "Error")
 				FinishRefresh()
 				return
@@ -5821,9 +5802,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				end
 				_VH_RefreshRecommendations()
 				RefreshAllCardStates()
-				StatusDot.BackgroundColor3 = Theme.Success
-				StatusText.Text = "Online"
-				StatusText.TextColor3 = Theme.Success
+				SetHubStatus("Online", Theme.Success)
 				if not isAutoRefresh and not CatalogBatchRefreshing then
 					ShowNotification(refreshCategory .. " catalog is already up to date.", "Info")
 				end
@@ -5949,9 +5928,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 					end)
 				end
 			end
-			StatusDot.BackgroundColor3 = Theme.Success
-			StatusText.Text = "Online"
-			StatusText.TextColor3 = Theme.Success
+			SetHubStatus("Online", Theme.Success)
 			if not CatalogBatchRefreshing then
 				if isAutoRefresh then
 					ShowNotification(refreshCategory .. " catalog updated.", "Success")
@@ -5971,9 +5948,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 		end
 		if not taskOk and not isDestroying and generation == CatalogGeneration then
 			CatalogRefreshResults[refreshCategory] = false
-			StatusDot.BackgroundColor3 = Theme.Error
-			StatusText.Text = "Catalog Error"
-			StatusText.TextColor3 = Theme.Error
+			SetHubStatus("Catalog Error", Theme.Error)
 			ShowNotification(refreshCategory .. " catalog refresh failed safely.", "Error")
 		end
 		FinishRefresh()
@@ -6016,14 +5991,10 @@ local function _VH_RestoreSelectedCategoryState(category)
 		end
 	end
 	if GetActiveCatalogUrl() == "" then
-		StatusDot.BackgroundColor3 = Theme.Info
-		StatusText.Text = "Empty"
-		StatusText.TextColor3 = Theme.Info
+		SetHubStatus("Empty", Theme.Info)
 		SetScriptEmptyState("blank", category)
 	else
-		StatusDot.BackgroundColor3 = state.Loaded and Theme.Success or Theme.Info
-		StatusText.Text = state.Loaded and "Online" or "Empty"
-		StatusText.TextColor3 = state.Loaded and Theme.Success or Theme.Info
+		SetHubStatus(state.Loaded and "Online" or "Empty", state.Loaded and Theme.Success or Theme.Info)
 		if #RegisteredScripts == 0 then SetScriptEmptyState("blank", category) else HideScriptEmptyState() end
 	end
 	UpdateFilter()
@@ -6217,39 +6188,6 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	rightContainer.Position = UDim2.new(1, -110, 0, 0)
 	rightContainer.BackgroundTransparency = 1
 	return row, rightContainer
-end
-function CreateToggleSettingInGroup(groupCard, title, desc, iconAsset, order, defaultValue, callback)
-	local rightContainer = select(2, CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order))
-	local toggleBtn = Instance.new("TextButton", rightContainer)
-	toggleBtn.Size = UDim2.new(0, 44, 0, 22)
-	toggleBtn.Position = UDim2.new(1, -44, 0.5, -11)
-	toggleBtn.BackgroundColor3 = defaultValue and Theme.Accent or Theme.BackgroundMain
-	toggleBtn.Text = ""
-	toggleBtn.AutoButtonColor = false
-	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
-	local toggleStroke = Instance.new("UIStroke", toggleBtn)
-	toggleStroke.Color = defaultValue and Theme.Accent or Theme.Stroke
-	toggleStroke.Thickness = 1
-	local circle = Instance.new("Frame", toggleBtn)
-	circle.Size = UDim2.new(0, 16, 0, 16)
-	circle.Position = defaultValue and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-	local state = defaultValue
-	_VH_RegConn(toggleBtn.Activated:Connect(_VH_CreateDebounce(0.1, function()
-		if isDestroying then return end
-		state = not state
-		_VH_SafeTween(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = state and Theme.Accent or Theme.BackgroundMain
-		})
-		_VH_SafeTween(toggleStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Color = state and Theme.Accent or Theme.Stroke
-		})
-		_VH_SafeTween(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-		})
-		if type(callback) == "function" then task.spawn(callback, state) end
-	end)))
 end
 function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, order, isDestructive, callback)
 	local rightContainer = select(2, CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order))
@@ -6466,6 +6404,7 @@ function SetLanguage(language)
 	SavedData.Settings.Language = language
 	if languageButton and languageButton.Parent then languageButton.Text = language end
 	_VH_ApplyTranslations(ScreenGui)
+	SetHubStatus(HubStatusKey, StatusText.TextColor3)
 	if ScriptCategoryButtons then UpdateScriptCategoryButtons() end
 	if RecommendationPanel and RecommendationPanel.Parent then RecommendationTitle.Text = L("Recommended for You"); RecommendationSeeMoreButton.Text = L("See More") end
 	if RecommendationPanel and RecommendationPanel.Visible then _VH_RefreshRecommendations() end
