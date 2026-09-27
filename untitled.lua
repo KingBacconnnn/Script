@@ -2494,7 +2494,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.8 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.9 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -4120,6 +4120,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
+CreateParagraph("v2.0.9 - Settings Refresh & Unload Fixes", "• Restored the Unload Hub action under System Actions.\n• Fixed the Manual Refresh title and description references so they no longer overwrite each other.\n• Kept the Manual Refresh title and description on one line with end truncation instead of wrapping.\n• Preserved the separate catalog target dropdown and refresh action button with balanced mobile spacing.\n• Kept the Language dropdown design, Games-only recommendations, catalog caching, and refresh compatibility paths.", ChangelogsView)
 CreateParagraph("v2.0.8 - Settings Dropdown Refinement & Refresh Layout", "• Fixed Recommended for You visibility so it only appears in the Games catalog.\n• Fixed Games refreshes so the Recommended for You cards rebuild from the refreshed Games catalog.\n• Kept Games recommendations isolated while Utilities are refreshed.\n• Refined Manual Refresh into a separate target dropdown and refresh action button.\n• Added the same icon, chevron, balanced-spacing, and white-outline design to the Language dropdown.\n• Fixed mobile layout clamping and overlap in the Manual Refresh controls.\n• Kept the existing catalog caching, execution, notifications, language, configuration, and executor fallback paths.", ChangelogsView)
 CreateParagraph("v2.0.6 - Stability, Language & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized Offline status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Kept Recommended for You restricted to the Games catalog only.\n• Removed unused legacy helper functions left behind by earlier UI changes.\n• Removed unnecessary legacy code paths without changing the existing executor fallback layer.\n• Preserved the existing request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendations, notifications, and catalog-refresh compatibility paths.\n• Kept the script free of comments and avoided adding local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
@@ -6227,6 +6228,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	tLay.Padding = UDim.new(0, 2)
 	tLay.VerticalAlignment = Enum.VerticalAlignment.Center
 	t = Instance.new("TextLabel", textContainer)
+	t.Name = "SettingTitle"
 	t.Size = UDim2.new(1, 0, 0, 16)
 	t.BackgroundTransparency = 1
 	t.Text = title
@@ -6236,6 +6238,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.LayoutOrder = 1
 	d = Instance.new("TextLabel", textContainer)
+	d.Name = "SettingDescription"
 	d.Size = UDim2.new(1, 0, 0, 14)
 	d.BackgroundTransparency = 1
 	d.Text = desc
@@ -6605,13 +6608,22 @@ manualRefreshRow, manualRefreshRight = CreateSettingRowInGroup(actionGroup, "Man
 manualRefreshTextContainer = manualRefreshRow:FindFirstChild("TextContainer")
 manualRefreshRightWidth = IsMobile and 188 or 202
 if manualRefreshTextContainer then
-	manualRefreshTextContainer.Size = UDim2.new(1, -(manualRefreshRightWidth + 62), 1, 0)
+	manualRefreshTextContainer.Size = UDim2.new(1, -(manualRefreshRightWidth + 52), 1, 0)
 	manualRefreshTextContainer.Position = UDim2.new(0, 42, 0, 0)
-	for _, manualRefreshText in ipairs(manualRefreshTextContainer:GetChildren()) do
-		if manualRefreshText:IsA("TextLabel") then
-			manualRefreshText.TextTruncate = Enum.TextTruncate.AtEnd
-			if manualRefreshText.LayoutOrder == 2 then manualRefreshText.TextWrapped = false end
-		end
+	manualRefreshTextContainer.ClipsDescendants = true
+	manualRefreshTitle = manualRefreshTextContainer:FindFirstChild("SettingTitle")
+	manualRefreshDesc = manualRefreshTextContainer:FindFirstChild("SettingDescription")
+	if manualRefreshTitle and manualRefreshTitle:IsA("TextLabel") then
+		manualRefreshTitle.Text = L("Manual Refresh")
+		manualRefreshTitle:SetAttribute("VeloxTranslationKey", "Manual Refresh")
+		manualRefreshTitle.TextWrapped = false
+		manualRefreshTitle.TextTruncate = Enum.TextTruncate.AtEnd
+	end
+	if manualRefreshDesc and manualRefreshDesc:IsA("TextLabel") then
+		manualRefreshDesc.Text = L("Choose which catalog to refresh manually.")
+		manualRefreshDesc:SetAttribute("VeloxTranslationKey", "Choose which catalog to refresh manually.")
+		manualRefreshDesc.TextWrapped = false
+		manualRefreshDesc.TextTruncate = Enum.TextTruncate.AtEnd
 	end
 end
 manualRefreshRight.Size = UDim2.new(0, manualRefreshRightWidth, 1, 0)
@@ -6624,10 +6636,6 @@ manualRefreshRightLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 manualRefreshRightLayout.SortOrder = Enum.SortOrder.LayoutOrder
 manualRefreshRightLayout.Padding = UDim.new(0, IsMobile and 10 or 12)
 if manualRefreshRow then manualRefreshRow.Size = UDim2.new(1, 0, 0, IsMobile and 64 or 68) end
-manualRefreshTitle = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:FindFirstChildOfClass("TextLabel")
-manualRefreshDesc = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:GetChildren()[2]
-if manualRefreshTitle then manualRefreshTitle.Text = L("Manual Refresh"); manualRefreshTitle:SetAttribute("VeloxTranslationKey", "Manual Refresh") end
-if manualRefreshDesc and manualRefreshDesc:IsA("TextLabel") then manualRefreshDesc.Text = L("Choose which catalog to refresh manually."); manualRefreshDesc:SetAttribute("VeloxTranslationKey", "Choose which catalog to refresh manually.") end
 manualRefreshDropdownWidth = IsMobile and 118 or 126
 manualRefreshButtonWidth = IsMobile and 38 or 40
 ManualRefreshTargetButton = Instance.new("TextButton", manualRefreshRight)
@@ -6843,6 +6851,10 @@ _VH_RegConn(ManualRefreshButton.Activated:Connect(_VH_CreateDebounce(0.1, functi
 		end)
 	end)
 end)))
+CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", VeloxIcons.UnloadHub, "Unload", 2, true, function()
+	task.wait(0.3)
+	CloseUI()
+end)
 
 if IsMobile then
 	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
