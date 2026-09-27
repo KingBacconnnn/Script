@@ -175,6 +175,9 @@ PendingTasks = {}
 ActiveTweens = setmetatable({}, { __mode = "k" })
 CatalogGeneration = 0
 LastCatalogRefreshAt = 0
+currentScriptCategory = "Games"
+GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
+UTILITIES_CATALOG_URL = ""
 RecommendationGeneration = 0
 RecommendationItems = {}
 RecommendationConnections = {}
@@ -2464,16 +2467,155 @@ HowToUseView = CreateCanvas("How to Use")
 ChangelogsView:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, IsMobile and 7 or 8)
 HowToUseView:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, IsMobile and 7 or 8)
 ScriptsView.AnchorPoint = Vector2.new(0, 0)
-ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 144) or UDim2.new(0, 14, 0, 162)
-ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -152) or UDim2.new(1, -28, 1, -172)
+ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 172) or UDim2.new(0, 14, 0, 190)
+ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -180) or UDim2.new(1, -28, 1, -200)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
 EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
 EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
 EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
 
+ScriptCategoryRow = Instance.new("Frame", MainContent)
+ScriptCategoryRow.Name = "ScriptCategoryTabs"
+ScriptCategoryRow.AnchorPoint = Vector2.new(0, 0)
+ScriptCategoryRow.Size = UDim2.new(1, -28, 0, IsMobile and 28 or 32)
+ScriptCategoryRow.Position = UDim2.new(0, 14, 0, IsMobile and 98 or 112)
+ScriptCategoryRow.BackgroundTransparency = 1
+ScriptCategoryRow.BorderSizePixel = 0
+ScriptCategoryRow.Visible = false
+ScriptCategoryRow.ZIndex = 49
+
+ScriptCategoryLayout = Instance.new("UIListLayout", ScriptCategoryRow)
+ScriptCategoryLayout.FillDirection = Enum.FillDirection.Horizontal
+ScriptCategoryLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptCategoryLayout.Padding = UDim.new(0, IsMobile and 5 or 7)
+ScriptCategoryLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+ScriptCategoryLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+ScriptCategoryButtons = {}
+
+local function UpdateScriptCategoryButtons()
+	for category, button in pairs(ScriptCategoryButtons) do
+		if button and button.Parent then
+			local active = category == currentScriptCategory
+			button.BackgroundColor3 = active and Theme.CardHover or Theme.BackgroundSecondary
+			button.BackgroundTransparency = active and 0.02 or 0.52
+			local stroke = button:FindFirstChild("CategoryOutline")
+			if stroke and stroke:IsA("UIStroke") then
+				stroke.Color = active and Theme.Accent or Theme.Stroke
+				stroke.Transparency = active and 0.18 or 0.4
+			end
+			local label = button:FindFirstChild("CategoryLabel")
+			if label and label:IsA("TextLabel") then
+				label.TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary
+			end
+		end
+	end
+end
+
+local function CreateScriptCategoryButton(category, layoutOrder)
+	local button = Instance.new("TextButton", ScriptCategoryRow)
+	button.Name = category .. "Tab"
+	button.Size = UDim2.new(0.5, IsMobile and -3 or -4, 1, 0)
+	button.BackgroundColor3 = Theme.BackgroundSecondary
+	button.BackgroundTransparency = 0.52
+	button.BorderSizePixel = 0
+	button.Text = ""
+	button.AutoButtonColor = false
+	button.ClipsDescendants = true
+	button.LayoutOrder = layoutOrder
+	button.ZIndex = 50
+	Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
+
+	local stroke = Instance.new("UIStroke", button)
+	stroke.Name = "CategoryOutline"
+	stroke.Color = Theme.Stroke
+	stroke.Transparency = 0.4
+	stroke.Thickness = 1
+
+	local label = Instance.new("TextLabel", button)
+	label.Name = "CategoryLabel"
+	label.Size = UDim2.new(1, -12, 1, 0)
+	label.Position = UDim2.new(0, 6, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = category
+	label.TextColor3 = Theme.TextSecondary
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = IsMobile and 9 or 11
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.Active = false
+	label.ZIndex = 51
+
+	ScriptCategoryButtons[category] = button
+	ApplyInteractiveAnimations(button, Theme.BackgroundSecondary, Theme.CardHover, Theme.BackgroundMain, stroke, Theme.Stroke, Theme.Accent)
+
+	_VH_RegConn(button.Activated:Connect(function()
+		if isDestroying or currentTab ~= "Scripts" then return end
+		if currentScriptCategory == category then return end
+		if dbRefreshing then
+			ShowNotification("Please wait for the current catalog refresh to finish.", "Info")
+			return
+		end
+
+		currentScriptCategory = category
+		UpdateScriptCategoryButtons()
+
+		for _, connection in ipairs(RecommendationConnections) do
+			if typeof(connection) == "RBXScriptConnection" and connection.Connected then
+				pcall(function() connection:Disconnect() end)
+			end
+		end
+		table.clear(RecommendationConnections)
+		RecommendationItems = {}
+		RecommendationRenderSignature = ""
+		if RecommendationPanel and RecommendationPanel.Parent then
+			RecommendationPanel.Visible = false
+		end
+
+		for _, entry in ipairs(RegisteredScripts) do
+			if entry and entry.DisconnectConnections then
+				pcall(entry.DisconnectConnections)
+			end
+			if entry and entry.Instance and entry.Instance.Parent then
+				pcall(function() entry.Instance:Destroy() end)
+			end
+		end
+		table.clear(RegisteredScripts)
+		LastCatalogFingerprint = nil
+		LastCatalogRefreshAt = 0
+		CatalogGeneration += 1
+		filterVersion = filterVersion + 1
+		EmptyStateMessage.Visible = false
+		EmptyStateMessage.Text = ""
+		ScriptsView.CanvasPosition = Vector2.new(0, 0)
+
+		local catalogUrl = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
+		if type(catalogUrl) ~= "string" then catalogUrl = "" end
+		catalogUrl = string.gsub(catalogUrl, "^%s*(.-)%s*$", "%1")
+
+		if catalogUrl == "" then
+			StatusDot.BackgroundColor3 = Theme.Info
+			StatusText.Text = "Empty"
+			StatusText.TextColor3 = Theme.Info
+			EmptyStateMessage.Visible = true
+			EmptyStateMessage.Text = category .. " catalog is empty. Add its URL in " .. (category == "Utilities" and "UTILITIES_CATALOG_URL" or "GAMES_CATALOG_URL") .. "."
+			UpdateFilter()
+			return
+		end
+
+		ShowNotification("Loading " .. category .. " catalog...", "Info")
+		PendingTasks.__LoadCatalog(true)
+	end))
+	return button
+end
+
+CreateScriptCategoryButton("Games", 1)
+CreateScriptCategoryButton("Utilities", 2)
+UpdateScriptCategoryButtons()
+
 SearchRow = Instance.new("Frame", MainContent)
 SearchRow.AnchorPoint = Vector2.new(0, 0)
-SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 30 or 34); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 104 or 118)
+SearchRow.Size = UDim2.new(1, -28, 0, IsMobile and 30 or 34); SearchRow.Position = UDim2.new(0, 14, 0, IsMobile and 134 or 150)
 SearchRow.BackgroundTransparency = 1; SearchRow.Visible = false; SearchRow.Active = false; SearchRow.ZIndex = 50
 
 filterBtnWidth = IsMobile and 38 or 42
@@ -3597,8 +3739,10 @@ function CreateTab(name, index)
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
 		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or (name == "Settings") and "Settings Hub" or "How to Use"
 		SectionHeaderLabel.Visible = true
+		ScriptCategoryRow.Visible = (name == "Scripts")
 		SearchRow.Visible = (name == "Scripts")
 		if name == "Scripts" then
+			UpdateScriptCategoryButtons()
 			UpdateFilter()
 			SearchRow.BackgroundTransparency = 1
 			_VH_SafeTween(SearchRow, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
@@ -5227,8 +5371,12 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
 end
-CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 CATALOG_REFRESH_INTERVAL = 300
+function GetActiveCatalogUrl()
+	local url = currentScriptCategory == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
+	if type(url) ~= "string" then return "" end
+	return string.gsub(url, "^%s*(.-)%s*$", "%1")
+end
 dbRefreshing = false
 CatalogRefreshQueued = false
 CatalogRefreshQueueScheduled = false
@@ -5324,7 +5472,18 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	activeNewEntries = {}
 	_VH_TrackTask(function()
 		taskOk, taskErr = xpcall(function()
-			raw, catalogStatus = FetchWithRetry(CATALOG_URL, 3, true)
+			local catalogUrl = GetActiveCatalogUrl()
+			if catalogUrl == "" then
+				ClearCatalogCardsForRefresh()
+				StatusDot.BackgroundColor3 = Theme.Info
+				StatusText.Text = "Empty"
+				StatusText.TextColor3 = Theme.Info
+				EmptyStateMessage.Visible = true
+				EmptyStateMessage.Text = currentScriptCategory .. " catalog is empty. Add its URL in " .. (currentScriptCategory == "Utilities" and "UTILITIES_CATALOG_URL" or "GAMES_CATALOG_URL") .. "."
+				FinishRefresh()
+				return
+			end
+			raw, catalogStatus = FetchWithRetry(catalogUrl, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
 				RestoreCatalogCardsAfterRefreshFailure()
@@ -5528,11 +5687,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
 			if isAutoRefresh then
-				ShowNotification("Catalog updated.", "Success")
+				ShowNotification(currentScriptCategory .. " catalog updated.", "Success")
 			elseif force == true then
-				ShowNotification("Successfully refreshed latest script.", "Success")
+				ShowNotification("Successfully refreshed " .. currentScriptCategory .. " catalog.", "Success")
 			else
-				ShowNotification("Script catalog loaded successfully!", "Success")
+				ShowNotification(currentScriptCategory .. " catalog loaded successfully!", "Success")
 			end
 		end, function(err) return tostring(err) end)
 		if not taskOk then
@@ -5561,7 +5720,12 @@ _VH_TrackTask(function()
 			task.wait(math.min(remaining, 1))
 		else
 			if not dbRefreshing then
-				PendingTasks.__LoadCatalog(false, true)
+				if GetActiveCatalogUrl() ~= "" then
+					PendingTasks.__LoadCatalog(false, true)
+				else
+					LastCatalogRefreshAt = os.clock()
+					task.wait(1)
+				end
 			else
 
 				task.wait(1)
@@ -5931,9 +6095,14 @@ _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() Set
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches latest scripts.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches the active catalog.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
+			return
+		end
+		if GetActiveCatalogUrl() == "" then
+			ShowNotification(currentScriptCategory .. " catalog URL is blank. Add it manually first.", "Info")
+			AnimateRefreshButton(btn, "success")
 			return
 		end
 		AnimateRefreshButton(btn, true)
@@ -5985,6 +6154,8 @@ TabViews["Changelog"].Visible = true
 TabViews["Scripts"].Visible = false
 TabViews["Settings"].Visible = false
 TabViews["How to Use"].Visible = false
+ScriptCategoryRow.Visible = false
+UpdateScriptCategoryButtons()
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
 SectionHeaderLabel.Text = "Updates"
 SectionHeaderLabel.Visible = true
