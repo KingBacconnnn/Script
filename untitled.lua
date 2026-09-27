@@ -178,6 +178,10 @@ LastCatalogRefreshAt = 0
 currentScriptCategory = "Games"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 UTILITIES_CATALOG_URL = ""
+CategoryCatalogStates = {
+	Games = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false },
+	Utilities = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
+}
 RecommendationGeneration = 0
 RecommendationItems = {}
 RecommendationConnections = {}
@@ -2590,6 +2594,21 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 			return
 		end
 
+		local previousCategory = currentScriptCategory
+		local previousState = CategoryCatalogStates[previousCategory]
+		if previousState then
+			previousState.Entries = RegisteredScripts
+			previousState.ByKey = RegisteredScripts.__ByKey or {}
+			previousState.Fingerprint = LastCatalogFingerprint
+			previousState.LastRefreshAt = LastCatalogRefreshAt
+			previousState.Loaded = previousState.Loaded or LastCatalogFingerprint ~= nil or #RegisteredScripts > 0
+			for _, entry in ipairs(RegisteredScripts) do
+				if entry and entry.Instance and entry.Instance.Parent then
+					entry.Instance.Visible = false
+				end
+			end
+		end
+
 		currentScriptCategory = category
 		UpdateScriptCategoryButtons()
 
@@ -2605,22 +2624,25 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 			RecommendationPanel.Visible = false
 		end
 
-		for _, entry in ipairs(RegisteredScripts) do
-			if entry and entry.DisconnectConnections then
-				pcall(entry.DisconnectConnections)
-			end
-			if entry and entry.Instance and entry.Instance.Parent then
-				pcall(function() entry.Instance:Destroy() end)
-			end
-		end
-		table.clear(RegisteredScripts)
-		LastCatalogFingerprint = nil
-		LastCatalogRefreshAt = 0
-		CatalogGeneration += 1
 		filterVersion = filterVersion + 1
 		HideScriptEmptyState()
 		EmptyStateMessage.Text = ""
 		ScriptsView.CanvasPosition = Vector2.new(0, 0)
+
+		local categoryState = CategoryCatalogStates[category]
+		if not categoryState then
+			categoryState = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
+			CategoryCatalogStates[category] = categoryState
+		end
+		RegisteredScripts = categoryState.Entries or {}
+		RegisteredScripts.__ByKey = categoryState.ByKey or {}
+		LastCatalogFingerprint = categoryState.Fingerprint
+		LastCatalogRefreshAt = categoryState.LastRefreshAt or 0
+		for _, entry in ipairs(RegisteredScripts) do
+			if entry and entry.Instance and entry.Instance.Parent then
+				entry.Instance.Visible = true
+			end
+		end
 
 		local catalogUrl = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
 		if type(catalogUrl) ~= "string" then catalogUrl = "" end
@@ -2635,8 +2657,24 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 			return
 		end
 
+		if categoryState.Loaded then
+			if #RegisteredScripts == 0 then
+				SetScriptEmptyState("blank", category)
+			else
+				HideScriptEmptyState()
+			end
+			StatusDot.BackgroundColor3 = Theme.Success
+			StatusText.Text = "Online"
+			StatusText.TextColor3 = Theme.Success
+			UpdateFilter()
+			RefreshAllCardStates()
+			_VH_RefreshRecommendations()
+			return
+		end
+
+		SetScriptEmptyState("loading", category)
 		ShowNotification("Loading " .. category .. " catalog...", "Info")
-		PendingTasks.__LoadCatalog(true)
+		PendingTasks.__LoadCatalog(false)
 	end))
 	return button
 end
@@ -5418,7 +5456,25 @@ end
 dbRefreshing = false
 CatalogRefreshQueued = false
 CatalogRefreshQueueScheduled = false
+CatalogRefreshQueuedCategory = nil
 LastCatalogFingerprint = nil
+function GetCategoryCatalogState(category)
+	category = category or currentScriptCategory or "Games"
+	local state = CategoryCatalogStates[category]
+	if not state then
+		state = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
+		CategoryCatalogStates[category] = state
+	end
+	return state
+end
+function SaveActiveCatalogState()
+	local state = GetCategoryCatalogState(currentScriptCategory)
+	state.Entries = RegisteredScripts
+	state.ByKey = RegisteredScripts.__ByKey or {}
+	state.Fingerprint = LastCatalogFingerprint
+	state.LastRefreshAt = LastCatalogRefreshAt
+	state.Loaded = state.Loaded or LastCatalogFingerprint ~= nil or #RegisteredScripts > 0
+end
 function BuildCatalogFingerprint(entries)
 	local parts = {}
 	for index, entry in ipairs(entries) do
@@ -5462,16 +5518,20 @@ function _VH_ScheduleQueuedCatalogRefresh()
 		if isDestroying or dbRefreshing or not CatalogRefreshQueued then return end
 		local queuedForce = PendingTasks.__CatalogRefreshForce == true
 		local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
+		local queuedCategory = CatalogRefreshQueuedCategory
 		CatalogRefreshQueued = false
+		CatalogRefreshQueuedCategory = nil
 		PendingTasks.__CatalogRefreshForce = false
 		PendingTasks.__CatalogRefreshAuto = false
-		PendingTasks.__LoadCatalog(queuedForce, queuedAuto)
+		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, queuedCategory)
 	end)
 end
-PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
+PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	if isDestroying then return false end
+	if expectedCategory and expectedCategory ~= currentScriptCategory then return false end
 	if dbRefreshing then
 		CatalogRefreshQueued = true
+		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		return false
@@ -5479,6 +5539,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 	local now = os.clock()
 	if not force and now - LastCatalogRefreshAt < 5 then
 		CatalogRefreshQueued = true
+		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		_VH_ScheduleQueuedCatalogRefresh()
@@ -5502,6 +5563,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 		if not isAutoRefresh then
 			LastCatalogRefreshAt = os.clock()
 		end
+		local finishedState = GetCategoryCatalogState(currentScriptCategory)
+		finishedState.LastRefreshAt = LastCatalogRefreshAt
 		if CatalogRefreshQueued and not isDestroying then
 			_VH_ScheduleQueuedCatalogRefresh()
 		end
@@ -5666,10 +5729,14 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh)
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
-			table.clear(RegisteredScripts)
-			for _, entry in ipairs(nextEntries) do RegisteredScripts[#RegisteredScripts + 1] = entry end
+			RegisteredScripts = nextEntries
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
+			local activeState = GetCategoryCatalogState(currentScriptCategory)
+			activeState.Entries = RegisteredScripts
+			activeState.ByKey = nextByKey
+			activeState.Fingerprint = fingerprint
+			activeState.Loaded = true
 			_VH_RefreshRecommendations()
 			RefreshAllCardStates()
 			UpdateFilter()
@@ -5752,19 +5819,23 @@ PendingTasks.__LoadCatalog()
 
 _VH_TrackTask(function()
 	while not isDestroying do
-		remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - LastCatalogRefreshAt)
+		local autoRefreshCategory = currentScriptCategory
+		local autoRefreshState = GetCategoryCatalogState(autoRefreshCategory)
+		local autoRefreshLastAt = autoRefreshState.LastRefreshAt or LastCatalogRefreshAt
+		LastCatalogRefreshAt = autoRefreshLastAt
+		remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - autoRefreshLastAt)
 		if remaining > 0 then
 			task.wait(math.min(remaining, 1))
 		else
-			if not dbRefreshing then
+			if not dbRefreshing and currentScriptCategory == autoRefreshCategory then
 				if GetActiveCatalogUrl() ~= "" then
-					PendingTasks.__LoadCatalog(false, true)
+					PendingTasks.__LoadCatalog(false, true, autoRefreshCategory)
 				else
 					LastCatalogRefreshAt = os.clock()
+					autoRefreshState.LastRefreshAt = LastCatalogRefreshAt
 					task.wait(1)
 				end
 			else
-
 				task.wait(1)
 			end
 		end
