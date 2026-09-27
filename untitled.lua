@@ -151,7 +151,11 @@ VeloxIcons = {
 	Book = "rbxassetid://128971810128936",
 	Checklist = "rbxassetid://109837415710773",
 	PlayCircle = "rbxassetid://109292590008276",
-	AppBadge = "rbxassetid://124163824604013"
+	AppBadge = "rbxassetid://124163824604013",
+	RefreshGames = "rbxassetid://90287169568964",
+	RefreshUtilities = "rbxassetid://96504473642584",
+	RefreshAll = "rbxassetid://137146389676408",
+	ChevronDown = "rbxassetid://97045880141942"
 }
 function CreateVeloxIcon(parent, asset, size, color, position, anchor, zIndex, name)
 	local img = Instance.new("ImageLabel", parent)
@@ -175,6 +179,7 @@ ActiveTweens = setmetatable({}, { __mode = "k" })
 CatalogGeneration = 0
 LastCatalogRefreshAt = 0
 currentScriptCategory = "Games"
+ManualRefreshSelection = "All"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
 CategoryCatalogStates = {
@@ -620,6 +625,8 @@ LanguageTranslations = {
 		["User Preferences"] = "User Preferences", ["Toggle UI"] = "Toggle UI", ["Keybind to show or hide hub."] = "Keybind to show or hide hub.",
 		["UI Scale"] = "UI Scale", ["Adjust the hub size from 80% to 120%."] = "Adjust the hub size from 80% to 120%.",
 		["Language"] = "Language", ["Change the hub language."] = "Change the hub language.", ["System Actions"] = "System Actions",
+		["Manual Refresh"] = "Manual Refresh", ["Choose which catalog to refresh manually."] = "Choose which catalog to refresh manually.",
+		["All"] = "All",
 		["Refresh Catalog"] = "Refresh Catalog", ["Refreshes both Games and Utilities catalogs."] = "Refreshes both Games and Utilities catalogs.",
 		["Refresh"] = "Refresh", ["Refreshing"] = "Refreshing", ["Retry"] = "Retry", ["Unload Hub"] = "Unload Hub", ["Removes Velox Hub completely."] = "Removes Velox Hub completely.", ["Unload"] = "Unload",
 		["User Data"] = "User Data", ["Clear UI Cache"] = "Clear UI Cache", ["Resets layout position."] = "Resets layout position.", ["Reset"] = "Reset",
@@ -642,6 +649,8 @@ LanguageTranslations = {
 		["User Preferences"] = "Mga Kagustuhan", ["Toggle UI"] = "I-toggle ang UI", ["Keybind to show or hide hub."] = "Keybind para ipakita o itago ang hub.",
 		["UI Scale"] = "Laki ng UI", ["Adjust the hub size from 80% to 120%."] = "Ayusin ang laki ng hub mula 80% hanggang 120%.",
 		["Language"] = "Wika", ["Change the hub language."] = "Palitan ang wika ng hub.", ["System Actions"] = "Mga System Action",
+		["Manual Refresh"] = "Manual Refresh", ["Choose which catalog to refresh manually."] = "Piliin kung aling catalog ang mano-manong ire-refresh.",
+		["All"] = "Lahat",
 		["Refresh Catalog"] = "I-refresh ang Catalog", ["Refreshes both Games and Utilities catalogs."] = "Ire-refresh ang Games at Utilities catalog.",
 		["Refresh"] = "Refresh", ["Refreshing"] = "Nire-refresh", ["Retry"] = "Ulitin", ["Unload Hub"] = "Alisin ang Hub", ["Removes Velox Hub completely."] = "Tuluyang aalisin ang Velox Hub.", ["Unload"] = "Alisin",
 		["User Data"] = "User Data", ["Clear UI Cache"] = "I-clear ang UI Cache", ["Resets layout position."] = "Ire-reset ang posisyon ng layout.", ["Reset"] = "I-reset",
@@ -664,6 +673,8 @@ LanguageTranslations = {
 		["User Preferences"] = "用户偏好", ["Toggle UI"] = "切换界面", ["Keybind to show or hide hub."] = "用于显示或隐藏中心的快捷键。",
 		["UI Scale"] = "界面缩放", ["Adjust the hub size from 80% to 120%."] = "将中心大小调整为 80% 到 120%。",
 		["Language"] = "语言", ["Change the hub language."] = "更改中心语言。", ["System Actions"] = "系统操作",
+		["Manual Refresh"] = "手动刷新", ["Choose which catalog to refresh manually."] = "选择要手动刷新的目录。",
+		["All"] = "全部",
 		["Refresh Catalog"] = "刷新目录", ["Refreshes both Games and Utilities catalogs."] = "刷新游戏和工具目录。",
 		["Refresh"] = "刷新", ["Refreshing"] = "刷新中", ["Retry"] = "重试", ["Unload Hub"] = "卸载中心", ["Removes Velox Hub completely."] = "完全移除 Velox Hub。", ["Unload"] = "卸载",
 		["User Data"] = "用户数据", ["Clear UI Cache"] = "清除界面缓存", ["Resets layout position."] = "重置布局位置。", ["Reset"] = "重置",
@@ -2481,7 +2492,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.6 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.7 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -3507,6 +3518,9 @@ function PositionOpenPanels()
 	if FilterPanel and FilterPanel.Visible then
 		_VH_SetPopupPosition(FilterPanel, FilterBtn, IsMobile and 236 or 250, IsMobile and 318 or 330, 10)
 	end
+	if PositionManualRefreshDropdown and ManualRefreshDropdown and ManualRefreshDropdown.Visible then
+		PositionManualRefreshDropdown()
+	end
 end
 
 function _VH_ClampGuiToViewport(gui, viewport)
@@ -3665,7 +3679,7 @@ function UpdateFilter()
 		if isDestroying or currentVersion ~= filterVersion then return end
 		local query = _VH_NormalizeSearchText(SearchInput.Text or "")
 		if RecommendationPanel and RecommendationPanel.Parent then
-			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and query == "" and _VH_GetFilterCount() == 0
+			RecommendationPanel.Visible = #RecommendationItems > 0 and currentTab == "Scripts" and currentScriptCategory == "Games" and query == "" and _VH_GetFilterCount() == 0
 		end
 
 		local matches = {}
@@ -4104,6 +4118,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
+CreateParagraph("v2.0.7 - Recommendation Refresh & Manual Refresh Targets", "• Fixed Recommended for You visibility so it can only appear in the Games catalog tab.\n• Fixed manual Games refreshes so the Recommended for You cards are rebuilt from the refreshed Games catalog.\n• Kept Games recommendations available in the background while Utilities are being refreshed.\n• Added a Manual Refresh target dropdown in Settings with Games, Utilities, and All options.\n• Added icon-backed refresh target options with balanced padding and a white outline around the selected option.\n• Kept the existing 5-minute automatic refresh behavior for both catalogs.\n• Preserved the existing catalog caching, execution, notifications, language, configuration, and executor fallback paths.", ChangelogsView)
 CreateParagraph("v2.0.6 - Stability, Language & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized Offline status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Kept Recommended for You restricted to the Games catalog only.\n• Removed unused legacy helper functions left behind by earlier UI changes.\n• Removed unnecessary legacy code paths without changing the existing executor fallback layer.\n• Preserved the existing request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendations, notifications, and catalog-refresh compatibility paths.\n• Kept the script free of comments and avoided adding local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
@@ -4993,7 +5008,7 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	RecommendationPageLabel.Visible = hasMultiplePages and #RecommendationItems > 0
 	RecommendationPageLabel.Text = hasMultiplePages and (tostring(RecommendationPage) .. " / " .. tostring(RecommendationPageCount)) or ""
 
-	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and _VH_GetFilterCount() == 0
+	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and currentScriptCategory == "Games" and string.gsub(SearchInput.Text or "", "%s", "") == "" and _VH_GetFilterCount() == 0
 	RecommendationPanel.Visible = visible
 	if currentCount and currentCount > 0 then
 		RecommendationSubtitle.Text = L("Based on your current game")
@@ -5904,7 +5919,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			activeState.ByKey = nextByKey
 			activeState.Fingerprint = fingerprint
 			activeState.Loaded = true
-			_VH_RefreshRecommendations()
+			if refreshCategory == "Games" then
+				_VH_RefreshRecommendations()
+			elseif RecommendationPanel then
+				RecommendationPanel.Visible = false
+			end
 			RefreshAllCardStates()
 			UpdateFilter()
 			task.defer(function()
@@ -6031,10 +6050,14 @@ local function _VH_RestoreSelectedCategoryState(category)
 	end
 	UpdateFilter()
 	RefreshAllCardStates()
-	_VH_RefreshRecommendations()
+	if category == "Games" then
+		_VH_RefreshRecommendations()
+	elseif RecommendationPanel then
+		RecommendationPanel.Visible = false
+	end
 end
 
-function RefreshAllCatalogs(force, isAutoRefresh)
+function RefreshAllCatalogs(force, isAutoRefresh, refreshSelection)
 	if isDestroying or CatalogBatchRefreshing then return false end
 	if dbRefreshing then return false end
 	CatalogBatchRefreshing = true
@@ -6055,7 +6078,7 @@ function RefreshAllCatalogs(force, isAutoRefresh)
 		local completed = 0
 		local successful = 0
 		local skipped = 0
-		local categories = { "Games", "Utilities" }
+		local categories = refreshSelection == "Games" and { "Games" } or (refreshSelection == "Utilities" and { "Utilities" } or { "Games", "Utilities" })
 		for _, category in ipairs(categories) do
 			if isDestroying or batchGeneration ~= CatalogBatchGeneration then break end
 			local url = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
@@ -6083,11 +6106,15 @@ function RefreshAllCatalogs(force, isAutoRefresh)
 			CatalogBatchRefreshing = false
 			CatalogBatchOriginalCategory = nil
 			if not isAutoRefresh then
-				if successful > 0 and completed == successful then
-					ShowNotification("Games and Utilities catalogs refreshed.", "Success")
-				elseif completed > 0 then
-					ShowNotification("Catalog refresh finished with some errors.", "Warning")
-				elseif skipped == 2 then
+				if completed > 0 and successful == completed and skipped == 0 then
+					if refreshSelection == "Games" or refreshSelection == "Utilities" then
+						ShowNotification(refreshSelection .. " catalog refreshed.", "Success")
+					else
+						ShowNotification("Games and Utilities catalogs refreshed.", "Success")
+					end
+				elseif completed > 0 or skipped > 0 then
+					ShowNotification("Catalog refresh finished with some errors or skipped catalogs.", "Warning")
+				else
 					ShowNotification("No catalog URLs are configured.", "Info")
 				end
 			end
@@ -6189,6 +6216,7 @@ function CreateSettingRowInGroup(groupCard, title, desc, iconAsset, order)
 	iconImg.Image = iconAsset or VeloxIcons.Scripts
 	iconImg.ImageColor3 = Theme.Accent
 	textContainer = Instance.new("Frame", row)
+	textContainer.Name = "TextContainer"
 	textContainer.Size = UDim2.new(1, -165, 1, 0)
 	textContainer.Position = UDim2.new(0, 42, 0, 0)
 	textContainer.BackgroundTransparency = 1
@@ -6255,20 +6283,26 @@ function AnimateRefreshButton(button, state)
 		scaleObj.Scale = 1
 		scaleObj.Parent = button
 	end
+	local iconOnly = button.Name == "ManualRefreshButton"
+	local icon = iconOnly and button:FindFirstChild("ManualRefreshIcon") or nil
 	if state == true or state == "refreshing" then
-		button.Text = "Refreshing"
+		button.Text = iconOnly and "" or L("Refreshing")
+		if icon then _VH_SafeTween(icon, TweenInfo.new(0.45, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Rotation = 180}) end
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.96})
 		_VH_SafeTween(button, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.1})
 	elseif state == "success" then
-		button.Text = "Refresh"
+		button.Text = iconOnly and "" or L("Refresh")
+		if icon then _VH_SafeTween(icon, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0}) end
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	elseif state == "error" then
-		button.Text = "Retry"
+		button.Text = iconOnly and "" or L("Retry")
+		if icon then _VH_SafeTween(icon, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0}) end
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25})
 	else
-		button.Text = "Refresh"
+		button.Text = iconOnly and "" or L("Refresh")
+		if icon then _VH_SafeTween(icon, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0}) end
 		_VH_SafeTween(scaleObj, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
 		_VH_SafeTween(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4})
 	end
@@ -6526,41 +6560,226 @@ _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() Set
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Refreshes both Games and Utilities catalogs.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
-	AttemptActionWithCooldown(function()
-		if dbRefreshing then
-			return
+manualRefreshRow, manualRefreshRight = CreateSettingRowInGroup(actionGroup, "Manual Refresh", "Choose which catalog to refresh manually.", VeloxIcons.RefreshCatalog, 1)
+manualRefreshTitle = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:FindFirstChildOfClass("TextLabel")
+manualRefreshDesc = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:FindFirstChildOfClass("TextLabel")
+manualRefreshRight.Size = UDim2.new(0, IsMobile and 148 or 158, 1, 0)
+manualRefreshRight.Position = UDim2.new(1, -(IsMobile and 148 or 158), 0, 0)
+if manualRefreshTitle then manualRefreshTitle.Text = L("Manual Refresh"); manualRefreshTitle:SetAttribute("VeloxTranslationKey", "Manual Refresh") end
+if manualRefreshDesc then manualRefreshDesc.Text = L("Choose which catalog to refresh manually."); manualRefreshDesc:SetAttribute("VeloxTranslationKey", "Choose which catalog to refresh manually.") end
+
+ManualRefreshTargetButton = Instance.new("TextButton", manualRefreshRight)
+ManualRefreshTargetButton.Name = "RefreshTargetButton"
+ManualRefreshTargetButton.Size = UDim2.new(0, IsMobile and 96 or 105, 0, 28)
+ManualRefreshTargetButton.Position = UDim2.new(0, 0, 0.5, -14)
+ManualRefreshTargetButton.BackgroundColor3 = Theme.BackgroundMain
+ManualRefreshTargetButton.BackgroundTransparency = 0.35
+ManualRefreshTargetButton.BorderSizePixel = 0
+ManualRefreshTargetButton.AutoButtonColor = false
+ManualRefreshTargetButton.Text = ""
+ManualRefreshTargetButton.ClipsDescendants = false
+ManualRefreshTargetButton.ZIndex = 300
+Instance.new("UICorner", ManualRefreshTargetButton).CornerRadius = UDim.new(0, 7)
+ManualRefreshTargetStroke = Instance.new("UIStroke", ManualRefreshTargetButton)
+ManualRefreshTargetStroke.Color = Theme.Stroke
+ManualRefreshTargetStroke.Thickness = 1
+ManualRefreshTargetStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+ManualRefreshTargetIcon = CreateVeloxIcon(ManualRefreshTargetButton, VeloxIcons.RefreshAll, IsMobile and 14 or 15, Theme.TextPrimary, UDim2.new(0, 9, 0.5, -(IsMobile and 7 or 7.5)), nil, 302, "RefreshTargetIcon")
+ManualRefreshTargetLabel = Instance.new("TextLabel", ManualRefreshTargetButton)
+ManualRefreshTargetLabel.Name = "RefreshTargetLabel"
+ManualRefreshTargetLabel.Size = UDim2.new(1, -48, 1, 0)
+ManualRefreshTargetLabel.Position = UDim2.new(0, 31, 0, 0)
+ManualRefreshTargetLabel.BackgroundTransparency = 1
+ManualRefreshTargetLabel.Text = L(ManualRefreshSelection)
+ManualRefreshTargetLabel:SetAttribute("VeloxTranslationKey", ManualRefreshSelection)
+ManualRefreshTargetLabel.TextColor3 = Theme.TextPrimary
+ManualRefreshTargetLabel.Font = Enum.Font.GothamMedium
+ManualRefreshTargetLabel.TextSize = IsMobile and 9 or 10
+ManualRefreshTargetLabel.TextXAlignment = Enum.TextXAlignment.Left
+ManualRefreshTargetLabel.TextYAlignment = Enum.TextYAlignment.Center
+ManualRefreshTargetLabel.TextTruncate = Enum.TextTruncate.AtEnd
+ManualRefreshTargetLabel.Active = false
+ManualRefreshTargetLabel.ZIndex = 303
+ManualRefreshChevron = CreateVeloxIcon(ManualRefreshTargetButton, VeloxIcons.ChevronDown, IsMobile and 11 or 12, Theme.TextSecondary, UDim2.new(1, -(IsMobile and 18 or 19), 0.5, -(IsMobile and 5.5 or 6)), nil, 303, "RefreshTargetChevron")
+
+ManualRefreshButton = Instance.new("TextButton", manualRefreshRight)
+ManualRefreshButton.Name = "ManualRefreshButton"
+ManualRefreshButton.Size = UDim2.new(0, IsMobile and 34 or 38, 0, 28)
+ManualRefreshButton.Position = UDim2.new(1, -(IsMobile and 34 or 38), 0.5, -14)
+ManualRefreshButton.BackgroundColor3 = Theme.BackgroundMain
+ManualRefreshButton.BackgroundTransparency = 0.35
+ManualRefreshButton.BorderSizePixel = 0
+ManualRefreshButton.AutoButtonColor = false
+ManualRefreshButton.Text = ""
+ManualRefreshButton.ClipsDescendants = false
+ManualRefreshButton.ZIndex = 300
+Instance.new("UICorner", ManualRefreshButton).CornerRadius = UDim.new(0, 7)
+ManualRefreshButtonStroke = Instance.new("UIStroke", ManualRefreshButton)
+ManualRefreshButtonStroke.Color = Theme.Stroke
+ManualRefreshButtonStroke.Thickness = 1
+ManualRefreshButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+CreateVeloxIcon(ManualRefreshButton, VeloxIcons.RefreshCatalog, IsMobile and 14 or 15, Theme.TextPrimary, UDim2.new(0.5, -(IsMobile and 7 or 7.5), 0.5, -(IsMobile and 7 or 7.5)), nil, 302, "ManualRefreshIcon")
+ApplyInteractiveAnimations(ManualRefreshTargetButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), ManualRefreshTargetStroke, Theme.Stroke, Theme.Accent)
+ApplyInteractiveAnimations(ManualRefreshButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), ManualRefreshButtonStroke, Theme.Stroke, Theme.Accent)
+
+ManualRefreshDropdown = nil
+ManualRefreshDropdownConnection = nil
+ManualRefreshOptions = { "Games", "Utilities", "All" }
+ManualRefreshIcons = { Games = VeloxIcons.RefreshGames, Utilities = VeloxIcons.RefreshUtilities, All = VeloxIcons.RefreshAll }
+function CloseManualRefreshDropdown()
+	if ManualRefreshDropdown and ManualRefreshDropdown.Parent then ManualRefreshDropdown.Visible = false end
+	if ManualRefreshDropdownConnection then _VH_UnregConn(ManualRefreshDropdownConnection); ManualRefreshDropdownConnection = nil end
+end
+function UpdateManualRefreshSelection()
+	if not ManualRefreshTargetButton or not ManualRefreshTargetButton.Parent then return end
+	ManualRefreshTargetLabel.Text = L(ManualRefreshSelection)
+	ManualRefreshTargetLabel:SetAttribute("VeloxTranslationKey", ManualRefreshSelection)
+	ManualRefreshTargetIcon.Image = ManualRefreshIcons[ManualRefreshSelection] or VeloxIcons.RefreshAll
+	if ManualRefreshDropdown and ManualRefreshDropdown.Parent then
+		for _, option in ipairs(ManualRefreshDropdown:GetChildren()) do
+			if option:IsA("TextButton") then
+				local selected = option:GetAttribute("RefreshTarget") == ManualRefreshSelection
+				local stroke = option:FindFirstChild("RefreshTargetOutline")
+				option.BackgroundColor3 = selected and Theme.CardHover or Theme.BackgroundMain
+				option.BackgroundTransparency = selected and 0.12 or 0.35
+				if stroke then
+					stroke.Color = selected and Color3.fromRGB(255, 255, 255) or Theme.Stroke
+					stroke.Thickness = selected and 1.5 or 1
+				end
+			end
 		end
-		AnimateRefreshButton(btn, true)
+	end
+end
+function PositionManualRefreshDropdown()
+	if not ManualRefreshDropdown or not ManualRefreshDropdown.Parent or not ManualRefreshDropdown.Visible then return end
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local abs = ManualRefreshTargetButton.AbsolutePosition
+	local size = ManualRefreshTargetButton.AbsoluteSize
+	local width, height = IsMobile and 156 or 170, 142
+	local x = math.clamp(abs.X + size.X - width, 8, math.max(8, viewport.X - width - 8))
+	local y = abs.Y + size.Y + 6
+	if y + height > viewport.Y - 8 then y = math.max(8, abs.Y - height - 6) end
+	ManualRefreshDropdown.Position = UDim2.new(0, x, 0, y)
+	ManualRefreshDropdown.Size = UDim2.new(0, width, 0, height)
+end
+function OpenManualRefreshDropdown()
+	if isDestroying then return end
+	if not ManualRefreshDropdown then
+		ManualRefreshDropdown = Instance.new("Frame", ScreenGui)
+		ManualRefreshDropdown.Name = "VeloxManualRefreshDropdown"
+		ManualRefreshDropdown.BackgroundColor3 = Theme.BackgroundSecondary
+		ManualRefreshDropdown.BorderSizePixel = 0
+		ManualRefreshDropdown.ClipsDescendants = false
+		ManualRefreshDropdown.ZIndex = 1700
+		Instance.new("UICorner", ManualRefreshDropdown).CornerRadius = UDim.new(0, 9)
+		local outer = Instance.new("UIStroke", ManualRefreshDropdown)
+		outer.Color = Theme.Stroke
+		outer.Thickness = 1
+		outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		local layout = Instance.new("UIListLayout", ManualRefreshDropdown)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 4)
+		local pad = Instance.new("UIPadding", ManualRefreshDropdown)
+		pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 8); pad.PaddingLeft = UDim.new(0, 8); pad.PaddingRight = UDim.new(0, 8)
+		for index, target in ipairs(ManualRefreshOptions) do
+			local option = Instance.new("TextButton", ManualRefreshDropdown)
+			option.Name = "RefreshTarget_" .. target
+			option.Size = UDim2.new(1, 0, 0, 38)
+			option.BackgroundColor3 = Theme.BackgroundMain
+			option.BackgroundTransparency = 0.35
+			option.BorderSizePixel = 0
+			option.ClipsDescendants = false
+			option.AutoButtonColor = false
+			option.Text = ""
+			option.LayoutOrder = index
+			option.ZIndex = 1701
+			Instance.new("UICorner", option).CornerRadius = UDim.new(0, 7)
+			local optionStroke = Instance.new("UIStroke", option)
+			optionStroke.Name = "RefreshTargetOutline"
+			optionStroke.Color = Theme.Stroke
+			optionStroke.Thickness = 1
+			optionStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			option:SetAttribute("RefreshTarget", target)
+			CreateVeloxIcon(option, ManualRefreshIcons[target], 16, Theme.TextPrimary, UDim2.new(0, 10, 0.5, -8), nil, 1702, "RefreshTargetIcon")
+			local optionLabel = Instance.new("TextLabel", option)
+			optionLabel.Name = "RefreshTargetLabel"
+			optionLabel.Size = UDim2.new(1, -42, 1, 0)
+			optionLabel.Position = UDim2.new(0, 34, 0, 0)
+			optionLabel.BackgroundTransparency = 1
+			optionLabel.Text = L(target)
+			optionLabel:SetAttribute("VeloxTranslationKey", target)
+			optionLabel.TextColor3 = Theme.TextPrimary
+			optionLabel.Font = Enum.Font.GothamMedium
+			optionLabel.TextSize = IsMobile and 9 or 10
+			optionLabel.TextXAlignment = Enum.TextXAlignment.Left
+			optionLabel.TextYAlignment = Enum.TextYAlignment.Center
+			optionLabel.ZIndex = 1702
+			optionLabel.Active = false
+			_VH_RegConn(option.Activated:Connect(function()
+				if isDestroying then return end
+				ManualRefreshSelection = target
+				UpdateManualRefreshSelection()
+				CloseManualRefreshDropdown()
+				ShowNotification("Manual refresh target: " .. target, "Info")
+			end))
+		end
+	end
+	ManualRefreshDropdown.Visible = true
+	UpdateManualRefreshSelection()
+	PositionManualRefreshDropdown()
+	if ManualRefreshDropdownConnection then _VH_UnregConn(ManualRefreshDropdownConnection); ManualRefreshDropdownConnection = nil end
+	ManualRefreshDropdownConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
+		if isDestroying or not ManualRefreshDropdown or not ManualRefreshDropdown.Visible then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			local pos = input.Position
+			local p = ManualRefreshDropdown.AbsolutePosition
+			local sz = ManualRefreshDropdown.AbsoluteSize
+			local b = ManualRefreshTargetButton.AbsolutePosition
+			local bs = ManualRefreshTargetButton.AbsoluteSize
+			local inDrop = pos.X >= p.X and pos.X <= p.X + sz.X and pos.Y >= p.Y and pos.Y <= p.Y + sz.Y
+			local inButton = pos.X >= b.X and pos.X <= b.X + bs.X and pos.Y >= b.Y and pos.Y <= b.Y + bs.Y
+			if not inDrop and not inButton then CloseManualRefreshDropdown() end
+		end
+	end))
+end
+UpdateManualRefreshSelection()
+_VH_RegConn(ManualRefreshTargetButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
+	if ManualRefreshDropdown and ManualRefreshDropdown.Visible then CloseManualRefreshDropdown() else OpenManualRefreshDropdown() end
+end)))
+_VH_RegConn(ManualRefreshButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
+	AttemptActionWithCooldown(function()
+		if dbRefreshing or CatalogBatchRefreshing then return end
+		AnimateRefreshButton(ManualRefreshButton, true)
+		local selected = ManualRefreshSelection
 		local started = false
 		local ok = pcall(function()
-			started = RefreshAllCatalogs(true, false) == true
+			started = RefreshAllCatalogs(true, false, selected) == true
 		end)
 		if not ok or not started then
-			if btn and btn.Parent and not isDestroying then
-				AnimateRefreshButton(btn, "error")
+			if ManualRefreshButton and ManualRefreshButton.Parent and not isDestroying then
+				AnimateRefreshButton(ManualRefreshButton, "error")
 				ShowNotification("Could not start catalog refresh.", "Error")
 			end
 			return
 		end
 		_VH_TrackTask(function()
-			while not isDestroying and CatalogBatchRefreshing do
-				task.wait(0.1)
-			end
-			if btn and btn.Parent and not isDestroying then
-				local gamesConfigured = type(GAMES_CATALOG_URL) == "string" and string.gsub(GAMES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
-				local utilitiesConfigured = type(UTILITIES_CATALOG_URL) == "string" and string.gsub(UTILITIES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
-				local gamesOk = (not gamesConfigured) or CatalogRefreshResults.Games == true
-				local utilitiesOk = (not utilitiesConfigured) or CatalogRefreshResults.Utilities == true
-				if gamesOk and utilitiesOk then
-					AnimateRefreshButton(btn, "success")
+			while not isDestroying and CatalogBatchRefreshing do task.wait(0.1) end
+			if ManualRefreshButton and ManualRefreshButton.Parent and not isDestroying then
+				local selectedResult = true
+				if selected == "Games" or selected == "Utilities" then
+					local configured = type(selected == "Games" and GAMES_CATALOG_URL or UTILITIES_CATALOG_URL) == "string" and string.gsub(selected == "Games" and GAMES_CATALOG_URL or UTILITIES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
+					selectedResult = (not configured) or CatalogRefreshResults[selected] == true
 				else
-					AnimateRefreshButton(btn, "error")
+					local gamesConfigured = type(GAMES_CATALOG_URL) == "string" and string.gsub(GAMES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
+					local utilitiesConfigured = type(UTILITIES_CATALOG_URL) == "string" and string.gsub(UTILITIES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
+					selectedResult = (not gamesConfigured or CatalogRefreshResults.Games == true) and (not utilitiesConfigured or CatalogRefreshResults.Utilities == true)
 				end
+				AnimateRefreshButton(ManualRefreshButton, selectedResult and "success" or "error")
 			end
 		end)
 	end)
-end)
+end)))
 CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", VeloxIcons.UnloadHub, "Unload", 2, true, function()
 	task.wait(0.3)
 	CloseUI()
