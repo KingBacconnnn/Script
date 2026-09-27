@@ -208,7 +208,6 @@ FavoriteRecommendationLimit = 8
 FavoriteRecommendationMaxBoost = 12
 FavoriteRecommendationRefreshDelay = 0.35
 FavoriteRecommendationRefreshGeneration = 0
-AutoExecuteRanThisSession = false
 InteractiveElements = setmetatable({}, { __mode = "k" })
 isDestroying = false
 isMinimized = false
@@ -1324,19 +1323,26 @@ function ApplyPanelUIScale(scaleValue)
 	if ScriptDetailsUIScale and ScriptDetailsUIScale.Parent then
 		_VH_SafeTween(ScriptDetailsUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
 	end
-	task.defer(function()
+	task.delay(0.24, function()
 		if isDestroying or not MainPanel or not MainPanel.Parent then return end
 		camera = workspace.CurrentCamera
 		viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-		task.wait(0.24)
-		if isDestroying or not MainPanel or not MainPanel.Parent then return end
-		halfX = MainPanel.AbsoluteSize.X * MainPanel.AnchorPoint.X
-		halfY = MainPanel.AbsoluteSize.Y * MainPanel.AnchorPoint.Y
+		baseWidth = MainPanel.AbsoluteSize.X
+		baseHeight = MainPanel.AbsoluteSize.Y
+		visualWidth = baseWidth * nextScale
+		visualHeight = baseHeight * nextScale
+		halfX = visualWidth * MainPanel.AnchorPoint.X
+		halfY = visualHeight * MainPanel.AnchorPoint.Y
 		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
 		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-		currentX = math.max(halfX, math.min(currentX, math.max(halfX, viewport.X - (MainPanel.AbsoluteSize.X - halfX))))
-		currentY = math.max(halfY, math.min(currentY, math.max(halfY, viewport.Y - (MainPanel.AbsoluteSize.Y - halfY))))
+		minX = halfX
+		maxX = math.max(minX, viewport.X - (visualWidth - halfX))
+		minY = halfY
+		maxY = math.max(minY, viewport.Y - (visualHeight - halfY))
+		currentX = math.clamp(currentX, minX, maxX)
+		currentY = math.clamp(currentY, minY, maxY)
 		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
+		if PositionOpenPanels then PositionOpenPanels() end
 	end)
 end
 SearchInput = nil
@@ -2747,8 +2753,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 		if dbRefreshing then
 			CatalogRefreshQueued = true
 			CatalogRefreshQueuedCategory = category
-			CatalogRefreshQueuedEmbeddedOnly = category == "Utilities"
-			PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or false
+					PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or false
 			PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or false
 			SetScriptEmptyState("loading", category)
 			ShowNotification("Loading " .. category .. " catalog when the current refresh finishes...", "Info")
@@ -4135,10 +4140,8 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Final Stability, Two Catalogs & Cleanup", "• Fixed Games and Utilities catalog loading so both catalogs work independently.\n• Utilities now use utilitycatalog.json with its direct array structure, while PlaceId 0 remains a valid global utility value.\n• Added a built-in Utilities fallback so the utility catalog can still appear when the remote catalog cannot be reached.\n• Fixed category switching and refresh handling so Games and Utilities do not overwrite each other's cached entries.\n• Kept Recommended for You restricted to Games and preserved the shared manual and automatic catalog refresh behavior.\n• Preserved the existing request, HTTP, compiler, file I/O, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, notification, and catalog compatibility fallbacks without unnecessary compatibility changes.\n• Removed verified unused task error, script status, UI scale row, and redundant catalog URL variables/return data.\n• Kept the source comment-free and avoided new local-heavy structures to reduce register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
-CreateParagraph("v2.0.5 - Search, Filters, Sorting & How to Use", "• Redesigned natural search across script names, games, descriptions, categories, and tags.\n• Added relevance-based search without special search syntax.\n• Redesigned Favorites, Categories, Tags, and Status filters with multi-select and Clear controls.\n• Added Most Relevant, A-Z, Z-A, Newest, Oldest, and time-based sorting options.\n• Added the How to Use tab with visual examples, legends, Quick Start, and troubleshooting guidance.\n• Improved icons, spacing, borders, popup positioning, and mobile layouts.", ChangelogsView)
-CreateParagraph("v2.0.4 - Stability & Compatibility", "• Fixed viewport positioning and text-size scaling issues.\n• Improved support for smaller screens and resized windows.\n• Added safer native text-size handling with UITextSizeConstraint.\n• Preserved request and HTTP fallbacks and added request.request support.\n• Preserved compiler, GUI-parent, protected-GUI, cloneref, configuration, file, cleanup, and recovery fallbacks.\n• Added Recommended For You and redesigned the confirmation dialog.\n• Removed unused catalog and UI data without changing the fallback architecture.", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning and sizing.\n• Improved catalog refresh performance and automatic refresh handling.\n• Added catalog-based Recommended For You suggestions while keeping the current-game FOR YOU system.", ChangelogsView)
+CreateParagraph("v2.0.6 - Stability, Language, Catalogs & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Fixed Utilities loading so its catalog state remains separate from the Games catalog.\n• Fixed Utilities Auto Execute initialization so Utilities no longer depend on the Games catalog being processed first.\n• Fixed UI Scale viewport clamping so 80%–120% scaling stays centered and does not shift or clip the hub when resized.\n• Kept Recommended for You restricted to the Games catalog only.\n• Preserved the existing executor fallback layer and working request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendation, notification, and catalog-refresh paths.\n• Removed unnecessary legacy code paths without changing required fallbacks.\n• Kept the source free of comments and avoided local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
 	block.Size = UDim2.new(1, -2, 0, 0)
@@ -5664,17 +5667,17 @@ function FetchCatalogWithFallback(category, retries, cacheBust)
 	for _, url in ipairs(candidates) do
 		local response, status, err = FetchWithRetry(url, retries, category == "Utilities" and false or cacheBust)
 		if response and type(response) == "string" and #response > 0 then
-			return response, status, nil, false
+			return response, status, nil, url
 		end
 		lastStatus, lastError = status, err
 	end
 	if category == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" and #EmbeddedUtilitiesCatalog > 0 then
 		local ok, encoded = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
 		if ok and type(encoded) == "string" and encoded ~= "" then
-			return encoded, 200, "embedded utilities fallback", true
+			return encoded, 200, "embedded utilities fallback", "embedded://utilitycatalog.json"
 		end
 	end
-	return nil, lastStatus, lastError, false
+	return nil, lastStatus, lastError, candidates[1], false
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
@@ -5682,7 +5685,6 @@ CatalogBatchGeneration = 0
 CatalogRefreshQueued = false
 CatalogRefreshQueueScheduled = false
 CatalogRefreshQueuedCategory = nil
-CatalogRefreshQueuedEmbeddedOnly = false
 LastCatalogFingerprint = nil
 CatalogRefreshResults = { Games = nil, Utilities = nil }
 function GetCategoryCatalogState(category)
@@ -5749,23 +5751,20 @@ function _VH_ScheduleQueuedCatalogRefresh()
 		local queuedForce = PendingTasks.__CatalogRefreshForce == true
 		local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
 		local targetCategory = CatalogRefreshQueuedCategory or currentScriptCategory or "Games"
-		local queuedEmbeddedOnly = CatalogRefreshQueuedEmbeddedOnly == true
 		CatalogRefreshQueued = false
 		CatalogRefreshQueuedCategory = nil
-		CatalogRefreshQueuedEmbeddedOnly = false
-		PendingTasks.__CatalogRefreshForce = false
+				PendingTasks.__CatalogRefreshForce = false
 		PendingTasks.__CatalogRefreshAuto = false
-		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, targetCategory, queuedEmbeddedOnly)
+		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, targetCategory)
 	end)
 end
-PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, embeddedOnly)
+PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	if isDestroying then return false end
 	local refreshCategory = expectedCategory or currentScriptCategory
 	CatalogRefreshResults[refreshCategory] = nil
 	if dbRefreshing then
 		CatalogRefreshQueued = true
 		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
-		CatalogRefreshQueuedEmbeddedOnly = CatalogRefreshQueuedEmbeddedOnly or embeddedOnly == true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		return false
@@ -5806,8 +5805,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 	activeBuildFolder = nil
 	activeNewEntries = {}
 	_VH_TrackTask(function()
-		taskOk = xpcall(function()
-			if GetActiveCatalogUrl(refreshCategory) == "" and not (embeddedOnly and refreshCategory == "Utilities") then
+		taskOk, taskErr = xpcall(function()
+			local catalogUrl = GetActiveCatalogUrl(refreshCategory)
+			if catalogUrl == "" then
 				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
 				SetHubStatus("Empty", Theme.Info)
@@ -5815,22 +5815,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 				FinishRefresh()
 				return
 			end
-			if embeddedOnly and refreshCategory == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" then
-				local embeddedOk, embeddedRaw = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
-				if embeddedOk and type(embeddedRaw) == "string" and embeddedRaw ~= "" then
-					raw = embeddedRaw
-					catalogStatus = 200
-					catalogFetchError = nil
-					catalogUsedFallback = true
-				else
-					raw = nil
-					catalogStatus = nil
-					catalogFetchError = "embedded utilities catalog unavailable"
-					catalogUsedFallback = true
-				end
-			else
-				raw, catalogStatus, catalogFetchError, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
-			end
+			raw, catalogStatus, catalogFetchError, catalogUrl = FetchCatalogWithFallback(refreshCategory, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
 				CatalogRefreshResults[refreshCategory] = true
@@ -6024,8 +6009,9 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 			task.defer(function()
 				if _VH_IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
-			if not AutoExecuteRanThisSession then
-				AutoExecuteRanThisSession = true
+			local categoryState = GetCategoryCatalogState(refreshCategory)
+			if not isAutoRefresh and not categoryState.AutoExecuteProcessed then
+				categoryState.AutoExecuteProcessed = true
 				autoQueue = {}
 				autoConfigMigrated = false
 				if ConfigurationLoaded then
@@ -6049,7 +6035,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 						startedList, failList = {}, {}
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
@@ -6073,13 +6059,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 					SetHubStatus("Empty", Theme.Info)
 					SetScriptEmptyState("blank", refreshCategory)
 				else
-					SetHubStatus(catalogUsedFallback and "Offline Fallback" or "Online", catalogUsedFallback and Theme.Warning or Theme.Success)
+					SetHubStatus("Online", Theme.Success)
 					HideScriptEmptyState()
 				end
 			end
-			if catalogUsedFallback and not CatalogBatchRefreshing then
-				ShowNotification("Utilities catalog loaded from built-in fallback. The remote catalog could not be reached.", "Warning")
-			elseif not CatalogBatchRefreshing then
+			if not CatalogBatchRefreshing then
 				if isAutoRefresh then
 					ShowNotification(refreshCategory .. " catalog updated.", "Success")
 				elseif force == true then
@@ -6167,8 +6151,7 @@ function RefreshAllCatalogs(force, isAutoRefresh, refreshSelection)
 	CatalogRefreshQueued = false
 	CatalogRefreshQueueScheduled = false
 	CatalogRefreshQueuedCategory = nil
-	CatalogRefreshQueuedEmbeddedOnly = false
-	PendingTasks.__CatalogRefreshForce = false
+		PendingTasks.__CatalogRefreshForce = false
 	PendingTasks.__CatalogRefreshAuto = false
 	for _, state in pairs(CategoryCatalogStates) do
 		_VH_HideCategoryEntries(state.Entries)
@@ -6648,7 +6631,7 @@ _VH_RegConn(languageButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 	if LanguageDropdown and LanguageDropdown.Visible then CloseLanguageDropdown() else OpenLanguageDropdown() end
 end)))
 
-scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
+scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
 scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
