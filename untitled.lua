@@ -2503,7 +2503,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.11 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.6 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -4135,10 +4135,10 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.11 - Final Stability, Cleanup & Compatibility", "• Finalized the Manual Refresh layout with separate target selection and refresh action controls.\n• Kept the Language dropdown and Manual Refresh dropdown using the same mobile-safe outline, spacing, and alignment behavior.\n• Fixed Recommended for You so recommendation state and badges remain Games-only.\n• Preserved cached Games and Utilities catalogs, shared refresh behavior, Unload Hub, saved configuration, and language settings.\n• Removed only verified unused variables and stale batch state without changing required executor fallbacks.\n• Kept the existing request, HTTP, compiler, file I/O, GUI-parent, protected-GUI, cloneref, Auto Execute, notification, and catalog compatibility paths unchanged.\n• Cleaned the final source without comments or new local-heavy structures.\n• Visible version is now v2.0.11.", ChangelogsView)
-CreateParagraph("v2.0.8 - Settings Dropdown Refinement & Refresh Layout", "• Fixed Recommended for You visibility so it only appears in the Games catalog.\n• Fixed Games refreshes so the Recommended for You cards rebuild from the refreshed Games catalog.\n• Kept Games recommendations isolated while Utilities are refreshed.\n• Refined Manual Refresh into a separate target dropdown and refresh action button.\n• Added the same icon, chevron, balanced-spacing, and white-outline design to the Language dropdown.\n• Fixed mobile layout clamping and overlap in the Manual Refresh controls.\n• Kept the existing catalog caching, execution, notifications, language, configuration, and executor fallback paths.", ChangelogsView)
-CreateParagraph("v2.0.6 - Stability, Language & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized Offline status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Kept Recommended for You restricted to the Games catalog only.\n• Removed unused legacy helper functions left behind by earlier UI changes.\n• Removed unnecessary legacy code paths without changing the existing executor fallback layer.\n• Preserved the existing request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendations, notifications, and catalog-refresh compatibility paths.\n• Kept the script free of comments and avoided adding local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
-CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
+CreateParagraph("v2.0.6 - Final Stability, Two Catalogs & Cleanup", "• Fixed Games and Utilities catalog loading so both catalogs work independently.\n• Utilities now use utilitycatalog.json with its direct array structure, while PlaceId 0 remains a valid global utility value.\n• Added a built-in Utilities fallback so the utility catalog can still appear when the remote catalog cannot be reached.\n• Fixed category switching and refresh handling so Games and Utilities do not overwrite each other's cached entries.\n• Kept Recommended for You restricted to Games and preserved the shared manual and automatic catalog refresh behavior.\n• Preserved the existing request, HTTP, compiler, file I/O, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, notification, and catalog compatibility fallbacks without unnecessary compatibility changes.\n• Removed verified unused task error, script status, UI scale row, and redundant catalog URL variables/return data.\n• Kept the source comment-free and avoided new local-heavy structures to reduce register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.5 - Search, Filters, Sorting & How to Use", "• Redesigned natural search across script names, games, descriptions, categories, and tags.\n• Added relevance-based search without special search syntax.\n• Redesigned Favorites, Categories, Tags, and Status filters with multi-select and Clear controls.\n• Added Most Relevant, A-Z, Z-A, Newest, Oldest, and time-based sorting options.\n• Added the How to Use tab with visual examples, legends, Quick Start, and troubleshooting guidance.\n• Improved icons, spacing, borders, popup positioning, and mobile layouts.", ChangelogsView)
+CreateParagraph("v2.0.4 - Stability & Compatibility", "• Fixed viewport positioning and text-size scaling issues.\n• Improved support for smaller screens and resized windows.\n• Added safer native text-size handling with UITextSizeConstraint.\n• Preserved request and HTTP fallbacks and added request.request support.\n• Preserved compiler, GUI-parent, protected-GUI, cloneref, configuration, file, cleanup, and recovery fallbacks.\n• Added Recommended For You and redesigned the confirmation dialog.\n• Removed unused catalog and UI data without changing the fallback architecture.", ChangelogsView)
+CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning and sizing.\n• Improved catalog refresh performance and automatic refresh handling.\n• Added catalog-based Recommended For You suggestions while keeping the current-game FOR YOU system.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
 	block.Size = UDim2.new(1, -2, 0, 0)
@@ -5664,17 +5664,17 @@ function FetchCatalogWithFallback(category, retries, cacheBust)
 	for _, url in ipairs(candidates) do
 		local response, status, err = FetchWithRetry(url, retries, category == "Utilities" and false or cacheBust)
 		if response and type(response) == "string" and #response > 0 then
-			return response, status, nil, url, false
+			return response, status, nil, false
 		end
 		lastStatus, lastError = status, err
 	end
 	if category == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" and #EmbeddedUtilitiesCatalog > 0 then
 		local ok, encoded = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
 		if ok and type(encoded) == "string" and encoded ~= "" then
-			return encoded, 200, "embedded utilities fallback", "embedded://utilitycatalog.json", true
+			return encoded, 200, "embedded utilities fallback", true
 		end
 	end
-	return nil, lastStatus, lastError, candidates[1], false
+	return nil, lastStatus, lastError, false
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
@@ -5806,9 +5806,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 	activeBuildFolder = nil
 	activeNewEntries = {}
 	_VH_TrackTask(function()
-		taskOk, taskErr = xpcall(function()
-			local catalogUrl = GetActiveCatalogUrl(refreshCategory)
-			if catalogUrl == "" and not (embeddedOnly and refreshCategory == "Utilities") then
+		taskOk = xpcall(function()
+			if GetActiveCatalogUrl(refreshCategory) == "" and not (embeddedOnly and refreshCategory == "Utilities") then
 				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
 				SetHubStatus("Empty", Theme.Info)
@@ -5822,17 +5821,15 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 					raw = embeddedRaw
 					catalogStatus = 200
 					catalogFetchError = nil
-					catalogUrl = "embedded://utilitycatalog.json"
 					catalogUsedFallback = true
 				else
 					raw = nil
 					catalogStatus = nil
 					catalogFetchError = "embedded utilities catalog unavailable"
-					catalogUrl = "embedded://utilitycatalog.json"
 					catalogUsedFallback = true
 				end
 			else
-				raw, catalogStatus, catalogFetchError, catalogUrl, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
+				raw, catalogStatus, catalogFetchError, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
 			end
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
@@ -6052,7 +6049,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, em
 						startedList, failList = {}, {}
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw, scrStatus = FetchWithRetry(scriptData.RawUrl, 2)
+							scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
@@ -6651,7 +6648,7 @@ _VH_RegConn(languageButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 	if LanguageDropdown and LanguageDropdown.Visible then CloseLanguageDropdown() else OpenLanguageDropdown() end
 end)))
 
-scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
+scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
 scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 scaleFrame = Instance.new("Frame", scaleRight)
 scaleFrame.Size = UDim2.new(1, 0, 1, 0)
