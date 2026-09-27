@@ -5454,10 +5454,14 @@ function GetActiveCatalogUrl()
 	return string.gsub(url, "^%s*(.-)%s*$", "%1")
 end
 dbRefreshing = false
+CatalogBatchRefreshing = false
+CatalogBatchOriginalCategory = nil
+CatalogBatchGeneration = 0
 CatalogRefreshQueued = false
 CatalogRefreshQueueScheduled = false
 CatalogRefreshQueuedCategory = nil
 LastCatalogFingerprint = nil
+CatalogRefreshResults = { Games = nil, Utilities = nil }
 function GetCategoryCatalogState(category)
 	category = category or currentScriptCategory or "Games"
 	local state = CategoryCatalogStates[category]
@@ -5512,23 +5516,28 @@ function RestoreCatalogCardsAfterRefreshFailure()
 end
 function _VH_ScheduleQueuedCatalogRefresh()
 	if CatalogRefreshQueueScheduled or isDestroying then return end
+	local queuedCategory = CatalogRefreshQueuedCategory or currentScriptCategory or "Games"
+	local queuedState = GetCategoryCatalogState(queuedCategory)
+	local queuedLastAt = queuedState.LastRefreshAt or 0
 	CatalogRefreshQueueScheduled = true
-	task.delay(math.max(0, 5 - (os.clock() - LastCatalogRefreshAt)), function()
+	task.delay(math.max(0, 5 - (os.clock() - queuedLastAt)), function()
 		CatalogRefreshQueueScheduled = false
 		if isDestroying or dbRefreshing or not CatalogRefreshQueued then return end
 		local queuedForce = PendingTasks.__CatalogRefreshForce == true
 		local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
-		local queuedCategory = CatalogRefreshQueuedCategory
+		local targetCategory = CatalogRefreshQueuedCategory or currentScriptCategory or "Games"
 		CatalogRefreshQueued = false
 		CatalogRefreshQueuedCategory = nil
 		PendingTasks.__CatalogRefreshForce = false
 		PendingTasks.__CatalogRefreshAuto = false
-		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, queuedCategory)
+		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, targetCategory)
 	end)
 end
 PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	if isDestroying then return false end
 	if expectedCategory and expectedCategory ~= currentScriptCategory then return false end
+	local refreshCategory = currentScriptCategory
+	CatalogRefreshResults[refreshCategory] = nil
 	if dbRefreshing then
 		CatalogRefreshQueued = true
 		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
@@ -5537,9 +5546,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 		return false
 	end
 	local now = os.clock()
-	if not force and now - LastCatalogRefreshAt < 5 then
+	local refreshState = GetCategoryCatalogState(refreshCategory)
+	local refreshLastAt = refreshState.LastRefreshAt or 0
+	if not force and now - refreshLastAt < 5 then
 		CatalogRefreshQueued = true
-		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
+		CatalogRefreshQueuedCategory = expectedCategory or refreshCategory
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		_VH_ScheduleQueuedCatalogRefresh()
@@ -5575,34 +5586,37 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 		taskOk, taskErr = xpcall(function()
 			local catalogUrl = GetActiveCatalogUrl()
 			if catalogUrl == "" then
+				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
 				StatusDot.BackgroundColor3 = Theme.Info
 				StatusText.Text = "Empty"
 				StatusText.TextColor3 = Theme.Info
-				SetScriptEmptyState("blank", currentScriptCategory)
+				SetScriptEmptyState("blank", refreshCategory)
 				FinishRefresh()
 				return
 			end
 			raw, catalogStatus = FetchWithRetry(catalogUrl, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if not raw then
+				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
-				if #RegisteredScripts == 0 then SetScriptEmptyState("error", currentScriptCategory, "Unable to reach the script catalog server.") end
+				if #RegisteredScripts == 0 then SetScriptEmptyState("error", refreshCategory, "Unable to reach the script catalog server.") end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline"
 				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Could not connect to the script catalog server.", "Error")
+				ShowNotification(refreshCategory .. " catalog: could not connect to the server.", "Error")
 				FinishRefresh()
 				return
 			end
 			success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
+				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
-				if #RegisteredScripts == 0 then SetScriptEmptyState("error", currentScriptCategory, "The catalog data format could not be read.") end
+				if #RegisteredScripts == 0 then SetScriptEmptyState("error", refreshCategory, "The catalog data format could not be read.") end
 				StatusDot.BackgroundColor3 = Theme.Error
 				StatusText.Text = "Data Error"
 				StatusText.TextColor3 = Theme.Error
-				ShowNotification("Catalog data format error.", "Error")
+				ShowNotification(refreshCategory .. " catalog data format error.", "Error")
 				FinishRefresh()
 				return
 			end
@@ -5655,6 +5669,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			end
 			fingerprint = BuildCatalogFingerprint(validEntries) .. "\30" .. tostring(catalogVersion)
 			if fingerprint == LastCatalogFingerprint and force ~= true then
+				CatalogRefreshResults[refreshCategory] = true
 				for _, existingEntry in ipairs(RegisteredScripts) do
 					if existingEntry and existingEntry.Instance and existingEntry.Instance.Parent then existingEntry.Instance.Visible = true end
 				end
@@ -5663,8 +5678,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				StatusDot.BackgroundColor3 = Theme.Success
 				StatusText.Text = "Online"
 				StatusText.TextColor3 = Theme.Success
-				if not isAutoRefresh then
-					ShowNotification("Catalog is already up to date.", "Info")
+				if not isAutoRefresh and not CatalogBatchRefreshing then
+					ShowNotification(refreshCategory .. " catalog is already up to date.", "Info")
 				end
 				FinishRefresh()
 				return
@@ -5732,7 +5747,8 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			RegisteredScripts = nextEntries
 			RegisteredScripts.__ByKey = nextByKey
 			LastCatalogFingerprint = fingerprint
-			local activeState = GetCategoryCatalogState(currentScriptCategory)
+			CatalogRefreshResults[refreshCategory] = true
+			local activeState = GetCategoryCatalogState(refreshCategory)
 			activeState.Entries = RegisteredScripts
 			activeState.ByKey = nextByKey
 			activeState.Fingerprint = fingerprint
@@ -5790,25 +5806,29 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			StatusDot.BackgroundColor3 = Theme.Success
 			StatusText.Text = "Online"
 			StatusText.TextColor3 = Theme.Success
-			if isAutoRefresh then
-				ShowNotification(currentScriptCategory .. " catalog updated.", "Success")
-			elseif force == true then
-				ShowNotification("Successfully refreshed " .. currentScriptCategory .. " catalog.", "Success")
-			else
-				ShowNotification(currentScriptCategory .. " catalog loaded successfully!", "Success")
+			if not CatalogBatchRefreshing then
+				if isAutoRefresh then
+					ShowNotification(refreshCategory .. " catalog updated.", "Success")
+				elseif force == true then
+					ShowNotification("Successfully refreshed " .. refreshCategory .. " catalog.", "Success")
+				else
+					ShowNotification(refreshCategory .. " catalog loaded successfully!", "Success")
+				end
 			end
 		end, function(err) return tostring(err) end)
 		if not taskOk then
+			CatalogRefreshResults[refreshCategory] = false
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
 			RestoreCatalogCardsAfterRefreshFailure()
 		end
 		if not taskOk and not isDestroying and generation == CatalogGeneration then
+			CatalogRefreshResults[refreshCategory] = false
 			StatusDot.BackgroundColor3 = Theme.Error
 			StatusText.Text = "Catalog Error"
 			StatusText.TextColor3 = Theme.Error
-			ShowNotification("Catalog refresh failed safely.", "Error")
+			ShowNotification(refreshCategory .. " catalog refresh failed safely.", "Error")
 		end
 		FinishRefresh()
 	end)
@@ -5817,27 +5837,128 @@ end
 
 PendingTasks.__LoadCatalog()
 
-_VH_TrackTask(function()
-	while not isDestroying do
-		local autoRefreshCategory = currentScriptCategory
-		local autoRefreshState = GetCategoryCatalogState(autoRefreshCategory)
-		local autoRefreshLastAt = autoRefreshState.LastRefreshAt or LastCatalogRefreshAt
-		LastCatalogRefreshAt = autoRefreshLastAt
-		remaining = CATALOG_REFRESH_INTERVAL - (os.clock() - autoRefreshLastAt)
-		if remaining > 0 then
-			task.wait(math.min(remaining, 1))
-		else
-			if not dbRefreshing and currentScriptCategory == autoRefreshCategory then
-				if GetActiveCatalogUrl() ~= "" then
-					PendingTasks.__LoadCatalog(false, true, autoRefreshCategory)
-				else
-					LastCatalogRefreshAt = os.clock()
-					autoRefreshState.LastRefreshAt = LastCatalogRefreshAt
-					task.wait(1)
+local function _VH_LoadRuntimeCategoryState(category)
+	local state = GetCategoryCatalogState(category)
+	RegisteredScripts = state.Entries or {}
+	RegisteredScripts.__ByKey = state.ByKey or {}
+	LastCatalogFingerprint = state.Fingerprint
+	LastCatalogRefreshAt = state.LastRefreshAt or 0
+	return state
+end
+
+local function _VH_HideCategoryEntries(entries)
+	if type(entries) ~= "table" then return end
+	for _, entry in ipairs(entries) do
+		if entry and entry.Instance and entry.Instance.Parent then
+			entry.Instance.Visible = false
+		end
+	end
+end
+
+local function _VH_RestoreSelectedCategoryState(category)
+	currentScriptCategory = category
+	local state = _VH_LoadRuntimeCategoryState(category)
+	UpdateScriptCategoryButtons()
+	for name, categoryState in pairs(CategoryCatalogStates) do
+		if name ~= category then
+			_VH_HideCategoryEntries(categoryState.Entries)
+		end
+	end
+	for _, entry in ipairs(RegisteredScripts) do
+		if entry and entry.Instance and entry.Instance.Parent then
+			entry.Instance.Visible = true
+		end
+	end
+	if GetActiveCatalogUrl() == "" then
+		StatusDot.BackgroundColor3 = Theme.Info
+		StatusText.Text = "Empty"
+		StatusText.TextColor3 = Theme.Info
+		SetScriptEmptyState("blank", category)
+	else
+		StatusDot.BackgroundColor3 = state.Loaded and Theme.Success or Theme.Info
+		StatusText.Text = state.Loaded and "Online" or "Empty"
+		StatusText.TextColor3 = state.Loaded and Theme.Success or Theme.Info
+		if #RegisteredScripts == 0 then SetScriptEmptyState("blank", category) else HideScriptEmptyState() end
+	end
+	UpdateFilter()
+	RefreshAllCardStates()
+	_VH_RefreshRecommendations()
+end
+
+function RefreshAllCatalogs(force, isAutoRefresh)
+	if isDestroying or CatalogBatchRefreshing then return false end
+	if dbRefreshing then return false end
+	CatalogBatchRefreshing = true
+	CatalogBatchGeneration = CatalogBatchGeneration + 1
+	local batchGeneration = CatalogBatchGeneration
+	local originalCategory = currentScriptCategory or "Games"
+	CatalogBatchOriginalCategory = originalCategory
+	SaveActiveCatalogState()
+	CatalogRefreshQueued = false
+	CatalogRefreshQueueScheduled = false
+	CatalogRefreshQueuedCategory = nil
+	PendingTasks.__CatalogRefreshForce = false
+	PendingTasks.__CatalogRefreshAuto = false
+	for _, state in pairs(CategoryCatalogStates) do
+		_VH_HideCategoryEntries(state.Entries)
+	end
+	_VH_TrackTask(function()
+		local completed = 0
+		local successful = 0
+		local skipped = 0
+		local categories = { "Games", "Utilities" }
+		for _, category in ipairs(categories) do
+			if isDestroying or batchGeneration ~= CatalogBatchGeneration then break end
+			local url = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
+			url = type(url) == "string" and string.gsub(url, "^%s*(.-)%s*$", "%1") or ""
+			if url ~= "" then
+				currentScriptCategory = category
+				local state = _VH_LoadRuntimeCategoryState(category)
+				_VH_HideCategoryEntries(state.Entries)
+				if PendingTasks.__LoadCatalog(force == true, isAutoRefresh == true, category) then
+					completed = completed + 1
+					while not isDestroying and dbRefreshing do
+						task.wait(0.1)
+					end
+					if CatalogRefreshResults[category] == true then
+						successful = successful + 1
+					end
 				end
 			else
-				task.wait(1)
+				skipped = skipped + 1
 			end
+			_VH_HideCategoryEntries((GetCategoryCatalogState(category)).Entries)
+		end
+		if not isDestroying and batchGeneration == CatalogBatchGeneration then
+			_VH_RestoreSelectedCategoryState(originalCategory)
+			CatalogBatchRefreshing = false
+			CatalogBatchOriginalCategory = nil
+			if not isAutoRefresh then
+				if successful > 0 and completed == successful then
+					ShowNotification("Games and Utilities catalogs refreshed.", "Success")
+				elseif completed > 0 then
+					ShowNotification("Catalog refresh finished with some errors.", "Warning")
+				elseif skipped == 2 then
+					ShowNotification("No catalog URLs are configured.", "Info")
+				end
+			end
+		end
+	end)
+	return true
+end
+
+_VH_TrackTask(function()
+	local nextAutoRefreshAt = os.clock() + CATALOG_REFRESH_INTERVAL
+	while not isDestroying do
+		local waitTime = nextAutoRefreshAt - os.clock()
+		if waitTime > 0 then
+			task.wait(math.min(waitTime, 1))
+		else
+			if not isDestroying and not CatalogBatchRefreshing and not dbRefreshing then
+				RefreshAllCatalogs(false, true)
+			end
+			nextAutoRefreshAt = os.clock() + CATALOG_REFRESH_INTERVAL
+			task.wait(0.5)
 		end
 	end
 end)
@@ -6203,22 +6324,17 @@ _VH_RegConn(scaleMinus.Activated:Connect(_VH_CreateDebounce(0.08, function() Set
 _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetUIScaleFromSetting(scaleValue + 0.05) end)))
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
-CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches the active catalog.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
+CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Refreshes both Games and Utilities catalogs.", VeloxIcons.RefreshCatalog, "Refresh", 1, false, function(btn)
 	AttemptActionWithCooldown(function()
 		if dbRefreshing then
-			return
-		end
-		if GetActiveCatalogUrl() == "" then
-			ShowNotification(currentScriptCategory .. " catalog URL is blank. Add it manually first.", "Info")
-			AnimateRefreshButton(btn, "success")
 			return
 		end
 		AnimateRefreshButton(btn, true)
 		local started = false
 		local ok = pcall(function()
-			started = PendingTasks.__LoadCatalog(true) == true
+			started = RefreshAllCatalogs(true, false) == true
 		end)
-		if not ok or (not started and not dbRefreshing) then
+		if not ok or not started then
 			if btn and btn.Parent and not isDestroying then
 				AnimateRefreshButton(btn, "error")
 				ShowNotification("Could not start catalog refresh.", "Error")
@@ -6226,11 +6342,15 @@ CreateButtonSettingInGroup(actionGroup, "Refresh Catalog", "Fetches the active c
 			return
 		end
 		_VH_TrackTask(function()
-			while not isDestroying and dbRefreshing do
+			while not isDestroying and CatalogBatchRefreshing do
 				task.wait(0.1)
 			end
 			if btn and btn.Parent and not isDestroying then
-				if StatusText.Text == "Online" then
+				local gamesConfigured = type(GAMES_CATALOG_URL) == "string" and string.gsub(GAMES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
+				local utilitiesConfigured = type(UTILITIES_CATALOG_URL) == "string" and string.gsub(UTILITIES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
+				local gamesOk = (not gamesConfigured) or CatalogRefreshResults.Games == true
+				local utilitiesOk = (not utilitiesConfigured) or CatalogRefreshResults.Utilities == true
+				if gamesOk and utilitiesOk then
 					AnimateRefreshButton(btn, "success")
 				else
 					AnimateRefreshButton(btn, "error")
