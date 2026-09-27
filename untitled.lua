@@ -2745,7 +2745,13 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 		if isDestroying or currentTab ~= "Scripts" then return end
 		if currentScriptCategory == category then return end
 		if dbRefreshing then
-			ShowNotification("Please wait for the current catalog refresh to finish.", "Info")
+			CatalogRefreshQueued = true
+			CatalogRefreshQueuedCategory = category
+			CatalogRefreshQueuedEmbeddedOnly = category == "Utilities"
+			PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or false
+			PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or false
+			SetScriptEmptyState("loading", category)
+			ShowNotification("Loading " .. category .. " catalog when the current refresh finishes...", "Info")
 			return
 		end
 
@@ -2825,7 +2831,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 
 		SetScriptEmptyState("loading", category)
 		ShowNotification("Loading " .. category .. " catalog...", "Info")
-		PendingTasks.__LoadCatalog(false, false, category)
+		PendingTasks.__LoadCatalog(false, false, category, category == "Utilities" and true or false)
 	end))
 	return button
 end
@@ -5676,6 +5682,7 @@ CatalogBatchGeneration = 0
 CatalogRefreshQueued = false
 CatalogRefreshQueueScheduled = false
 CatalogRefreshQueuedCategory = nil
+CatalogRefreshQueuedEmbeddedOnly = false
 LastCatalogFingerprint = nil
 CatalogRefreshResults = { Games = nil, Utilities = nil }
 function GetCategoryCatalogState(category)
@@ -5742,21 +5749,23 @@ function _VH_ScheduleQueuedCatalogRefresh()
 		local queuedForce = PendingTasks.__CatalogRefreshForce == true
 		local queuedAuto = PendingTasks.__CatalogRefreshAuto == true
 		local targetCategory = CatalogRefreshQueuedCategory or currentScriptCategory or "Games"
+		local queuedEmbeddedOnly = CatalogRefreshQueuedEmbeddedOnly == true
 		CatalogRefreshQueued = false
 		CatalogRefreshQueuedCategory = nil
+		CatalogRefreshQueuedEmbeddedOnly = false
 		PendingTasks.__CatalogRefreshForce = false
 		PendingTasks.__CatalogRefreshAuto = false
-		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, targetCategory)
+		PendingTasks.__LoadCatalog(queuedForce, queuedAuto, targetCategory, queuedEmbeddedOnly)
 	end)
 end
-PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
+PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory, embeddedOnly)
 	if isDestroying then return false end
-	if expectedCategory and expectedCategory ~= currentScriptCategory then return false end
-	local refreshCategory = currentScriptCategory
+	local refreshCategory = expectedCategory or currentScriptCategory
 	CatalogRefreshResults[refreshCategory] = nil
 	if dbRefreshing then
 		CatalogRefreshQueued = true
 		CatalogRefreshQueuedCategory = expectedCategory or currentScriptCategory
+		CatalogRefreshQueuedEmbeddedOnly = CatalogRefreshQueuedEmbeddedOnly or embeddedOnly == true
 		PendingTasks.__CatalogRefreshForce = PendingTasks.__CatalogRefreshForce or force == true
 		PendingTasks.__CatalogRefreshAuto = PendingTasks.__CatalogRefreshAuto or isAutoRefresh == true
 		return false
@@ -5799,7 +5808,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	_VH_TrackTask(function()
 		taskOk, taskErr = xpcall(function()
 			local catalogUrl = GetActiveCatalogUrl(refreshCategory)
-			if catalogUrl == "" then
+			if catalogUrl == "" and not (embeddedOnly and refreshCategory == "Utilities") then
 				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
 				SetHubStatus("Empty", Theme.Info)
@@ -5807,7 +5816,24 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			raw, catalogStatus, catalogFetchError, catalogUrl, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
+			if embeddedOnly and refreshCategory == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" then
+				local embeddedOk, embeddedRaw = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
+				if embeddedOk and type(embeddedRaw) == "string" and embeddedRaw ~= "" then
+					raw = embeddedRaw
+					catalogStatus = 200
+					catalogFetchError = nil
+					catalogUrl = "embedded://utilitycatalog.json"
+					catalogUsedFallback = true
+				else
+					raw = nil
+					catalogStatus = nil
+					catalogFetchError = "embedded utilities catalog unavailable"
+					catalogUrl = "embedded://utilitycatalog.json"
+					catalogUsedFallback = true
+				end
+			else
+				raw, catalogStatus, catalogFetchError, catalogUrl, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
+			end
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
 				CatalogRefreshResults[refreshCategory] = true
@@ -5979,22 +6005,25 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			if activeBuildFolder and activeBuildFolder.Parent then activeBuildFolder:Destroy() end
 			activeBuildFolder = nil
 			table.clear(activeNewEntries)
-			RegisteredScripts = nextEntries
-			RegisteredScripts.__ByKey = nextByKey
-			LastCatalogFingerprint = fingerprint
 			CatalogRefreshResults[refreshCategory] = true
 			local activeState = GetCategoryCatalogState(refreshCategory)
-			activeState.Entries = RegisteredScripts
+			activeState.Entries = nextEntries
+			activeState.Entries.__ByKey = nextByKey
 			activeState.ByKey = nextByKey
 			activeState.Fingerprint = fingerprint
 			activeState.Loaded = true
-			if refreshCategory == "Games" then
-				_VH_RefreshRecommendations()
-			elseif RecommendationPanel then
-				RecommendationPanel.Visible = false
+			if refreshCategory == currentScriptCategory then
+				RegisteredScripts = nextEntries
+				RegisteredScripts.__ByKey = nextByKey
+				LastCatalogFingerprint = fingerprint
+				if refreshCategory == "Games" then
+					_VH_RefreshRecommendations()
+				elseif RecommendationPanel then
+					RecommendationPanel.Visible = false
+				end
+				RefreshAllCardStates()
+				UpdateFilter()
 			end
-			RefreshAllCardStates()
-			UpdateFilter()
 			task.defer(function()
 				if _VH_IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
@@ -6042,12 +6071,14 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 					end)
 				end
 			end
-			if #RegisteredScripts == 0 then
-				SetHubStatus("Empty", Theme.Info)
-				SetScriptEmptyState("blank", refreshCategory)
-			else
-				SetHubStatus(catalogUsedFallback and "Offline Fallback" or "Online", catalogUsedFallback and Theme.Warning or Theme.Success)
-				HideScriptEmptyState()
+			if refreshCategory == currentScriptCategory then
+				if #RegisteredScripts == 0 then
+					SetHubStatus("Empty", Theme.Info)
+					SetScriptEmptyState("blank", refreshCategory)
+				else
+					SetHubStatus(catalogUsedFallback and "Offline Fallback" or "Online", catalogUsedFallback and Theme.Warning or Theme.Success)
+					HideScriptEmptyState()
+				end
 			end
 			if catalogUsedFallback and not CatalogBatchRefreshing then
 				ShowNotification("Utilities catalog loaded from built-in fallback. The remote catalog could not be reached.", "Warning")
@@ -6139,6 +6170,7 @@ function RefreshAllCatalogs(force, isAutoRefresh, refreshSelection)
 	CatalogRefreshQueued = false
 	CatalogRefreshQueueScheduled = false
 	CatalogRefreshQueuedCategory = nil
+	CatalogRefreshQueuedEmbeddedOnly = false
 	PendingTasks.__CatalogRefreshForce = false
 	PendingTasks.__CatalogRefreshAuto = false
 	for _, state in pairs(CategoryCatalogStates) do
