@@ -183,6 +183,13 @@ currentScriptCategory = "Games"
 ManualRefreshSelection = "All"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
+EmbeddedUtilitiesCatalog = {
+	{Name = "Anti AFK", Description = "Prevents the player from being marked AFK.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/AntiAFK", ImageAssetId = "rbxassetid://88299949043864", TagType = "UPDATED", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Anti AFK", "Utility"}},
+	{Name = "Test Utility 2", Description = "Test utility for catalog loading.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/TestUtility2", ImageAssetId = "rbxassetid://88299949043864", TagType = "HOT", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Test", "Utility"}},
+	{Name = "Test Utility 3", Description = "Another utility used for testing the catalog.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/TestUtility3", ImageAssetId = "rbxassetid://88299949043864", TagType = "NONE", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Test"}},
+	{Name = "FPS Monitor", Description = "Displays FPS information for testing.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/FPSMonitor", ImageAssetId = "rbxassetid://88299949043864", TagType = "UPDATED", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"FPS", "Monitor"}},
+	{Name = "Ping Monitor", Description = "Displays network ping information for testing.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/PingMonitor", ImageAssetId = "rbxassetid://88299949043864", TagType = "HOT", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Ping", "Network"}}
+}
 CategoryCatalogStates = {
 	Games = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false },
 	Utilities = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
@@ -5621,19 +5628,27 @@ end
 function GetCatalogUrlCandidates(category)
 	category = category or currentScriptCategory
 	local candidates = {}
-	local primary = GetActiveCatalogUrl(category)
-	if primary ~= "" then candidates[#candidates + 1] = primary end
-	if category == "Utilities" then
-		local base = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/"
-		local variants = {"UtilityCatalog.json", "UtilitiesCatalog.json"}
-		for _, name in ipairs(variants) do
-			local candidate = base .. name
-			local exists = false
-			for _, current in ipairs(candidates) do
-				if current == candidate then exists = true break end
-			end
-			if not exists then candidates[#candidates + 1] = candidate end
+	local function addCandidate(url)
+		if type(url) ~= "string" or url == "" then return end
+		for _, current in ipairs(candidates) do
+			if current == url then return end
 		end
+		candidates[#candidates + 1] = url
+	end
+	addCandidate(GetActiveCatalogUrl(category))
+	if category == "Utilities" then
+		local root = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/"
+		local variants = {
+			"refs/heads/main/utilitycatalog.json",
+			"main/utilitycatalog.json",
+			"refs/heads/main/UtilityCatalog.json",
+			"main/UtilityCatalog.json",
+			"refs/heads/main/UtilitiesCatalog.json",
+			"main/UtilitiesCatalog.json"
+		}
+		for _, suffix in ipairs(variants) do addCandidate(root .. suffix) end
+		addCandidate("https://github.com/KingBaconnnn/VeloxScripts/raw/refs/heads/main/utilitycatalog.json")
+		addCandidate("https://github.com/KingBaconnnn/VeloxScripts/raw/main/utilitycatalog.json")
 	end
 	return candidates
 end
@@ -5641,13 +5656,19 @@ function FetchCatalogWithFallback(category, retries, cacheBust)
 	local candidates = GetCatalogUrlCandidates(category)
 	local lastStatus, lastError = nil, nil
 	for _, url in ipairs(candidates) do
-		local response, status, err = FetchWithRetry(url, retries, cacheBust)
+		local response, status, err = FetchWithRetry(url, retries, category == "Utilities" and false or cacheBust)
 		if response and type(response) == "string" and #response > 0 then
-			return response, status, nil, url
+			return response, status, nil, url, false
 		end
 		lastStatus, lastError = status, err
 	end
-	return nil, lastStatus, lastError, candidates[1]
+	if category == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" and #EmbeddedUtilitiesCatalog > 0 then
+		local ok, encoded = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
+		if ok and type(encoded) == "string" and encoded ~= "" then
+			return encoded, 200, "embedded utilities fallback", "embedded://utilitycatalog.json", true
+		end
+	end
+	return nil, lastStatus, lastError, candidates[1], false
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
@@ -5786,7 +5807,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			raw, catalogStatus, catalogFetchError, catalogUrl = FetchCatalogWithFallback(refreshCategory, 3, true)
+			raw, catalogStatus, catalogFetchError, catalogUrl, catalogUsedFallback = FetchCatalogWithFallback(refreshCategory, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
 				CatalogRefreshResults[refreshCategory] = true
@@ -6025,10 +6046,12 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				SetHubStatus("Empty", Theme.Info)
 				SetScriptEmptyState("blank", refreshCategory)
 			else
-				SetHubStatus("Online", Theme.Success)
+				SetHubStatus(catalogUsedFallback and "Offline Fallback" or "Online", catalogUsedFallback and Theme.Warning or Theme.Success)
 				HideScriptEmptyState()
 			end
-			if not CatalogBatchRefreshing then
+			if catalogUsedFallback and not CatalogBatchRefreshing then
+				ShowNotification("Utilities catalog loaded from built-in fallback. The remote catalog could not be reached.", "Warning")
+			elseif not CatalogBatchRefreshing then
 				if isAutoRefresh then
 					ShowNotification(refreshCategory .. " catalog updated.", "Success")
 				elseif force == true then
