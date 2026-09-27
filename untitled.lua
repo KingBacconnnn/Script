@@ -2470,164 +2470,41 @@ ScriptsView.AnchorPoint = Vector2.new(0, 0)
 ScriptsView.Position = IsMobile and UDim2.new(0, 14, 0, 172) or UDim2.new(0, 14, 0, 190)
 ScriptsView.Size = IsMobile and UDim2.new(1, -28, 1, -180) or UDim2.new(1, -28, 1, -200)
 EmptyStateMessage = Instance.new("TextLabel", ScriptsView)
-EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40); EmptyStateMessage.BackgroundTransparency = 1
-EmptyStateMessage.TextColor3 = Theme.TextSecondary; EmptyStateMessage.Font = Enum.Font.GothamMedium
-EmptyStateMessage.TextSize = 12; EmptyStateMessage.TextWrapped = true; EmptyStateMessage.LayoutOrder = -1
+EmptyStateMessage.Name = "EmptyStateMessage"
+EmptyStateMessage.Size = UDim2.new(1, 0, 0, 40)
+EmptyStateMessage.BackgroundTransparency = 1
+EmptyStateMessage.Text = "No scripts currently available in catalog."
+EmptyStateMessage.TextColor3 = Theme.TextSecondary
+EmptyStateMessage.Font = Enum.Font.GothamMedium
+EmptyStateMessage.TextSize = IsMobile and 11 or 13
+EmptyStateMessage.TextWrapped = true
+EmptyStateMessage.TextXAlignment = Enum.TextXAlignment.Center
+EmptyStateMessage.TextYAlignment = Enum.TextYAlignment.Center
+EmptyStateMessage.LayoutOrder = -1
 EmptyStateMessage.Visible = false
 
-ScriptEmptyCard = Instance.new("Frame", ScriptsView)
-ScriptEmptyCard.Name = "ScriptEmptyState"
-ScriptEmptyCard.Size = UDim2.new(1, -6, 0, IsMobile and 176 or 192)
-ScriptEmptyCard.BackgroundColor3 = Theme.BackgroundSecondary
-ScriptEmptyCard.BackgroundTransparency = 0.1
-ScriptEmptyCard.BorderSizePixel = 0
-ScriptEmptyCard.LayoutOrder = -2
-ScriptEmptyCard.Visible = false
-ScriptEmptyCard.ClipsDescendants = true
-ScriptEmptyCard.ZIndex = 2
-Instance.new("UICorner", ScriptEmptyCard).CornerRadius = UDim.new(0, 12)
-
-ScriptEmptyStroke = Instance.new("UIStroke", ScriptEmptyCard)
-ScriptEmptyStroke.Color = Theme.Stroke
-ScriptEmptyStroke.Transparency = 0.28
-ScriptEmptyStroke.Thickness = 1
-
-ScriptEmptyAccent = Instance.new("Frame", ScriptEmptyCard)
-ScriptEmptyAccent.Size = UDim2.new(0, 3, 1, -24)
-ScriptEmptyAccent.Position = UDim2.new(0, 0, 0, 12)
-ScriptEmptyAccent.BackgroundColor3 = Theme.Accent
-ScriptEmptyAccent.BorderSizePixel = 0
-ScriptEmptyAccent.ZIndex = 3
-Instance.new("UICorner", ScriptEmptyAccent).CornerRadius = UDim.new(0, 2)
-
-ScriptEmptyIconBox = Instance.new("Frame", ScriptEmptyCard)
-ScriptEmptyIconBox.Size = UDim2.new(0, IsMobile and 48 or 54, 0, IsMobile and 48 or 54)
-ScriptEmptyIconBox.Position = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 18 or 22)
-ScriptEmptyIconBox.BackgroundColor3 = Theme.BackgroundMain
-ScriptEmptyIconBox.BackgroundTransparency = 0.12
-ScriptEmptyIconBox.BorderSizePixel = 0
-ScriptEmptyIconBox.ZIndex = 3
-Instance.new("UICorner", ScriptEmptyIconBox).CornerRadius = UDim.new(0, 12)
-ScriptEmptyIconStroke = Instance.new("UIStroke", ScriptEmptyIconBox)
-ScriptEmptyIconStroke.Color = Theme.Accent
-ScriptEmptyIconStroke.Transparency = 0.58
-ScriptEmptyIconStroke.Thickness = 1
-CreateVeloxIcon(ScriptEmptyIconBox, VeloxIcons.Scripts, IsMobile and 22 or 25, Theme.Accent, UDim2.new(0.5, -(IsMobile and 11 or 12.5), 0.5, -(IsMobile and 11 or 12.5)), nil, 4, "EmptyStateIcon")
-
-ScriptEmptyTitle = Instance.new("TextLabel", ScriptEmptyCard)
-ScriptEmptyTitle.Size = UDim2.new(1, IsMobile and -88 or -104, 0, IsMobile and 22 or 26)
-ScriptEmptyTitle.Position = UDim2.new(0, IsMobile and 78 or 92, 0, IsMobile and 19 or 20)
-ScriptEmptyTitle.BackgroundTransparency = 1
-ScriptEmptyTitle.Text = "Velox Script Center"
-ScriptEmptyTitle.TextColor3 = Theme.TextPrimary
-ScriptEmptyTitle.Font = Enum.Font.GothamBold
-ScriptEmptyTitle.TextSize = IsMobile and 13 or 16
-ScriptEmptyTitle.TextXAlignment = Enum.TextXAlignment.Left
-ScriptEmptyTitle.TextYAlignment = Enum.TextYAlignment.Center
-ScriptEmptyTitle.TextTruncate = Enum.TextTruncate.AtEnd
-ScriptEmptyTitle.ZIndex = 4
-
-ScriptEmptySubtitle = Instance.new("TextLabel", ScriptEmptyCard)
-ScriptEmptySubtitle.Size = UDim2.new(1, IsMobile and -104 or -120, 0, IsMobile and 34 or 38)
-ScriptEmptySubtitle.Position = UDim2.new(0, IsMobile and 78 or 92, 0, IsMobile and 43 or 47)
-ScriptEmptySubtitle.BackgroundTransparency = 1
-ScriptEmptySubtitle.Text = "Choose a catalog tab to get started."
-ScriptEmptySubtitle.TextColor3 = Theme.TextSecondary
-ScriptEmptySubtitle.Font = Enum.Font.GothamMedium
-ScriptEmptySubtitle.TextSize = IsMobile and 10 or 11
-ScriptEmptySubtitle.TextWrapped = true
-ScriptEmptySubtitle.TextXAlignment = Enum.TextXAlignment.Left
-ScriptEmptySubtitle.TextYAlignment = Enum.TextYAlignment.Top
-ScriptEmptySubtitle.ZIndex = 4
-
-ScriptEmptyStatus = Instance.new("Frame", ScriptEmptyCard)
-ScriptEmptyStatus.Size = UDim2.new(0, IsMobile and 94 or 104, 0, 23)
-ScriptEmptyStatus.Position = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 88 or 96)
-ScriptEmptyStatus.BackgroundColor3 = Theme.BackgroundMain
-ScriptEmptyStatus.BackgroundTransparency = 0.05
-ScriptEmptyStatus.BorderSizePixel = 0
-ScriptEmptyStatus.ZIndex = 3
-Instance.new("UICorner", ScriptEmptyStatus).CornerRadius = UDim.new(1, 0)
-ScriptEmptyStatusStroke = Instance.new("UIStroke", ScriptEmptyStatus)
-ScriptEmptyStatusStroke.Color = Theme.Stroke
-ScriptEmptyStatusStroke.Transparency = 0.35
-ScriptEmptyStatusStroke.Thickness = 1
-ScriptEmptyStatusLabel = Instance.new("TextLabel", ScriptEmptyStatus)
-ScriptEmptyStatusLabel.Size = UDim2.new(1, -10, 1, 0)
-ScriptEmptyStatusLabel.Position = UDim2.new(0, 5, 0, 0)
-ScriptEmptyStatusLabel.BackgroundTransparency = 1
-ScriptEmptyStatusLabel.Text = "CATALOG READY"
-ScriptEmptyStatusLabel.TextColor3 = Theme.Accent
-ScriptEmptyStatusLabel.Font = Enum.Font.GothamBold
-ScriptEmptyStatusLabel.TextSize = 8
-ScriptEmptyStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-ScriptEmptyStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-ScriptEmptyStatusLabel.ZIndex = 4
-
-ScriptEmptyDetail = Instance.new("TextLabel", ScriptEmptyCard)
-ScriptEmptyDetail.Size = UDim2.new(1, IsMobile and -36 or -44, 0, IsMobile and 42 or 48)
-ScriptEmptyDetail.Position = UDim2.new(0, IsMobile and 18 or 22, 0, IsMobile and 119 or 130)
-ScriptEmptyDetail.BackgroundTransparency = 1
-ScriptEmptyDetail.Text = "Games and Utilities use separate catalog sources, so each tab can have its own library."
-ScriptEmptyDetail.TextColor3 = Theme.TextSecondary
-ScriptEmptyDetail.Font = Enum.Font.Gotham
-ScriptEmptyDetail.TextSize = IsMobile and 9 or 10
-ScriptEmptyDetail.TextWrapped = true
-ScriptEmptyDetail.TextXAlignment = Enum.TextXAlignment.Left
-ScriptEmptyDetail.TextYAlignment = Enum.TextYAlignment.Top
-ScriptEmptyDetail.ZIndex = 4
-
 local function SetScriptEmptyState(state, category, message)
-	if not ScriptEmptyCard or not ScriptEmptyCard.Parent then return end
 	category = category or currentScriptCategory or "Games"
-	state = state or "empty"
-	local title = category .. " Catalog"
-	local subtitle = "Choose a catalog tab to get started."
-	local detail = "Games and Utilities use separate catalog sources, so each tab can have its own library."
-	local status = "CATALOG READY"
-	local accent = Theme.Accent
+	state = state or "blank"
 
+	local text = "No scripts currently available in catalog."
 	if state == "no_matches" then
-		title = "No Matching Scripts"
-		subtitle = "Nothing matches your current search or filters."
-		detail = "Try another search, clear the filters, or switch between Games and Utilities."
-		status = "NO RESULTS"
-		accent = Theme.Warning
+		text = "No scripts matched your search or filters."
 	elseif state == "loading" then
-		title = "Loading " .. category
-		subtitle = "Refreshing the catalog and rebuilding the script cards."
-		detail = "Please wait while Velox Hub fetches the latest catalog data."
-		status = "LOADING"
-		accent = Theme.Info
+		text = "Loading " .. category .. " catalog..."
 	elseif state == "error" then
-		title = category .. " Catalog Unavailable"
-		subtitle = message or "The catalog could not be loaded right now."
-		detail = "Check the catalog URL and your connection, then use Refresh Catalog to try again."
-		status = "CATALOG ERROR"
-		accent = Theme.Error
-	elseif state == "blank" then
-		title = category .. " Catalog"
-		subtitle = category == "Utilities" and "Your utilities library is ready to be filled." or "No game scripts are available in this catalog yet."
-		detail = category == "Utilities" and "Add your Utilities JSON URL to UTILITIES_CATALOG_URL, then refresh this tab." or "Refresh this tab to check for the latest game scripts."
-		status = category == "Utilities" and "READY TO ADD" or "CATALOG EMPTY"
-		accent = category == "Utilities" and Theme.System or Theme.Info
+		text = message or "Unable to load catalog."
 	end
 
-	ScriptEmptyTitle.Text = title
-	ScriptEmptySubtitle.Text = subtitle
-	ScriptEmptyDetail.Text = detail
-	ScriptEmptyStatusLabel.Text = status
-	ScriptEmptyStatusLabel.TextColor3 = accent
-	ScriptEmptyAccent.BackgroundColor3 = accent
-	ScriptEmptyIconStroke.Color = accent
-	ScriptEmptyStatusStroke.Color = accent
-	ScriptEmptyCard.Visible = true
-	EmptyStateMessage.Visible = false
+	EmptyStateMessage.Text = text
+	EmptyStateMessage.Visible = true
 end
 
 local function HideScriptEmptyState()
-	if ScriptEmptyCard and ScriptEmptyCard.Parent then ScriptEmptyCard.Visible = false end
-	if EmptyStateMessage and EmptyStateMessage.Parent then EmptyStateMessage.Visible = false end
+	if EmptyStateMessage and EmptyStateMessage.Parent then
+		EmptyStateMessage.Visible = false
+		EmptyStateMessage.Text = ""
+	end
 end
 
 ScriptCategoryRow = Instance.new("Frame", MainContent)
