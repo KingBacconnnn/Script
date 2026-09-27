@@ -176,7 +176,7 @@ CatalogGeneration = 0
 LastCatalogRefreshAt = 0
 currentScriptCategory = "Games"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
-UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
+UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
 CategoryCatalogStates = {
 	Games = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false },
 	Utilities = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
@@ -5728,6 +5728,26 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			end
 			raw, catalogStatus = FetchWithRetry(catalogUrl, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
+			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
+				CatalogRefreshResults[refreshCategory] = true
+				local emptyState = GetCategoryCatalogState(refreshCategory)
+				emptyState.Entries = {}
+				emptyState.ByKey = {}
+				emptyState.Fingerprint = BuildCatalogFingerprint({}) .. "\30" .. "0"
+				emptyState.LastRefreshAt = os.clock()
+				emptyState.Loaded = true
+			if refreshCategory == currentScriptCategory then
+				RegisteredScripts = {}
+				RegisteredScripts.__ByKey = {}
+				LastCatalogFingerprint = emptyState.Fingerprint
+				LastCatalogRefreshAt = emptyState.LastRefreshAt
+				ClearCatalogCardsForRefresh()
+				SetHubStatus("Empty", Theme.Info)
+				SetScriptEmptyState("blank", refreshCategory)
+			end
+				FinishRefresh()
+				return
+			end
 			if not raw then
 				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
@@ -5802,7 +5822,13 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				end
 				_VH_RefreshRecommendations()
 				RefreshAllCardStates()
-				SetHubStatus("Online", Theme.Success)
+				if #RegisteredScripts == 0 then
+					SetHubStatus("Empty", Theme.Info)
+					SetScriptEmptyState("blank", refreshCategory)
+				else
+					SetHubStatus("Online", Theme.Success)
+					HideScriptEmptyState()
+				end
 				if not isAutoRefresh and not CatalogBatchRefreshing then
 					ShowNotification(refreshCategory .. " catalog is already up to date.", "Info")
 				end
@@ -5928,7 +5954,13 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 					end)
 				end
 			end
-			SetHubStatus("Online", Theme.Success)
+			if #RegisteredScripts == 0 then
+				SetHubStatus("Empty", Theme.Info)
+				SetScriptEmptyState("blank", refreshCategory)
+			else
+				SetHubStatus("Online", Theme.Success)
+				HideScriptEmptyState()
+			end
 			if not CatalogBatchRefreshing then
 				if isAutoRefresh then
 					ShowNotification(refreshCategory .. " catalog updated.", "Success")
@@ -5990,12 +6022,12 @@ local function _VH_RestoreSelectedCategoryState(category)
 			entry.Instance.Visible = true
 		end
 	end
-	if GetActiveCatalogUrl() == "" then
+	if GetActiveCatalogUrl() == "" or (state.Loaded and #RegisteredScripts == 0) then
 		SetHubStatus("Empty", Theme.Info)
 		SetScriptEmptyState("blank", category)
 	else
-		SetHubStatus(state.Loaded and "Online" or "Empty", state.Loaded and Theme.Success or Theme.Info)
-		if #RegisteredScripts == 0 then SetScriptEmptyState("blank", category) else HideScriptEmptyState() end
+		SetHubStatus("Online", Theme.Success)
+		HideScriptEmptyState()
 	end
 	UpdateFilter()
 	RefreshAllCardStates()
