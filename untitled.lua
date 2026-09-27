@@ -6331,12 +6331,30 @@ function PositionLanguageDropdown()
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
 	local abs = languageButton.AbsolutePosition
 	local size = languageButton.AbsoluteSize
-	local width, height = 150, 132
+	local width, height = 160, 138
 	local x = math.clamp(abs.X + size.X - width, 8, math.max(8, viewport.X - width - 8))
 	local y = abs.Y + size.Y + 6
 	if y + height > viewport.Y - 8 then y = math.max(8, abs.Y - height - 6) end
 	LanguageDropdown.Position = UDim2.new(0, x, 0, y)
 	LanguageDropdown.Size = UDim2.new(0, width, 0, height)
+end
+function UpdateLanguageDropdownSelection()
+	if not LanguageDropdown or not LanguageDropdown.Parent then return end
+	for _, option in ipairs(LanguageDropdown:GetChildren()) do
+		if option:IsA("TextButton") then
+			local selected = option:GetAttribute("LanguageName") == CurrentLanguage
+			local stroke = option:FindFirstChildOfClass("UIStroke")
+			if selected then
+				option.BackgroundColor3 = Theme.CardHover
+				option.BackgroundTransparency = 0.15
+				if stroke then stroke.Color = Color3.fromRGB(255, 255, 255); stroke.Thickness = 1.5 end
+			else
+				option.BackgroundColor3 = Theme.BackgroundMain
+				option.BackgroundTransparency = 0.35
+				if stroke then stroke.Color = Theme.Stroke; stroke.Thickness = 1 end
+			end
+		end
+	end
 end
 function OpenLanguageDropdown()
 	if isDestroying then return end
@@ -6345,6 +6363,7 @@ function OpenLanguageDropdown()
 		LanguageDropdown.Name = "VeloxLanguageDropdown"
 		LanguageDropdown.BackgroundColor3 = Theme.BackgroundSecondary
 		LanguageDropdown.BorderSizePixel = 0
+		LanguageDropdown.ClipsDescendants = false
 		LanguageDropdown.ZIndex = 1700
 		Instance.new("UICorner", LanguageDropdown).CornerRadius = UDim.new(0, 8)
 		local stroke = Instance.new("UIStroke", LanguageDropdown)
@@ -6354,14 +6373,15 @@ function OpenLanguageDropdown()
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
 		layout.Padding = UDim.new(0, 4)
 		local pad = Instance.new("UIPadding", LanguageDropdown)
-		pad.PaddingTop = UDim.new(0, 6); pad.PaddingBottom = UDim.new(0, 6); pad.PaddingLeft = UDim.new(0, 6); pad.PaddingRight = UDim.new(0, 6)
+		pad.PaddingTop = UDim.new(0, 8); pad.PaddingBottom = UDim.new(0, 8); pad.PaddingLeft = UDim.new(0, 8); pad.PaddingRight = UDim.new(0, 8)
 		for index, language in ipairs(SupportedLanguages) do
 			local option = Instance.new("TextButton", LanguageDropdown)
 			option.Name = "Language_" .. language
-			option.Size = UDim2.new(1, 0, 0, 36)
+			option.Size = UDim2.new(1, 0, 0, 38)
 			option.BackgroundColor3 = Theme.BackgroundMain
 			option.BackgroundTransparency = 0.35
 			option.BorderSizePixel = 0
+			option.ClipsDescendants = false
 			option.AutoButtonColor = false
 			option.Text = language
 			option.TextColor3 = Theme.TextPrimary
@@ -6370,10 +6390,15 @@ function OpenLanguageDropdown()
 			option.LayoutOrder = index
 			option.ZIndex = 1701
 			Instance.new("UICorner", option).CornerRadius = UDim.new(0, 6)
+			local optionTextPadding = Instance.new("UIPadding", option)
+			optionTextPadding.PaddingLeft = UDim.new(0, 12)
+			optionTextPadding.PaddingRight = UDim.new(0, 12)
 			local optionStroke = Instance.new("UIStroke", option)
 			optionStroke.Color = Theme.Stroke
 			optionStroke.Thickness = 1
-			ApplyInteractiveAnimations(option, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), optionStroke, Theme.Stroke, Theme.Accent)
+			optionStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			option:SetAttribute("LanguageName", language)
+			ApplyInteractiveAnimations(option, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), nil, nil, nil)
 			_VH_RegConn(option.Activated:Connect(function()
 				if isDestroying then return end
 				SetLanguage(language)
@@ -6382,6 +6407,7 @@ function OpenLanguageDropdown()
 		end
 	end
 	LanguageDropdown.Visible = true
+	UpdateLanguageDropdownSelection()
 	PositionLanguageDropdown()
 	if LanguageDropdownConnection then _VH_UnregConn(LanguageDropdownConnection); LanguageDropdownConnection = nil end
 	LanguageDropdownConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
@@ -6403,6 +6429,7 @@ function SetLanguage(language)
 	CurrentLanguage = language
 	SavedData.Settings.Language = language
 	if languageButton and languageButton.Parent then languageButton.Text = language end
+	UpdateLanguageDropdownSelection()
 	_VH_ApplyTranslations(ScreenGui)
 	SetHubStatus(HubStatusKey, StatusText.TextColor3)
 	if ScriptCategoryButtons then UpdateScriptCategoryButtons() end
