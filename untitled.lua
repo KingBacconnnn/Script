@@ -5609,8 +5609,9 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	return scriptEntry
 end
 CATALOG_REFRESH_INTERVAL = 300
-function GetActiveCatalogUrl()
-	local url = currentScriptCategory == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
+function GetActiveCatalogUrl(category)
+	category = category or currentScriptCategory
+	local url = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
 	if type(url) ~= "string" then return "" end
 	return string.gsub(url, "^%s*(.-)%s*$", "%1")
 end
@@ -5742,7 +5743,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	activeNewEntries = {}
 	_VH_TrackTask(function()
 		taskOk, taskErr = xpcall(function()
-			local catalogUrl = GetActiveCatalogUrl()
+			local catalogUrl = GetActiveCatalogUrl(refreshCategory)
 			if catalogUrl == "" then
 				CatalogRefreshResults[refreshCategory] = "skipped"
 				ClearCatalogCardsForRefresh()
@@ -5792,42 +5793,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			catalogVersion = tonumber(parsed.CatalogVersion or parsed.Version) or 0
-			catalogEntries = nil
-			if type(parsed) == "table" then
-				local preferredKeys = refreshCategory == "Utilities"
-					and { "Utilities", "UtilityScripts", "Scripts", "Entries", "Catalog", "Items", "Data" }
-					or { "Games", "Scripts", "GameScripts", "Entries", "Catalog", "Items", "Data" }
-				for _, keyName in ipairs(preferredKeys) do
-					if type(parsed[keyName]) == "table" then
-						catalogEntries = parsed[keyName]
-						break
-					end
-				end
-				if not catalogEntries and #parsed > 0 then
-					catalogEntries = parsed
-				end
-				if not catalogEntries then
-					local candidate, candidateCount = nil, 0
-					for _, value in pairs(parsed) do
-						if type(value) == "table" and #value > 0 and type(value[1]) == "table" then
-							candidate = value
-							candidateCount = candidateCount + 1
-						end
-					end
-					if candidateCount == 1 then
-						catalogEntries = candidate
-					end
-				end
-			end
-			if type(catalogEntries) ~= "table" then
-				CatalogRefreshResults[refreshCategory] = false
-				RestoreCatalogCardsAfterRefreshFailure()
-				SetHubStatus("Data Error", Theme.Error)
-				SetScriptEmptyState("error", refreshCategory, "The " .. refreshCategory .. " catalog does not contain a supported script list.")
-				ShowNotification(refreshCategory .. " catalog data format error.", "Error")
-				FinishRefresh()
-				return
+			catalogVersion = 0
+			catalogEntries = parsed
+			if type(parsed.Scripts) == "table" then
+				catalogEntries = parsed.Scripts
+				catalogVersion = tonumber(parsed.CatalogVersion) or 0
 			end
 			validEntries = {}
 			seenIds = {}
