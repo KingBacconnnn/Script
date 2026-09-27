@@ -155,7 +155,9 @@ VeloxIcons = {
 	RefreshGames = "rbxassetid://90287169568964",
 	RefreshUtilities = "rbxassetid://96504473642584",
 	RefreshAll = "rbxassetid://137146389676408",
-	ChevronDown = "rbxassetid://97045880141942"
+	ChevronDown = "rbxassetid://97045880141942",
+	Globe = "rbxassetid://84596747718088",
+	Character = "rbxassetid://71205921945680"
 }
 function CreateVeloxIcon(parent, asset, size, color, position, anchor, zIndex, name)
 	local img = Instance.new("ImageLabel", parent)
@@ -2492,7 +2494,7 @@ BLRowLay = Instance.new("UIListLayout", BtmLeftRow)
 BLRowLay.FillDirection = Enum.FillDirection.Horizontal; BLRowLay.SortOrder = Enum.SortOrder.LayoutOrder; BLRowLay.Padding = UDim.new(0, 6)
 VersionLabel = Instance.new("TextLabel", BtmLeftRow)
 VersionLabel.AutomaticSize = Enum.AutomaticSize.X; VersionLabel.Size = UDim2.new(0, 0, 1, 0)
-VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.7 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
+VersionLabel.BackgroundTransparency = 1; VersionLabel.Text = "v2.0.8 | " .. (type(identifyexecutor) == "function" and identifyexecutor() or (type(getexecutorname) == "function" and getexecutorname() or "Unknown Executor"))
 VersionLabel.TextColor3 = Theme.Accent; VersionLabel.Font = Enum.Font.GothamMedium; VersionLabel.TextSize = IsMobile and 10 or 12; VersionLabel.LayoutOrder = 1
 DiagnosticsLabel = Instance.new("TextLabel", BtmLeftRow)
 DiagnosticsLabel.AutomaticSize = Enum.AutomaticSize.X; DiagnosticsLabel.Size = UDim2.new(0, 0, 1, 0); DiagnosticsLabel.BackgroundTransparency = 1
@@ -4118,7 +4120,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.7 - Recommendation Refresh & Manual Refresh Targets", "• Fixed Recommended for You visibility so it can only appear in the Games catalog tab.\n• Fixed manual Games refreshes so the Recommended for You cards are rebuilt from the refreshed Games catalog.\n• Kept Games recommendations available in the background while Utilities are being refreshed.\n• Added a Manual Refresh target dropdown in Settings with Games, Utilities, and All options.\n• Added icon-backed refresh target options with balanced padding and a white outline around the selected option.\n• Kept the existing 5-minute automatic refresh behavior for both catalogs.\n• Preserved the existing catalog caching, execution, notifications, language, configuration, and executor fallback paths.", ChangelogsView)
+CreateParagraph("v2.0.8 - Settings Dropdown Refinement & Refresh Layout", "• Fixed Recommended for You visibility so it only appears in the Games catalog.\n• Fixed Games refreshes so the Recommended for You cards rebuild from the refreshed Games catalog.\n• Kept Games recommendations isolated while Utilities are refreshed.\n• Refined Manual Refresh into a separate target dropdown and refresh action button.\n• Added the same icon, chevron, balanced-spacing, and white-outline design to the Language dropdown.\n• Fixed mobile layout clamping and overlap in the Manual Refresh controls.\n• Kept the existing catalog caching, execution, notifications, language, configuration, and executor fallback paths.", ChangelogsView)
 CreateParagraph("v2.0.6 - Stability, Language & Cleanup", "• Fixed the header status getting stuck on Connecting... after changing the hub language; the current status is now preserved and immediately re-localized.\n• Added localized Offline status text for English, Filipino, and Chinese.\n• Kept Games and Utilities catalogs independent while retaining shared manual and 5-minute automatic refresh behavior.\n• Kept Recommended for You restricted to the Games catalog only.\n• Removed unused legacy helper functions left behind by earlier UI changes.\n• Removed unnecessary legacy code paths without changing the existing executor fallback layer.\n• Preserved the existing request, HTTP, file I/O, compiler, GUI-parent, protected-GUI, cloneref, configuration, Auto Execute, recommendations, notifications, and catalog-refresh compatibility paths.\n• Kept the script free of comments and avoided adding local-heavy structures that could increase register pressure.\n• Visible version is now v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
@@ -6372,21 +6374,51 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 	end))
 end)))
 languageRow, languageRight = CreateSettingRowInGroup(prefGroup, "Language", "Change the hub language.", VeloxIcons.Book, 2)
+languageTextContainer = languageRow:FindFirstChild("TextContainer")
+languageRightWidth = IsMobile and 138 or 148
+if languageTextContainer then
+	languageTextContainer.Size = UDim2.new(1, -(languageRightWidth + 52), 1, 0)
+	languageTextContainer.Position = UDim2.new(0, 42, 0, 0)
+	for _, languageText in ipairs(languageTextContainer:GetChildren()) do
+		if languageText:IsA("TextLabel") then
+			languageText.TextTruncate = Enum.TextTruncate.AtEnd
+			if languageText.LayoutOrder == 2 then languageText.TextWrapped = false end
+		end
+	end
+end
+languageRight.Size = UDim2.new(0, languageRightWidth, 1, 0)
+languageRight.Position = UDim2.new(1, -languageRightWidth, 0, 0)
 languageButton = Instance.new("TextButton", languageRight)
-languageButton.Size = UDim2.new(0, 95, 0, 26)
-languageButton.Position = UDim2.new(1, -95, 0.5, -13)
+languageButton.Size = UDim2.new(0, IsMobile and 126 or 134, 0, 28)
+languageButton.Position = UDim2.new(0, 0, 0.5, -14)
 languageButton.BackgroundColor3 = Theme.BackgroundMain
-languageButton.BackgroundTransparency = 0.4
-languageButton.Text = CurrentLanguage
-languageButton.TextColor3 = Theme.TextPrimary
-languageButton.Font = Enum.Font.GothamMedium
-languageButton.TextSize = 10
+languageButton.BackgroundTransparency = 0.35
+languageButton.BorderSizePixel = 0
+languageButton.Text = ""
 languageButton.AutoButtonColor = false
-Instance.new("UICorner", languageButton).CornerRadius = UDim.new(0, 6)
+languageButton.ClipsDescendants = false
+languageButton.ZIndex = 300
+Instance.new("UICorner", languageButton).CornerRadius = UDim.new(0, 7)
 languageButtonStroke = Instance.new("UIStroke", languageButton)
 languageButtonStroke.Color = Theme.Stroke
 languageButtonStroke.Thickness = 1
-ApplyInteractiveAnimations(languageButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), languageButtonStroke, Theme.Stroke, Theme.Accent)
+languageButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+languageButtonIcon = CreateVeloxIcon(languageButton, VeloxIcons.Globe, IsMobile and 14 or 15, Theme.TextPrimary, UDim2.new(0, 9, 0.5, -(IsMobile and 7 or 7.5)), nil, 302, "LanguageIcon")
+languageButtonLabel = Instance.new("TextLabel", languageButton)
+languageButtonLabel.Name = "LanguageButtonLabel"
+languageButtonLabel.Size = UDim2.new(1, -48, 1, 0)
+languageButtonLabel.Position = UDim2.new(0, 31, 0, 0)
+languageButtonLabel.BackgroundTransparency = 1
+languageButtonLabel.Text = CurrentLanguage
+languageButtonLabel.TextColor3 = Theme.TextPrimary
+languageButtonLabel.Font = Enum.Font.GothamMedium
+languageButtonLabel.TextSize = IsMobile and 9 or 10
+languageButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
+languageButtonLabel.TextYAlignment = Enum.TextYAlignment.Center
+languageButtonLabel.TextTruncate = Enum.TextTruncate.AtEnd
+languageButtonLabel.Active = false
+languageButtonLabel.ZIndex = 303
+languageButtonChevron = CreateVeloxIcon(languageButton, VeloxIcons.ChevronDown, IsMobile and 11 or 12, Theme.TextSecondary, UDim2.new(1, -(IsMobile and 18 or 19), 0.5, -(IsMobile and 5.5 or 6)), nil, 303, "LanguageChevron")
 function CloseLanguageDropdown()
 	if LanguageDropdown and LanguageDropdown.Parent then LanguageDropdown.Visible = false end
 	if LanguageDropdownConnection then _VH_UnregConn(LanguageDropdownConnection); LanguageDropdownConnection = nil end
@@ -6397,7 +6429,7 @@ function PositionLanguageDropdown()
 	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
 	local abs = languageButton.AbsolutePosition
 	local size = languageButton.AbsoluteSize
-	local width, height = 160, 138
+	local width, height = IsMobile and 156 or 170, 142
 	local x = math.clamp(abs.X + size.X - width, 8, math.max(8, viewport.X - width - 8))
 	local y = abs.Y + size.Y + 6
 	if y + height > viewport.Y - 8 then y = math.max(8, abs.Y - height - 6) end
@@ -6406,18 +6438,16 @@ function PositionLanguageDropdown()
 end
 function UpdateLanguageDropdownSelection()
 	if not LanguageDropdown or not LanguageDropdown.Parent then return end
+	if languageButtonLabel then languageButtonLabel.Text = CurrentLanguage end
 	for _, option in ipairs(LanguageDropdown:GetChildren()) do
 		if option:IsA("TextButton") then
 			local selected = option:GetAttribute("LanguageName") == CurrentLanguage
-			local stroke = option:FindFirstChildOfClass("UIStroke")
-			if selected then
-				option.BackgroundColor3 = Theme.CardHover
-				option.BackgroundTransparency = 0.15
-				if stroke then stroke.Color = Color3.fromRGB(255, 255, 255); stroke.Thickness = 1.5 end
-			else
-				option.BackgroundColor3 = Theme.BackgroundMain
-				option.BackgroundTransparency = 0.35
-				if stroke then stroke.Color = Theme.Stroke; stroke.Thickness = 1 end
+			local stroke = option:FindFirstChild("LanguageOutline")
+			option.BackgroundColor3 = selected and Theme.CardHover or Theme.BackgroundMain
+			option.BackgroundTransparency = selected and 0.12 or 0.35
+			if stroke then
+				stroke.Color = selected and Color3.fromRGB(255, 255, 255) or Theme.Stroke
+				stroke.Thickness = selected and 1.5 or 1
 			end
 		end
 	end
@@ -6431,10 +6461,11 @@ function OpenLanguageDropdown()
 		LanguageDropdown.BorderSizePixel = 0
 		LanguageDropdown.ClipsDescendants = false
 		LanguageDropdown.ZIndex = 1700
-		Instance.new("UICorner", LanguageDropdown).CornerRadius = UDim.new(0, 8)
-		local stroke = Instance.new("UIStroke", LanguageDropdown)
-		stroke.Color = Theme.Stroke
-		stroke.Thickness = 1
+		Instance.new("UICorner", LanguageDropdown).CornerRadius = UDim.new(0, 9)
+		local outer = Instance.new("UIStroke", LanguageDropdown)
+		outer.Color = Theme.Stroke
+		outer.Thickness = 1
+		outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local layout = Instance.new("UIListLayout", LanguageDropdown)
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
 		layout.Padding = UDim.new(0, 4)
@@ -6449,22 +6480,31 @@ function OpenLanguageDropdown()
 			option.BorderSizePixel = 0
 			option.ClipsDescendants = false
 			option.AutoButtonColor = false
-			option.Text = language
-			option.TextColor3 = Theme.TextPrimary
-			option.Font = Enum.Font.GothamMedium
-			option.TextSize = 10
+			option.Text = ""
 			option.LayoutOrder = index
 			option.ZIndex = 1701
-			Instance.new("UICorner", option).CornerRadius = UDim.new(0, 6)
-			local optionTextPadding = Instance.new("UIPadding", option)
-			optionTextPadding.PaddingLeft = UDim.new(0, 12)
-			optionTextPadding.PaddingRight = UDim.new(0, 12)
+			Instance.new("UICorner", option).CornerRadius = UDim.new(0, 7)
 			local optionStroke = Instance.new("UIStroke", option)
+			optionStroke.Name = "LanguageOutline"
 			optionStroke.Color = Theme.Stroke
 			optionStroke.Thickness = 1
 			optionStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			option:SetAttribute("LanguageName", language)
-			ApplyInteractiveAnimations(option, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), nil, nil, nil)
+			CreateVeloxIcon(option, VeloxIcons.Character, 15, Theme.TextPrimary, UDim2.new(0, 10, 0.5, -7.5), nil, 1702, "LanguageOptionIcon")
+			local optionLabel = Instance.new("TextLabel", option)
+			optionLabel.Name = "LanguageOptionLabel"
+			optionLabel.Size = UDim2.new(1, -42, 1, 0)
+			optionLabel.Position = UDim2.new(0, 34, 0, 0)
+			optionLabel.BackgroundTransparency = 1
+			optionLabel.Text = language
+			optionLabel:SetAttribute("VeloxTranslationKey", language)
+			optionLabel.TextColor3 = Theme.TextPrimary
+			optionLabel.Font = Enum.Font.GothamMedium
+			optionLabel.TextSize = IsMobile and 9 or 10
+			optionLabel.TextXAlignment = Enum.TextXAlignment.Left
+			optionLabel.TextYAlignment = Enum.TextYAlignment.Center
+			optionLabel.ZIndex = 1702
+			optionLabel.Active = false
 			_VH_RegConn(option.Activated:Connect(function()
 				if isDestroying then return end
 				SetLanguage(language)
@@ -6494,7 +6534,7 @@ function SetLanguage(language)
 	if not LanguageTranslations[language] then return end
 	CurrentLanguage = language
 	SavedData.Settings.Language = language
-	if languageButton and languageButton.Parent then languageButton.Text = language end
+	if languageButtonLabel and languageButtonLabel.Parent then languageButtonLabel.Text = language end
 	UpdateLanguageDropdownSelection()
 	_VH_ApplyTranslations(ScreenGui)
 	SetHubStatus(HubStatusKey, StatusText.TextColor3)
@@ -6505,6 +6545,7 @@ function SetLanguage(language)
 	SaveConfiguration()
 	ShowNotification("Language: " .. language, "Success")
 end
+ApplyInteractiveAnimations(languageButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), languageButtonStroke, Theme.Stroke, Theme.Accent)
 _VH_RegConn(languageButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 	if LanguageDropdown and LanguageDropdown.Visible then CloseLanguageDropdown() else OpenLanguageDropdown() end
 end)))
@@ -6561,17 +6602,38 @@ _VH_RegConn(scalePlus.Activated:Connect(_VH_CreateDebounce(0.08, function() SetU
 
 actionGroup = CreateSettingsGroup("System Actions", SettingsView, 2)
 manualRefreshRow, manualRefreshRight = CreateSettingRowInGroup(actionGroup, "Manual Refresh", "Choose which catalog to refresh manually.", VeloxIcons.RefreshCatalog, 1)
+manualRefreshTextContainer = manualRefreshRow:FindFirstChild("TextContainer")
+manualRefreshRightWidth = IsMobile and 188 or 202
+if manualRefreshTextContainer then
+	manualRefreshTextContainer.Size = UDim2.new(1, -(manualRefreshRightWidth + 62), 1, 0)
+	manualRefreshTextContainer.Position = UDim2.new(0, 42, 0, 0)
+	for _, manualRefreshText in ipairs(manualRefreshTextContainer:GetChildren()) do
+		if manualRefreshText:IsA("TextLabel") then
+			manualRefreshText.TextTruncate = Enum.TextTruncate.AtEnd
+			if manualRefreshText.LayoutOrder == 2 then manualRefreshText.TextWrapped = false end
+		end
+	end
+end
+manualRefreshRight.Size = UDim2.new(0, manualRefreshRightWidth, 1, 0)
+manualRefreshRight.Position = UDim2.new(1, -manualRefreshRightWidth, 0, 0)
+manualRefreshRight.ClipsDescendants = false
+manualRefreshRightLayout = Instance.new("UIListLayout", manualRefreshRight)
+manualRefreshRightLayout.FillDirection = Enum.FillDirection.Horizontal
+manualRefreshRightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+manualRefreshRightLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+manualRefreshRightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+manualRefreshRightLayout.Padding = UDim.new(0, IsMobile and 10 or 12)
+if manualRefreshRow then manualRefreshRow.Size = UDim2.new(1, 0, 0, IsMobile and 64 or 68) end
 manualRefreshTitle = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:FindFirstChildOfClass("TextLabel")
-manualRefreshDesc = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:FindFirstChildOfClass("TextLabel")
-manualRefreshRight.Size = UDim2.new(0, IsMobile and 148 or 158, 1, 0)
-manualRefreshRight.Position = UDim2.new(1, -(IsMobile and 148 or 158), 0, 0)
+manualRefreshDesc = manualRefreshRow:FindFirstChild("TextContainer") and manualRefreshRow.TextContainer:GetChildren()[2]
 if manualRefreshTitle then manualRefreshTitle.Text = L("Manual Refresh"); manualRefreshTitle:SetAttribute("VeloxTranslationKey", "Manual Refresh") end
-if manualRefreshDesc then manualRefreshDesc.Text = L("Choose which catalog to refresh manually."); manualRefreshDesc:SetAttribute("VeloxTranslationKey", "Choose which catalog to refresh manually.") end
-
+if manualRefreshDesc and manualRefreshDesc:IsA("TextLabel") then manualRefreshDesc.Text = L("Choose which catalog to refresh manually."); manualRefreshDesc:SetAttribute("VeloxTranslationKey", "Choose which catalog to refresh manually.") end
+manualRefreshDropdownWidth = IsMobile and 118 or 126
+manualRefreshButtonWidth = IsMobile and 38 or 40
 ManualRefreshTargetButton = Instance.new("TextButton", manualRefreshRight)
 ManualRefreshTargetButton.Name = "RefreshTargetButton"
-ManualRefreshTargetButton.Size = UDim2.new(0, IsMobile and 96 or 105, 0, 28)
-ManualRefreshTargetButton.Position = UDim2.new(0, 0, 0.5, -14)
+ManualRefreshTargetButton.Size = UDim2.new(0, manualRefreshDropdownWidth, 0, 28)
+ManualRefreshTargetButton.LayoutOrder = 1
 ManualRefreshTargetButton.BackgroundColor3 = Theme.BackgroundMain
 ManualRefreshTargetButton.BackgroundTransparency = 0.35
 ManualRefreshTargetButton.BorderSizePixel = 0
@@ -6601,11 +6663,10 @@ ManualRefreshTargetLabel.TextTruncate = Enum.TextTruncate.AtEnd
 ManualRefreshTargetLabel.Active = false
 ManualRefreshTargetLabel.ZIndex = 303
 ManualRefreshChevron = CreateVeloxIcon(ManualRefreshTargetButton, VeloxIcons.ChevronDown, IsMobile and 11 or 12, Theme.TextSecondary, UDim2.new(1, -(IsMobile and 18 or 19), 0.5, -(IsMobile and 5.5 or 6)), nil, 303, "RefreshTargetChevron")
-
 ManualRefreshButton = Instance.new("TextButton", manualRefreshRight)
 ManualRefreshButton.Name = "ManualRefreshButton"
-ManualRefreshButton.Size = UDim2.new(0, IsMobile and 34 or 38, 0, 28)
-ManualRefreshButton.Position = UDim2.new(1, -(IsMobile and 34 or 38), 0.5, -14)
+ManualRefreshButton.Size = UDim2.new(0, manualRefreshButtonWidth, 0, 28)
+ManualRefreshButton.LayoutOrder = 2
 ManualRefreshButton.BackgroundColor3 = Theme.BackgroundMain
 ManualRefreshButton.BackgroundTransparency = 0.35
 ManualRefreshButton.BorderSizePixel = 0
@@ -6701,7 +6762,7 @@ function OpenManualRefreshDropdown()
 			optionStroke.Thickness = 1
 			optionStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			option:SetAttribute("RefreshTarget", target)
-			CreateVeloxIcon(option, ManualRefreshIcons[target], 16, Theme.TextPrimary, UDim2.new(0, 10, 0.5, -8), nil, 1702, "RefreshTargetIcon")
+			CreateVeloxIcon(option, ManualRefreshIcons[target], 15, Theme.TextPrimary, UDim2.new(0, 10, 0.5, -7.5), nil, 1702, "RefreshTargetIcon")
 			local optionLabel = Instance.new("TextLabel", option)
 			optionLabel.Name = "RefreshTargetLabel"
 			optionLabel.Size = UDim2.new(1, -42, 1, 0)
@@ -6773,41 +6834,16 @@ _VH_RegConn(ManualRefreshButton.Activated:Connect(_VH_CreateDebounce(0.1, functi
 				else
 					local gamesConfigured = type(GAMES_CATALOG_URL) == "string" and string.gsub(GAMES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
 					local utilitiesConfigured = type(UTILITIES_CATALOG_URL) == "string" and string.gsub(UTILITIES_CATALOG_URL, "^%s*(.-)%s*$", "%1") ~= ""
-					selectedResult = (not gamesConfigured or CatalogRefreshResults.Games == true) and (not utilitiesConfigured or CatalogRefreshResults.Utilities == true)
+					local gamesOk = (not gamesConfigured) or CatalogRefreshResults.Games == true
+					local utilitiesOk = (not utilitiesConfigured) or CatalogRefreshResults.Utilities == true
+					selectedResult = gamesOk and utilitiesOk
 				end
 				AnimateRefreshButton(ManualRefreshButton, selectedResult and "success" or "error")
 			end
 		end)
 	end)
 end)))
-CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub completely.", VeloxIcons.UnloadHub, "Unload", 2, true, function()
-	task.wait(0.3)
-	CloseUI()
-end)
 
-for _, obj in ipairs(ScreenGui:GetDescendants()) do
-	_VH_ApplyTextLayoutGuard(obj)
-end
-_VH_RegConn(ScreenGui.DescendantAdded:Connect(function(obj)
-	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-		task.defer(function()
-			_VH_ApplyTextLayoutGuard(obj)
-		end)
-	end
-end))
-
-TabViews["Changelog"].Visible = true
-TabViews["Scripts"].Visible = false
-TabViews["Settings"].Visible = false
-TabViews["How to Use"].Visible = false
-ScriptCategoryRow.Visible = false
-UpdateScriptCategoryButtons()
-TabIndicator.Position = UDim2.new(0, 0, 0, 5)
-SectionHeaderLabel.Text = GetLocalizedSectionHeader("Changelog")
-SectionHeaderLabel.Visible = true
-MainPanel.Visible = true
-SearchRow.Visible = false
-FloatingBtn.Visible = false
 if IsMobile then
 	UserDataGroup = CreateSettingsGroup("User Data", SettingsView, 3)
 	CreateButtonSettingInGroup(UserDataGroup, "Clear UI Cache", "Resets layout position.", VeloxIcons.ClearUICache, "Reset", 1, true, function()
