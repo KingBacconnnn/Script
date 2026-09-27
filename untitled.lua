@@ -738,7 +738,10 @@ function UniversalHttpGet(url)
 			local body = type(reqResult) == "table" and (reqResult.Body or reqResult.body or reqResult.ResponseBody or reqResult.Response or reqResult.response) or (type(reqResult) == "string" and reqResult or nil)
 			local status = type(reqResult) == "table" and tonumber(reqResult.StatusCode or reqResult.Status or reqResult.status_code or reqResult.Code) or 200
 			if status == nil and body then status = 200 end
-			if body and tostring(body) ~= "" and (status == nil or (status >= 200 and status < 300)) then return tostring(body), status or 200, nil end
+			if body and tostring(body) ~= "" then
+				if status and status >= 200 and status < 300 then return tostring(body), status, nil end
+				return nil, status, "http " .. tostring(status or 0)
+			end
 		end
 	end
 	if type(httpget) == "function" then
@@ -5615,6 +5618,37 @@ function GetActiveCatalogUrl(category)
 	if type(url) ~= "string" then return "" end
 	return string.gsub(url, "^%s*(.-)%s*$", "%1")
 end
+function GetCatalogUrlCandidates(category)
+	category = category or currentScriptCategory
+	local candidates = {}
+	local primary = GetActiveCatalogUrl(category)
+	if primary ~= "" then candidates[#candidates + 1] = primary end
+	if category == "Utilities" then
+		local base = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/"
+		local variants = {"UtilityCatalog.json", "UtilitiesCatalog.json"}
+		for _, name in ipairs(variants) do
+			local candidate = base .. name
+			local exists = false
+			for _, current in ipairs(candidates) do
+				if current == candidate then exists = true break end
+			end
+			if not exists then candidates[#candidates + 1] = candidate end
+		end
+	end
+	return candidates
+end
+function FetchCatalogWithFallback(category, retries, cacheBust)
+	local candidates = GetCatalogUrlCandidates(category)
+	local lastStatus, lastError = nil, nil
+	for _, url in ipairs(candidates) do
+		local response, status, err = FetchWithRetry(url, retries, cacheBust)
+		if response and type(response) == "string" and #response > 0 then
+			return response, status, nil, url
+		end
+		lastStatus, lastError = status, err
+	end
+	return nil, lastStatus, lastError, candidates[1]
+end
 dbRefreshing = false
 CatalogBatchRefreshing = false
 CatalogBatchGeneration = 0
@@ -5752,7 +5786,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			raw, catalogStatus = FetchWithRetry(catalogUrl, 3, true)
+			raw, catalogStatus, catalogFetchError, catalogUrl = FetchCatalogWithFallback(refreshCategory, 3, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
 				CatalogRefreshResults[refreshCategory] = true
@@ -5777,7 +5811,10 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 			if not raw then
 				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
-				if #RegisteredScripts == 0 then SetScriptEmptyState("error", refreshCategory, "Unable to reach the script catalog server.") end
+				if #RegisteredScripts == 0 then
+					local reason = tonumber(catalogStatus) and ("HTTP " .. tostring(catalogStatus)) or tostring(catalogFetchError or "request failed")
+					SetScriptEmptyState("error", refreshCategory, "Unable to load the catalog: " .. reason)
+				end
 				SetHubStatus(catalogStatus and ("HTTP " .. tostring(catalogStatus)) or "Offline", Theme.Error)
 				ShowNotification(refreshCategory .. " catalog: could not connect to the server.", "Error")
 				FinishRefresh()
