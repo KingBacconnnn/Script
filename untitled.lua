@@ -127,7 +127,6 @@ VeloxIcons = {
 	Settings = "rbxassetid://72089331699313",
 	HowToUse = "rbxassetid://121204007268320",
 	ToggleUI = "rbxassetid://90339742588515",
-	AntiAFK = "rbxassetid://133188122434047",
 	UIScale = "rbxassetid://99583318883826",
 	RefreshCatalog = "rbxassetid://129652027568082",
 	UnloadHub = "rbxassetid://125903368538682",
@@ -208,6 +207,8 @@ activeMainDragInput, activeFloatDragInput = nil, nil
 ToggleKeybindConnection = nil
 KeybindCaptureConnection = nil
 DropdownContainer = nil
+LanguageDropdown = nil
+LanguageDropdownConnection = nil
 FilterPanel = nil
 ToastContainer = nil
 ConfirmOverlay = nil
@@ -217,9 +218,6 @@ GlobalCooldownBanner = nil
 GlobalCooldownLoopVersion = 0
 GlobalActionCooldownEndTime = 0
 OriginalCache = setmetatable({}, { __mode = "k" })
-AntiAFKConnection = nil
-AntiAFKDisabledConnections = {}
-DisableAntiAFK = nil
 function _VH_CacheInstanceAndDescendants(root)
 	local function CacheObj(obj)
 		if not obj or OriginalCache[obj] then return end
@@ -298,7 +296,6 @@ function _VH_CleanUpMemory()
 	if floatDragConnection then pcall(function() floatDragConnection:Disconnect() end) end
 	if ToggleKeybindConnection then _VH_UnregConn(ToggleKeybindConnection); ToggleKeybindConnection = nil end
 	if KeybindCaptureConnection then _VH_UnregConn(KeybindCaptureConnection); KeybindCaptureConnection = nil end
-	if DisableAntiAFK then DisableAntiAFK() end
 	for _, conn in ipairs(VeloxConnections) do
 		if typeof(conn) == "RBXScriptConnection" and conn.Connected then
 			conn:Disconnect()
@@ -321,6 +318,8 @@ function _VH_CleanUpMemory()
 		end
 	end
 	if DropdownContainer and DropdownContainer.Parent then pcall(function() DropdownContainer:Destroy() end) end
+	if LanguageDropdownConnection then _VH_UnregConn(LanguageDropdownConnection); LanguageDropdownConnection = nil end
+	if LanguageDropdown and LanguageDropdown.Parent then pcall(function() LanguageDropdown:Destroy() end) end
 	if FilterPanel and FilterPanel.Parent then pcall(function() FilterPanel:Destroy() end) end
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
@@ -381,13 +380,13 @@ function _VH_CreateDebounce(cooldown, func)
 		end)
 	end
 end
-DATA_FILE = ".VeloxHub_Data_V3.1.json"
+DATA_FILE = "VeloxHubConfiguration.json"
 make_folder = type(makefolder) == "function" and makefolder or nil
 SavedData = {
 	Favorites = {},
 	AutoExecutes = {},
 	ToggleKeybind = "RightControl",
-	Settings = { AntiAFK = false, UIScale = 1 }
+	Settings = { UIScale = 1, Language = "English" }
 }
 SavedConfigExtras = {}
 ConfigurationLoaded = false
@@ -490,9 +489,11 @@ function _VH_BuildConfigurationData()
 	cleanData.Favorites = {}
 	cleanData.AutoExecutes = {}
 	cleanData.ToggleKeybind = tostring(SavedData.ToggleKeybind or "RightControl")
+	local savedLanguage = type(SavedData.Settings.Language) == "string" and SavedData.Settings.Language or "English"
+	if savedLanguage ~= "English" and savedLanguage ~= "Filipino" and savedLanguage ~= "Chinese" then savedLanguage = "English" end
 	cleanData.Settings = {
-		AntiAFK = SavedData.Settings.AntiAFK == true,
-		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+		UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2),
+		Language = savedLanguage
 	}
 	for k, v in pairs(SavedData.Favorites) do
 		if v then cleanData.Favorites[tostring(k)] = true end
@@ -590,15 +591,135 @@ function LoadConfiguration()
 	end
 	if type(result.ToggleKeybind) == "string" then SavedData.ToggleKeybind = result.ToggleKeybind end
 	if type(result.Settings) == "table" then
-		for k, v in pairs(result.Settings) do if k == "AntiAFK" or k == "UIScale" then SavedData.Settings[k] = v end end
+		if result.Settings.UIScale ~= nil then SavedData.Settings.UIScale = result.Settings.UIScale end
+		if type(result.Settings.Language) == "string" then SavedData.Settings.Language = result.Settings.Language end
 	end
-	SavedData.Settings.AntiAFK = SavedData.Settings.AntiAFK == true
 	SavedData.Settings.UIScale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
+	if SavedData.Settings.Language ~= "English" and SavedData.Settings.Language ~= "Filipino" and SavedData.Settings.Language ~= "Chinese" then
+		SavedData.Settings.Language = "English"
+	end
 	ConfigurationLoaded = true
 	return true, nil
 end
 
 LoadConfiguration()
+
+SupportedLanguages = { "English", "Filipino", "Chinese" }
+LanguageTranslations = {
+	English = {
+		["Changelog"] = "Changelog", ["Scripts"] = "Scripts", ["Settings"] = "Settings", ["How to Use"] = "How to Use",
+		["Updates"] = "Updates", ["Scripts Catalog"] = "Scripts Catalog", ["Settings Hub"] = "Settings Hub",
+		["Games"] = "Games", ["Utilities"] = "Utilities", ["Search scripts, games, tags..."] = "Search scripts, games, tags...",
+		["Recommended for You"] = "Recommended for You", ["Based on your current game"] = "Based on your current game",
+		["Discover other games in Velox Hub"] = "Discover other games in Velox Hub", ["No other recommendations found yet"] = "No other recommendations found yet",
+		["See More"] = "See More", ["Filters"] = "Filters", ["Refine your script results"] = "Refine your script results", ["Clear"] = "Clear",
+		["Favorites"] = "Favorites", ["Categories"] = "Categories", ["Tags"] = "Tags", ["Status"] = "Status", ["Compatible"] = "Compatible", ["Game Only"] = "Game Only",
+		["Auto Execute ON"] = "Auto Execute ON", ["Auto Execute OFF"] = "Auto Execute OFF", ["Sort Scripts"] = "Sort Scripts", ["Choose how scripts are ordered"] = "Choose how scripts are ordered",
+		["Most Relevant"] = "Most Relevant", ["A-Z"] = "A-Z", ["Z-A"] = "Z-A", ["Newest"] = "Newest", ["Oldest"] = "Oldest",
+		["Updated Today"] = "Updated Today", ["Updated This Week"] = "Updated This Week", ["Updated This Month"] = "Updated This Month",
+		["User Preferences"] = "User Preferences", ["Toggle UI"] = "Toggle UI", ["Keybind to show or hide hub."] = "Keybind to show or hide hub.",
+		["UI Scale"] = "UI Scale", ["Adjust the hub size from 80% to 120%."] = "Adjust the hub size from 80% to 120%.",
+		["Language"] = "Language", ["Change the hub language."] = "Change the hub language.", ["System Actions"] = "System Actions",
+		["Refresh Catalog"] = "Refresh Catalog", ["Refreshes both Games and Utilities catalogs."] = "Refreshes both Games and Utilities catalogs.",
+		["Refresh"] = "Refresh", ["Refreshing"] = "Refreshing", ["Retry"] = "Retry", ["Unload Hub"] = "Unload Hub", ["Removes Velox Hub completely."] = "Removes Velox Hub completely.", ["Unload"] = "Unload",
+		["User Data"] = "User Data", ["Clear UI Cache"] = "Clear UI Cache", ["Resets layout position."] = "Resets layout position.", ["Reset"] = "Reset",
+		["No scripts currently available in catalog."] = "No scripts currently available in catalog.", ["No scripts matched your search or filters."] = "No scripts matched your search or filters.",
+		["Quick Start"] = "Quick Start", ["When Something Looks Wrong"] = "When Something Looks Wrong", ["Quick Reference"] = "Quick Reference",
+		["Online"] = "Online", ["Empty"] = "Empty", ["Connecting..."] = "Connecting...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Wrong Game",
+		["Cancel"] = "Cancel", ["Execute"] = "Execute", ["Execute Script"] = "Execute Script", ["Script Details"] = "Script Details", ["View Details"] = "View Details", ["Close"] = "Close", ["Auto Execute"] = "Auto Execute",
+	},
+	Filipino = {
+		["Changelog"] = "Mga Update", ["Scripts"] = "Scripts", ["Settings"] = "Mga Setting", ["How to Use"] = "Paano Gamitin",
+		["Updates"] = "Mga Update", ["Scripts Catalog"] = "Script Catalog", ["Settings Hub"] = "Settings Hub",
+		["Games"] = "Mga Laro", ["Utilities"] = "Utilities", ["Search scripts, games, tags..."] = "Maghanap ng scripts, laro, tags...",
+		["Recommended for You"] = "Inirerekomenda Para sa Iyo", ["Based on your current game"] = "Batay sa kasalukuyan mong laro",
+		["Discover other games in Velox Hub"] = "Tumuklas ng iba pang laro sa Velox Hub", ["No other recommendations found yet"] = "Wala pang ibang rekomendasyon",
+		["See More"] = "Tingnan Pa", ["Filters"] = "Mga Filter", ["Refine your script results"] = "Ayusin ang resulta ng scripts", ["Clear"] = "I-clear",
+		["Favorites"] = "Mga Paborito", ["Categories"] = "Mga Kategorya", ["Tags"] = "Mga Tag", ["Status"] = "Status", ["Compatible"] = "Compatible", ["Game Only"] = "Laro Lamang",
+		["Auto Execute ON"] = "Auto Execute NAKA-ON", ["Auto Execute OFF"] = "Auto Execute NAKA-OFF", ["Sort Scripts"] = "Ayusin ang Scripts", ["Choose how scripts are ordered"] = "Piliin kung paano aayusin ang scripts",
+		["Most Relevant"] = "Pinakaangkop", ["A-Z"] = "A-Z", ["Z-A"] = "Z-A", ["Newest"] = "Pinakabago", ["Oldest"] = "Pinakaluma",
+		["Updated Today"] = "Na-update Ngayon", ["Updated This Week"] = "Na-update Ngayong Linggo", ["Updated This Month"] = "Na-update Ngayong Buwan",
+		["User Preferences"] = "Mga Kagustuhan", ["Toggle UI"] = "I-toggle ang UI", ["Keybind to show or hide hub."] = "Keybind para ipakita o itago ang hub.",
+		["UI Scale"] = "Laki ng UI", ["Adjust the hub size from 80% to 120%."] = "Ayusin ang laki ng hub mula 80% hanggang 120%.",
+		["Language"] = "Wika", ["Change the hub language."] = "Palitan ang wika ng hub.", ["System Actions"] = "Mga System Action",
+		["Refresh Catalog"] = "I-refresh ang Catalog", ["Refreshes both Games and Utilities catalogs."] = "Ire-refresh ang Games at Utilities catalog.",
+		["Refresh"] = "Refresh", ["Refreshing"] = "Nire-refresh", ["Retry"] = "Ulitin", ["Unload Hub"] = "Alisin ang Hub", ["Removes Velox Hub completely."] = "Tuluyang aalisin ang Velox Hub.", ["Unload"] = "Alisin",
+		["User Data"] = "User Data", ["Clear UI Cache"] = "I-clear ang UI Cache", ["Resets layout position."] = "Ire-reset ang posisyon ng layout.", ["Reset"] = "I-reset",
+		["No scripts currently available in catalog."] = "Walang available na scripts sa catalog.", ["No scripts matched your search or filters."] = "Walang script na tumugma sa paghahanap o filter.",
+		["Quick Start"] = "Mabilis na Simula", ["When Something Looks Wrong"] = "Kapag May Mukhang Mali", ["Quick Reference"] = "Mabilis na Gabay",
+		["Online"] = "Online", ["Empty"] = "Walang laman", ["Connecting..."] = "Kumokonekta...", ["Data Error"] = "Data Error", ["Catalog Error"] = "Catalog Error", ["Wrong Game"] = "Maling Laro",
+		["Cancel"] = "Kanselahin", ["Execute"] = "I-execute", ["Execute Script"] = "I-execute ang Script", ["Script Details"] = "Detalye ng Script", ["View Details"] = "Tingnan ang Detalye", ["Close"] = "Isara", ["Auto Execute"] = "Auto Execute",
+	},
+	Chinese = {
+		["Changelog"] = "更新日志", ["Scripts"] = "脚本", ["Settings"] = "设置", ["How to Use"] = "使用方法",
+		["Updates"] = "更新", ["Scripts Catalog"] = "脚本目录", ["Settings Hub"] = "设置中心",
+		["Games"] = "游戏", ["Utilities"] = "工具", ["Search scripts, games, tags..."] = "搜索脚本、游戏、标签...",
+		["Recommended for You"] = "为你推荐", ["Based on your current game"] = "根据你当前的游戏",
+		["Discover other games in Velox Hub"] = "发现 Velox Hub 中的其他游戏", ["No other recommendations found yet"] = "暂时没有其他推荐",
+		["See More"] = "查看更多", ["Filters"] = "筛选", ["Refine your script results"] = "筛选脚本结果", ["Clear"] = "清除",
+		["Favorites"] = "收藏", ["Categories"] = "分类", ["Tags"] = "标签", ["Status"] = "状态", ["Compatible"] = "兼容", ["Game Only"] = "仅游戏",
+		["Auto Execute ON"] = "自动执行 开启", ["Auto Execute OFF"] = "自动执行 关闭", ["Sort Scripts"] = "排序脚本", ["Choose how scripts are ordered"] = "选择脚本排序方式",
+		["Most Relevant"] = "最相关", ["A-Z"] = "A-Z", ["Z-A"] = "Z-A", ["Newest"] = "最新", ["Oldest"] = "最旧",
+		["Updated Today"] = "今天更新", ["Updated This Week"] = "本周更新", ["Updated This Month"] = "本月更新",
+		["User Preferences"] = "用户偏好", ["Toggle UI"] = "切换界面", ["Keybind to show or hide hub."] = "用于显示或隐藏中心的快捷键。",
+		["UI Scale"] = "界面缩放", ["Adjust the hub size from 80% to 120%."] = "将中心大小调整为 80% 到 120%。",
+		["Language"] = "语言", ["Change the hub language."] = "更改中心语言。", ["System Actions"] = "系统操作",
+		["Refresh Catalog"] = "刷新目录", ["Refreshes both Games and Utilities catalogs."] = "刷新游戏和工具目录。",
+		["Refresh"] = "刷新", ["Refreshing"] = "刷新中", ["Retry"] = "重试", ["Unload Hub"] = "卸载中心", ["Removes Velox Hub completely."] = "完全移除 Velox Hub。", ["Unload"] = "卸载",
+		["User Data"] = "用户数据", ["Clear UI Cache"] = "清除界面缓存", ["Resets layout position."] = "重置布局位置。", ["Reset"] = "重置",
+		["No scripts currently available in catalog."] = "目录中目前没有可用脚本。", ["No scripts matched your search or filters."] = "没有符合搜索或筛选条件的脚本。",
+		["Quick Start"] = "快速开始", ["When Something Looks Wrong"] = "出现问题时", ["Quick Reference"] = "快速参考",
+		["Online"] = "在线", ["Empty"] = "空", ["Connecting..."] = "连接中...", ["Data Error"] = "数据错误", ["Catalog Error"] = "目录错误", ["Wrong Game"] = "游戏不匹配",
+		["Cancel"] = "取消", ["Execute"] = "执行", ["Execute Script"] = "执行脚本", ["Script Details"] = "脚本详情", ["View Details"] = "查看详情", ["Close"] = "关闭", ["Auto Execute"] = "自动执行",
+	}
+}
+CurrentLanguage = SavedData.Settings.Language or "English"
+if not LanguageTranslations[CurrentLanguage] then CurrentLanguage = "English" end
+function L(key)
+	local lang = LanguageTranslations[CurrentLanguage] or LanguageTranslations.English
+	return (lang and lang[key]) or (LanguageTranslations.English and LanguageTranslations.English[key]) or tostring(key)
+end
+function _VH_RegisterTranslation(obj, key)
+	if obj and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
+		obj:SetAttribute("VeloxTranslationKey", key)
+	end
+	return obj
+end
+function _VH_ApplyTranslations(root)
+	if not root then return end
+	local objects = { root }
+	for _, obj in ipairs(root:GetDescendants()) do objects[#objects + 1] = obj end
+	for _, obj in ipairs(objects) do
+		if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+			local key = obj:GetAttribute("VeloxTranslationKey")
+			if type(key) ~= "string" or key == "" then
+				local currentText = obj.Text
+				if type(currentText) == "string" and LanguageTranslations.English[currentText] then
+					key = currentText
+					obj:SetAttribute("VeloxTranslationKey", key)
+				end
+			end
+			if type(key) == "string" and key ~= "" and LanguageTranslations.English[key] then
+				obj.Text = L(key)
+			end
+			local placeholder = obj:IsA("TextBox") and obj.PlaceholderText or nil
+			if type(placeholder) == "string" and LanguageTranslations.English[placeholder] then
+				obj:SetAttribute("VeloxPlaceholderTranslationKey", placeholder)
+				obj.PlaceholderText = L(placeholder)
+			elseif obj:IsA("TextBox") then
+				local placeholderKey = obj:GetAttribute("VeloxPlaceholderTranslationKey")
+				if type(placeholderKey) == "string" and LanguageTranslations.English[placeholderKey] then obj.PlaceholderText = L(placeholderKey) end
+			end
+		end
+	end
+end
+function GetLocalizedTabName(name)
+	return L(name)
+end
+function GetLocalizedSectionHeader(name)
+	local map = { Changelog = "Updates", Scripts = "Scripts Catalog", Settings = "Settings Hub", ["How to Use"] = "How to Use" }
+	return L(map[name] or name)
+end
 
 function UniversalHttpGet(url)
 	if type(url) ~= "string" or url == "" then return nil, nil, "invalid url" end
@@ -2500,7 +2621,14 @@ local function SetScriptEmptyState(state, category, message)
 		text = message or "Unable to load catalog."
 	end
 
-	EmptyStateMessage.Text = text
+	if state == "loading" then
+		local loadingByLanguage = { English = "Loading %s catalog...", Filipino = "Nilo-load ang %s catalog...", Chinese = "正在加载%s目录..." }
+		EmptyStateMessage.Text = string.format(loadingByLanguage[CurrentLanguage] or loadingByLanguage.English, tostring(category))
+	elseif state == "error" then
+		EmptyStateMessage.Text = message or L("Catalog Error")
+	else
+		EmptyStateMessage.Text = L(text)
+	end
 	EmptyStateMessage.Visible = true
 end
 
@@ -2543,6 +2671,8 @@ local function UpdateScriptCategoryButtons()
 			end
 			local label = button:FindFirstChild("CategoryLabel")
 			if label and label:IsA("TextLabel") then
+				label.Text = GetLocalizedTabName(category)
+				label:SetAttribute("VeloxTranslationKey", category)
 				label.TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary
 			end
 		end
@@ -2574,7 +2704,8 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 	label.Size = UDim2.new(1, -12, 1, 0)
 	label.Position = UDim2.new(0, 6, 0, 0)
 	label.BackgroundTransparency = 1
-	label.Text = category
+	label.Text = GetLocalizedTabName(category)
+	label:SetAttribute("VeloxTranslationKey", category)
 	label.TextColor3 = Theme.TextSecondary
 	label.Font = Enum.Font.GothamBold
 	label.TextSize = IsMobile and 9 or 11
@@ -2706,7 +2837,7 @@ SearchIcon.BackgroundTransparency = 1; SearchIcon.Image = VeloxIcons.Search; Sea
 
 SearchInput = Instance.new("TextBox", SearchContainer)
 SearchInput.Size = UDim2.new(1, -64, 1, 0); SearchInput.Position = UDim2.new(0, 34, 0, 0); SearchInput.BackgroundTransparency = 1
-SearchInput.Text = ""; SearchInput.PlaceholderText = "Search scripts, games, tags..."
+SearchInput.Text = ""; SearchInput.PlaceholderText = L("Search scripts, games, tags..."); SearchInput:SetAttribute("VeloxPlaceholderTranslationKey", "Search scripts, games, tags...")
 SearchInput.PlaceholderColor3 = Color3.fromRGB(148, 163, 184); SearchInput.TextColor3 = Color3.fromRGB(248, 250, 252)
 SearchInput.Font = Enum.Font.Gotham; SearchInput.TextSize = IsMobile and 11 or 12; SearchInput.TextXAlignment = Enum.TextXAlignment.Left
 SearchInput.ClearTextOnFocus = false
@@ -2830,7 +2961,7 @@ RecommendationTitle = Instance.new("TextLabel", RecommendationPanel)
 RecommendationTitle.Size = UDim2.new(1, -(IsMobile and 150 or 170), 0, 18)
 RecommendationTitle.Position = UDim2.new(0, IsMobile and 46 or 50, 0, IsMobile and 17 or 19)
 RecommendationTitle.BackgroundTransparency = 1
-RecommendationTitle.Text = "Recommended for You"
+RecommendationTitle.Text = L("Recommended for You"); RecommendationTitle:SetAttribute("VeloxTranslationKey", "Recommended for You")
 RecommendationTitle.TextColor3 = Theme.TextPrimary
 RecommendationTitle.Font = Enum.Font.GothamBold
 RecommendationTitle.TextSize = IsMobile and 12 or 14
@@ -2842,7 +2973,7 @@ RecommendationSubtitle = Instance.new("TextLabel", RecommendationPanel)
 RecommendationSubtitle.Size = UDim2.new(1, -(IsMobile and 155 or 175), 0, 15)
 RecommendationSubtitle.Position = UDim2.new(0, IsMobile and 46 or 50, 0, IsMobile and 35 or 37)
 RecommendationSubtitle.BackgroundTransparency = 1
-RecommendationSubtitle.Text = "Based on your current game"
+RecommendationSubtitle.Text = L("Based on your current game")
 RecommendationSubtitle.TextColor3 = Color3.fromRGB(203, 213, 225)
 RecommendationSubtitle.Font = Enum.Font.GothamMedium
 RecommendationSubtitle.TextSize = IsMobile and 8 or 9
@@ -2856,7 +2987,7 @@ RecommendationSeeMoreButton.Position = UDim2.new(1, -(IsMobile and 88 or 100), 0
 RecommendationSeeMoreButton.BackgroundColor3 = Color3.fromRGB(40, 34, 105)
 RecommendationSeeMoreButton.BorderSizePixel = 0
 RecommendationSeeMoreButton.AutoButtonColor = false
-RecommendationSeeMoreButton.Text = "See More"
+RecommendationSeeMoreButton.Text = L("See More"); RecommendationSeeMoreButton:SetAttribute("VeloxTranslationKey", "See More")
 RecommendationSeeMoreButton.TextColor3 = Color3.fromRGB(216, 218, 255)
 RecommendationSeeMoreButton.Font = Enum.Font.GothamBold
 RecommendationSeeMoreButton.TextSize = IsMobile and 8 or 9
@@ -2958,7 +3089,7 @@ SortPanelTitle = Instance.new("TextLabel", SortPanelHeader)
 SortPanelTitle.Size = UDim2.new(1, 0, 0, 16)
 SortPanelTitle.Position = UDim2.new(0, 0, 0, 0)
 SortPanelTitle.BackgroundTransparency = 1
-SortPanelTitle.Text = "Sort Scripts"
+SortPanelTitle.Text = L("Sort Scripts"); SortPanelTitle:SetAttribute("VeloxTranslationKey", "Sort Scripts")
 SortPanelTitle.TextColor3 = Theme.TextPrimary
 SortPanelTitle.Font = Enum.Font.GothamBold
 SortPanelTitle.TextSize = IsMobile and 12 or 13
@@ -2969,7 +3100,7 @@ SortPanelSub = Instance.new("TextLabel", SortPanelHeader)
 SortPanelSub.Size = UDim2.new(1, 0, 0, 14)
 SortPanelSub.Position = UDim2.new(0, 0, 0, 17)
 SortPanelSub.BackgroundTransparency = 1
-SortPanelSub.Text = "Choose how scripts are ordered"
+SortPanelSub.Text = L("Choose how scripts are ordered"); SortPanelSub:SetAttribute("VeloxTranslationKey", "Choose how scripts are ordered")
 SortPanelSub.TextColor3 = Color3.fromRGB(148, 163, 184)
 SortPanelSub.Font = Enum.Font.Gotham
 SortPanelSub.TextSize = 9
@@ -3013,7 +3144,7 @@ FilterTitle = Instance.new("TextLabel", FilterHeader)
 FilterTitle.Size = UDim2.new(1, -68, 0, 17)
 FilterTitle.Position = UDim2.new(0, 0, 0, 0)
 FilterTitle.BackgroundTransparency = 1
-FilterTitle.Text = "Filters"
+FilterTitle.Text = L("Filters"); FilterTitle:SetAttribute("VeloxTranslationKey", "Filters")
 FilterTitle.TextColor3 = Theme.TextPrimary
 FilterTitle.Font = Enum.Font.GothamBold
 FilterTitle.TextSize = IsMobile and 12 or 13
@@ -3024,7 +3155,7 @@ FilterSubtitle = Instance.new("TextLabel", FilterHeader)
 FilterSubtitle.Size = UDim2.new(1, -68, 0, 14)
 FilterSubtitle.Position = UDim2.new(0, 0, 0, 18)
 FilterSubtitle.BackgroundTransparency = 1
-FilterSubtitle.Text = "Refine your script results"
+FilterSubtitle.Text = L("Refine your script results"); FilterSubtitle:SetAttribute("VeloxTranslationKey", "Refine your script results")
 FilterSubtitle.TextColor3 = Color3.fromRGB(148, 163, 184)
 FilterSubtitle.Font = Enum.Font.Gotham
 FilterSubtitle.TextSize = 9
@@ -3038,7 +3169,7 @@ FilterClearButton.BackgroundColor3 = Color3.fromRGB(29, 37, 62)
 FilterClearButton.BackgroundTransparency = 0
 FilterClearButton.BorderSizePixel = 0
 FilterClearButton.AutoButtonColor = false
-FilterClearButton.Text = "Clear"
+FilterClearButton.Text = L("Clear"); FilterClearButton:SetAttribute("VeloxTranslationKey", "Clear")
 FilterClearButton.TextColor3 = Theme.TextSecondary
 FilterClearButton.Font = Enum.Font.GothamBold
 FilterClearButton.TextSize = 9
@@ -3220,7 +3351,7 @@ function _VH_AddFilterSection(title, options, stateMap, layoutOrder, singleToggl
 	header.Size = UDim2.new(1, 0, 0, 16)
 	header.Position = UDim2.new(0, 0, 0, 0)
 	header.BackgroundTransparency = 1
-	header.Text = string.upper(title)
+	header.Text = string.upper(L(title)); header:SetAttribute("VeloxTranslationKey", title)
 	header.TextColor3 = Color3.fromRGB(148, 163, 184)
 	header.Font = Enum.Font.GothamBold
 	header.TextSize = 8
@@ -3260,7 +3391,7 @@ function _VH_AddFilterSection(title, options, stateMap, layoutOrder, singleToggl
 		labelObject.Size = UDim2.new(1, -42, 1, 0)
 		labelObject.Position = UDim2.new(0, 10, 0, 0)
 		labelObject.BackgroundTransparency = 1
-		labelObject.Text = label
+		labelObject.Text = L(label); labelObject:SetAttribute("VeloxTranslationKey", label)
 		labelObject.TextColor3 = Theme.TextPrimary
 		labelObject.Font = Enum.Font.GothamMedium
 		labelObject.TextSize = 9
@@ -3319,7 +3450,7 @@ function RebuildFilterPanel()
 	favStroke.Transparency = 0.2
 	local favText = Instance.new("TextLabel", favButton)
 	favText.Size = UDim2.new(1, -42, 1, 0); favText.Position = UDim2.new(0, 10, 0, 0)
-	favText.BackgroundTransparency = 1; favText.Text = "Favorites"; favText.TextColor3 = Theme.TextPrimary
+	favText.BackgroundTransparency = 1; favText.Text = L("Favorites"); favText:SetAttribute("VeloxTranslationKey", "Favorites"); favText.TextColor3 = Theme.TextPrimary
 	favText.Font = Enum.Font.GothamMedium; favText.TextSize = 9; favText.TextXAlignment = Enum.TextXAlignment.Left; favText.ZIndex = 1557
 	local favCheck = CreateVeloxIcon(favButton, VeloxIcons.Favorite, 13, Color3.fromRGB(250, 204, 21), UDim2.new(1, -26, 0.5, -6.5), nil, 1557, "FavoriteFilterIcon")
 	favCheck.Visible = FilterState.Favorites
@@ -3791,7 +3922,8 @@ function CreateTab(name, index)
 	label.Size = UDim2.new(1, -(IsMobile and 40 or 46), 1, 0)
 	label.Position = UDim2.new(0, IsMobile and 36 or 40, 0, 0)
 	label.BackgroundTransparency = 1
-	label.Text = name
+	label.Text = GetLocalizedTabName(name)
+	label:SetAttribute("VeloxTranslationKey", name)
 	label.TextColor3 = (name == currentTab) and Theme.TextPrimary or Theme.TextSecondary
 	label.Font = Enum.Font.GothamMedium
 	label.TextSize = IsMobile and 10 or 13
@@ -3813,7 +3945,7 @@ function CreateTab(name, index)
 		if FilterPanel then FilterPanel.Visible = false end
 		TabIndicator.Size = UDim2.new(0, 3, 0, IsMobile and 26 or 30)
 		_VH_SafeTween(TabIndicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, yOffset + 5) })
-		SectionHeaderLabel.Text = (name == "Changelog") and "Updates" or (name == "Scripts") and "Scripts Catalog" or (name == "Settings") and "Settings Hub" or "How to Use"
+		SectionHeaderLabel.Text = GetLocalizedSectionHeader(name)
 		SectionHeaderLabel.Visible = true
 		ScriptCategoryRow.Visible = (name == "Scripts")
 		SearchRow.Visible = (name == "Scripts")
@@ -4016,7 +4148,7 @@ function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	t.Size = UDim2.new(1, -32, 1, 0)
 	t.Position = UDim2.new(0, 30, 0, 0)
 	t.BackgroundTransparency = 1
-	t.Text = title
+	t.Text = L(title); t:SetAttribute("VeloxTranslationKey", title)
 	t.TextColor3 = Theme.TextPrimary
 	t.Font = Enum.Font.GothamBold
 	t.TextSize = IsMobile and 13 or 14
@@ -4028,7 +4160,7 @@ function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	d.Size = UDim2.new(1, 0, 0, 0)
 	d.AutomaticSize = Enum.AutomaticSize.Y
 	d.BackgroundTransparency = 1
-	d.Text = desc
+	d.Text = L(desc); d:SetAttribute("VeloxTranslationKey", desc)
 	d.TextColor3 = Theme.TextSecondary
 	d.Font = Enum.Font.Gotham
 	d.TextSize = IsMobile and 11 or 11.5
@@ -4557,6 +4689,20 @@ function _VH_GetRecommendationReason(reasonType, overlapCount, favoriteOverlap, 
 end
 
 function _VH_BuildRecommendationState()
+	if currentScriptCategory ~= "Games" then
+		RecommendationGeneration = RecommendationGeneration + 1
+		for _, entry in ipairs(RegisteredScripts or {}) do
+			entry.Recommended = false
+			entry.RecommendationRank = nil
+			entry.RecommendationScore = 0
+			entry.RecommendationReason = ""
+			entry.RecommendationType = "OTHER"
+			if type(entry.SetRecommendation) == "function" then
+				entry.SetRecommendation(false, "", "OTHER", 0)
+			end
+		end
+		return {}, 0
+	end
 	RecommendationGeneration = RecommendationGeneration + 1
 	local generation = RecommendationGeneration
 	local currentSet, favoriteSet, currentCategories, currentTags, currentTopics, favoriteTopics, currentCount = _VH_GetRecommendationContext(RegisteredScripts)
@@ -4712,11 +4858,11 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 		RecommendationPageLabel.Visible = RecommendationPageCount > 1 and #allItems > 0
 		RecommendationPageLabel.Text = RecommendationPageCount > 1 and (tostring(RecommendationPage) .. " / " .. tostring(RecommendationPageCount)) or ""
 		if currentCount and currentCount > 0 then
-			RecommendationSubtitle.Text = "Based on your current game"
+			RecommendationSubtitle.Text = L("Based on your current game")
 		elseif #allItems > 0 then
-			RecommendationSubtitle.Text = "Discover other games in Velox Hub"
+			RecommendationSubtitle.Text = L("Discover other games in Velox Hub")
 		else
-			RecommendationSubtitle.Text = "No other recommendations found yet"
+			RecommendationSubtitle.Text = L("No other recommendations found yet")
 		end
 		return
 	end
@@ -4861,11 +5007,11 @@ function _VH_RefreshRecommendationPanel(items, currentCount)
 	local visible = #RecommendationItems > 0 and currentTab == "Scripts" and string.gsub(SearchInput.Text or "", "%s", "") == "" and _VH_GetFilterCount() == 0
 	RecommendationPanel.Visible = visible
 	if currentCount and currentCount > 0 then
-		RecommendationSubtitle.Text = "Based on your current game"
+		RecommendationSubtitle.Text = L("Based on your current game")
 	elseif #RecommendationItems > 0 then
-		RecommendationSubtitle.Text = "Discover other games in Velox Hub"
+		RecommendationSubtitle.Text = L("Discover other games in Velox Hub")
 	else
-		RecommendationSubtitle.Text = "No other recommendations found yet"
+		RecommendationSubtitle.Text = L("No other recommendations found yet")
 	end
 
 	RecommendationRenderSignature = previewSignature
@@ -5985,7 +6131,7 @@ function CreateSettingsGroup(titleText, parentView, order)
 	header = Instance.new("TextLabel", container)
 	header.Size = UDim2.new(1, 0, 0, 16)
 	header.BackgroundTransparency = 1
-	header.Text = string.upper(titleText)
+	header.Text = string.upper(L(titleText)); header:SetAttribute("VeloxTranslationKey", titleText)
 	header.TextColor3 = Theme.TextSecondary
 	header.Font = Enum.Font.GothamBold
 	header.TextSize = 10
@@ -6112,7 +6258,7 @@ function CreateButtonSettingInGroup(groupCard, title, desc, iconAsset, btnText, 
 	btn.Position = UDim2.new(1, -95, 0.5, -13)
 	btn.BackgroundColor3 = Theme.BackgroundMain
 	btn.BackgroundTransparency = 0.4
-	btn.Text = btnText
+	btn.Text = L(btnText); btn:SetAttribute("VeloxTranslationKey", btnText)
 	btn.TextColor3 = isDestructive and Theme.Error or Theme.TextPrimary
 	btn.Font = Enum.Font.GothamMedium
 	btn.TextSize = 11
@@ -6221,57 +6367,115 @@ _VH_RegConn(KeybindButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
 		end
 	end))
 end)))
-function ApplyAntiAFK()
-	if AntiAFKConnection and AntiAFKConnection.Connected then return end
-	local player = Players.LocalPlayer
-	local GC = getconnections or get_signal_cons
-	if type(GC) == "function" then
-		table.clear(AntiAFKDisabledConnections)
-		local ok, connections = pcall(function() return GC(player.Idled) end)
-		if ok and type(connections) == "table" then
-			for _, connection in pairs(connections) do
-				if connection.Disable then
-					local disabled = pcall(function() connection:Disable() end)
-					if disabled then AntiAFKDisabledConnections[#AntiAFKDisabledConnections + 1] = connection end
-				end
-			end
+languageRow, languageRight = CreateSettingRowInGroup(prefGroup, "Language", "Change the hub language.", VeloxIcons.Book, 2)
+languageButton = Instance.new("TextButton", languageRight)
+languageButton.Size = UDim2.new(0, 95, 0, 26)
+languageButton.Position = UDim2.new(1, -95, 0.5, -13)
+languageButton.BackgroundColor3 = Theme.BackgroundMain
+languageButton.BackgroundTransparency = 0.4
+languageButton.Text = CurrentLanguage
+languageButton.TextColor3 = Theme.TextPrimary
+languageButton.Font = Enum.Font.GothamMedium
+languageButton.TextSize = 10
+languageButton.AutoButtonColor = false
+Instance.new("UICorner", languageButton).CornerRadius = UDim.new(0, 6)
+languageButtonStroke = Instance.new("UIStroke", languageButton)
+languageButtonStroke.Color = Theme.Stroke
+languageButtonStroke.Thickness = 1
+ApplyInteractiveAnimations(languageButton, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), languageButtonStroke, Theme.Stroke, Theme.Accent)
+function CloseLanguageDropdown()
+	if LanguageDropdown and LanguageDropdown.Parent then LanguageDropdown.Visible = false end
+	if LanguageDropdownConnection then _VH_UnregConn(LanguageDropdownConnection); LanguageDropdownConnection = nil end
+end
+function PositionLanguageDropdown()
+	if not LanguageDropdown or not LanguageDropdown.Parent or not LanguageDropdown.Visible or not languageButton or not languageButton.Parent then return end
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+	local abs = languageButton.AbsolutePosition
+	local size = languageButton.AbsoluteSize
+	local width, height = 150, 132
+	local x = math.clamp(abs.X + size.X - width, 8, math.max(8, viewport.X - width - 8))
+	local y = abs.Y + size.Y + 6
+	if y + height > viewport.Y - 8 then y = math.max(8, abs.Y - height - 6) end
+	LanguageDropdown.Position = UDim2.new(0, x, 0, y)
+	LanguageDropdown.Size = UDim2.new(0, width, 0, height)
+end
+function OpenLanguageDropdown()
+	if isDestroying then return end
+	if not LanguageDropdown then
+		LanguageDropdown = Instance.new("Frame", ScreenGui)
+		LanguageDropdown.Name = "VeloxLanguageDropdown"
+		LanguageDropdown.BackgroundColor3 = Theme.BackgroundSecondary
+		LanguageDropdown.BorderSizePixel = 0
+		LanguageDropdown.ZIndex = 1700
+		Instance.new("UICorner", LanguageDropdown).CornerRadius = UDim.new(0, 8)
+		local stroke = Instance.new("UIStroke", LanguageDropdown)
+		stroke.Color = Theme.Stroke
+		stroke.Thickness = 1
+		local layout = Instance.new("UIListLayout", LanguageDropdown)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 4)
+		local pad = Instance.new("UIPadding", LanguageDropdown)
+		pad.PaddingTop = UDim.new(0, 6); pad.PaddingBottom = UDim.new(0, 6); pad.PaddingLeft = UDim.new(0, 6); pad.PaddingRight = UDim.new(0, 6)
+		for index, language in ipairs(SupportedLanguages) do
+			local option = Instance.new("TextButton", LanguageDropdown)
+			option.Name = "Language_" .. language
+			option.Size = UDim2.new(1, 0, 0, 36)
+			option.BackgroundColor3 = Theme.BackgroundMain
+			option.BackgroundTransparency = 0.35
+			option.BorderSizePixel = 0
+			option.AutoButtonColor = false
+			option.Text = language
+			option.TextColor3 = Theme.TextPrimary
+			option.Font = Enum.Font.GothamMedium
+			option.TextSize = 10
+			option.LayoutOrder = index
+			option.ZIndex = 1701
+			Instance.new("UICorner", option).CornerRadius = UDim.new(0, 6)
+			local optionStroke = Instance.new("UIStroke", option)
+			optionStroke.Color = Theme.Stroke
+			optionStroke.Thickness = 1
+			ApplyInteractiveAnimations(option, Theme.BackgroundMain, Theme.CardHover, Color3.fromRGB(10, 15, 30), optionStroke, Theme.Stroke, Theme.Accent)
+			_VH_RegConn(option.Activated:Connect(function()
+				if isDestroying then return end
+				SetLanguage(language)
+				CloseLanguageDropdown()
+			end))
 		end
 	end
-	if type(GC) ~= "function" or #AntiAFKDisabledConnections == 0 then
-		AntiAFKConnection = player.Idled:Connect(function()
-			if isDestroying then return end
-			pcall(function()
-				local virtualUser = Services.VirtualUser
-				if virtualUser then
-					virtualUser:CaptureController()
-					virtualUser:ClickButton2(Vector2.new())
-				end
-			end)
-		end)
-	end
+	LanguageDropdown.Visible = true
+	PositionLanguageDropdown()
+	if LanguageDropdownConnection then _VH_UnregConn(LanguageDropdownConnection); LanguageDropdownConnection = nil end
+	LanguageDropdownConnection = _VH_RegConn(UserInputService.InputBegan:Connect(function(input)
+		if isDestroying or not LanguageDropdown or not LanguageDropdown.Visible then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			local pos = input.Position
+			local p = LanguageDropdown.AbsolutePosition
+			local sz = LanguageDropdown.AbsoluteSize
+			local b = languageButton.AbsolutePosition
+			local bs = languageButton.AbsoluteSize
+			local inDrop = pos.X >= p.X and pos.X <= p.X + sz.X and pos.Y >= p.Y and pos.Y <= p.Y + sz.Y
+			local inButton = pos.X >= b.X and pos.X <= b.X + bs.X and pos.Y >= b.Y and pos.Y <= b.Y + bs.Y
+			if not inDrop and not inButton then CloseLanguageDropdown() end
+		end
+	end))
 end
-DisableAntiAFK = function()
-	if AntiAFKConnection then
-		pcall(function() AntiAFKConnection:Disconnect() end)
-		AntiAFKConnection = nil
-	end
-	for i = #AntiAFKDisabledConnections, 1, -1 do
-		local connection = AntiAFKDisabledConnections[i]
-		if connection and connection.Enable then pcall(function() connection:Enable() end) end
-		AntiAFKDisabledConnections[i] = nil
-	end
-end
-CreateToggleSettingInGroup(prefGroup, "Anti-AFK", "Prevents idle kicks.", VeloxIcons.AntiAFK, 2, SavedData.Settings.AntiAFK, function(val)
-	SavedData.Settings.AntiAFK = val
+function SetLanguage(language)
+	if not LanguageTranslations[language] then return end
+	CurrentLanguage = language
+	SavedData.Settings.Language = language
+	if languageButton and languageButton.Parent then languageButton.Text = language end
+	_VH_ApplyTranslations(ScreenGui)
+	if ScriptCategoryButtons then UpdateScriptCategoryButtons() end
+	if RecommendationPanel and RecommendationPanel.Parent then RecommendationTitle.Text = L("Recommended for You"); RecommendationSeeMoreButton.Text = L("See More") end
+	if RecommendationPanel and RecommendationPanel.Visible then _VH_RefreshRecommendations() end
+	if currentTab then SectionHeaderLabel.Text = GetLocalizedSectionHeader(currentTab) end
 	SaveConfiguration()
-	if val then
-		ApplyAntiAFK()
-		ShowNotification("Anti-AFK enabled.", "Success")
-	else
-		DisableAntiAFK()
-		ShowNotification("Anti-AFK disabled.", "Warning")
-	end
-end)
+	ShowNotification("Language: " .. language, "Success")
+end
+_VH_RegConn(languageButton.Activated:Connect(_VH_CreateDebounce(0.1, function()
+	if LanguageDropdown and LanguageDropdown.Visible then CloseLanguageDropdown() else OpenLanguageDropdown() end
+end)))
 
 scaleRow, scaleRight = CreateSettingRowInGroup(prefGroup, "UI Scale", "Adjust the hub size from 80% to 120%.", VeloxIcons.UIScale, 3)
 scaleValue = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
@@ -6363,9 +6567,6 @@ CreateButtonSettingInGroup(actionGroup, "Unload Hub", "Removes Velox Hub complet
 	task.wait(0.3)
 	CloseUI()
 end)
-if SavedData.Settings.AntiAFK then
-	ApplyAntiAFK()
-end
 
 for _, obj in ipairs(ScreenGui:GetDescendants()) do
 	_VH_ApplyTextLayoutGuard(obj)
@@ -6385,7 +6586,7 @@ TabViews["How to Use"].Visible = false
 ScriptCategoryRow.Visible = false
 UpdateScriptCategoryButtons()
 TabIndicator.Position = UDim2.new(0, 0, 0, 5)
-SectionHeaderLabel.Text = "Updates"
+SectionHeaderLabel.Text = GetLocalizedSectionHeader("Changelog")
 SectionHeaderLabel.Visible = true
 MainPanel.Visible = true
 SearchRow.Visible = false
@@ -6404,6 +6605,8 @@ if IsMobile then
 end
 end
 BuildSettings()
+_VH_ApplyTranslations(ScreenGui)
+UpdateScriptCategoryButtons()
 if ScreenGui and ScreenGui.Parent then
 	for _, child in ipairs(ScreenGui:GetChildren()) do
 		pcall(function()
