@@ -182,13 +182,13 @@ local function CreateGUI()
 
     local Theme = {
         Indigo = Color3.fromRGB(76, 68, 225),
-        IndigoBright = Color3.fromRGB(104, 95, 255),
-        IndigoSoft = Color3.fromRGB(178, 173, 255),
-        IndigoDeep = Color3.fromRGB(42, 35, 126),
-        Glass = Color3.fromRGB(14, 15, 29),
+        IndigoBright = Color3.fromRGB(106, 96, 255),
+        IndigoSoft = Color3.fromRGB(183, 178, 255),
+        IndigoDeep = Color3.fromRGB(41, 34, 123),
+        Glass = Color3.fromRGB(11, 12, 24),
         White = Color3.fromRGB(248, 248, 255),
-        Muted = Color3.fromRGB(168, 169, 193),
-        Faint = Color3.fromRGB(105, 108, 134),
+        Muted = Color3.fromRGB(166, 168, 191),
+        Faint = Color3.fromRGB(104, 106, 130),
         Success = Color3.fromRGB(82, 224, 145),
         Error = Color3.fromRGB(255, 104, 130),
         Warning = Color3.fromRGB(255, 194, 91),
@@ -221,8 +221,8 @@ local function CreateGUI()
         return s
     end
 
-    -- Compact rectangular glass panel.
-    local BASE_W, BASE_H = 400, 380
+    -- Compact, balanced portrait-rectangle.
+    local BASE_W, BASE_H = 360, 330
 
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "OYB_KeySystem"
@@ -240,9 +240,9 @@ local function CreateGUI()
         local camera = workspace.CurrentCamera
         if not camera then return end
         local viewport = camera.ViewportSize
-        local sx = (viewport.X - 20) / BASE_W
-        local sy = (viewport.Y - 20) / BASE_H
-        UiScale.Scale = math.min(1, math.max(0.55, sx), math.max(0.55, sy))
+        local sx = (viewport.X - 16) / BASE_W
+        local sy = (viewport.Y - 16) / BASE_H
+        UiScale.Scale = math.min(1, math.max(0.58, sx), math.max(0.58, sy))
     end
 
     fitToViewport()
@@ -251,73 +251,62 @@ local function CreateGUI()
         cameraConnection = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitToViewport)
     end
 
-    -- CanvasGroup lets one short tween animate every child together.
     local MainFrame = Instance.new("CanvasGroup")
     MainFrame.Name = "MainFrame"
     MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 6)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 4)
     MainFrame.Size = UDim2.new(0, BASE_W, 0, BASE_H)
     MainFrame.BackgroundColor3 = Theme.Glass
     MainFrame.BackgroundTransparency = 0.055
     MainFrame.BorderSizePixel = 0
     MainFrame.GroupTransparency = 1
-    MainFrame.ClipsDescendants = false
+    MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
-    corner(MainFrame, 23)
-    local MainStroke = stroke(MainFrame, Theme.IndigoBright, 0.22, 1.25)
+    corner(MainFrame, 21)
+    local MainStroke = stroke(MainFrame, Theme.IndigoBright, 0.22, 1.2)
 
     local MainGradient = Instance.new("UIGradient")
     MainGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 38, 74)),
-        ColorSequenceKeypoint.new(0.45, Color3.fromRGB(23, 24, 44)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 11, 22))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 38, 73)),
+        ColorSequenceKeypoint.new(0.48, Color3.fromRGB(20, 21, 40)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 20))
     })
-    MainGradient.Rotation = 128
+    MainGradient.Rotation = 132
     MainGradient.Parent = MainFrame
 
-    local Glow = Instance.new("Frame")
-    Glow.AnchorPoint = Vector2.new(0.5, 0.5)
-    Glow.Position = UDim2.new(0.5, 0, 0.5, 0)
-    Glow.Size = UDim2.new(1, 20, 1, 20)
-    Glow.BackgroundColor3 = Theme.Indigo
-    Glow.BackgroundTransparency = 0.94
-    Glow.BorderSizePixel = 0
-    Glow.ZIndex = 0
-    Glow.Parent = MainFrame
-    corner(Glow, 29)
-
+    -- Soft top highlight: static, so it cannot create animation jitter.
     local Light = Instance.new("Frame")
-    Light.Size = UDim2.new(0, 190, 0, 190)
-    Light.Position = UDim2.new(0.57, 0, -0.34, 0)
+    Light.Size = UDim2.new(0, 180, 0, 120)
+    Light.Position = UDim2.new(0.48, 0, -0.25, 0)
     Light.BackgroundColor3 = Theme.IndigoBright
-    Light.BackgroundTransparency = 0.95
+    Light.BackgroundTransparency = 0.955
     Light.BorderSizePixel = 0
     Light.ZIndex = 1
     Light.Parent = MainFrame
-    corner(Light, 95)
+    corner(Light, 60)
 
     -- Header --------------------------------------------------------------
     local Header = Instance.new("Frame")
-    Header.Size = UDim2.new(1, -28, 0, 70)
-    Header.Position = UDim2.new(0, 14, 0, 13)
+    Header.Size = UDim2.new(1, -24, 0, 58)
+    Header.Position = UDim2.new(0, 12, 0, 11)
     Header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Header.BackgroundTransparency = 0.962
+    Header.BackgroundTransparency = 0.963
     Header.BorderSizePixel = 0
     Header.Active = true
     Header.ZIndex = 5
     Header.Parent = MainFrame
-    corner(Header, 18)
+    corner(Header, 17)
     stroke(Header, Color3.fromRGB(255,255,255), 0.94, 1)
 
     local Brand = Instance.new("Frame")
-    Brand.Size = UDim2.new(0, 46, 0, 46)
-    Brand.Position = UDim2.new(0, 11, 0.5, -23)
+    Brand.Size = UDim2.new(0, 38, 0, 38)
+    Brand.Position = UDim2.new(0, 9, 0.5, -19)
     Brand.BackgroundColor3 = Theme.Indigo
     Brand.BackgroundTransparency = 0.08
     Brand.BorderSizePixel = 0
     Brand.ZIndex = 7
     Brand.Parent = Header
-    corner(Brand, 15)
+    corner(Brand, 13)
     stroke(Brand, Theme.IndigoSoft, 0.52, 1)
 
     local BrandGradient = Instance.new("UIGradient")
@@ -330,8 +319,8 @@ local function CreateGUI()
 
     local Logo = Instance.new("ImageLabel")
     Logo.Name = "Logo"
-    Logo.Size = UDim2.new(0, 34, 0, 34)
-    Logo.Position = UDim2.new(0.5, -17, 0.5, -17)
+    Logo.Size = UDim2.new(0, 30, 0, 30)
+    Logo.Position = UDim2.new(0.5, -15, 0.5, -15)
     Logo.BackgroundTransparency = 1
     Logo.Image = "rbxassetid://124635602201411"
     Logo.ScaleType = Enum.ScaleType.Fit
@@ -339,13 +328,13 @@ local function CreateGUI()
     Logo.Parent = Brand
 
     local HeaderTitle = Instance.new("TextLabel")
-    HeaderTitle.Size = UDim2.new(1, -128, 0, 24)
-    HeaderTitle.Position = UDim2.new(0, 70, 0, 12)
+    HeaderTitle.Size = UDim2.new(1, -118, 0, 22)
+    HeaderTitle.Position = UDim2.new(0, 58, 0, 8)
     HeaderTitle.BackgroundTransparency = 1
     HeaderTitle.Text = Config.HubName
     HeaderTitle.TextColor3 = Theme.White
     HeaderTitle.Font = Enum.Font.GothamBold
-    HeaderTitle.TextSize = 18
+    HeaderTitle.TextSize = 16
     HeaderTitle.TextWrapped = true
     HeaderTitle.TextTruncate = Enum.TextTruncate.None
     HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -353,21 +342,21 @@ local function CreateGUI()
     HeaderTitle.Parent = Header
 
     local HeaderSub = Instance.new("TextLabel")
-    HeaderSub.Size = UDim2.new(1, -128, 0, 18)
-    HeaderSub.Position = UDim2.new(0, 70, 0, 37)
+    HeaderSub.Size = UDim2.new(1, -118, 0, 15)
+    HeaderSub.Position = UDim2.new(0, 58, 0, 30)
     HeaderSub.BackgroundTransparency = 1
     HeaderSub.Text = "Secure key access"
     HeaderSub.TextColor3 = Theme.IndigoSoft
     HeaderSub.Font = Enum.Font.GothamMedium
-    HeaderSub.TextSize = 10
+    HeaderSub.TextSize = 8
     HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
     HeaderSub.ZIndex = 8
     HeaderSub.Parent = Header
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Name = "CloseButton"
-    CloseBtn.Size = UDim2.new(0, 36, 0, 36)
-    CloseBtn.Position = UDim2.new(1, -47, 0.5, -18)
+    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+    CloseBtn.Position = UDim2.new(1, -39, 0.5, -15)
     CloseBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
     CloseBtn.BackgroundTransparency = 0.955
     CloseBtn.BorderSizePixel = 0
@@ -375,30 +364,30 @@ local function CreateGUI()
     CloseBtn.Text = "×"
     CloseBtn.TextColor3 = Theme.Muted
     CloseBtn.Font = Enum.Font.GothamMedium
-    CloseBtn.TextSize = 20
+    CloseBtn.TextSize = 17
     CloseBtn.ZIndex = 9
     CloseBtn.Parent = Header
-    corner(CloseBtn, 12)
+    corner(CloseBtn, 10)
     local CloseStroke = stroke(CloseBtn, Color3.fromRGB(255,255,255), 0.93, 1)
 
     CloseBtn.MouseEnter:Connect(function()
-        tween(CloseBtn, 0.10, {BackgroundTransparency = 0.90, TextColor3 = Theme.White})
-        tween(CloseStroke, 0.10, {Transparency = 0.80})
+        tween(CloseBtn, 0.08, {BackgroundTransparency = 0.90, TextColor3 = Theme.White})
+        tween(CloseStroke, 0.08, {Transparency = 0.80})
     end)
     CloseBtn.MouseLeave:Connect(function()
-        tween(CloseBtn, 0.12, {BackgroundTransparency = 0.955, TextColor3 = Theme.Muted})
-        tween(CloseStroke, 0.12, {Transparency = 0.93})
+        tween(CloseBtn, 0.10, {BackgroundTransparency = 0.955, TextColor3 = Theme.Muted})
+        tween(CloseStroke, 0.10, {Transparency = 0.93})
     end)
 
-    -- Top info row --------------------------------------------------------
+    -- Intro / secure status ----------------------------------------------
     local Intro = Instance.new("TextLabel")
-    Intro.Size = UDim2.new(1, -180, 0, 24)
-    Intro.Position = UDim2.new(0, 20, 0, 91)
+    Intro.Size = UDim2.new(1, -180, 0, 20)
+    Intro.Position = UDim2.new(0, 14, 0, 76)
     Intro.BackgroundTransparency = 1
     Intro.Text = Config.HubDescription
     Intro.TextColor3 = Theme.Muted
     Intro.Font = Enum.Font.Gotham
-    Intro.TextSize = 10
+    Intro.TextSize = 9
     Intro.TextWrapped = true
     Intro.TextTruncate = Enum.TextTruncate.None
     Intro.TextXAlignment = Enum.TextXAlignment.Left
@@ -407,33 +396,33 @@ local function CreateGUI()
     Intro.Parent = MainFrame
 
     local SecurePill = Instance.new("Frame")
-    SecurePill.Size = UDim2.new(0, 145, 0, 27)
-    SecurePill.Position = UDim2.new(1, -165, 0, 89)
+    SecurePill.Size = UDim2.new(0, 134, 0, 25)
+    SecurePill.Position = UDim2.new(1, -148, 0, 74)
     SecurePill.BackgroundColor3 = Theme.Indigo
-    SecurePill.BackgroundTransparency = 0.89
+    SecurePill.BackgroundTransparency = 0.90
     SecurePill.BorderSizePixel = 0
     SecurePill.ZIndex = 6
     SecurePill.Parent = MainFrame
-    corner(SecurePill, 14)
+    corner(SecurePill, 13)
     stroke(SecurePill, Theme.IndigoSoft, 0.72, 1)
 
     local SecureDot = Instance.new("Frame")
-    SecureDot.Size = UDim2.new(0, 8, 0, 8)
-    SecureDot.Position = UDim2.new(0, 12, 0.5, -4)
+    SecureDot.Size = UDim2.new(0, 7, 0, 7)
+    SecureDot.Position = UDim2.new(0, 11, 0.5, -3.5)
     SecureDot.BackgroundColor3 = Theme.Success
     SecureDot.BorderSizePixel = 0
     SecureDot.ZIndex = 7
     SecureDot.Parent = SecurePill
-    corner(SecureDot, 8)
+    corner(SecureDot, 7)
 
     local SecureText = Instance.new("TextLabel")
-    SecureText.Size = UDim2.new(1, -31, 1, 0)
-    SecureText.Position = UDim2.new(0, 28, 0, 0)
+    SecureText.Size = UDim2.new(1, -29, 1, 0)
+    SecureText.Position = UDim2.new(0, 25, 0, 0)
     SecureText.BackgroundTransparency = 1
     SecureText.Text = "SECURE ACCESS"
     SecureText.TextColor3 = Theme.IndigoSoft
     SecureText.Font = Enum.Font.GothamBold
-    SecureText.TextSize = 8
+    SecureText.TextSize = 7
     SecureText.TextXAlignment = Enum.TextXAlignment.Left
     SecureText.ZIndex = 7
     SecureText.Parent = SecurePill
@@ -454,8 +443,8 @@ local function CreateGUI()
     local socialCount = #enabledSocial
     local SocialRow = Instance.new("Frame")
     SocialRow.Name = "SocialRow"
-    SocialRow.Size = UDim2.new(1, -40, 0, socialCount > 0 and 31 or 0)
-    SocialRow.Position = UDim2.new(0, 20, 0, 120)
+    SocialRow.Size = UDim2.new(1, -28, 0, socialCount > 0 and 28 or 0)
+    SocialRow.Position = UDim2.new(0, 14, 0, 103)
     SocialRow.BackgroundTransparency = 1
     SocialRow.ZIndex = 6
     SocialRow.Parent = MainFrame
@@ -464,17 +453,18 @@ local function CreateGUI()
     socialLayout.FillDirection = Enum.FillDirection.Horizontal
     socialLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     socialLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    socialLayout.Padding = UDim.new(0, 8)
+    socialLayout.Padding = UDim.new(0, 7)
     socialLayout.Parent = SocialRow
 
     if socialCount > 0 then
         local buttonWidth = 1 / socialCount
+        local gapComp = ((socialCount - 1) * 7) / socialCount
         for _, data in ipairs(enabledSocial) do
             local label, iconId, url, accent = data[1], data[2], data[3], data[4]
 
             local Button = Instance.new("TextButton")
             Button.Name = label .. "Button"
-            Button.Size = UDim2.new(buttonWidth, -((socialCount - 1) * 8) / socialCount, 1, 0)
+            Button.Size = UDim2.new(buttonWidth, -gapComp, 1, 0)
             Button.BackgroundColor3 = Color3.fromRGB(255,255,255)
             Button.BackgroundTransparency = 0.95
             Button.BorderSizePixel = 0
@@ -482,12 +472,12 @@ local function CreateGUI()
             Button.Text = ""
             Button.ZIndex = 6
             Button.Parent = SocialRow
-            corner(Button, 11)
+            corner(Button, 10)
             local bStroke = stroke(Button, accent, 0.82, 1)
 
             local Icon = Instance.new("ImageLabel")
-            Icon.Size = UDim2.new(0, 18, 0, 18)
-            Icon.Position = UDim2.new(0, 11, 0.5, -9)
+            Icon.Size = UDim2.new(0, 16, 0, 16)
+            Icon.Position = UDim2.new(0, 10, 0.5, -8)
             Icon.BackgroundTransparency = 1
             Icon.Image = iconId
             Icon.ScaleType = Enum.ScaleType.Fit
@@ -495,13 +485,13 @@ local function CreateGUI()
             Icon.Parent = Button
 
             local Label = Instance.new("TextLabel")
-            Label.Size = UDim2.new(1, -40, 1, 0)
-            Label.Position = UDim2.new(0, 36, 0, 0)
+            Label.Size = UDim2.new(1, -36, 1, 0)
+            Label.Position = UDim2.new(0, 33, 0, 0)
             Label.BackgroundTransparency = 1
             Label.Text = label
             Label.TextColor3 = Theme.White
             Label.Font = Enum.Font.GothamSemibold
-            Label.TextSize = 9
+            Label.TextSize = 8
             Label.TextWrapped = false
             Label.TextTruncate = Enum.TextTruncate.None
             Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -509,12 +499,12 @@ local function CreateGUI()
             Label.Parent = Button
 
             Button.MouseEnter:Connect(function()
-                tween(Button, 0.10, {BackgroundTransparency = 0.90})
-                tween(bStroke, 0.10, {Transparency = 0.60})
+                tween(Button, 0.08, {BackgroundTransparency = 0.90})
+                tween(bStroke, 0.08, {Transparency = 0.60})
             end)
             Button.MouseLeave:Connect(function()
-                tween(Button, 0.12, {BackgroundTransparency = 0.95})
-                tween(bStroke, 0.12, {Transparency = 0.82})
+                tween(Button, 0.10, {BackgroundTransparency = 0.95})
+                tween(bStroke, 0.10, {Transparency = 0.82})
             end)
             Button.MouseButton1Click:Connect(function()
                 fSetClipboard(url)
@@ -531,12 +521,12 @@ local function CreateGUI()
         end
     end
 
-    local dividerY = socialCount > 0 and 158 or 117
-    local contentTop = socialCount > 0 and 169 or 128
+    local dividerY = socialCount > 0 and 139 or 101
+    local contentTop = socialCount > 0 and 150 or 112
 
     local Divider = Instance.new("Frame")
-    Divider.Size = UDim2.new(1, -40, 0, 1)
-    Divider.Position = UDim2.new(0, 20, 0, dividerY)
+    Divider.Size = UDim2.new(1, -28, 0, 1)
+    Divider.Position = UDim2.new(0, 14, 0, dividerY)
     Divider.BackgroundColor3 = Color3.fromRGB(255,255,255)
     Divider.BackgroundTransparency = 0.925
     Divider.BorderSizePixel = 0
@@ -545,38 +535,38 @@ local function CreateGUI()
 
     -- Key field -----------------------------------------------------------
     local SectionLabel = Instance.new("TextLabel")
-    SectionLabel.Size = UDim2.new(1, -40, 0, 16)
-    SectionLabel.Position = UDim2.new(0, 20, 0, contentTop)
+    SectionLabel.Size = UDim2.new(1, -28, 0, 14)
+    SectionLabel.Position = UDim2.new(0, 14, 0, contentTop)
     SectionLabel.BackgroundTransparency = 1
     SectionLabel.Text = "LICENSE KEY"
     SectionLabel.TextColor3 = Theme.IndigoSoft
     SectionLabel.Font = Enum.Font.GothamBold
-    SectionLabel.TextSize = 8
+    SectionLabel.TextSize = 7
     SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
     SectionLabel.ZIndex = 6
     SectionLabel.Parent = MainFrame
 
     local KeyInputShell = Instance.new("Frame")
     KeyInputShell.Name = "KeyInputShell"
-    KeyInputShell.Size = UDim2.new(1, -40, 0, 50)
-    KeyInputShell.Position = UDim2.new(0, 20, 0, contentTop + 20)
+    KeyInputShell.Size = UDim2.new(1, -28, 0, 44)
+    KeyInputShell.Position = UDim2.new(0, 14, 0, contentTop + 17)
     KeyInputShell.BackgroundColor3 = Color3.fromRGB(255,255,255)
     KeyInputShell.BackgroundTransparency = 0.947
     KeyInputShell.BorderSizePixel = 0
     KeyInputShell.ZIndex = 6
     KeyInputShell.Parent = MainFrame
-    corner(KeyInputShell, 16)
+    corner(KeyInputShell, 14)
     local KeyStroke = stroke(KeyInputShell, Theme.IndigoBright, 0.83, 1)
 
     local KeyIcon = Instance.new("Frame")
-    KeyIcon.Size = UDim2.new(0, 32, 0, 32)
-    KeyIcon.Position = UDim2.new(0, 10, 0.5, -16)
+    KeyIcon.Size = UDim2.new(0, 28, 0, 28)
+    KeyIcon.Position = UDim2.new(0, 9, 0.5, -14)
     KeyIcon.BackgroundColor3 = Theme.Indigo
     KeyIcon.BackgroundTransparency = 0.80
     KeyIcon.BorderSizePixel = 0
     KeyIcon.ZIndex = 7
     KeyIcon.Parent = KeyInputShell
-    corner(KeyIcon, 11)
+    corner(KeyIcon, 10)
 
     local KeySymbol = Instance.new("TextLabel")
     KeySymbol.Size = UDim2.new(1,0,1,0)
@@ -584,14 +574,14 @@ local function CreateGUI()
     KeySymbol.Text = "•"
     KeySymbol.TextColor3 = Theme.IndigoSoft
     KeySymbol.Font = Enum.Font.GothamBold
-    KeySymbol.TextSize = 17
+    KeySymbol.TextSize = 15
     KeySymbol.ZIndex = 8
     KeySymbol.Parent = KeyIcon
 
     local KeyInput = Instance.new("TextBox")
     KeyInput.Name = "KeyInput"
-    KeyInput.Size = UDim2.new(1, -57, 1, 0)
-    KeyInput.Position = UDim2.new(0, 57, 0, 0)
+    KeyInput.Size = UDim2.new(1, -50, 1, 0)
+    KeyInput.Position = UDim2.new(0, 50, 0, 0)
     KeyInput.BackgroundTransparency = 1
     KeyInput.ClearTextOnFocus = false
     KeyInput.Text = ""
@@ -599,7 +589,7 @@ local function CreateGUI()
     KeyInput.PlaceholderColor3 = Theme.Muted
     KeyInput.TextColor3 = Theme.White
     KeyInput.Font = Enum.Font.Gotham
-    KeyInput.TextSize = 12
+    KeyInput.TextSize = 11
     KeyInput.TextWrapped = false
     KeyInput.TextTruncate = Enum.TextTruncate.None
     KeyInput.TextXAlignment = Enum.TextXAlignment.Left
@@ -607,21 +597,21 @@ local function CreateGUI()
     KeyInput.Parent = KeyInputShell
 
     KeyInput.Focused:Connect(function()
-        tween(KeyStroke, 0.12, {Transparency = 0.16})
-        tween(KeyInputShell, 0.12, {BackgroundTransparency = 0.91})
-        tween(KeyIcon, 0.12, {BackgroundTransparency = 0.64})
+        tween(KeyStroke, 0.10, {Transparency = 0.16})
+        tween(KeyInputShell, 0.10, {BackgroundTransparency = 0.91})
+        tween(KeyIcon, 0.10, {BackgroundTransparency = 0.64})
     end)
     KeyInput.FocusLost:Connect(function()
-        tween(KeyStroke, 0.12, {Transparency = 0.83})
-        tween(KeyInputShell, 0.12, {BackgroundTransparency = 0.947})
-        tween(KeyIcon, 0.12, {BackgroundTransparency = 0.80})
+        tween(KeyStroke, 0.10, {Transparency = 0.83})
+        tween(KeyInputShell, 0.10, {BackgroundTransparency = 0.947})
+        tween(KeyIcon, 0.10, {BackgroundTransparency = 0.80})
     end)
 
-    -- Action row: stable layout, no resizing tweens. ---------------------
+    -- Actions -------------------------------------------------------------
     local ActionRow = Instance.new("Frame")
     ActionRow.Name = "ActionRow"
-    ActionRow.Size = UDim2.new(1, -40, 0, 42)
-    ActionRow.Position = UDim2.new(0, 20, 0, contentTop + 78)
+    ActionRow.Size = UDim2.new(1, -28, 0, 38)
+    ActionRow.Position = UDim2.new(0, 14, 0, contentTop + 68)
     ActionRow.BackgroundTransparency = 1
     ActionRow.ZIndex = 6
     ActionRow.Parent = MainFrame
@@ -630,22 +620,22 @@ local function CreateGUI()
     actionLayout.FillDirection = Enum.FillDirection.Horizontal
     actionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     actionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    actionLayout.Padding = UDim.new(0, 8)
+    actionLayout.Padding = UDim.new(0, 7)
     actionLayout.Parent = ActionRow
 
     local VerifyBtn = Instance.new("TextButton")
     VerifyBtn.Name = "VerifyButton"
-    VerifyBtn.Size = UDim2.new(0.60, -4, 1, 0)
+    VerifyBtn.Size = UDim2.new(0.58, -3.5, 1, 0)
     VerifyBtn.BackgroundColor3 = Theme.Indigo
     VerifyBtn.BorderSizePixel = 0
     VerifyBtn.AutoButtonColor = false
     VerifyBtn.Text = "VERIFY KEY"
     VerifyBtn.TextColor3 = Theme.White
     VerifyBtn.Font = Enum.Font.GothamBold
-    VerifyBtn.TextSize = 10
+    VerifyBtn.TextSize = 9
     VerifyBtn.ZIndex = 7
     VerifyBtn.Parent = ActionRow
-    corner(VerifyBtn, 14)
+    corner(VerifyBtn, 13)
     local VerifyStroke = stroke(VerifyBtn, Theme.IndigoSoft, 0.40, 1)
 
     local VerifyGradient = Instance.new("UIGradient")
@@ -659,7 +649,7 @@ local function CreateGUI()
 
     local GetKeyBtn = Instance.new("TextButton")
     GetKeyBtn.Name = "GetKeyButton"
-    GetKeyBtn.Size = UDim2.new(0.40, -4, 1, 0)
+    GetKeyBtn.Size = UDim2.new(0.42, -3.5, 1, 0)
     GetKeyBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
     GetKeyBtn.BackgroundTransparency = 0.932
     GetKeyBtn.BorderSizePixel = 0
@@ -667,58 +657,58 @@ local function CreateGUI()
     GetKeyBtn.Text = "GET KEY"
     GetKeyBtn.TextColor3 = Theme.White
     GetKeyBtn.Font = Enum.Font.GothamBold
-    GetKeyBtn.TextSize = 10
+    GetKeyBtn.TextSize = 9
     GetKeyBtn.ZIndex = 7
     GetKeyBtn.Parent = ActionRow
-    corner(GetKeyBtn, 14)
+    corner(GetKeyBtn, 13)
     local GetKeyStroke = stroke(GetKeyBtn, Theme.IndigoBright, 0.70, 1)
 
     local function bindButton(button, defaultTransparency, hoverTransparency, buttonStroke)
         button.MouseEnter:Connect(function()
-            tween(button, 0.10, {BackgroundTransparency = hoverTransparency})
-            tween(buttonStroke, 0.10, {Transparency = 0.48})
+            tween(button, 0.08, {BackgroundTransparency = hoverTransparency})
+            tween(buttonStroke, 0.08, {Transparency = 0.48})
         end)
         button.MouseLeave:Connect(function()
-            tween(button, 0.12, {BackgroundTransparency = defaultTransparency})
-            tween(buttonStroke, 0.12, {Transparency = 0.70})
+            tween(button, 0.10, {BackgroundTransparency = defaultTransparency})
+            tween(buttonStroke, 0.10, {Transparency = 0.70})
         end)
     end
 
     bindButton(VerifyBtn, 0, 0.07, VerifyStroke)
     bindButton(GetKeyBtn, 0.932, 0.875, GetKeyStroke)
 
-    -- Status --------------------------------------------------------------
+    -- Status + footer -----------------------------------------------------
     local StatusPanel = Instance.new("Frame")
     StatusPanel.Name = "StatusPanel"
-    StatusPanel.Size = UDim2.new(1, -40, 0, 44)
-    StatusPanel.Position = UDim2.new(0, 20, 0, contentTop + 129)
+    StatusPanel.Size = UDim2.new(1, -28, 0, 34)
+    StatusPanel.Position = UDim2.new(0, 14, 0, contentTop + 115)
     StatusPanel.BackgroundColor3 = Color3.fromRGB(255,255,255)
     StatusPanel.BackgroundTransparency = 0.955
     StatusPanel.BorderSizePixel = 0
     StatusPanel.ZIndex = 6
     StatusPanel.Parent = MainFrame
-    corner(StatusPanel, 14)
+    corner(StatusPanel, 12)
     local StatusStroke = stroke(StatusPanel, Color3.fromRGB(255,255,255), 0.93, 1)
 
     StatusDot = Instance.new("Frame")
     StatusDot.Name = "StatusDot"
-    StatusDot.Size = UDim2.new(0, 8, 0, 8)
-    StatusDot.Position = UDim2.new(0, 14, 0.5, -4)
+    StatusDot.Size = UDim2.new(0, 7, 0, 7)
+    StatusDot.Position = UDim2.new(0, 12, 0.5, -3.5)
     StatusDot.BackgroundColor3 = Theme.IndigoSoft
     StatusDot.BorderSizePixel = 0
     StatusDot.ZIndex = 7
     StatusDot.Parent = StatusPanel
-    corner(StatusDot, 8)
+    corner(StatusDot, 7)
 
     Status = Instance.new("TextLabel")
     Status.Name = "StatusLabel"
-    Status.Size = UDim2.new(1, -42, 1, 0)
-    Status.Position = UDim2.new(0, 32, 0, 0)
+    Status.Size = UDim2.new(1, -38, 1, 0)
+    Status.Position = UDim2.new(0, 28, 0, 0)
     Status.BackgroundTransparency = 1
     Status.Text = "Waiting for a key..."
     Status.TextColor3 = Theme.Muted
     Status.Font = Enum.Font.GothamMedium
-    Status.TextSize = 9
+    Status.TextSize = 8
     Status.TextWrapped = true
     Status.TextTruncate = Enum.TextTruncate.None
     Status.TextXAlignment = Enum.TextXAlignment.Left
@@ -727,32 +717,31 @@ local function CreateGUI()
     Status.Parent = StatusPanel
 
     local Footer = Instance.new("TextLabel")
-    Footer.Size = UDim2.new(1, -40, 0, 14)
-    Footer.Position = UDim2.new(0, 20, 0, contentTop + 179)
+    Footer.Size = UDim2.new(1, -28, 0, 10)
+    Footer.Position = UDim2.new(0, 14, 0, contentTop + 153)
     Footer.BackgroundTransparency = 1
-    Footer.Text = "Stored locally after successful verification."
+    Footer.Text = "Stored locally after successful verification"
     Footer.TextColor3 = Theme.Faint
     Footer.Font = Enum.Font.Gotham
-    Footer.TextSize = 7
+    Footer.TextSize = 6.5
     Footer.TextWrapped = true
     Footer.TextTruncate = Enum.TextTruncate.None
     Footer.TextXAlignment = Enum.TextXAlignment.Left
     Footer.ZIndex = 6
     Footer.Parent = MainFrame
 
-    -- Status helper is declared after the label, but social callbacks run later.
     local function setStatus(message, color)
         Status.Text = tostring(message)
         Status.TextColor3 = color or Theme.Muted
         StatusDot.BackgroundColor3 = color or Theme.IndigoSoft
-        tween(StatusPanel, 0.12, {BackgroundTransparency = color and 0.915 or 0.955})
-        tween(StatusStroke, 0.12, {
+        tween(StatusPanel, 0.10, {BackgroundTransparency = color and 0.915 or 0.955})
+        tween(StatusStroke, 0.10, {
             Color = color or Color3.fromRGB(255,255,255),
             Transparency = color and 0.80 or 0.93
         })
     end
 
-    -- Dragging: one active input, scaled correctly, with no animation. ---
+    -- Dragging: no animation during movement, preventing jitter. ---------
     local dragging = false
     local dragStart
     local startPosition
@@ -808,9 +797,9 @@ local function CreateGUI()
         VerifyBtn.Active = false
         GetKeyBtn.Active = false
         KeyInput.Active = false
-        local fade = tween(MainFrame, 0.12, {
+        local fade = tween(MainFrame, 0.08, {
             GroupTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0.5, 5)
+            Position = UDim2.new(0.5, 0, 0.5, 2)
         }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
         fade.Completed:Connect(function()
             if ScreenGui.Parent then ScreenGui:Destroy() end
@@ -818,11 +807,11 @@ local function CreateGUI()
         end)
     end
 
-    -- Open instantly enough to feel responsive, but still polished. ------
-    tween(MainFrame, 0.16, {
+    -- Very short open transition: responsive without feeling abrupt. -----
+    tween(MainFrame, 0.10, {
         GroupTransparency = 0,
         Position = UDim2.new(0.5, 0, 0.5, 0)
-    }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
     CloseBtn.MouseButton1Click:Connect(function()
         closeGui()
