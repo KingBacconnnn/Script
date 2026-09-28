@@ -282,17 +282,11 @@ function _VH_UnregConn(connection)
 end
 function _VH_TrackTask(fn)
 	local thread = nil
-	local completed = false
 	thread = task.spawn(function()
 		pcall(fn)
-		completed = true
-		if thread ~= nil then
-			PendingTasks[thread] = nil
-		end
+		PendingTasks[thread] = nil
 	end)
-	if not completed and thread ~= nil then
-		PendingTasks[thread] = true
-	end
+	PendingTasks[thread] = true
 	return thread
 end
 function _VH_IsTaskCurrent(generation)
@@ -1114,21 +1108,6 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = TargetParent
 
-function _VH_ApplyTextLayoutGuard(obj)
-	if not obj or not obj.Parent then return end
-	if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
-	if obj:GetAttribute("VeloxTextConstraintBound") then return end
-	local base = tonumber(obj.TextSize) or 0
-	if base <= 0 then return end
-	if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
-		local constraint = Instance.new("UITextSizeConstraint")
-		constraint.Name = "VeloxTextSizeConstraint"
-		constraint.MinTextSize = math.min(base, math.max(5, math.floor(base * 0.7 + 0.5)))
-		constraint.MaxTextSize = base
-		constraint.Parent = obj
-	end
-	obj:SetAttribute("VeloxTextConstraintBound", true)
-end
 function _VH_DisableTextOutline(object)
 	if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
 		object.TextStrokeTransparency = 1
@@ -2989,7 +2968,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 
 		SetScriptEmptyState("loading", category)
 		ShowNotification("Loading " .. category .. " catalog...", "Info")
-		PendingTasks.__LoadCatalog(false, false, category)
+		PendingTasks.__LoadCatalog(false, false, category, category == "Utilities" and true or false)
 	end))
 	return button
 end
@@ -4293,7 +4272,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Shared Catalog Loading, Utilities Refresh & Stability", "• Games and Utilities now use the same catalog loading pipeline; only the remote catalog URL differs.\n• Removed the separate Utilities-only request behavior so both catalogs use the same HTTP fallbacks, timeout handling, JSON parsing, validation, fingerprinting, and card replacement flow.\n• Removed the unused extra argument from the Utilities tab catalog load call.\n• Fixed catalog refresh bookkeeping so each category records its own refresh timestamp instead of depending on the currently selected tab.\n• Utilities now loads directly from utilitycatalog.json without any hardcoded catalog entries or embedded Utility fallback data.\n• Utilities refresh keeps the same direct-request-then-cache-busted fallback order used by Games.\n• Preserved separate Games and Utilities catalog state so switching tabs does not require re-downloading an already loaded catalog.\n• Preserved the existing request, compiler, HTTP, GUI-parent, configuration, notification, and other fallback paths.\n• Kept the source comment-free and avoided unnecessary local-heavy additions to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.6 - Final Cleanup & Compatibility", "• Kept the release version at v2.0.6.\n• Removed embedded Anti AFK, test utilities, FPS Monitor, and Ping Monitor catalog entries so Utilities loads only from the configured remote catalog.\n• Removed the unused text layout helper and its dead code path.\n• Kept the existing executor request, HTTP, compiler, GUI parent, protected-GUI, cloneref, file, JSON, and other compatibility fallbacks unchanged.\n• Kept the existing execution flow and catalog behavior intact while avoiding new local-heavy refactors.\n• Retained bounded catalog request handling and the notification fallback paths already present in v2.0.6.\n• Cleaned stale changelog wording to match the final 2.0.6 codebase.\n• Source remains comment-free.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5380,18 +5359,6 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		return false, "empty script source"
 	end
 
-	if string.sub(code, 1, 3) == "\239\187\191" then
-		code = string.sub(code, 4)
-	end
-	local sourceHead = string.lower(string.sub(code, 1, 160))
-	if string.find(sourceHead, "<html", 1, true)
-		or string.find(sourceHead, "<!doctype", 1, true)
-		or string.find(sourceHead, "404: not found", 1, true)
-		or string.find(sourceHead, "cannot get /", 1, true) then
-		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: downloaded data is not Lua source.", "Error")
-		return false, "downloaded data is not Lua source"
-	end
-
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
@@ -5415,13 +5382,6 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		or string.find(normalized, "registers", 1, true)
 		or (string.find(normalized, "register", 1, true) and string.find(normalized, "limit", 1, true)) then
 		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: compiler limit exceeded.", "Error")
-		return false, detail
-	end
-
-	if string.find(normalized, "malformed string", 1, true)
-		or string.find(normalized, "unfinished string", 1, true)
-		or string.find(normalized, "did you forget to finish", 1, true) then
-		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: source contains an incomplete string or was downloaded incomplete.", "Error")
 		return false, detail
 	end
 
@@ -5800,41 +5760,19 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	return scriptEntry
 end
 CATALOG_REFRESH_INTERVAL = 300
-CATALOG_REQUEST_TIMEOUT = 7
-CatalogUrls = { Games = GAMES_CATALOG_URL, Utilities = UTILITIES_CATALOG_URL }
 function GetActiveCatalogUrl(category)
 	category = category or currentScriptCategory
-	local url = CatalogUrls[category]
+	local url = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
 	if type(url) ~= "string" then return "" end
 	return string.gsub(url, "^%s*(.-)%s*$", "%1")
 end
-function BuildCatalogRequestUrls(primary, cacheBust)
-	if type(primary) ~= "string" or primary == "" then return {} end
-	primary = string.gsub(primary, "^%s*(.-)%s*$", "%1")
-	local urls, seen = {}, {}
-	local function add(url)
-		if type(url) ~= "string" or url == "" then return end
-		if cacheBust then url = AddCacheBuster(url) end
-		if not seen[url] then
-			seen[url] = true
-			urls[#urls + 1] = url
-		end
-	end
-	add(primary)
-	local user, repo, branch, filePath = primary:match("^https://raw%.githubusercontent%.com/([^/]+)/([^/]+)/refs/heads/([^/]+)/(.*)$")
-	if user and repo and branch and filePath then
-		add("https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/" .. branch .. "/" .. filePath)
-		add("https://github.com/" .. user .. "/" .. repo .. "/raw/refs/heads/" .. branch .. "/" .. filePath)
-	end
-	return urls
-end
-function FetchCatalogUrl(primary, cacheBust)
-	if type(primary) ~= "string" or primary == "" then return nil, nil, "invalid catalog url", primary end
-	local urls = BuildCatalogRequestUrls(primary, cacheBust)
+function FetchCatalogWithFallback(category, cacheBust)
+	local primary = GetActiveCatalogUrl(category)
 	local lastStatus, lastError = nil, nil
-	for index, requestUrl in ipairs(urls) do
+	if primary ~= "" then
 		local finished = false
 		local response, status, err
+		local requestUrl = category == "Utilities" and primary or (cacheBust and AddCacheBuster(primary) or primary)
 		task.spawn(function()
 			local ok, body, code, requestError = pcall(function()
 				return UniversalHttpGet(requestUrl)
@@ -5846,7 +5784,8 @@ function FetchCatalogUrl(primary, cacheBust)
 			end
 			finished = true
 		end)
-		local deadline = os.clock() + CATALOG_REQUEST_TIMEOUT
+		local timeout = category == "Utilities" and 5 or 6
+		local deadline = os.clock() + timeout
 		while not finished and os.clock() < deadline do
 			task.wait(0.1)
 		end
@@ -5854,12 +5793,8 @@ function FetchCatalogUrl(primary, cacheBust)
 			return response, status, nil, primary
 		end
 		lastStatus, lastError = status, finished and err or "catalog request timed out"
-		if index < #urls then task.wait(0.2) end
 	end
 	return nil, lastStatus, lastError, primary
-end
-function FetchCatalogWithFallback(category, cacheBust)
-	return FetchCatalogUrl(GetActiveCatalogUrl(category), cacheBust)
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
@@ -5978,7 +5913,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 		if not isAutoRefresh then
 			LastCatalogRefreshAt = os.clock()
 		end
-		local finishedState = GetCategoryCatalogState(refreshCategory)
+		local finishedState = GetCategoryCatalogState(currentScriptCategory)
 		finishedState.LastRefreshAt = LastCatalogRefreshAt
 		if CatalogRefreshQueued and not isDestroying then
 			_VH_ScheduleQueuedCatalogRefresh()
