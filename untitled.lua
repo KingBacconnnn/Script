@@ -281,10 +281,9 @@ function _VH_UnregConn(connection)
 	end
 end
 function _VH_TrackTask(fn)
-	local thread = nil
-	thread = task.spawn(function()
+	local thread = task.defer(function()
 		pcall(fn)
-		PendingTasks[thread] = nil
+		PendingTasks[coroutine.running()] = nil
 	end)
 	PendingTasks[thread] = true
 	return thread
@@ -832,7 +831,43 @@ function NormalizeTagType(value)
 	return "NONE"
 end
 
+RecommendationStopWords = {
+	["the"] = true, ["and"] = true, ["for"] = true, ["with"] = true, ["from"] = true, ["this"] = true, ["that"] = true, ["your"] = true, ["you"] = true, ["are"] = true,
+	["can"] = true, ["into"] = true, ["more"] = true, ["script"] = true, ["scripts"] = true, ["roblox"] = true, ["game"] = true, ["games"] = true, ["play"] = true,
+	["playing"] = true, ["player"] = true, ["players"] = true, ["auto"] = true, ["beta"] = true, ["currently"] = true, ["features"] = true, ["feature"] = true,
+	["use"] = true, ["using"] = true, ["while"] = true, ["through"] = true, ["convenient"] = true, ["progress"] = true
+}
+RecommendationTopicKeywords = {
+	combat = {"murder", "mystery", "rivals", "arsenal", "shooter", "shooting", "gun", "pvp", "combat", "sword", "katana", "hunter", "fight", "battle", "enemy"},
+	eggs = {"egg", "eggs", "hatch", "hatching", "steal an egg", "lucky egg"},
+	brainrot = {"brainrot", "brainrots"},
+	anime = {"anime"},
+	rng = {"rng", "luck", "lucky", "dice", "roll", "random"},
+	obby = {"obby", "escape", "wall hop", "moonwalk", "keyboard escape", "backflip", "bottle flip", "web swing", "high jump", "jump crunch", "jump for"},
+	speed = {"speed", "fast", "run", "running", "moonwalk", "high jump", "jump"},
+	farming = {"farm", "farming", "grow", "garden", "collect", "collection", "bucket", "chicken farm", "tree", "axe", "pickaxe"},
+	clicker = {"click", "clicker", "tap", "money", "followers", "per click", "per jump"},
+	soccer = {"soccer", "football", "player squad", "squad"},
+	tycoon = {"tycoon", "city", "build a", "building", "base", "party"},
+	asmr = {"asmr"},
+	paint = {"paint", "painting", "seek"},
+	animals = {"animal", "animals", "chicken", "dino", "dinosaur", "crab", "fish"},
+	crafting = {"craft", "crafting", "unbox", "loot", "card"}
+}
+RecommendationDataCache = setmetatable({}, {__mode = "k"})
+RecommendationTagFingerprintCache = setmetatable({}, {__mode = "k"})
+
 function _VH_RecommendationListFingerprint(value)
+	if type(value) == "table" then
+		local cached = RecommendationTagFingerprintCache[value]
+		if cached then return cached end
+		local list = {}
+		for index, item in ipairs(value) do list[index] = item end
+		table.sort(list)
+		local fingerprint = table.concat(list, "|")
+		RecommendationTagFingerprintCache[value] = fingerprint
+		return fingerprint
+	end
 	local list = _VH_NormalizeRecommendationList(value)
 	table.sort(list)
 	return table.concat(list, "|")
@@ -857,66 +892,53 @@ function _VH_NormalizeRecommendationList(value)
 end
 
 function _VH_GetRecommendationTokenSet(data)
+	if type(data) ~= "table" then return {} end
+	local cached = RecommendationDataCache[data]
+	if cached and cached.Tokens then return cached.Tokens end
 	local set = {}
-	local stopWords = {
-		"the", "and", "for", "with", "from", "this", "that", "your", "you", "are", "can", "into", "more",
-		"script", "scripts", "roblox", "game", "games", "play", "playing", "player", "players", "auto", "beta",
-		"currently", "features", "feature", "use", "using", "while", "through", "with", "convenient", "progress"
-	}
 	local function addText(value)
 		if type(value) ~= "string" then return end
-		value = string.lower(value)
-		value = string.gsub(value, "[^%w%s]", " ")
+		value = string.gsub(string.lower(value), "[^%w%s]", " ")
 		for word in string.gmatch(value, "%S+") do
-			if #word >= 3 and not stopWords[word] then set[word] = true end
+			if #word >= 3 and not RecommendationStopWords[word] then set[word] = true end
 		end
 	end
-	addText(data and data.Name)
-	addText(data and data.Description)
-	addText(data and data.Category)
-	addText(data and data.Author)
-	addText(data and data.TagType)
-	if data and type(data.Tags) == "table" then
+	addText(data.Name)
+	addText(data.Description)
+	addText(data.Category)
+	addText(data.Author)
+	addText(data.TagType)
+	if type(data.Tags) == "table" then
 		for _, tag in ipairs(data.Tags) do addText(tag) end
-	elseif data and type(data.Tags) == "string" then
+	elseif type(data.Tags) == "string" then
 		addText(data.Tags)
 	end
+	cached = cached or {}
+	cached.Tokens = set
+	RecommendationDataCache[data] = cached
 	return set
 end
 
 function _VH_GetRecommendationTopicSet(data)
+	if type(data) ~= "table" then return {} end
+	local cached = RecommendationDataCache[data]
+	if cached and cached.Topics then return cached.Topics end
 	local topics = {}
 	local textParts = {}
 	local function add(value)
 		if type(value) == "string" and value ~= "" then textParts[#textParts + 1] = string.lower(value) end
 	end
-	add(data and data.Name)
-	add(data and data.Description)
-	add(data and data.Category)
-	add(data and data.Author)
-	add(data and data.Tags)
-	if data and type(data.Tags) == "table" then
+	add(data.Name)
+	add(data.Description)
+	add(data.Category)
+	add(data.Author)
+	if type(data.Tags) == "table" then
 		for _, tag in ipairs(data.Tags) do add(tag) end
+	elseif type(data.Tags) == "string" then
+		add(data.Tags)
 	end
 	local textValue = table.concat(textParts, " ")
-	local topicKeywords = {
-		combat = {"murder", "mystery", "rivals", "arsenal", "shooter", "shooting", "gun", "pvp", "combat", "sword", "katana", "hunter", "fight", "battle", "enemy"},
-		eggs = {"egg", "eggs", "hatch", "hatching", "steal an egg", "lucky egg"},
-		brainrot = {"brainrot", "brainrots"},
-		anime = {"anime"},
-		rng = {"rng", "luck", "lucky", "dice", "roll", "random"},
-		obby = {"obby", "escape", "wall hop", "moonwalk", "keyboard escape", "backflip", "bottle flip", "web swing", "high jump", "jump crunch", "jump for"},
-		speed = {"speed", "fast", "run", "running", "moonwalk", "high jump", "jump"},
-		farming = {"farm", "farming", "grow", "garden", "collect", "collection", "bucket", "chicken farm", "tree", "axe", "pickaxe"},
-		clicker = {"click", "clicker", "tap", "money", "followers", "per click", "per jump"},
-		soccer = {"soccer", "football", "player squad", "squad"},
-		tycoon = {"tycoon", "city", "build a", "building", "base", "party"},
-		asmr = {"asmr"},
-		paint = {"paint", "painting", "seek"},
-		animals = {"animal", "animals", "chicken", "dino", "dinosaur", "crab", "fish"},
-		crafting = {"craft", "crafting", "unbox", "loot", "card"},
-	}
-	for topic, keywords in pairs(topicKeywords) do
+	for topic, keywords in pairs(RecommendationTopicKeywords) do
 		for _, keyword in ipairs(keywords) do
 			if string.find(textValue, keyword, 1, true) then
 				topics[topic] = true
@@ -924,6 +946,9 @@ function _VH_GetRecommendationTopicSet(data)
 			end
 		end
 	end
+	cached = cached or {}
+	cached.Topics = topics
+	RecommendationDataCache[data] = cached
 	return topics
 end
 
@@ -1147,32 +1172,32 @@ function ApplyInteractiveAnimations(gui, originalColor, hoverColor, clickColor, 
 		end
 		return _VH_RegConn(connection)
 	end
-	RegInteractive(gui.MouseEnter:Connect(function()
-		if isDestroying or isTransitioning or IsMobile then return end
-		if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
-		if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
-	end))
-	RegInteractive(gui.MouseLeave:Connect(function()
-		if isDestroying or isTransitioning or IsMobile then return end
-		if originalColor then gui.BackgroundColor3 = originalColor end
-		if strokeObj and originalStroke then strokeObj.Color = originalStroke end
-	end))
-	RegInteractive(gui.InputBegan:Connect(function(input)
-		if isDestroying or isTransitioning then return end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if clickColor then gui.BackgroundColor3 = clickColor end
-		end
-	end))
-	RegInteractive(gui.InputEnded:Connect(function(input)
-		if isDestroying or isTransitioning then return end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if not IsMobile and hoverColor then
-				gui.BackgroundColor3 = hoverColor
-			elseif originalColor then
-				gui.BackgroundColor3 = originalColor
-			end
-		end
-	end))
+	if not IsMobile and (originalColor and hoverColor or strokeObj and hoverStroke) then
+		RegInteractive(gui.MouseEnter:Connect(function()
+			if isDestroying or isTransitioning then return end
+			if originalColor and hoverColor then gui.BackgroundColor3 = hoverColor end
+			if strokeObj and hoverStroke then strokeObj.Color = hoverStroke end
+		end))
+		RegInteractive(gui.MouseLeave:Connect(function()
+			if isDestroying or isTransitioning then return end
+			if originalColor then gui.BackgroundColor3 = originalColor end
+			if strokeObj and originalStroke then strokeObj.Color = originalStroke end
+		end))
+	end
+	if clickColor and gui:IsA("GuiButton") then
+		RegInteractive(gui.Activated:Connect(function()
+			if isDestroying or isTransitioning then return end
+			gui.BackgroundColor3 = clickColor
+			task.delay(0.08, function()
+				if isDestroying or not gui.Parent then return end
+				if not IsMobile and hoverColor then
+					gui.BackgroundColor3 = hoverColor
+				elseif originalColor then
+					gui.BackgroundColor3 = originalColor
+				end
+			end)
+		end))
+	end
 end
 _VH_RegConn(UserInputService.WindowFocusReleased:Connect(function()
 	if isDestroying then return end
@@ -2672,10 +2697,10 @@ AvatarFrame.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"; AvatarFram
 Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(0, 8)
 AvatarStroke = Instance.new("UIStroke", AvatarFrame); AvatarStroke.Color = Theme.Accent; AvatarStroke.Thickness = 1.5
 task.spawn(function()
-	attempts = 0
+	local attempts = 0
 	while attempts < 3 and not isDestroying do
 		attempts = attempts + 1
-		success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
+		local success, content = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150) end)
 		if success and content then
 			if isDestroying then return end
 			if AvatarFrame and AvatarFrame.Parent then AvatarFrame.Image = content end
@@ -2705,7 +2730,7 @@ _VH_RegConn(RunService.Heartbeat:Connect(function(deltaTime)
 	diagnosticsElapsed = diagnosticsElapsed + deltaTime
 	if diagnosticsElapsed < 1 then return end
 	diagnosticsElapsed = diagnosticsElapsed - 1
-	success, ping = pcall(function()
+	local success, ping = pcall(function()
 		return math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 	end)
 	if DiagnosticsLabel and DiagnosticsLabel.Parent then
@@ -3734,9 +3759,8 @@ function _VH_NormalizeSearchText(value)
 	return string.gsub(value, "^%s*(.-)%s*$", "%1")
 end
 
-function _VH_FieldMatchScore(value, token, exactWeight, prefixWeight, containsWeight)
-	if type(value) ~= "string" or value == "" then return 0 end
-	local field = _VH_NormalizeSearchText(value)
+function _VH_FieldMatchScore(field, token, exactWeight, prefixWeight, containsWeight)
+	if type(field) ~= "string" or field == "" then return 0 end
 	if field == token then return exactWeight end
 	if string.sub(field, 1, #token) == token then return prefixWeight end
 	if string.find(field, token, 1, true) then return containsWeight end
@@ -3752,33 +3776,31 @@ function _VH_SearchRelevance(scr, query)
 	query = _VH_NormalizeSearchText(query)
 	if query == "" then return 0, true end
 
-	local fields = {
-		Title = _VH_NormalizeSearchText(scr.SearchTitle),
-		Game = _VH_NormalizeSearchText(scr.SearchGame),
-		Description = _VH_NormalizeSearchText(scr.SearchDesc),
-		Category = _VH_NormalizeSearchText(scr.SearchCategory),
-		Tags = _VH_NormalizeSearchText(scr.SearchTags)
-	}
+	local fieldsTitle = scr.SearchTitleNormalized or _VH_NormalizeSearchText(scr.SearchTitle)
+	local fieldsGame = scr.SearchGame or ""
+	local fieldsDescription = scr.SearchDesc or ""
+	local fieldsCategory = scr.SearchCategory or ""
+	local fieldsTags = scr.SearchTags or ""
 	local score = 0
 	local fullPhrase = query
-	if fields.Title == fullPhrase then score = score + 1400
-	elseif string.sub(fields.Title, 1, #fullPhrase) == fullPhrase then score = score + 1050
-	elseif string.find(fields.Title, fullPhrase, 1, true) then score = score + 850 end
-	if fields.Game == fullPhrase then score = score + 900
-	elseif string.sub(fields.Game, 1, #fullPhrase) == fullPhrase then score = score + 680
-	elseif string.find(fields.Game, fullPhrase, 1, true) then score = score + 520 end
-	if string.find(fields.Category, fullPhrase, 1, true) then score = score + 360 end
-	if string.find(fields.Tags, fullPhrase, 1, true) then score = score + 380 end
-	if string.find(fields.Description, fullPhrase, 1, true) then score = score + 200 end
+	if fieldsTitle == fullPhrase then score = score + 1400
+	elseif string.sub(fieldsTitle, 1, #fullPhrase) == fullPhrase then score = score + 1050
+	elseif string.find(fieldsTitle, fullPhrase, 1, true) then score = score + 850 end
+	if fieldsGame == fullPhrase then score = score + 900
+	elseif string.sub(fieldsGame, 1, #fullPhrase) == fullPhrase then score = score + 680
+	elseif string.find(fieldsGame, fullPhrase, 1, true) then score = score + 520 end
+	if string.find(fieldsCategory, fullPhrase, 1, true) then score = score + 360 end
+	if string.find(fieldsTags, fullPhrase, 1, true) then score = score + 380 end
+	if string.find(fieldsDescription, fullPhrase, 1, true) then score = score + 200 end
 
 	local allTokensMatched = true
 	for token in string.gmatch(query, "%S+") do
 		local best = 0
-		best = math.max(best, _VH_FieldMatchScore(fields.Title, token, 220, 180, 150))
-		best = math.max(best, _VH_FieldMatchScore(fields.Game, token, 180, 145, 120))
-		best = math.max(best, _VH_FieldMatchScore(fields.Tags, token, 165, 135, 110))
-		best = math.max(best, _VH_FieldMatchScore(fields.Category, token, 150, 120, 95))
-		best = math.max(best, _VH_FieldMatchScore(fields.Description, token, 95, 70, 50))
+		best = math.max(best, _VH_FieldMatchScore(fieldsTitle, token, 220, 180, 150))
+		best = math.max(best, _VH_FieldMatchScore(fieldsGame, token, 180, 145, 120))
+		best = math.max(best, _VH_FieldMatchScore(fieldsTags, token, 165, 135, 110))
+		best = math.max(best, _VH_FieldMatchScore(fieldsCategory, token, 150, 120, 95))
+		best = math.max(best, _VH_FieldMatchScore(fieldsDescription, token, 95, 70, 50))
 		if best <= 0 then
 			allTokensMatched = false
 			break
@@ -4252,27 +4274,27 @@ _VH_RegConn(SidebarDiscord.Activated:Connect(_VH_CreateDebounce(0.2, function()
 	_VH_OpenCreditLink("https://discord.gg/duXxnUp4Vq", "Discord link opened.")
 end)))
 function CreateParagraph(title, desc, parentView, order)
-	block = Instance.new("Frame", parentView)
+	local block = Instance.new("Frame", parentView)
 	block.Size = UDim2.new(1, 0, 0, 0); block.AutomaticSize = Enum.AutomaticSize.Y
 	block.BackgroundColor3 = Theme.CardHover; block.LayoutOrder = order or 0
 	Instance.new("UICorner", block).CornerRadius = UDim.new(0, 8)
 	Instance.new("UIStroke", block).Color = Color3.fromRGB(33, 43, 61)
-	pad = Instance.new("UIPadding", block)
+	local pad = Instance.new("UIPadding", block)
 	pad.PaddingLeft = UDim.new(0, 12); pad.PaddingRight = UDim.new(0, 12); pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-	lay = Instance.new("UIListLayout", block)
+	local lay = Instance.new("UIListLayout", block)
 	lay.Padding = UDim.new(0, 4); lay.SortOrder = Enum.SortOrder.LayoutOrder
-	tLbl = Instance.new("TextLabel", block)
+	local tLbl = Instance.new("TextLabel", block)
 	tLbl.Size = UDim2.new(1, 0, 0, 18); tLbl.BackgroundTransparency = 1; tLbl.Text = title
 	tLbl.TextColor3 = Theme.TextPrimary; tLbl.Font = Enum.Font.GothamBold; tLbl.TextSize = 13
 	tLbl.TextXAlignment = Enum.TextXAlignment.Left; tLbl.LayoutOrder = 1
-	dLbl = Instance.new("TextLabel", block)
+	local dLbl = Instance.new("TextLabel", block)
 	dLbl.Size = UDim2.new(1, 0, 0, 0); dLbl.AutomaticSize = Enum.AutomaticSize.Y
 	dLbl.BackgroundTransparency = 1; dLbl.Text = desc; dLbl.TextColor3 = Theme.TextSecondary
 	dLbl.Font = Enum.Font.Gotham; dLbl.TextSize = 12; dLbl.TextXAlignment = Enum.TextXAlignment.Left
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Final Cleanup & Compatibility", "• Kept the release version at v2.0.6.\n• Removed embedded Anti AFK, test utilities, FPS Monitor, and Ping Monitor catalog entries so Utilities loads only from the configured remote catalog.\n• Removed the unused text layout helper and its dead code path.\n• Kept the existing executor request, HTTP, compiler, GUI parent, protected-GUI, cloneref, file, JSON, and other compatibility fallbacks unchanged.\n• Kept the existing execution flow and catalog behavior intact while avoiding new local-heavy refactors.\n• Retained bounded catalog request handling and the notification fallback paths already present in v2.0.6.\n• Cleaned stale changelog wording to match the final 2.0.6 codebase.\n• Source remains comment-free.", ChangelogsView)
+CreateParagraph("v2.0.6 - Performance & Stability Cleanup", "• Fixed the tracked-task race that could leave completed tasks retained.\n• Reduced per-card UI event connections and removed unused descendant caching from script cards.\n• Cached normalized search fields to avoid repeated string normalization during filtering.\n• Cached recommendation token/topic analysis and moved static recommendation dictionaries out of hot paths.\n• Fixed callback temporary variables that could leak across refreshes and asynchronous callbacks.\n• Kept the existing executor compatibility fallbacks for requests, HTTP, compilation, GUI parenting/protection, file I/O, JSON, and related APIs.\n• Kept the release version at v2.0.6 and preserved the existing catalog and execution behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5599,12 +5621,13 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	local categorySearch = type(data.Category) == "string" and data.Category or ""
 	local tagsSearch = type(data.Tags) == "table" and table.concat(data.Tags, " ") or (type(data.Tags) == "string" and data.Tags or "")
 	local tagSearch = tagType
+	local compatibleAtCreate = IsScriptCompatible(data)
 	local scriptEntry = {
-		Instance = card, SearchTitle = string.lower(exactName), SearchGame = string.lower(gameName), SearchDesc = string.lower(description),
-		SearchCategory = string.lower(categorySearch), SearchTags = string.lower(tagsSearch), SearchStatus = string.lower(tagSearch .. " " .. (IsScriptCompatible(data) and "compatible" or "game-only")),
-		SearchMeta = string.lower(table.concat({categorySearch, type(data.Author) == "string" and data.Author or "", tagSearch, tagsSearch, IsScriptCompatible(data) and "compatible" or "game-only"}, " ")),
+		Instance = card, SearchTitle = string.lower(exactName), SearchTitleNormalized = _VH_NormalizeSearchText(exactName),
+		SearchGame = _VH_NormalizeSearchText(gameName), SearchDesc = _VH_NormalizeSearchText(description),
+		SearchCategory = _VH_NormalizeSearchText(categorySearch), SearchTags = _VH_NormalizeSearchText(tagsSearch),
 		Data = data,
-		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = IsScriptCompatible(data), Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(data.GameName or data.GameTitle or data.ExperienceName or data.Game or data.PlaceName or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
+		Id = scriptId, ExactName = exactName, PlaceId = tonumber(data.PlaceId) or 0, Compatible = compatibleAtCreate, Recommended = isRecommended, RecommendationReason = recommendationReason, RecommendationType = recommendationType, RecommendationScore = recommendationScore, RecommendationRank = 999, LastUpdated = data.LastUpdated, LastUpdatedNumber = GetSafeTimestamp(data.LastUpdated), TagType = tagType, TagPriority = tagConfig.Priority, OriginalIndex = originalIndex or (#RegisteredScripts + 1), EntryFingerprint = table.concat({ tostring(data.Id or StableScriptId(data) or ""), tostring(data.Name or ""), tostring(data.Description or ""), tostring(data.RawUrl or ""), tostring(data.ImageAssetId or ""), tostring(data.GameName or data.GameTitle or data.ExperienceName or data.Game or data.PlaceName or ""), tostring(NormalizeTagType(data.TagType)), tostring(GetSafeTimestamp(data.LastUpdated)), tostring(tonumber(data.PlaceId) or 0), tostring(data.Category or ""), tostring(data.Author or ""), _VH_RecommendationListFingerprint(data.Tags) }, "\31"), TimeLabel = dateLbl
 	}
 	scriptEntry.DisconnectConnections = function()
 		for i = #entryConnections, 1, -1 do
@@ -5626,11 +5649,7 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 		recommendBadge.Visible = isRecommended
 		recommendText.Text = recommendationType == "SMART" and "YOU MAY LIKE" or "FOR YOU"
 		badgeRow.Visible = isRecommended or tagType ~= "NONE"
-		scriptEntry.SearchGame = string.lower(type(data.GameName) == "string" and data.GameName or (type(data.GameTitle) == "string" and data.GameTitle or (type(data.ExperienceName) == "string" and data.ExperienceName or (type(data.Game) == "string" and data.Game or (type(data.PlaceName) == "string" and data.PlaceName or "")))))
-		scriptEntry.SearchCategory = string.lower(type(data.Category) == "string" and data.Category or "")
-		scriptEntry.SearchTags = string.lower(type(data.Tags) == "table" and table.concat(data.Tags, " ") or (type(data.Tags) == "string" and data.Tags or ""))
-		scriptEntry.SearchStatus = string.lower(table.concat({tagType, compatible and "compatible" or "game-only"}, " "))
-		scriptEntry.SearchMeta = string.lower(table.concat({type(data.Category) == "string" and data.Category or "", type(data.Author) == "string" and data.Author or "", tagType, type(data.Tags) == "table" and table.concat(data.Tags, " ") or type(data.Tags) == "string" and data.Tags or "", compatible and "compatible" or "game-only"}, " "))
+		scriptEntry.Compatible = compatible
 		starBtn.Text = isFav and "★" or "☆"; starBtn.TextColor3 = isFav and Color3.fromRGB(250, 204, 21) or Theme.TextSecondary
 		aeLbl.Text = compatible and "Auto Execute" or "Wrong Game"
 		aeStateTxt.Text = compatible and (isON and "ON" or "OFF") or "X"
@@ -5755,7 +5774,6 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	end))
 	card.Parent = renderParent
 
-	_VH_CacheInstanceAndDescendants(card)
 	if registerImmediately ~= false then table.insert(RegisteredScripts, scriptEntry) end
 	return scriptEntry
 end
@@ -5922,6 +5940,12 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	activeBuildFolder = nil
 	activeNewEntries = {}
 	_VH_TrackTask(function()
+		local taskOk
+		local raw, catalogStatus, catalogFetchError, fingerprint
+		local parsed, catalogVersion, catalogEntries, validEntries, seenIds, validationIssueCount
+		local previousByKey, nextByKey, nextEntries, nextKeys, replacedEntries
+		local key, entryFingerprint, existing, entry
+		local autoQueue, autoConfigMigrated
 		taskOk = xpcall(function()
 			local catalogUrl = GetActiveCatalogUrl(refreshCategory)
 			if catalogUrl == "" then
@@ -5932,7 +5956,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			raw, catalogStatus, catalogFetchError, catalogUrl = FetchCatalogWithFallback(refreshCategory, true)
+			raw, catalogStatus, catalogFetchError = FetchCatalogWithFallback(refreshCategory, true)
 			if not _VH_IsTaskCurrent(generation) then return end
 			if raw and string.gsub(tostring(raw), "%s+", "") == "" then
 				CatalogRefreshResults[refreshCategory] = true
@@ -5966,7 +5990,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				FinishRefresh()
 				return
 			end
-			success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
+			local success, parsed = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not success or type(parsed) ~= "table" then
 				CatalogRefreshResults[refreshCategory] = false
 				RestoreCatalogCardsAfterRefreshFailure()
@@ -5989,11 +6013,11 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				if type(entry) ~= "table" then
 					validationIssueCount = validationIssueCount + 1
 				else
-					name = type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") or ""
-					rawUrl = type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") or ""
-					id = StableScriptId(entry)
-					placeId = tonumber(entry.PlaceId) or 0
-					validUrl = rawUrl:match("^https?://") ~= nil
+					local name = type(entry.Name) == "string" and string.gsub(entry.Name, "^%s*(.-)%s*$", "%1") or ""
+					local rawUrl = type(entry.RawUrl) == "string" and string.gsub(entry.RawUrl, "^%s*(.-)%s*$", "%1") or ""
+					local id = StableScriptId(entry)
+					local placeId = tonumber(entry.PlaceId) or 0
+					local validUrl = rawUrl:match("^https?://") ~= nil
 					if name == "" then validationIssueCount = validationIssueCount + 1 end
 					if rawUrl == "" or not validUrl then validationIssueCount = validationIssueCount + 1 end
 					if type(id) ~= "string" or id == "" then validationIssueCount = validationIssueCount + 1 end
@@ -6133,7 +6157,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				autoConfigMigrated = false
 				if ConfigurationLoaded then
 					for _, scriptData in ipairs(validEntries) do
-						auto, migrated = _VH_GetSavedAutoExecute(scriptData)
+						local auto, migrated = _VH_GetSavedAutoExecute(scriptData)
 						if migrated then autoConfigMigrated = true end
 						if type(auto) == "table" and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
 							autoQueue[#autoQueue + 1] = scriptData
@@ -6149,10 +6173,10 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				if #autoQueue > 0 then
 					_VH_TrackTask(function()
 						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
-						startedList, failList = {}, {}
+						local startedList, failList = {}, {}
 						for _, scriptData in ipairs(autoQueue) do
 							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
+							local scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
 							if not _VH_IsTaskCurrent(generation) then return end
 							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
 								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
