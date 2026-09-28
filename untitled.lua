@@ -4140,7 +4140,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Final Stability, Catalogs, Scale & Cleanup", "• Fixed the hub remaining on Connecting... for too long during catalog loading.\n• Added bounded catalog loading so a slow or unavailable server cannot keep the UI stuck indefinitely.\n• Kept the Games and Utilities catalogs fully independent with separate catalog states.\n• Fixed Utilities loading and preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed Utilities Auto Execute so it initializes independently from the Games catalog.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Preserved the existing request, HTTP, compiler, file I/O, GUI-parent, protected-GUI, cloneref, configuration, execution, notification, recommendation, and catalog fallback paths.\n• Removed unused catalog candidate logic and redundant temporary variables without changing required fallback behavior.\n• Kept the source free of comments and avoided unnecessary local-heavy structures.\n• Visible version is now v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.6 - Final Stability, Catalogs, Scale & Cleanup", "• Fixed the hub remaining on Connecting... for too long during catalog loading.\n• Added bounded catalog loading so a slow or unavailable server cannot keep the UI stuck indefinitely.\n• Kept the Games and Utilities catalogs fully independent with separate catalog states.\n• Fixed Utilities loading and preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed Utilities Auto Execute so it initializes independently from the Games catalog.\n• Restored a startup notification after both catalogs finish their initial load.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Preserved the existing request, HTTP, compiler, file I/O, GUI-parent, protected-GUI, cloneref, configuration, execution, notification, recommendation, and catalog fallback paths.\n• Removed unused catalog candidate logic and redundant temporary variables without changing required fallback behavior.\n• Kept the source free of comments and avoided unnecessary local-heavy structures.\n• Visible version is now v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -6105,6 +6105,7 @@ local function _VH_RestoreSelectedCategoryState(category)
 	end
 end
 
+local CatalogInitialLoad = true
 function RefreshAllCatalogs(force, isAutoRefresh, refreshSelection)
 	if isDestroying or CatalogBatchRefreshing then return false end
 	if dbRefreshing then return false end
@@ -6151,7 +6152,17 @@ function RefreshAllCatalogs(force, isAutoRefresh, refreshSelection)
 		if not isDestroying and batchGeneration == CatalogBatchGeneration then
 			_VH_RestoreSelectedCategoryState(originalCategory)
 			CatalogBatchRefreshing = false
-			if not isAutoRefresh then
+			local initialLoad = CatalogInitialLoad == true
+			if initialLoad then CatalogInitialLoad = false end
+			if initialLoad then
+				if completed > 0 and successful == completed and skipped == 0 then
+					ShowNotification("Games and Utilities catalogs loaded.", "Success")
+				elseif completed > 0 or skipped > 0 then
+					ShowNotification("Catalog startup finished with some errors or skipped catalogs.", "Warning")
+				else
+					ShowNotification("No catalog URLs are configured.", "Info")
+				end
+			elseif not isAutoRefresh then
 				if completed > 0 and successful == completed and skipped == 0 then
 					if refreshSelection == "Games" or refreshSelection == "Utilities" then
 						ShowNotification(refreshSelection .. " catalog refreshed.", "Success")
