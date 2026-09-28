@@ -223,6 +223,8 @@ LanguageDropdown = nil
 LanguageDropdownConnection = nil
 FilterPanel = nil
 ToastContainer = nil
+PendingNotifications = {}
+NotificationFlushBusy = false
 ConfirmOverlay = nil
 ScriptDetailsOverlay = nil
 ScriptDetailsUIScale = nil
@@ -334,6 +336,8 @@ function _VH_CleanUpMemory()
 	if LanguageDropdown and LanguageDropdown.Parent then pcall(function() LanguageDropdown:Destroy() end) end
 	if FilterPanel and FilterPanel.Parent then pcall(function() FilterPanel:Destroy() end) end
 	if ToastContainer and ToastContainer.Parent then pcall(function() ToastContainer:Destroy() end) end
+	table.clear(PendingNotifications)
+	NotificationFlushBusy = false
 	if ConfirmOverlay and ConfirmOverlay.Parent then pcall(function() ConfirmOverlay:Destroy() end) end
 	if ScriptDetailsOverlay and ScriptDetailsOverlay.Parent then pcall(function() ScriptDetailsOverlay:Destroy() end) end
 	if GlobalCooldownBanner and GlobalCooldownBanner.Parent then pcall(function() GlobalCooldownBanner:Destroy() end) end
@@ -1499,21 +1503,69 @@ function TrimNotificationStack()
 		return (a.LayoutOrder or 0) < (b.LayoutOrder or 0)
 	end)
 	while #active > MAX_VISIBLE_NOTIFICATIONS do
-		oldest = table.remove(active, 1)
+		local oldest = table.remove(active, 1)
 		if oldest and oldest.Parent then
 			pcall(function() oldest:Destroy() end)
 		end
 	end
 end
 
+function _VH_IsVeloxNotificationReady()
+	return ToastContainer and ToastContainer.Parent and ScreenGui and ScreenGui.Parent and not isDestroying
+end
+
+function _VH_FlushNotificationQueue()
+	if NotificationFlushBusy or #PendingNotifications == 0 then return end
+	NotificationFlushBusy = true
+	task.spawn(function()
+		for _ = 1, 10 do
+			if isDestroying then
+				NotificationFlushBusy = false
+				return
+			end
+			if _VH_IsVeloxNotificationReady() then
+				while #PendingNotifications > 0 do
+					local item = table.remove(PendingNotifications, 1)
+					if item then ShowNotification(item.Message, item.Type) end
+				end
+				NotificationFlushBusy = false
+				return
+			end
+			task.wait(0.1)
+		end
+		while #PendingNotifications > 0 do
+			local item = table.remove(PendingNotifications, 1)
+			if item then StandaloneBannerNotification(item.Message, item.Type) end
+		end
+		NotificationFlushBusy = false
+	end)
+end
+
+function _VH_QueueNotification(message, notifType)
+	if #PendingNotifications >= 12 then
+		table.remove(PendingNotifications, 1)
+	end
+	table.insert(PendingNotifications, {Message = message, Type = notifType})
+	_VH_FlushNotificationQueue()
+end
+
 function EmergencyFallbackNotification(msg, title)
-	pcall(function()
-		if StarterGui and type(StarterGui.SetCore) == "function" then
-			StarterGui:SetCore("SendNotification", {
-				Title = title or "Velox Hub Notice",
-				Text = tostring(msg),
-				Duration = NOTIF_DURATION
-			})
+	local payload = {
+		Title = title or "Velox Hub Notice",
+		Text = tostring(msg),
+		Duration = NOTIF_DURATION
+	}
+	task.spawn(function()
+		for attempt = 1, 3 do
+			if isDestroying then return end
+			local sent = false
+			if StarterGui and type(StarterGui.SetCore) == "function" then
+				sent = pcall(function()
+					StarterGui:SetCore("SendNotification", payload)
+				end)
+			end
+			if sent then return end
+			if attempt < 3 then task.wait(0.2) end
 		end
 	end)
 end
@@ -1609,16 +1661,20 @@ function ShowNotification(msg, notifType)
 	local message = GetNotificationMessage(msg)
 	local title = GetNotificationTitle(nType, message)
 	local indicatorColor = typeInfo.Color
+
+	if not _VH_IsVeloxNotificationReady() then
+		for _, item in ipairs(PendingNotifications) do
+			if item and item.Type == nType and item.Message == message then return end
+		end
+		_VH_QueueNotification(message, nType)
+		return
+	end
+
 	local signature = nType .. "\31" .. message
 	local now = os.clock()
 	if signature == LastNotificationSignature and now - LastNotificationAt < 0.18 then return end
 	LastNotificationSignature = signature
 	LastNotificationAt = now
-
-	if not ToastContainer or not ToastContainer.Parent then
-		StandaloneBannerNotification(message, nType)
-		return
-	end
 
 	local wrapper = nil
 	local success = pcall(function()
@@ -1696,7 +1752,7 @@ function ShowNotification(msg, notifType)
 		closeButton.AutoButtonColor = false
 		closeButton.Text = ""
 		closeButton.ZIndex = 2006
-		CreateVeloxIcon(closeButton, VeloxIcons.Close, 11, Theme.TextSecondary, UDim2.new(0.5, -5.5, 0.5, -5.5), nil, 2007, "CloseIcon")
+		local closeIcon = CreateVeloxIcon(closeButton, VeloxIcons.Close, 11, Theme.TextSecondary, UDim2.new(0.5, -5.5, 0.5, -5.5), nil, 2007, "CloseIcon")
 
 		local description = Instance.new("TextLabel", box)
 		description.Name = "Description"
@@ -1750,10 +1806,10 @@ function ShowNotification(msg, notifType)
 		end
 
 		closeButton.MouseEnter:Connect(function()
-			closeButton.TextColor3 = Theme.TextPrimary
+			if closeIcon and closeIcon.Parent then closeIcon.ImageColor3 = Theme.TextPrimary end
 		end)
 		closeButton.MouseLeave:Connect(function()
-			if not closeRequested then closeButton.TextColor3 = Theme.TextSecondary end
+			if not closeRequested and closeIcon and closeIcon.Parent then closeIcon.ImageColor3 = Theme.TextSecondary end
 		end)
 		closeButton.Activated:Connect(Dismiss)
 
