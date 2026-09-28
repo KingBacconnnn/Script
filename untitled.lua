@@ -6001,48 +6001,24 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 				if _VH_IsTaskCurrent(generation) and ScriptsView and ScriptsView.Parent then ScriptsView.CanvasPosition = savedScroll end
 			end)
 			local categoryState = GetCategoryCatalogState(refreshCategory)
-			if not isAutoRefresh and not categoryState.AutoExecuteProcessed then
-				categoryState.AutoExecuteProcessed = true
-				autoQueue = {}
-				autoConfigMigrated = false
+			if not categoryState.AutoExecuteStatePrepared then
+				categoryState.AutoExecuteStatePrepared = true
 				if ConfigurationLoaded then
+					autoConfigMigrated = false
 					for _, scriptData in ipairs(validEntries) do
-						auto, migrated = _VH_GetSavedAutoExecute(scriptData)
+						local autoState, migrated = _VH_GetSavedAutoExecute(scriptData)
 						if migrated then autoConfigMigrated = true end
-						if type(auto) == "table" and _VH_AutoExecuteGameMatches(auto) and IsScriptCompatible(scriptData) then
-							autoQueue[#autoQueue + 1] = scriptData
+						if type(autoState) == "table" then
+							local entryId = tostring(scriptData.Id or StableScriptId(scriptData) or "")
+							if entryId ~= "" then SavedData.AutoExecutes[entryId] = autoState end
 						end
 					end
-					if autoConfigMigrated then
-						local migrationSaved = SaveConfiguration()
-						if not migrationSaved then
-							ShowNotification("Auto-execute migration could not be persisted; the current session can still use the saved entry.", "Warning")
-						end
-					end
+					if autoConfigMigrated then SaveConfiguration() end
 				end
-				if #autoQueue > 0 then
-					_VH_TrackTask(function()
-						if type(CompileFunction) ~= "function" then ShowNotification("Auto-execute skipped: executor lacks loadstring/load support.", "Error"); return end
-						startedList, failList = {}, {}
-						for _, scriptData in ipairs(autoQueue) do
-							if not _VH_IsTaskCurrent(generation) then return end
-							scrRaw = FetchWithRetry(scriptData.RawUrl, 2)
-							if not _VH_IsTaskCurrent(generation) then return end
-							if scrRaw and #string.gsub(scrRaw, "%s+", "") > 0 then
-								if ExecuteSandboxed(scrRaw, scriptData.Name, true) then startedList[#startedList + 1] = scriptData.Name else failList[#failList + 1] = scriptData.Name end
-							else
-								failList[#failList + 1] = scriptData.Name
-							end
-							task.wait(0.3)
-						end
-						if #startedList > 0 and #failList == 0 then
-							ShowNotification("Auto-started " .. #startedList .. " script" .. (#startedList == 1 and "" or "s") .. ".", "Success")
-						elseif #startedList > 0 then
-							ShowNotification("Auto-started " .. #startedList .. "; " .. #failList .. " failed to start.", "Warning")
-						elseif #failList > 0 then
-							ShowNotification("Auto-execute: " .. #failList .. " script" .. (#failList == 1 and "" or "s") .. " failed to start.", "Warning")
-						end
-					end)
+			end
+			for _, cardEntry in ipairs(nextEntries) do
+				if cardEntry and type(cardEntry.UpdateUI) == "function" then
+					pcall(cardEntry.UpdateUI)
 				end
 			end
 			if refreshCategory == currentScriptCategory then
