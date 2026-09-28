@@ -191,11 +191,7 @@ ManualRefreshSelection = "All"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
 UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
 EmbeddedUtilitiesCatalog = {
-	{Name = "Anti AFK", Description = "Prevents the player from being marked AFK.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/AntiAFK", ImageAssetId = "rbxassetid://88299949043864", TagType = "UPDATED", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Anti AFK", "Utility"}},
-	{Name = "Test Utility 2", Description = "Test utility for catalog loading.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/TestUtility2", ImageAssetId = "rbxassetid://88299949043864", TagType = "HOT", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Test", "Utility"}},
-	{Name = "Test Utility 3", Description = "Another utility used for testing the catalog.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/TestUtility3", ImageAssetId = "rbxassetid://88299949043864", TagType = "NONE", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Test"}},
-	{Name = "FPS Monitor", Description = "Displays FPS information for testing.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/FPSMonitor", ImageAssetId = "rbxassetid://88299949043864", TagType = "UPDATED", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"FPS", "Monitor"}},
-	{Name = "Ping Monitor", Description = "Displays network ping information for testing.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/PingMonitor", ImageAssetId = "rbxassetid://88299949043864", TagType = "HOT", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Ping", "Network"}}
+	{Name = "Anti AFK", Description = "Prevents the player from being marked AFK.", RawUrl = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/AntiAFK", ImageAssetId = "rbxassetid://88299949043864", TagType = "UPDATED", LastUpdated = 1790519403, PlaceId = 0, Category = "Utilities", Tags = {"Anti AFK", "Utility"}}
 }
 CategoryCatalogStates = {
 	Games = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false },
@@ -4294,7 +4290,9 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Two-Catalog Startup, Notification Fix & Cleanup", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed prolonged Connecting... states during catalog loading with bounded request timeouts.\n• Preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Fixed Utilities catalog refresh caching so removed or changed utility entries are fetched from the latest remote utilitycatalog.json instead of reusing a cached response.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.6 - Two-Catalog Startup, Notification Fix & Cleanup", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed prolonged Connecting... states during catalog loading with bounded request timeouts.\n• Preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Fixed Utilities catalog refresh caching so removed or changed utility entries are fetched from the latest remote utilitycatalog.json instead of reusing a cached response.
+• Fixed stale Utilities fallback entries so removed test utilities are no longer reintroduced when the remote catalog request is temporarily unavailable.
+• Utilities refresh now tries the direct catalog URL first and then a cache-busted URL for better compatibility across HTTP methods.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5792,29 +5790,33 @@ function FetchCatalogWithFallback(category, cacheBust)
 	local primary = GetActiveCatalogUrl(category)
 	local lastStatus, lastError = nil, nil
 	if primary ~= "" then
-		local finished = false
-		local response, status, err
-		local requestUrl = cacheBust and AddCacheBuster(primary) or primary
-		task.spawn(function()
-			local ok, body, code, requestError = pcall(function()
-				return UniversalHttpGet(requestUrl)
+		local urls = {primary}
+		if cacheBust then urls[2] = AddCacheBuster(primary) end
+		for index, requestUrl in ipairs(urls) do
+			local finished = false
+			local response, status, err
+			task.spawn(function()
+				local ok, body, code, requestError = pcall(function()
+					return UniversalHttpGet(requestUrl)
+				end)
+				if ok then
+					response, status, err = body, code, requestError
+				else
+					err = tostring(body or "catalog request failed")
+				end
+				finished = true
 			end)
-			if ok then
-				response, status, err = body, code, requestError
-			else
-				err = tostring(body or "catalog request failed")
+			local timeout = category == "Utilities" and 8 or 7
+			local deadline = os.clock() + timeout
+			while not finished and os.clock() < deadline do
+				task.wait(0.1)
 			end
-			finished = true
-		end)
-		local timeout = category == "Utilities" and 5 or 6
-		local deadline = os.clock() + timeout
-		while not finished and os.clock() < deadline do
-			task.wait(0.1)
+			if finished and response and type(response) == "string" and #response > 0 then
+				return response, status, nil, primary
+			end
+			lastStatus, lastError = status, finished and err or "catalog request timed out"
+			if index == 1 and urls[2] then task.wait(0.2) end
 		end
-		if finished and response and type(response) == "string" and #response > 0 then
-			return response, status, nil, primary
-		end
-		lastStatus, lastError = status, finished and err or "catalog request timed out"
 	end
 	if category == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" and #EmbeddedUtilitiesCatalog > 0 then
 		local ok, encoded = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
