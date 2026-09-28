@@ -5662,14 +5662,32 @@ function GetCatalogUrlCandidates(category)
 	return candidates
 end
 function FetchCatalogWithFallback(category, retries, cacheBust)
-	local candidates = GetCatalogUrlCandidates(category)
+	local primary = GetActiveCatalogUrl(category)
 	local lastStatus, lastError = nil, nil
-	for _, url in ipairs(candidates) do
-		local response, status, err = FetchWithRetry(url, retries, category == "Utilities" and false or cacheBust)
-		if response and type(response) == "string" and #response > 0 then
-			return response, status, nil, url
+	if primary ~= "" then
+		local finished = false
+		local response, status, err
+		local requestUrl = category == "Utilities" and primary or (cacheBust and AddCacheBuster(primary) or primary)
+		task.spawn(function()
+			local ok, body, code, requestError = pcall(function()
+				return UniversalHttpGet(requestUrl)
+			end)
+			if ok then
+				response, status, err = body, code, requestError
+			else
+				err = tostring(body or "catalog request failed")
+			end
+			finished = true
+		end)
+		local timeout = category == "Utilities" and 5 or 6
+		local deadline = os.clock() + timeout
+		while not finished and os.clock() < deadline do
+			task.wait(0.1)
 		end
-		lastStatus, lastError = status, err
+		if finished and response and type(response) == "string" and #response > 0 then
+			return response, status, nil, primary
+		end
+		lastStatus, lastError = status, finished and err or "catalog request timed out"
 	end
 	if category == "Utilities" and HttpService and type(HttpService.JSONEncode) == "function" and type(EmbeddedUtilitiesCatalog) == "table" and #EmbeddedUtilitiesCatalog > 0 then
 		local ok, encoded = pcall(function() return HttpService:JSONEncode(EmbeddedUtilitiesCatalog) end)
@@ -5677,7 +5695,7 @@ function FetchCatalogWithFallback(category, retries, cacheBust)
 			return encoded, 200, "embedded utilities fallback", "embedded://utilitycatalog.json"
 		end
 	end
-	return nil, lastStatus, lastError, candidates[1], false
+	return nil, lastStatus, lastError, primary
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
