@@ -171,6 +171,7 @@ local function StartMainScript()
 end
 
 local function CreateGUI()
+    -- v8: lighter frosted-indigo glass; reduced opaque layering to preserve the game background.
     local player = game:GetService("Players").LocalPlayer
     local coreGui = game:GetService("CoreGui")
     local TweenService = game:GetService("TweenService")
@@ -185,10 +186,10 @@ local function CreateGUI()
         IndigoBright = Color3.fromRGB(106, 96, 255),
         IndigoSoft = Color3.fromRGB(183, 178, 255),
         IndigoDeep = Color3.fromRGB(41, 34, 123),
-        Glass = Color3.fromRGB(11, 12, 24),
+        Glass = Color3.fromRGB(24, 25, 46),
         White = Color3.fromRGB(248, 248, 255),
         Muted = Color3.fromRGB(166, 168, 191),
-        Faint = Color3.fromRGB(104, 106, 130),
+        Faint = Color3.fromRGB(130, 132, 158),
         Success = Color3.fromRGB(82, 224, 145),
         Error = Color3.fromRGB(255, 104, 130),
         Warning = Color3.fromRGB(255, 194, 91),
@@ -257,19 +258,19 @@ local function CreateGUI()
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 4)
     MainFrame.Size = UDim2.new(0, BASE_W, 0, BASE_H)
     MainFrame.BackgroundColor3 = Theme.Glass
-    MainFrame.BackgroundTransparency = 0.055
+    MainFrame.BackgroundTransparency = 0.20
     MainFrame.BorderSizePixel = 0
     MainFrame.GroupTransparency = 1
     MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
     corner(MainFrame, 21)
-    local MainStroke = stroke(MainFrame, Theme.IndigoBright, 0.22, 1.2)
+    local MainStroke = stroke(MainFrame, Theme.IndigoBright, 0.10, 1.2)
 
     local MainGradient = Instance.new("UIGradient")
     MainGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 38, 73)),
-        ColorSequenceKeypoint.new(0.48, Color3.fromRGB(20, 21, 40)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 20))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(58, 59, 104)),
+        ColorSequenceKeypoint.new(0.48, Color3.fromRGB(33, 34, 66)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(19, 20, 38))
     })
     MainGradient.Rotation = 132
     MainGradient.Parent = MainFrame
@@ -279,7 +280,7 @@ local function CreateGUI()
     Light.Size = UDim2.new(0, 180, 0, 120)
     Light.Position = UDim2.new(0.48, 0, -0.25, 0)
     Light.BackgroundColor3 = Theme.IndigoBright
-    Light.BackgroundTransparency = 0.955
+    Light.BackgroundTransparency = 0.88
     Light.BorderSizePixel = 0
     Light.ZIndex = 1
     Light.Parent = MainFrame
@@ -290,13 +291,13 @@ local function CreateGUI()
     Header.Size = UDim2.new(1, -24, 0, 58)
     Header.Position = UDim2.new(0, 12, 0, 11)
     Header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Header.BackgroundTransparency = 0.963
+    Header.BackgroundTransparency = 0.90
     Header.BorderSizePixel = 0
     Header.Active = true
     Header.ZIndex = 5
     Header.Parent = MainFrame
     corner(Header, 17)
-    stroke(Header, Color3.fromRGB(255,255,255), 0.94, 1)
+    stroke(Header, Color3.fromRGB(255,255,255), 0.84, 1)
 
     local Brand = Instance.new("Frame")
     Brand.Size = UDim2.new(0, 38, 0, 38)
@@ -358,7 +359,7 @@ local function CreateGUI()
     CloseBtn.Size = UDim2.new(0, 30, 0, 30)
     CloseBtn.Position = UDim2.new(1, -39, 0.5, -15)
     CloseBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    CloseBtn.BackgroundTransparency = 0.955
+    CloseBtn.BackgroundTransparency = 0.90
     CloseBtn.BorderSizePixel = 0
     CloseBtn.AutoButtonColor = false
     CloseBtn.Text = "×"
@@ -368,15 +369,15 @@ local function CreateGUI()
     CloseBtn.ZIndex = 9
     CloseBtn.Parent = Header
     corner(CloseBtn, 10)
-    local CloseStroke = stroke(CloseBtn, Color3.fromRGB(255,255,255), 0.93, 1)
+    local CloseStroke = stroke(CloseBtn, Color3.fromRGB(255,255,255), 0.84, 1)
 
     CloseBtn.MouseEnter:Connect(function()
         tween(CloseBtn, 0.08, {BackgroundTransparency = 0.90, TextColor3 = Theme.White})
         tween(CloseStroke, 0.08, {Transparency = 0.80})
     end)
     CloseBtn.MouseLeave:Connect(function()
-        tween(CloseBtn, 0.10, {BackgroundTransparency = 0.955, TextColor3 = Theme.Muted})
-        tween(CloseStroke, 0.10, {Transparency = 0.93})
+        tween(CloseBtn, 0.10, {BackgroundTransparency = 0.90, TextColor3 = Theme.Muted})
+        tween(CloseStroke, 0.10, {Transparency = 0.84})
     end)
 
     -- Intro / secure status ----------------------------------------------
@@ -399,12 +400,12 @@ local function CreateGUI()
     SecurePill.Size = UDim2.new(0, 134, 0, 25)
     SecurePill.Position = UDim2.new(1, -148, 0, 74)
     SecurePill.BackgroundColor3 = Theme.Indigo
-    SecurePill.BackgroundTransparency = 0.90
+    SecurePill.BackgroundTransparency = 0.82
     SecurePill.BorderSizePixel = 0
     SecurePill.ZIndex = 6
     SecurePill.Parent = MainFrame
     corner(SecurePill, 13)
-    stroke(SecurePill, Theme.IndigoSoft, 0.72, 1)
+    stroke(SecurePill, Theme.IndigoSoft, 0.58, 1)
 
     local SecureDot = Instance.new("Frame")
     SecureDot.Size = UDim2.new(0, 7, 0, 7)
@@ -466,14 +467,14 @@ local function CreateGUI()
             Button.Name = label .. "Button"
             Button.Size = UDim2.new(buttonWidth, -gapComp, 1, 0)
             Button.BackgroundColor3 = Color3.fromRGB(255,255,255)
-            Button.BackgroundTransparency = 0.95
+            Button.BackgroundTransparency = 0.90
             Button.BorderSizePixel = 0
             Button.AutoButtonColor = false
             Button.Text = ""
             Button.ZIndex = 6
             Button.Parent = SocialRow
             corner(Button, 10)
-            local bStroke = stroke(Button, accent, 0.82, 1)
+            local bStroke = stroke(Button, accent, 0.68, 1)
 
             local Icon = Instance.new("ImageLabel")
             Icon.Size = UDim2.new(0, 16, 0, 16)
@@ -499,12 +500,12 @@ local function CreateGUI()
             Label.Parent = Button
 
             Button.MouseEnter:Connect(function()
-                tween(Button, 0.08, {BackgroundTransparency = 0.90})
-                tween(bStroke, 0.08, {Transparency = 0.60})
+                tween(Button, 0.08, {BackgroundTransparency = 0.83})
+                tween(bStroke, 0.08, {Transparency = 0.44})
             end)
             Button.MouseLeave:Connect(function()
-                tween(Button, 0.10, {BackgroundTransparency = 0.95})
-                tween(bStroke, 0.10, {Transparency = 0.82})
+                tween(Button, 0.10, {BackgroundTransparency = 0.90})
+                tween(bStroke, 0.10, {Transparency = 0.68})
             end)
             Button.MouseButton1Click:Connect(function()
                 fSetClipboard(url)
@@ -551,12 +552,12 @@ local function CreateGUI()
     KeyInputShell.Size = UDim2.new(1, -28, 0, 44)
     KeyInputShell.Position = UDim2.new(0, 14, 0, contentTop + 17)
     KeyInputShell.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    KeyInputShell.BackgroundTransparency = 0.947
+    KeyInputShell.BackgroundTransparency = 0.89
     KeyInputShell.BorderSizePixel = 0
     KeyInputShell.ZIndex = 6
     KeyInputShell.Parent = MainFrame
     corner(KeyInputShell, 14)
-    local KeyStroke = stroke(KeyInputShell, Theme.IndigoBright, 0.83, 1)
+    local KeyStroke = stroke(KeyInputShell, Theme.IndigoBright, 0.67, 1)
 
     local KeyIcon = Instance.new("Frame")
     KeyIcon.Size = UDim2.new(0, 28, 0, 28)
@@ -602,8 +603,8 @@ local function CreateGUI()
         tween(KeyIcon, 0.10, {BackgroundTransparency = 0.64})
     end)
     KeyInput.FocusLost:Connect(function()
-        tween(KeyStroke, 0.10, {Transparency = 0.83})
-        tween(KeyInputShell, 0.10, {BackgroundTransparency = 0.947})
+        tween(KeyStroke, 0.10, {Transparency = 0.67})
+        tween(KeyInputShell, 0.10, {BackgroundTransparency = 0.89})
         tween(KeyIcon, 0.10, {BackgroundTransparency = 0.80})
     end)
 
@@ -651,7 +652,7 @@ local function CreateGUI()
     GetKeyBtn.Name = "GetKeyButton"
     GetKeyBtn.Size = UDim2.new(0.42, -3.5, 1, 0)
     GetKeyBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    GetKeyBtn.BackgroundTransparency = 0.932
+    GetKeyBtn.BackgroundTransparency = 0.88
     GetKeyBtn.BorderSizePixel = 0
     GetKeyBtn.AutoButtonColor = false
     GetKeyBtn.Text = "GET KEY"
@@ -661,7 +662,7 @@ local function CreateGUI()
     GetKeyBtn.ZIndex = 7
     GetKeyBtn.Parent = ActionRow
     corner(GetKeyBtn, 13)
-    local GetKeyStroke = stroke(GetKeyBtn, Theme.IndigoBright, 0.70, 1)
+    local GetKeyStroke = stroke(GetKeyBtn, Theme.IndigoBright, 0.58, 1)
 
     local function bindButton(button, defaultTransparency, hoverTransparency, buttonStroke)
         button.MouseEnter:Connect(function()
@@ -675,7 +676,7 @@ local function CreateGUI()
     end
 
     bindButton(VerifyBtn, 0, 0.07, VerifyStroke)
-    bindButton(GetKeyBtn, 0.932, 0.875, GetKeyStroke)
+    bindButton(GetKeyBtn, 0.88, 0.82, GetKeyStroke)
 
     -- Status + footer -----------------------------------------------------
     local StatusPanel = Instance.new("Frame")
@@ -683,12 +684,12 @@ local function CreateGUI()
     StatusPanel.Size = UDim2.new(1, -28, 0, 34)
     StatusPanel.Position = UDim2.new(0, 14, 0, contentTop + 115)
     StatusPanel.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    StatusPanel.BackgroundTransparency = 0.955
+    StatusPanel.BackgroundTransparency = 0.89
     StatusPanel.BorderSizePixel = 0
     StatusPanel.ZIndex = 6
     StatusPanel.Parent = MainFrame
     corner(StatusPanel, 12)
-    local StatusStroke = stroke(StatusPanel, Color3.fromRGB(255,255,255), 0.93, 1)
+    local StatusStroke = stroke(StatusPanel, Color3.fromRGB(255,255,255), 0.82, 1)
 
     StatusDot = Instance.new("Frame")
     StatusDot.Name = "StatusDot"
@@ -734,10 +735,10 @@ local function CreateGUI()
         Status.Text = tostring(message)
         Status.TextColor3 = color or Theme.Muted
         StatusDot.BackgroundColor3 = color or Theme.IndigoSoft
-        tween(StatusPanel, 0.10, {BackgroundTransparency = color and 0.915 or 0.955})
+        tween(StatusPanel, 0.10, {BackgroundTransparency = color and 0.84 or 0.89})
         tween(StatusStroke, 0.10, {
             Color = color or Color3.fromRGB(255,255,255),
-            Transparency = color and 0.80 or 0.93
+            Transparency = color and 0.65 or 0.82
         })
     end
 
