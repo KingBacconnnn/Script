@@ -26,13 +26,13 @@ local Config = {
     MainScriptURL   = "Link", -- The raw URL of your main script
     
     -- [4] Social Media Settings (Set to true to show, false to hide)
-    ShowDiscord     = false,
+    ShowDiscord     = true,
     DiscordURL      = "https://discord.gg/kT55J724BK",
     
     ShowInstagram   = false,
     InstagramURL    = "https://www.instagram.com/oyb0i/",
     
-    ShowYoutube     = false,
+    ShowYoutube     = true,
     YoutubeURL      = "https://www.youtube.com/channel/UCAlXXV1Hbvf7WbfXARuVtiQ",
 
     -- [5] File System
