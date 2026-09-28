@@ -282,11 +282,17 @@ function _VH_UnregConn(connection)
 end
 function _VH_TrackTask(fn)
 	local thread = nil
+	local completed = false
 	thread = task.spawn(function()
 		pcall(fn)
-		PendingTasks[thread] = nil
+		completed = true
+		if thread ~= nil then
+			PendingTasks[thread] = nil
+		end
 	end)
-	PendingTasks[thread] = true
+	if not completed and thread ~= nil then
+		PendingTasks[thread] = true
+	end
 	return thread
 end
 function _VH_IsTaskCurrent(generation)
