@@ -1329,7 +1329,7 @@ Instance.new("UICorner", MainPanel).CornerRadius = UDim.new(0, 12)
 PanelUIScale = Instance.new("UIScale", MainPanel)
 PanelUIScale.Scale = math.clamp(tonumber(SavedData.Settings.UIScale) or 1, 0.8, 1.2)
 function ApplyPanelUIScale(scaleValue)
-	nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
+	local nextScale = math.clamp(tonumber(scaleValue) or 1, 0.8, 1.2)
 	SavedData.Settings.UIScale = nextScale
 	if PanelUIScale and PanelUIScale.Parent then
 		_VH_SafeTween(PanelUIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = nextScale})
@@ -1339,23 +1339,18 @@ function ApplyPanelUIScale(scaleValue)
 	end
 	task.delay(0.24, function()
 		if isDestroying or not MainPanel or not MainPanel.Parent then return end
-		camera = workspace.CurrentCamera
-		viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-		baseWidth = MainPanel.AbsoluteSize.X
-		baseHeight = MainPanel.AbsoluteSize.Y
-		visualWidth = baseWidth * nextScale
-		visualHeight = baseHeight * nextScale
-		halfX = visualWidth * MainPanel.AnchorPoint.X
-		halfY = visualHeight * MainPanel.AnchorPoint.Y
-		currentX = MainPanel.Position.X.Scale * viewport.X + MainPanel.Position.X.Offset
-		currentY = MainPanel.Position.Y.Scale * viewport.Y + MainPanel.Position.Y.Offset
-		minX = halfX
-		maxX = math.max(minX, viewport.X - (visualWidth - halfX))
-		minY = halfY
-		maxY = math.max(minY, viewport.Y - (visualHeight - halfY))
-		currentX = math.clamp(currentX, minX, maxX)
-		currentY = math.clamp(currentY, minY, maxY)
-		MainPanel.Position = UDim2.new(0, currentX, 0, currentY)
+		local camera = workspace.CurrentCamera
+		local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+		local baseWidth, baseHeight = MainPanel.AbsoluteSize.X, MainPanel.AbsoluteSize.Y
+		local visualWidth, visualHeight = baseWidth * nextScale, baseHeight * nextScale
+		local halfX, halfY = visualWidth * MainPanel.AnchorPoint.X, visualHeight * MainPanel.AnchorPoint.Y
+		local position = MainPanel.Position
+		local currentX = position.X.Scale * viewport.X + position.X.Offset
+		local currentY = position.Y.Scale * viewport.Y + position.Y.Offset
+		local minX, minY = halfX, halfY
+		local maxX = math.max(minX, viewport.X - (visualWidth - halfX))
+		local maxY = math.max(minY, viewport.Y - (visualHeight - halfY))
+		MainPanel.Position = UDim2.new(0, math.clamp(currentX, minX, maxX), 0, math.clamp(currentY, minY, maxY))
 		if PositionOpenPanels then PositionOpenPanels() end
 	end)
 end
@@ -4294,7 +4289,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Performance & Stability Cleanup", "• Fixed the tracked-task race that could leave completed tasks retained.\n• Reduced per-card UI event connections and removed unused descendant caching from script cards.\n• Cached normalized search fields to avoid repeated string normalization during filtering.\n• Cached recommendation token/topic analysis and moved static recommendation dictionaries out of hot paths.\n• Fixed callback temporary variables that could leak across refreshes and asynchronous callbacks.\n• Kept the existing executor compatibility fallbacks for requests, HTTP, compilation, GUI parenting/protection, file I/O, JSON, and related APIs.\n• Kept the release version at v2.0.6 and preserved the existing catalog and execution behavior.", ChangelogsView)
+CreateParagraph("v2.0.6 - Stability, Performance & Catalog Fixes", "• Fixed tracked-task cleanup so completed asynchronous tasks are not retained accidentally.\n• Fixed UI-scale refresh state leaking between delayed callbacks.\n• Fixed Utilities catalog refreshes not receiving the same cache-busting behavior as Games.\n• Fixed catalog refresh bookkeeping so each category records its own refresh completion state.\n• Reduced repeated search normalization and cached recommendation analysis to lower filtering and recommendation overhead.\n• Removed unused per-card descendant caching and unnecessary UI event work without removing card features.\n• Reduced temporary shared-state usage in asynchronous callbacks and preserved executor fallback paths for HTTP, compilation, GUI protection, file I/O, JSON, and related APIs.\n• Added debounced persistence for auto-execute migrations triggered during card refreshes.\n• Kept the release version at v2.0.6 and preserved the existing Games/Utilities catalog structure and execution behavior.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5234,6 +5229,20 @@ function _VH_NormalizeAutoExecuteName(value)
 	if type(value) ~= "string" then return "" end
 	return string.lower(string.gsub(value, "^%s*(.-)%s*$", "%1"))
 end
+AutoConfigSaveQueued = false
+function _VH_QueueConfigurationSave()
+	if AutoConfigSaveQueued or isDestroying or not ConfigurationLoaded or type(write_file) ~= "function" then return end
+	AutoConfigSaveQueued = true
+	task.delay(0.25, function()
+		AutoConfigSaveQueued = false
+		if isDestroying or not ConfigurationLoaded then return end
+		local ok = SaveConfiguration()
+		if not ok then
+			ShowNotification("Configuration changes could not be saved to disk.", "Warning")
+		end
+	end)
+end
+
 function _VH_GetSavedAutoExecute(scriptData)
 	if type(scriptData) ~= "table" then return nil, false end
 	local scriptId = tostring(scriptData.Id or "")
@@ -5640,7 +5649,10 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	scriptEntry.UpdateUI = function()
 		local isFav = SavedData.Favorites[scriptId]
 		local compatible = IsScriptCompatible(data)
-		if compatible then _VH_GetSavedAutoExecute(data) end
+		if compatible then
+			local _, migrated = _VH_GetSavedAutoExecute(data)
+			if migrated then _VH_QueueConfigurationSave() end
+		end
 		local isON = compatible and _VH_IsAutoExecuteActive(scriptId)
 		ApplyTagBorder(card, tagType, cardStroke)
 		card.BackgroundColor3 = isRecommended and Color3.fromRGB(31, 42, 55) or tagConfig.CardColor
@@ -5790,8 +5802,8 @@ function FetchCatalogWithFallback(category, cacheBust)
 	if primary ~= "" then
 		local finished = false
 		local response, status, err
-		local requestUrl = category == "Utilities" and primary or (cacheBust and AddCacheBuster(primary) or primary)
-		task.spawn(function()
+		local requestUrl = cacheBust and AddCacheBuster(primary) or primary
+		local requestThread = task.spawn(function()
 			local ok, body, code, requestError = pcall(function()
 				return UniversalHttpGet(requestUrl)
 			end)
@@ -5806,6 +5818,9 @@ function FetchCatalogWithFallback(category, cacheBust)
 		local deadline = os.clock() + timeout
 		while not finished and os.clock() < deadline do
 			task.wait(0.1)
+		end
+		if not finished and type(task.cancel) == "function" then
+			pcall(task.cancel, requestThread)
 		end
 		if finished and response and type(response) == "string" and #response > 0 then
 			return response, status, nil, primary
@@ -5927,12 +5942,12 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 	local function FinishRefresh()
 		if generation ~= CatalogGeneration then return end
 		dbRefreshing = false
-
-		if not isAutoRefresh then
-			LastCatalogRefreshAt = os.clock()
+		local finishedAt = os.clock()
+		local finishedState = GetCategoryCatalogState(refreshCategory)
+		if not isAutoRefresh then finishedState.LastRefreshAt = finishedAt end
+		if refreshCategory == currentScriptCategory and not isAutoRefresh then
+			LastCatalogRefreshAt = finishedAt
 		end
-		local finishedState = GetCategoryCatalogState(currentScriptCategory)
-		finishedState.LastRefreshAt = LastCatalogRefreshAt
 		if CatalogRefreshQueued and not isDestroying then
 			_VH_ScheduleQueuedCatalogRefresh()
 		end
