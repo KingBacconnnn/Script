@@ -189,7 +189,7 @@ LastCatalogRefreshAt = 0
 currentScriptCategory = "Games"
 ManualRefreshSelection = "All"
 GAMES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalog.json"
-UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBacconnnn/VeloxScripts/refs/heads/main/catalogtest.json"
+UTILITIES_CATALOG_URL = "https://raw.githubusercontent.com/KingBaconnnn/VeloxScripts/refs/heads/main/utilitycatalog.json"
 CategoryCatalogStates = {
 	Games = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false },
 	Utilities = { Entries = {}, ByKey = {}, Fingerprint = nil, LastRefreshAt = 0, Loaded = false }
@@ -2983,7 +2983,7 @@ local function CreateScriptCategoryButton(category, layoutOrder)
 
 		SetScriptEmptyState("loading", category)
 		ShowNotification("Loading " .. category .. " catalog...", "Info")
-		PendingTasks.__LoadCatalog(false, false, category, category == "Utilities" and true or false)
+		PendingTasks.__LoadCatalog(false, false, category)
 	end))
 	return button
 end
@@ -4287,7 +4287,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Utilities Refresh, Two-Catalog Startup & Stability", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed prolonged Connecting... states during catalog loading with bounded request timeouts.\n• Removed hardcoded Utilities catalog entries so utilitycatalog.json is the single source of Utilities data.\n• When a Utilities refresh fails, the existing loaded Utilities entries are preserved instead of injecting hardcoded fallback entries.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Fixed Utilities catalog refresh caching so removed or changed utility entries are fetched from the latest remote utilitycatalog.json instead of reusing a cached response.\n• Utilities now use the same direct HTTPS catalog request flow as Games, with a cache-busted URL used only as a fallback when the direct request does not return data.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Added compiler-source guards for UTF-8 BOMs, non-script HTTP responses, and malformed or incomplete string errors so failed sources never proceed with a nil compiled chunk.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free, preserved the existing execution implementation, and avoided unnecessary local-heavy additions to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.6 - Shared Catalog Loading, Utilities Refresh & Stability", "• Games and Utilities now use the same catalog loading pipeline; only the remote catalog URL differs.\n• Removed the separate Utilities-only request behavior so both catalogs use the same HTTP fallbacks, timeout handling, JSON parsing, validation, fingerprinting, and card replacement flow.\n• Removed the unused extra argument from the Utilities tab catalog load call.\n• Fixed catalog refresh bookkeeping so each category records its own refresh timestamp instead of depending on the currently selected tab.\n• Utilities now loads directly from utilitycatalog.json without any hardcoded catalog entries or embedded Utility fallback data.\n• Utilities refresh keeps the same direct-request-then-cache-busted fallback order used by Games.\n• Preserved separate Games and Utilities catalog state so switching tabs does not require re-downloading an already loaded catalog.\n• Preserved the existing request, compiler, HTTP, GUI-parent, configuration, notification, and other fallback paths.\n• Kept the source comment-free and avoided unnecessary local-heavy additions to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5794,44 +5794,47 @@ function CreateScriptCard(data, renderParent, registerImmediately, originalIndex
 	return scriptEntry
 end
 CATALOG_REFRESH_INTERVAL = 300
+CATALOG_REQUEST_TIMEOUT = 7
+CatalogUrls = { Games = GAMES_CATALOG_URL, Utilities = UTILITIES_CATALOG_URL }
 function GetActiveCatalogUrl(category)
 	category = category or currentScriptCategory
-	local url = category == "Utilities" and UTILITIES_CATALOG_URL or GAMES_CATALOG_URL
+	local url = CatalogUrls[category]
 	if type(url) ~= "string" then return "" end
 	return string.gsub(url, "^%s*(.-)%s*$", "%1")
 end
-function FetchCatalogWithFallback(category, cacheBust)
-	local primary = GetActiveCatalogUrl(category)
+function FetchCatalogUrl(primary, cacheBust)
+	if type(primary) ~= "string" or primary == "" then return nil, nil, "invalid catalog url", primary end
+	local urls = {primary}
+	if cacheBust then urls[2] = AddCacheBuster(primary) end
 	local lastStatus, lastError = nil, nil
-	if primary ~= "" then
-		local urls = {primary}
-		if cacheBust then urls[2] = AddCacheBuster(primary) end
-		for index, requestUrl in ipairs(urls) do
-			local finished = false
-			local response, status, err
-			task.spawn(function()
-				local ok, body, code, requestError = pcall(function()
-					return UniversalHttpGet(requestUrl)
-				end)
-				if ok then
-					response, status, err = body, code, requestError
-				else
-					err = tostring(body or "catalog request failed")
-				end
-				finished = true
+	for index, requestUrl in ipairs(urls) do
+		local finished = false
+		local response, status, err
+		task.spawn(function()
+			local ok, body, code, requestError = pcall(function()
+				return UniversalHttpGet(requestUrl)
 			end)
-			local deadline = os.clock() + 7
-			while not finished and os.clock() < deadline do
-				task.wait(0.1)
+			if ok then
+				response, status, err = body, code, requestError
+			else
+				err = tostring(body or "catalog request failed")
 			end
-			if finished and response and type(response) == "string" and #response > 0 then
-				return response, status, nil, primary
-			end
-			lastStatus, lastError = status, finished and err or "catalog request timed out"
-			if index == 1 and urls[2] then task.wait(0.2) end
+			finished = true
+		end)
+		local deadline = os.clock() + CATALOG_REQUEST_TIMEOUT
+		while not finished and os.clock() < deadline do
+			task.wait(0.1)
 		end
+		if finished and response and type(response) == "string" and #response > 0 then
+			return response, status, nil, primary
+		end
+		lastStatus, lastError = status, finished and err or "catalog request timed out"
+		if index == 1 and urls[2] then task.wait(0.2) end
 	end
 	return nil, lastStatus, lastError, primary
+end
+function FetchCatalogWithFallback(category, cacheBust)
+	return FetchCatalogUrl(GetActiveCatalogUrl(category), cacheBust)
 end
 dbRefreshing = false
 CatalogBatchRefreshing = false
@@ -5950,7 +5953,7 @@ PendingTasks.__LoadCatalog = function(force, isAutoRefresh, expectedCategory)
 		if not isAutoRefresh then
 			LastCatalogRefreshAt = os.clock()
 		end
-		local finishedState = GetCategoryCatalogState(currentScriptCategory)
+		local finishedState = GetCategoryCatalogState(refreshCategory)
 		finishedState.LastRefreshAt = LastCatalogRefreshAt
 		if CatalogRefreshQueued and not isDestroying then
 			_VH_ScheduleQueuedCatalogRefresh()
