@@ -5809,8 +5809,13 @@ function FetchCatalogWithFallback(category, cacheBust)
 	local primary = GetActiveCatalogUrl(category)
 	local lastStatus, lastError = nil, nil
 	if primary ~= "" then
-		local urls = {primary}
-		if cacheBust then urls[2] = AddCacheBuster(primary) end
+		local urls = {}
+		if cacheBust then
+			urls[1] = AddCacheBuster(primary)
+			urls[2] = primary
+		else
+			urls[1] = primary
+		end
 		for index, requestUrl in ipairs(urls) do
 			local finished = false
 			local response, status, err
