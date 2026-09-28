@@ -157,7 +157,13 @@ VeloxIcons = {
 	RefreshAll = "rbxassetid://137146389676408",
 	ChevronDown = "rbxassetid://97045880141942",
 	Globe = "rbxassetid://84596747718088",
-	Character = "rbxassetid://71205921945680"
+	Character = "rbxassetid://71205921945680",
+	NotificationSuccess = "rbxassetid://98454659316573",
+	NotificationError = "rbxassetid://138405666905027",
+	NotificationWarning = "rbxassetid://138405666905027",
+	NotificationInfo = "rbxassetid://78205748034374",
+	NotificationSystem = "rbxassetid://78205748034374",
+	NotificationExecution = "rbxassetid://103305143354572"
 }
 function CreateVeloxIcon(parent, asset, size, color, position, anchor, zIndex, name)
 	local img = Instance.new("ImageLabel", parent)
@@ -1623,14 +1629,15 @@ function StandaloneBannerNotification(msg, notifType)
 		iconCircle.ZIndex = 2004
 		Instance.new("UICorner", iconCircle).CornerRadius = UDim.new(1, 0)
 
-		local icon = Instance.new("TextLabel", iconCircle)
-		icon.Size = UDim2.new(1, 0, 1, 0)
-		icon.BackgroundTransparency = 1
-		icon.Text = ({Success = "✓", Error = "!", Warning = "!", Info = "i", System = "•", Execution = "▶"})[nType] or "i"
-		icon.TextColor3 = typeInfo.Color
-		icon.Font = Enum.Font.GothamBold
-		icon.TextSize = IsMobile and 10 or 11
-		icon.ZIndex = 2005
+		local notificationIconAsset = ({
+			Success = VeloxIcons.NotificationSuccess,
+			Error = VeloxIcons.NotificationError,
+			Warning = VeloxIcons.NotificationWarning,
+			Info = VeloxIcons.NotificationInfo,
+			System = VeloxIcons.NotificationSystem,
+			Execution = VeloxIcons.NotificationExecution
+		})[nType] or VeloxIcons.NotificationInfo
+		CreateVeloxIcon(iconCircle, notificationIconAsset, IsMobile and 11 or 12, typeInfo.Color, UDim2.new(0.5, IsMobile and -5.5 or -6, 0.5, IsMobile and -5.5 or -6), nil, 2005, "NotificationIcon")
 
 		local typeLabel = Instance.new("TextLabel", box)
 		typeLabel.Size = UDim2.new(1, -72, 0, 11)
@@ -1801,14 +1808,15 @@ function ShowNotification(msg, notifType)
 		iconCircle.ZIndex = 2004
 		Instance.new("UICorner", iconCircle).CornerRadius = UDim.new(1, 0)
 
-		local icon = Instance.new("TextLabel", iconCircle)
-		icon.Size = UDim2.new(1, 0, 1, 0)
-		icon.BackgroundTransparency = 1
-		icon.Text = ({Success = "✓", Error = "!", Warning = "!", Info = "i", System = "•", Execution = "▶"})[nType] or "i"
-		icon.TextColor3 = indicatorColor
-		icon.Font = Enum.Font.GothamBold
-		icon.TextSize = IsMobile and 10 or 11
-		icon.ZIndex = 2005
+		local notificationIconAsset = ({
+			Success = VeloxIcons.NotificationSuccess,
+			Error = VeloxIcons.NotificationError,
+			Warning = VeloxIcons.NotificationWarning,
+			Info = VeloxIcons.NotificationInfo,
+			System = VeloxIcons.NotificationSystem,
+			Execution = VeloxIcons.NotificationExecution
+		})[nType] or VeloxIcons.NotificationInfo
+		CreateVeloxIcon(iconCircle, notificationIconAsset, IsMobile and 11 or 12, indicatorColor, UDim2.new(0.5, IsMobile and -5.5 or -6, 0.5, IsMobile and -5.5 or -6), nil, 2005, "NotificationIcon")
 
 		local typeLabel = Instance.new("TextLabel", box)
 		typeLabel.Size = UDim2.new(1, -72, 0, 11)
@@ -4286,7 +4294,7 @@ function CreateParagraph(title, desc, parentView, order)
 	dLbl.TextWrapped = true; dLbl.LayoutOrder = 2
 end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
-CreateParagraph("v2.0.6 - Two-Catalog Startup, Stability & Cleanup", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed the hub remaining on Connecting... for too long during catalog loading with bounded request timeouts.\n• Preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Preserved the existing HTTP, request, compiler, file I/O, GUI-parent, protected-GUI, cloneref, configuration, notification, recommendation, execution, and catalog fallback paths.\n• Removed the obsolete single-catalog startup load and kept the two-catalog initializer as the only startup catalog path.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
+CreateParagraph("v2.0.6 - Two-Catalog Startup, Notification Fix & Cleanup", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed prolonged Connecting... states during catalog loading with bounded request timeouts.\n• Preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
