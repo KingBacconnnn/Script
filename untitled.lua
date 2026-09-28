@@ -4292,7 +4292,7 @@ end
 CreateParagraph("Found a Bug?", "If you run into any bugs, issues, or anything that doesn't seem right, please report it on our Discord. It really helps me figure out what's going wrong and fix it faster. Even small details can be useful, so don't hesitate to report anything you notice!", ChangelogsView)
 CreateParagraph("v2.0.6 - Two-Catalog Startup, Notification Fix & Cleanup", "• Games and Utilities catalogs now initialize at startup using separate catalog states.\n• Removed the need to switch to the Utilities tab before its catalog is initialized.\n• Added a startup completion notification after the Games and Utilities catalog initialization pass.\n• Prepared saved Auto Execute state independently for both catalogs without changing the existing execution path.\n• Fixed prolonged Connecting... states during catalog loading with bounded request timeouts.\n• Preserved the built-in Utilities recovery catalog when the remote source is unavailable.\n• Fixed UI Scale handling so 80%–120% scaling stays inside the viewport without unexpected shifting or clipping.\n• Fixed Utilities catalog refresh caching so removed or changed utility entries are fetched from the latest remote utilitycatalog.json instead of reusing a cached response.
 • Fixed stale Utilities fallback entries so removed test utilities are no longer reintroduced when the remote catalog request is temporarily unavailable.
-• Utilities refresh now tries the direct catalog URL first and then a cache-busted URL for better compatibility across HTTP methods.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
+• Utilities refresh now tries the direct catalog URL first and then a cache-busted URL for better compatibility across HTTP methods.\n• Fixed Execution/Starting script notifications so they use the same Velox notification renderer instead of prematurely falling back to the Roblox notification UI.\n• Replaced notification text symbols with icon assets from the supplied Icons library for Success, Error, Warning, Info, System, and Execution states.\n• Added compiler-source guards for UTF-8 BOMs, non-script HTTP responses, and malformed or incomplete string errors so failed sources never proceed with a nil compiled chunk.\n• Preserved existing request, compiler, HTTP, GUI-parent, protected-GUI, cloneref, configuration, catalog, notification, and other fallback paths without changing the existing execution implementation.\n• Kept the source comment-free and avoided unnecessary local-heavy changes to reduce register pressure.\n• Visible version is v2.0.6.", ChangelogsView)
 CreateParagraph("v2.0.3 - UI, Notifications & Catalog Improvements", "• Added adjustable UI scaling from 80% to 120% with saved scale settings.\n• Redesigned notifications with improved types, titles, close controls, animations, and countdown progress bars.\n• Improved notification stacking and mobile positioning/sizing.\n• Improved catalog refresh performance to reduce unnecessary UI recreation and frame spikes.\n• Improved automatic catalog refresh handling and refresh button feedback.\n• Updated script recommendation badges and card presentation.\n• Added testing-phase Recommended for You suggestions that surface other games using catalog metadata, favorites, game types, and recent updates.\n• Kept the PlaceId-based FOR YOU system as the primary current-game recommendation while adding separate Recommended for You suggestions.\n• Added additional UI and mobile performance refinements.", ChangelogsView)
 function _VH_HowToCard(parent, title, desc, order, iconAsset)
 	local block = Instance.new("Frame", parent)
@@ -5379,6 +5379,18 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		return false, "empty script source"
 	end
 
+	if string.sub(code, 1, 3) == "\239\187\191" then
+		code = string.sub(code, 4)
+	end
+	local sourceHead = string.lower(string.sub(code, 1, 160))
+	if string.find(sourceHead, "<html", 1, true)
+		or string.find(sourceHead, "<!doctype", 1, true)
+		or string.find(sourceHead, "404: not found", 1, true)
+		or string.find(sourceHead, "cannot get /", 1, true) then
+		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: downloaded data is not Lua source.", "Error")
+		return false, "downloaded data is not Lua source"
+	end
+
 	local ok, chunk, compileErr = pcall(CompileFunction, code, "=" .. tostring(scriptName))
 	if ok and type(chunk) == "function" then
 		_VH_TrackTask(function()
@@ -5402,6 +5414,13 @@ function ExecuteSandboxed(code, scriptName, suppressSuccessNotification)
 		or string.find(normalized, "registers", 1, true)
 		or (string.find(normalized, "register", 1, true) and string.find(normalized, "limit", 1, true)) then
 		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: compiler limit exceeded.", "Error")
+		return false, detail
+	end
+
+	if string.find(normalized, "malformed string", 1, true)
+		or string.find(normalized, "unfinished string", 1, true)
+		or string.find(normalized, "did you forget to finish", 1, true) then
+		ShowNotification("Compile failed [" .. tostring(scriptName) .. "]: source contains an incomplete string or was downloaded incomplete.", "Error")
 		return false, detail
 	end
 
