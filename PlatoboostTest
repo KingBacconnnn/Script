@@ -2,9 +2,6 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
-if game.PlaceId ~= 113290951185459 then
-    error("[Anime Dice - ReefHub] This script only works in Anime Dice.", 0)
-end
 do
     local blocked = false
     pcall(function()
@@ -28,7 +25,33 @@ pcall(function()
         getgenv().ADH_Heartbeat = { t = os.clock() }
     end
 end)
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local function loadWindUI()
+    local urls = {
+        "https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua",
+        "https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua",
+    }
+    local lastError
+    for _, url in ipairs(urls) do
+        local ok, result = pcall(function()
+            local source = game:HttpGet(url)
+            local compiler = loadstring or load
+            if type(compiler) ~= "function" then
+                error("Loadstring is not supported.")
+            end
+            local chunk = compiler(source)
+            if type(chunk) ~= "function" then
+                error("WindUI source compilation failed.")
+            end
+            return chunk()
+        end)
+        if ok and type(result) == "table" and type(result.CreateWindow) == "function" then
+            return result
+        end
+        lastError = result
+    end
+    error("WindUI failed to load. Last error: " .. tostring(lastError), 0)
+end
+local WindUI = loadWindUI()
 WindUI:SetTheme("Dark")
 
 local currentSection
