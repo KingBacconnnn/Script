@@ -613,6 +613,7 @@ need("TreeStructure", function() return require(RS.Framework.Features.Upgrades.T
 need("Rebirths", function() return require(RS.Framework.Features.Rebirth.Rebirths) end)
 need("DiceMod", function() return require(RS.Framework.Features.Rolling.Dice) end)
 need("TowersMod", function() return require(RS.Framework.Features.Towers.Towers) end)
+need("TowerController", function() return require(RS.Framework.Features.Towers.TowerController) end)
 need("BoostConfig", function() return require(RS.Framework.Features.Inventory.Kinds.Boost.BoostConfig) end)
 need("MonetConfig", function() return require(RS.Framework.Features.Monetization.MonetizationConfig) end)
 need("QuestConfig", function() return require(RS.Framework.Features.Quests.QuestConfig) end)
@@ -2330,53 +2331,53 @@ end
 local function doTowerLoop()
     if Busy.tower then return end
     Busy.tower = true
-    local play = getFn("Towers", "PlayTower")
-    local step = getFn("Towers", "CompleteTowerFloor")
-    if not play or not step then clog("Tower remote missing.") Busy.tower = false return end
+
+    local controller = G.TowerController
+    local equipBest = getSig("Towers", "EquipBestTowerTeam")
+    local cancelTower = getFn("Towers", "CancelTower")
+
+    if not controller or type(controller.startTower) ~= "function" then
+        clog("Tower controller unavailable.")
+        Busy.tower = false
+        return
+    end
+
     while F.tower and Alive do
-        if F.towerEquipBest then
-            local eb = getSig("Towers", "EquipBestTowerTeam")
-            if eb then pcall(function() eb:Fire() end) end
+        if F.towerEquipBest and equipBest then
+            pcall(function() equipBest:Fire() end)
             task.wait(0.5)
         end
+
         if F.smartTower then
             local pick, info = smartTowerPick()
             if pick and pick ~= F.towerName then
                 F.towerName = pick
-                clog("Smart tower: " .. pick .. (info and (" (f~" .. info.reach .. (info.detail and (" [" .. info.detail .. "]") or "")) .. ")" or ""))
+                clog("Smart tower: " .. tostring(pick))
             elseif pick then
-                clog("Smart tower checked: " .. pick .. (info and (" (f~" .. info.reach .. (info.detail and (" [" .. info.detail .. "]") or "")) .. ")" or "") .. " - already best")
-            else
-                clog("Smart tower: no team found, keeping " .. tostring(F.towerName))
+                clog("Smart tower checked: " .. tostring(pick))
             end
             syncTowerDropdown()
         end
-        local okStart, started = pcall(play, F.towerName)
-        if okStart and started then
-            clog("Tower started: " .. F.towerName)
+
+        local okStart = pcall(function()
+            controller.startTower(F.towerName)
+        end)
+
+        if okStart then
+            clog("Tower started: " .. tostring(F.towerName))
             lastTowerFloor = 1
             towerRunDrops, towerRunFloor0 = {}, 1
-            driveTower(step)
+            task.wait(1)
         else
-            local okP, seq = pcall(step)
-            if okP and type(seq) == "table" and #seq > 0 then
-                clog("Found an active tower run, continuing it...")
-                towerRunDrops = {}
-                Stats.towerFloors += 1
-                local sawP = false
-                for _, act in ipairs(seq) do
-                    if type(act) == "table" and act.action ~= "ended" then sawP = true break end
-                end
-                local runDone = handleTowerSeq(seq, sawP)
-                if not runDone and towerExitRestart() then runDone = true end
-                if not runDone then driveTower(step) end
-            else
-                clog("Tower failed to start: " .. F.towerName .. " (team/cooldown?)")
-                task.wait(5)
-            end
+            clog("Tower failed to start: " .. tostring(F.towerName))
+            task.wait(2)
         end
     end
-    pcall(function() local c = getFn("Towers", "CancelTower") if c then c() end end)
+
+    if cancelTower then
+        pcall(function() cancelTower() end)
+    end
+
     Busy.tower = false
 end
 
