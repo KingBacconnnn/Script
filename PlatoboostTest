@@ -28,38 +28,194 @@ pcall(function()
         getgenv().ADH_Heartbeat = { t = os.clock() }
     end
 end)
-local Rayfield
-do
-    local lastErr
-    for attempt = 1, 4 do
-        local ok, lib = pcall(function()
-            return loadstring(game:HttpGet("https://sirius.menu/gen2"))()
-        end)
-        if ok and type(lib) == "table" and type(lib.CreateWindow) == "function" then
-            Rayfield = lib
-            break
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+WindUI:SetTheme("Dark")
+
+local currentSection
+local function wrapControl(raw, kind, opts)
+    local h = { value = opts.value }
+    local callback = opts.callback
+    if kind == "toggle" then
+        raw = raw or {}
+        function h:Set(v, silent)
+            h.value = v and true or false
+            h._silent = silent == true
+            pcall(function() raw:Set(h.value) end)
+            h._silent = false
         end
-        lastErr = lib
-        if attempt < 4 then task.wait(2) end
+    elseif kind == "slider" then
+        function h:Set(v, silent)
+            h.value = v
+            h._silent = silent == true
+            pcall(function() raw:Set(v) end)
+            h._silent = false
+        end
+    elseif kind == "input" then
+        function h:Set(v, silent)
+            h.value = tostring(v or "")
+            h._silent = silent == true
+            pcall(function() raw:Set(h.value) end)
+            h._silent = false
+        end
+    elseif kind == "dropdown" then
+        function h:Set(v, silent)
+            h.value = v
+            h._silent = silent == true
+            pcall(function() raw:Select(v) end)
+            h._silent = false
+        end
+        function h:Refresh(v)
+            h.options = v
+            pcall(function() raw:Refresh(v) end)
+        end
+    elseif kind == "button" then
+        function h:SetTitle(v) pcall(function() raw:SetTitle(v) end) end
+        function h:SetDesc(v) pcall(function() raw:SetDesc(v) end) end
     end
-    if not Rayfield then
-        error("[Anime Dice - ReefHub] Rayfield failed to load after 4 tries. Re-execute. Last error: " .. tostring(lastErr))
+    if kind == "console" then
+        h.lines = {}
+        function h:Set(v)
+            h.lines = { tostring(v) }
+            pcall(function() raw:SetDesc(tostring(v)) end)
+        end
+        function h:Append(v)
+            table.insert(h.lines, tostring(v))
+            local maxLines = tonumber(opts.maxLines) or 120
+            while #h.lines > maxLines do table.remove(h.lines, 1) end
+            pcall(function() raw:SetDesc(table.concat(h.lines, "\n")) end)
+        end
+    elseif kind == "stat" then
+        function h:Set(v)
+            h.value = tonumber(v) or 0
+            pcall(function() raw:SetDesc(tostring(h.value)) end)
+        end
+        function h:ResetBaseline() end
     end
+    if kind == "paragraph" then
+        function h:SetTitle(v) pcall(function() raw:SetTitle(v) end) end
+        function h:SetDesc(v) pcall(function() raw:SetDesc(v) end) end
+    end
+    return setmetatable(h, { __index = raw })
 end
 
-local window = Rayfield:CreateWindow({
-    name = "Anime Dice",
-    subtitle = "v1.6 | ReefHub",
-    sidebarLayout = true,
-    theme = "default",
-    icon = "rbxassetid://100284944801383",
-    configuration = {
-        autoSave = false,
-        autoLoad = false,
-        fileName = "Anime Dice - ReefHub",
-        customFolder = "Anime Dice - ReefHub",
-    },
+local function adaptTab(rawTab)
+    local tab = {}
+    function tab:CreateDivider(opts)
+        rawTab:Divider()
+    end
+    function tab:CreateToggle(opts)
+        local h
+        local cb = opts.callback
+        h = wrapControl(rawTab:Toggle({
+            Title = opts.name,
+            Desc = opts.description,
+            Value = opts.value == true,
+            Callback = function(v)
+                h.value = v
+                if not h._silent and cb then cb(v) end
+            end,
+        }), "toggle", opts)
+        return h
+    end
+    function tab:CreateSlider(opts)
+        local r = opts.range or {0, 100}
+        local step = opts.increment or 1
+        local h
+        local cb = opts.callback
+        h = wrapControl(rawTab:Slider({
+            Title = opts.name,
+            Desc = opts.description,
+            Step = step,
+            Value = { Min = r[1], Max = r[2], Default = opts.value or r[1] },
+            Callback = function(v)
+                h.value = v
+                if not h._silent and cb then cb(v) end
+            end,
+        }), "slider", opts)
+        return h
+    end
+    function tab:CreateInput(opts)
+        local h
+        local cb = opts.callback
+        h = wrapControl(rawTab:Input({
+            Title = opts.name,
+            Desc = opts.description,
+            Value = tostring(opts.value or ""),
+            Placeholder = opts.placeholder,
+            Callback = function(v)
+                h.value = v
+                if not h._silent and cb then cb(v) end
+            end,
+        }), "input", opts)
+        return h
+    end
+    function tab:CreateDropdown(opts)
+        local h
+        local cb = opts.callback
+        h = wrapControl(rawTab:Dropdown({
+            Title = opts.name,
+            Desc = opts.description,
+            Values = opts.options or {},
+            Value = opts.value,
+            Multi = opts.multiSelect == true,
+            AllowNone = true,
+            Callback = function(v)
+                h.value = v
+                if not h._silent and cb then cb(v) end
+            end,
+        }), "dropdown", opts)
+        h.options = opts.options or {}
+        return h
+    end
+    function tab:CreateButton(opts)
+        local h = wrapControl(rawTab:Button({
+            Title = opts.name,
+            Desc = opts.description,
+            Icon = opts.icon,
+            Callback = opts.callback,
+        }), "button", opts)
+        return h
+    end
+    function tab:CreateConsole(opts)
+        local raw = rawTab:Paragraph({ Title = opts.name or "Console", Desc = opts.text or "" })
+        return wrapControl(raw, "console", opts)
+    end
+    function tab:CreateStat(opts)
+        local raw = rawTab:Paragraph({ Title = opts.name or "Stat", Desc = tostring(opts.value or 0) })
+        return wrapControl(raw, "stat", opts)
+    end
+    function tab:CreateText(opts)
+        local raw = rawTab:Paragraph({ Title = opts.name or "", Desc = opts.text or "" })
+        return wrapControl(raw, "paragraph", opts)
+    end
+    return setmetatable(tab, { __index = rawTab })
+end
+
+local rawWindow = WindUI:CreateWindow({
+    Title = "Anime Dice",
+    Author = "ReefHub",
+    Icon = "rbxassetid://100284944801383",
+    Theme = "Dark",
+    NewElements = true,
+    OpenButton = { Enabled = true, Draggable = true },
 })
+
+local window = {}
+function window:CreateSection(opts)
+    currentSection = rawWindow:Section({ Title = opts.name, Opened = true })
+    return currentSection
+end
+function window:CreateTab(opts)
+    local rawTab = currentSection and currentSection:Tab({ Title = opts.name, Icon = opts.icon }) or rawWindow:Tab({ Title = opts.name, Icon = opts.icon })
+    return adaptTab(rawTab)
+end
+function window:Notify(opts)
+    return WindUI:Notify({ Title = opts.title or "Anime Dice", Content = opts.content or "", Duration = opts.duration or 4 })
+end
+function window:Unload()
+    return rawWindow:Destroy()
+end
+setmetatable(window, { __index = rawWindow })
 
 local F = {
     collect = false, collectDelay = 2,
@@ -74,39 +230,16 @@ local F = {
     potionAuto = false, potionDelay = 5, potionBest = true, potionExtend = false, potions = {},
     gradeAuto = false, gradeDelay = 2, gradeTargets = {}, gradeUnits = {}, gradeAll = false, gradePlacedOnly = false, gemReserve = 0,
     traitAuto = false, traitDelay = 2, traitTargets = {}, traitUnits = {}, traitAll = false, traitPlacedOnly = false, rerollReserve = 0,
-    statHookInterval = 300,
-    rollHookUrl = "", rollHookOn = false, rollHookMin = 0,
-    statHookUrl = "", statHookOn = false,
-    towerHookUrl = "", towerHookOn = false,
-    statHookFields = {}, towerHookFields = {},
     claimQuests = false, hideRolls = false,
     codesAuto = false, codesDelay = 300,
     tradeAuto = false, tradeMoney = 0, tradeRetries = 3, tradeHop = true, tradeHopDelay = 8, tradeAutoGo = true, tradeNeedOffer = true, tradeMinItems = 1, tradeChatOn = false, tradeChatMsg = "",
-    tradeHookUrl = "", tradeHookOn = false,
-    saveSettings = true, autoMinimize = false, wsOn = false, wsValue = 16, flyOn = false, flySpeed = 50, noclip = false, afk = true, fpsOn = false,
 }
 
 local BUILD = 52
 local Alive = true
-local loadingCfg = false
 
-function hideUIAuto()
-    task.spawn(function()
-        local t0, sawOpen = os.clock(), false
-        while os.clock() - t0 < 30 do
-            local hidden, anim = nil, nil
-            pcall(function() hidden = window.hidden anim = window.animating end)
-            if hidden == false then sawOpen = true end
-            if sawOpen and hidden == true then return end
-            if sawOpen and anim == false and hidden == false then
-                pcall(function() window:Hide() end)
-            end
-            task.wait(0.5)
-        end
-    end)
-end
 local U = {}
-local noclipConn, charConn, afkConn, tradeListenerConn, rollWatchConn = nil, nil, nil, nil, nil
+local tradeListenerConn = nil
 local adhShutdown
 task.spawn(function()
     if typeof(getgenv) ~= "function" then return end
@@ -401,334 +534,12 @@ function existingPath(newPath, oldPath)
     if okO and hasO then return oldPath end
     return nil
 end
-local lastCfgSaved = ""
-function cfgPath() return CFG_FOLDER .. "/config_" .. tostring(LocalPlayer.UserId) .. ".json" end
-function saveNow()
-    if typeof(writefile) ~= "function" or typeof(makefolder) ~= "function" then return false end
-    pcall(function() makefolder(CFG_FOLDER) end)
-    local ok, txt = pcall(function()
-        return HTS:JSONEncode({ v = 1, F = F, S = Stats, thresholdText = (U.sellInput and U.sellInput.value) or "", tradeText = (U.tradeInput and U.tradeInput.value) or "",
-            rollMinText = (U.rollMinT and U.rollMinT.value) or "", chatText = (U.tradeChatMsg and U.tradeChatMsg.value) or "" })
-    end)
-    if not ok or txt == lastCfgSaved then return false end
-    local ok2 = pcall(function() writefile(cfgPath(), txt) end)
-    if ok2 then lastCfgSaved = txt end
-    return ok2
-end
-function applyWS()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.WalkSpeed = (F.wsOn and F.wsValue) or 16 end
-end
-local flyGyro, flyVel, flyMoveConn, flyKeys = nil, nil, nil, {}
-function flyStop()
-    if flyMoveConn then pcall(function() flyMoveConn:Disconnect() end) flyMoveConn = nil end
-    if flyGyro then pcall(function() flyGyro:Destroy() end) flyGyro = nil end
-    if flyVel then pcall(function() flyVel:Destroy() end) flyVel = nil end
-    table.clear(flyKeys)
-end
-function flyStart()
-    flyStop()
-    local ch = LocalPlayer.Character
-    local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-    hum.PlatformStand = true
-    flyGyro = Instance.new("BodyGyro")
-    flyGyro.P = 9000
-    flyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyGyro.CFrame = hrp.CFrame
-    flyGyro.Parent = hrp
-    flyVel = Instance.new("BodyVelocity")
-    flyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyVel.Velocity = Vector3.zero
-    flyVel.Parent = hrp
-    flyMoveConn = game:GetService("RunService").RenderStepped:Connect(function()
-        if not F.flyOn then return end
-        local cam = workspace.CurrentCamera
-        if not cam then return end
-        local dir = Vector3.zero
-        if flyKeys[Enum.KeyCode.W] then dir += cam.CFrame.LookVector end
-        if flyKeys[Enum.KeyCode.S] then dir -= cam.CFrame.LookVector end
-        if flyKeys[Enum.KeyCode.A] then dir -= cam.CFrame.RightVector end
-        if flyKeys[Enum.KeyCode.D] then dir += cam.CFrame.RightVector end
-        if flyKeys[Enum.KeyCode.Space] then dir += Vector3.new(0, 1, 0) end
-        if flyKeys[Enum.KeyCode.LeftShift] then dir -= Vector3.new(0, 1, 0) end
-        if dir.Magnitude > 0 then dir = dir.Unit * F.flySpeed end
-        pcall(function()
-            flyVel.Velocity = dir
-            flyGyro.CFrame = cam.CFrame
-        end)
-    end)
-end
-function setFly(on)
-    F.flyOn = on
-    if not on then
-        flyStop()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
-        return
-    end
-    flyStart()
-end
-UIS.InputBegan:Connect(function(i, g)
-    if g or not F.flyOn then return end
-    if UIS:GetFocusedTextBox() then return end
-    flyKeys[i.KeyCode] = true
-end)
-UIS.InputEnded:Connect(function(i) flyKeys[i.KeyCode] = nil end)
-charConn = LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    applyWS()
-    if F.flyOn then flyStart() end
-end)
-noclipConn = game:GetService("RunService").Stepped:Connect(function()
-    if not F.noclip then return end
-    local ch = LocalPlayer.Character
-    if ch then
-        for _, p in ipairs(ch:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = false end
-        end
-    end
-end)
-afkConn = LocalPlayer.Idled:Connect(function()
-    if F.afk then pcall(function()
-        local vu = game:GetService("VirtualUser")
-        vu:CaptureController()
-        vu:ClickButton2(Vector2.new())
-    end) end
-end)
 local hopBusy = false
 TS.TeleportInitFailed:Connect(function(_, _, msg)
     if hopBusy then return end
     notify("Teleport", "Failed: " .. tostring(msg))
 end)
 
-local fpsRestore, fpsHidden, fpsMaintConn, fpsKeptPlot = {}, {}, nil, nil
-function fpsDisable(inst)
-    pcall(function()
-        if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire") or inst:IsA("Sparkles") then
-            if inst.Enabled then table.insert(fpsRestore, { o = inst, p = "Enabled", v = true }) inst.Enabled = false end
-        elseif inst:IsA("Decal") or inst:IsA("Texture") then
-            if inst.Transparency < 1 then table.insert(fpsRestore, { o = inst, p = "Transparency", v = inst.Transparency }) inst.Transparency = 1 end
-        elseif inst:IsA("MeshPart") then
-            if inst.CastShadow then table.insert(fpsRestore, { o = inst, p = "CastShadow", v = true }) inst.CastShadow = false end
-            if inst.TextureID ~= "" then table.insert(fpsRestore, { o = inst, p = "TextureID", v = inst.TextureID }) inst.TextureID = "" end
-            if inst.Material ~= Enum.Material.SmoothPlastic then table.insert(fpsRestore, { o = inst, p = "Material", v = inst.Material }) inst.Material = Enum.Material.SmoothPlastic end
-        elseif inst:IsA("BasePart") and not inst:IsA("Terrain") then
-            if inst.CastShadow then table.insert(fpsRestore, { o = inst, p = "CastShadow", v = true }) inst.CastShadow = false end
-        elseif inst:IsA("PointLight") or inst:IsA("SpotLight") or inst:IsA("SurfaceLight") then
-            if inst.Enabled then table.insert(fpsRestore, { o = inst, p = "Enabled", v = true }) inst.Enabled = false end
-        elseif inst:IsA("PostEffect") then
-            if inst.Enabled then table.insert(fpsRestore, { o = inst, p = "Enabled", v = true }) inst.Enabled = false end
-        end
-    end)
-end
-function fpsHide(inst)
-    pcall(function()
-        if inst and inst.Parent then
-            for _, h in ipairs(fpsHidden) do if h.o == inst then return end end
-            table.insert(fpsHidden, { o = inst, parent = inst.Parent })
-            inst.Parent = nil
-        end
-    end)
-end
-
-function fpsOwnPlot()
-    local plots = workspace:FindFirstChild("Plots")
-    local claimed = plots and plots:FindFirstChild("Claimed")
-    if not claimed then return nil end
-    local meD, meN = "", ""
-    pcall(function() meD = tostring(LocalPlayer.DisplayName or ""):lower() end)
-    pcall(function() meN = tostring(LocalPlayer.Name or ""):lower() end)
-    for _, plot in ipairs(claimed:GetChildren()) do
-        local hit = false
-        pcall(function()
-            for _, d in ipairs(plot:GetDescendants()) do
-                if d:IsA("TextLabel") and d.Name == "PlayerName" then
-                    local t = tostring(d.Text or ""):lower()
-                    if (meD ~= "" and t == meD) or (meN ~= "" and t == meN) then hit = true end
-                    break
-                end
-            end
-        end)
-        if hit then return plot end
-    end
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local best, bestD = nil, math.huge
-        pcall(function()
-            for _, plot in ipairs(claimed:GetChildren()) do
-                local ok, cf = pcall(function() return plot:GetPivot() end)
-                if ok and cf then
-                    local d = (cf.Position - hrp.Position).Magnitude
-                    if d < bestD then best, bestD = plot, d end
-                end
-            end
-        end)
-        if best then return best end
-    end
-    return nil
-end
-
-function fpsIsDecor(c)
-    local n = c.Name
-    if c:IsA("Model") then
-        return n == "Palm Tree" or n == "Mountain" or n == "LOW POLY ISLAND" or n == "LightHouse" or n == "Wind"
-    elseif c:IsA("MeshPart") then
-        return n == "Rock 1" or n == "Grass"
-    end
-    return false
-end
-local function applyAnimeDiceStrip()
-
-    pcall(function() local lb = workspace:FindFirstChild("Leaderboards") if lb then fpsHide(lb) end end)
-
-    pcall(function() local b = workspace:FindFirstChild("BestRollPoduium") if b then fpsHide(b) end end)
-    pcall(function() local l = workspace:FindFirstChild("Limiteds") if l then fpsHide(l) end end)
-
-    pcall(function()
-        local m = workspace:FindFirstChild("Map")
-        local t = m and m:FindFirstChild("CastleTower")
-        if t then fpsHide(t) end
-    end)
-
-    pcall(function()
-        local plots = workspace:FindFirstChild("Plots")
-        local un = plots and plots:FindFirstChild("Unclaimed")
-        if un then fpsHide(un) end
-    end)
-
-    pcall(function()
-        local plots = workspace:FindFirstChild("Plots")
-        local claimed = plots and plots:FindFirstChild("Claimed")
-        if claimed then
-            fpsKeptPlot = fpsOwnPlot()
-            for _, plot in ipairs(claimed:GetChildren()) do
-                if plot ~= fpsKeptPlot then fpsHide(plot) end
-            end
-        end
-    end)
-
-    pcall(function()
-        local pf = workspace:FindFirstChild("Players")
-        if pf then
-            for _, m in ipairs(pf:GetChildren()) do
-                if m:IsA("Model") and m.Name ~= LocalPlayer.Name then fpsHide(m) end
-            end
-        end
-    end)
-
-    pcall(function()
-        local m = workspace:FindFirstChild("Map")
-        if not m then return end
-        for _, c in ipairs(m:GetChildren()) do
-            if c:IsA("Model") and c.Name == "Model" and #c:GetDescendants() > 0 then
-                local keep = false
-                pcall(function()
-                    for _, d in ipairs(c:GetDescendants()) do
-                        if d.Name == "LobbyCircle" or d.Name == "Conveyor" then keep = true break end
-                    end
-                end)
-                if not keep then fpsHide(c) end
-            end
-        end
-    end)
-
-    pcall(function()
-        local m = workspace:FindFirstChild("Map")
-        if m then
-            for _, c in ipairs(m:GetDescendants()) do
-                if fpsIsDecor(c) then fpsHide(c) end
-            end
-        end
-    end)
-end
-local function fpsSweep(root)
-    for _, o in ipairs(root:GetDescendants()) do fpsDisable(o) end
-end
-local function applyFpsBoost(on)
-    if on then
-        pcall(function()
-            local pg = LocalPlayer:FindFirstChild("PlayerGui")
-            local hud = pg and pg:FindFirstChild("Root") and pg.Root:FindFirstChild("HUD")
-            if hud and typeof(getnilinstances) == "function" then
-                for _, o in ipairs(getnilinstances()) do
-                    if o.Name == "ProductDisplay" and o:IsA("GuiObject") then
-                        o.Parent = hud
-                        break
-                    end
-                end
-            end
-        end)
-        pcall(function()
-            local s = getSig("SettingsService", "SetSetting")
-            if s then s:Fire("Performance", true) end
-        end)
-        table.clear(fpsRestore)
-        table.clear(fpsHidden)
-        fpsKeptPlot = nil
-        pcall(function()
-            local L = game:GetService("Lighting")
-            table.insert(fpsRestore, { o = L, p = "GlobalShadows", v = L.GlobalShadows })
-            L.GlobalShadows = false
-            table.insert(fpsRestore, { o = L, p = "FogEnd", v = L.FogEnd })
-            L.FogEnd = 100000
-            table.insert(fpsRestore, { o = L, p = "EnvironmentDiffuseScale", v = L.EnvironmentDiffuseScale })
-            L.EnvironmentDiffuseScale = 0
-            table.insert(fpsRestore, { o = L, p = "EnvironmentSpecularScale", v = L.EnvironmentSpecularScale })
-            L.EnvironmentSpecularScale = 0
-        end)
-        pcall(function()
-            local T = workspace.Terrain
-            table.insert(fpsRestore, { o = T, p = "WaterWaveSize", v = T.WaterWaveSize })
-            table.insert(fpsRestore, { o = T, p = "WaterWaveSpeed", v = T.WaterWaveSpeed })
-            table.insert(fpsRestore, { o = T, p = "WaterReflectance", v = T.WaterReflectance })
-            table.insert(fpsRestore, { o = T, p = "Decoration", v = T.Decoration })
-            T.WaterWaveSize = 0
-            T.WaterWaveSpeed = 0
-            T.WaterReflectance = 0
-            T.Decoration = false
-        end)
-        fpsSweep(workspace)
-        applyAnimeDiceStrip()
-        pcall(function() for _, e in ipairs(game:GetService("Lighting"):GetDescendants()) do fpsDisable(e) end end)
-        pcall(function()
-            local R = settings().Rendering
-            table.insert(fpsRestore, { o = R, p = "QualityLevel", v = R.QualityLevel })
-            R.QualityLevel = Enum.QualityLevel.Level01
-        end)
-        if not fpsMaintConn then
-            fpsMaintConn = workspace.DescendantAdded:Connect(function(o)
-                if not F.fpsOn then return end
-                fpsDisable(o)
-
-                pcall(function()
-                    local par = o.Parent
-                    if not par then return end
-                    if par == workspace:FindFirstChild("Players") then
-                        if o:IsA("Model") and o.Name ~= LocalPlayer.Name then fpsHide(o) end
-                    elseif par.Name == "Claimed" and par.Parent and par.Parent.Name == "Plots" then
-                        if o ~= fpsKeptPlot then fpsHide(o) end
-                    end
-                end)
-            end)
-        end
-        task.delay(8, function() if F.fpsOn then fpsSweep(workspace) applyAnimeDiceStrip() end end)
-        notify("Performance", "FPS Boost ON: leaderboards/statues/tower/other bases hidden + shadows/particles/textures off.")
-    else
-        local wasActive = (fpsMaintConn ~= nil) or (#fpsRestore > 0) or (#fpsHidden > 0)
-        if fpsMaintConn then fpsMaintConn:Disconnect() fpsMaintConn = nil end
-        for i = #fpsHidden, 1, -1 do
-            local h = fpsHidden[i]
-            pcall(function() h.o.Parent = h.parent end)
-        end
-        table.clear(fpsHidden)
-        fpsKeptPlot = nil
-        for _, r in ipairs(fpsRestore) do pcall(function() r.o[r.p] = r.v end) end
-        table.clear(fpsRestore)
-        if wasActive then notify("Performance", "FPS Boost OFF: map and effects restored.") end
-    end
-end
 local function hopNotePath() return CFG_FOLDER .. "/lasthop_" .. tostring(LocalPlayer.UserId) .. ".json" end
 local function readHopNote()
     if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then return nil end
@@ -744,51 +555,6 @@ local function writeHopNote(job, tries)
     if typeof(writefile) ~= "function" then return end
     pcall(function() makefolder(CFG_FOLDER) end)
     pcall(function() writefile(hopNotePath(), HTS:JSONEncode({ job = job, tries = tries, time = os.time() })) end)
-end
-local function doRejoin(sameServer)
-    if not sameServer then
-        pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end)
-        return
-    end
-    task.spawn(function()
-        notify("Rejoin", "Rejoining this server...")
-        local myJob = game.JobId
-        local inPrivate = false
-        pcall(function() inPrivate = game.PrivateServerId ~= "" end)
-        local failMsg, pending = nil, false
-        local failConn = TS.TeleportInitFailed:Connect(function(plr, result, msg)
-            if plr == LocalPlayer then
-                pending = false
-                failMsg = tostring((msg and msg ~= "") and msg or result)
-            end
-        end)
-        local attempt = 0
-        while attempt < 3 do
-            attempt += 1
-            failMsg, pending = nil, true
-            local ok, err = pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, myJob, LocalPlayer) end)
-            if not ok then
-                pending = false
-                failMsg = tostring(err)
-            end
-            local t = 0
-            while t < 15 and pending do task.wait(1) t += 1 end
-            pending = false
-            if game.JobId ~= myJob then break end
-            if failMsg then notify("Rejoin", "Attempt " .. attempt .. "/3 failed: " .. failMsg) end
-        end
-        failConn:Disconnect()
-        if game.JobId ~= myJob then return end
-        if inPrivate then
-
-            notify("Rejoin", "Private server rejoin blocked (" .. tostring(failMsg or "unknown") .. "). Rejoin manually from the Roblox menu.")
-            log("Rejoin failed in private server: " .. tostring(failMsg or "unknown"))
-        else
-            notify("Rejoin", "Same-server blocked, hopping public...")
-            task.wait(1)
-            pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end)
-        end
-    end)
 end
 local VISIT_TTL = 1800
 local function visitedPath() return CFG_FOLDER .. "/visited_" .. tostring(LocalPlayer.UserId) .. ".json" end
@@ -1110,153 +876,6 @@ local function currencyAmount(name)
     return total
 end
 
-local thumbCache = {}
-local function thumbOf(asset)
-    local id = tostring(asset or ""):match("%d+")
-    if not id then return nil end
-    if thumbCache[id] ~= nil then return thumbCache[id] or nil end
-    local url = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=150x150&format=Png"
-    local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok then
-        local ok2, data = pcall(function() return HTS:JSONDecode(res) end)
-        local img = ok2 and data and data.data and data.data[1] and data.data[1].imageUrl
-        if type(img) == "string" and img ~= "" then thumbCache[id] = img return img end
-    end
-    thumbCache[id] = false
-    return nil
-end
-local function hookColorInt(cfg)
-    local hex = nil
-    pcall(function()
-        local g = cfg and cfg.gradient
-        if g and g.Keypoints and g.Keypoints[1] then hex = g.Keypoints[1].Value:ToHex() end
-    end)
-    return tonumber(hex, 16) or 0x808080
-end
-local function postWebhook(url, payload)
-    if type(url) ~= "string" or not url:find("^https?://") then return false end
-    local okB, body = pcall(function() return HTS:JSONEncode(payload) end)
-    if not okB then return false end
-    if typeof(request) == "function" then
-        local ok = pcall(function()
-            request({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body })
-        end)
-        return ok
-    elseif typeof(http_request) == "function" then
-        local ok = pcall(function()
-            http_request({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body })
-        end)
-        return ok
-    end
-    return false
-end
-local function hookStamp()
-    return os.date("!%Y-%m-%dT%H:%M:%S.000Z")
-end
-local function sendRollHook(url, e, cfg, chance)
-    local at = e.attributes or {}
-    local mut = at.mutation
-    local thumb = nil
-    if mut and G.Mutations and G.Mutations[mut] then thumb = thumbOf(G.Mutations[mut].image) end
-    if not thumb then
-        local cur, all = nil, nil
-        pcall(function() cur = G.DC.Dice() end)
-        pcall(function() all = G.DiceMod.GetAll() end)
-        if cur and all and all[cur] then thumb = thumbOf(all[cur].image) end
-    end
-    local fields = {
-        { name = "Chance", value = "1 in " .. fmt(chance), inline = true },
-        { name = "Mutation", value = tostring(mut or "None"), inline = true },
-    }
-    if at.grade then table.insert(fields, { name = "Grade", value = tostring(at.grade), inline = true }) end
-    if at.trait then table.insert(fields, { name = "Trait", value = tostring(at.trait), inline = true }) end
-    local emb = {
-        title = e.name .. " rolled!",
-        fields = fields,
-        color = hookColorInt(cfg),
-        footer = { text = LocalPlayer.DisplayName },
-        timestamp = hookStamp(),
-    }
-    if thumb then emb.thumbnail = { url = thumb } end
-    return postWebhook(url, { username = "Anime Dice - ReefHub", embeds = { emb } })
-end
-local function anyRollHook()
-    return F.rollHookOn and true or false
-end
-local function onNewEntry(key)
-    if not anyRollHook() then return end
-    local e = invEntry(key)
-    if not e or not isUnitEntry(e) then return end
-    local ok, cfg = pcall(function() return G.EntryRegistry.getEntryConfig(e.name) end)
-    if not ok or not cfg then return end
-    local chance = 0
-    pcall(function() chance = cfg.chance(e.attributes) or 0 end)
-    if F.rollHookOn then
-        local url = F.rollHookUrl
-        local min = tonumber(F.rollHookMin) or 0
-        if type(url) == "string" and url ~= "" and min > 0 and chance >= min then
-            task.spawn(function() sendRollHook(url, e, cfg, chance) end)
-        end
-    end
-end
-local function watchRolls()
-    pcall(function()
-        rollWatchConn = G.DC.Inventory.OnKeyAdded(function(key)
-            task.spawn(function() onNewEntry(key) end)
-        end)
-    end)
-end
-local function sendStatsHook(url)
-    local sel = F.statHookFields
-    local function want(name)
-        if type(sel) ~= "table" or #sel == 0 then return true end
-        for _, s in ipairs(sel) do if s == name then return true end end
-        return false
-    end
-    local fields = {}
-    if want("Money") then table.insert(fields, { name = "Money", value = fmt(money()), inline = true }) end
-    if want("Rolls") then table.insert(fields, { name = "Rolls", value = tostring(rolls()), inline = true }) end
-    if want("Rebirth") then table.insert(fields, { name = "Rebirth", value = tostring(rebirth()), inline = true }) end
-    local emb = {
-        title = "Session Stats",
-        fields = fields,
-        color = 0x4ADE80,
-        footer = { text = LocalPlayer.DisplayName },
-        timestamp = hookStamp(),
-    }
-    local th = thumbOf("rbxassetid://93129522258096")
-    if th then emb.thumbnail = { url = th } end
-    local embeds = { emb }
-    for _, name in ipairs({ "Gems", "Trait Reroll" }) do
-        if want(name) and currencyAmount(name) > 0 then
-            local item = { title = fmt(currencyAmount(name)) .. "x " .. name, color = 0x808080 }
-            pcall(function()
-                local cfg = G.EntryRegistry.getEntryConfig(name)
-                if cfg then
-                    item.color = hookColorInt(cfg)
-                    if cfg.image then
-                        local ith = thumbOf(cfg.image)
-                        if ith then item.thumbnail = { url = ith } end
-                    end
-                end
-            end)
-            table.insert(embeds, item)
-        end
-    end
-    return postWebhook(url, { username = "Anime Dice - ReefHub", embeds = embeds })
-end
-local lastStatsHook = 0
-local function statsHookTick()
-    if os.clock() - lastStatsHook < (tonumber(F.statHookInterval) or 300) then return end
-    lastStatsHook = os.clock()
-    if F.statHookOn then
-        local url = F.statHookUrl
-        if type(url) == "string" and url ~= "" then
-            task.spawn(function() sendStatsHook(url) end)
-        end
-    end
-end
-
 local towerByLabel, potByLabel, instantSmartCheck = {}, {}, nil
 do
 window:CreateSection({ name = "Farm" })
@@ -1272,9 +891,6 @@ local tTrade = window:CreateTab({ name = "Trade", icon = "rbxassetid://728214989
 window:CreateSection({ name = "Info" })
 local tStats = window:CreateTab({ name = "Stats", icon = "rbxassetid://93129522258096" })
 local tChanges = window:CreateTab({ name = "Changelogs", icon = "rbxassetid://112634880544308" })
-window:CreateSection({ name = "System" })
-local tSettings = window:CreateTab({ name = "Settings", icon = "rbxassetid://103326255092488" })
-local tHooks = window:CreateTab({ name = "Webhook", icon = "rbxassetid://137296756955034" })
 
 tMain:CreateDivider({ text = "Money Collection" })
 U.collectLine = tMain:CreateConsole({ name = "Collected Total", height = 48, text = "Total collected: 0" })
@@ -1448,7 +1064,6 @@ tTower:CreateButton({ name = "Reset Tower Stats", callback = function()
         setStat(U.towerGemStat, 0)
         setStat(U.towerTraitStat, 0)
     end)
-    pcall(saveNow)
     notify("Tower", "Tower stats reset.")
 end })
 
@@ -1622,11 +1237,6 @@ U.tradeChatMsg = tTrade:CreateInput({ name = "Chat Words (a, b)", value = "", pl
 tTrade:CreateButton({ name = "Send Test Chat", callback = function()
     task.spawn(sendTradeChat)
 end })
-tTrade:CreateDivider({ text = "Trade Webhook" })
-U.tradeHookUrl = tTrade:CreateInput({ name = "Trade Webhook URL", value = "", placeholder = "https://discord.com/api/webhooks/...",
-    callback = function(t) F.tradeHookUrl = t end })
-U.tradeHookOn = tTrade:CreateToggle({ name = "Trade Alerts", value = false,
-    callback = function(v) F.tradeHookOn = v end })
 local function stopTradeAll()
     F.tradeAuto = false
     if U.tradeAuto then pcall(function() U.tradeAuto:Set(false, true) end) end
@@ -1661,15 +1271,13 @@ end })
 tChanges:CreateText({
     name = '<b><font color="#60a5fa">v1.6 - Game-specific FPS Boost</font></b>',
     icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> FPS Boost now hides map junk: leaderboards, Best Roll podium + side statues, Towers building, other players/bases and decor meshes (yours stay, OFF restores all)
-<font color="#4ade80">•</font> Mesh textures stripped + flattened to SmoothPlastic on top of the existing shadows/particles/lights/postfx pass]]
+    text = [[]]
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.5 - Tower Exit & Tower Webhooks</font></b>',
+    name = '<b><font color="#60a5fa">v1.5 - Tower Exit</font></b>',
     icon = "rbxassetid://112634880544308",
     text = [[<font color="#4ade80">•</font> Tower: Exit At Floor - leaves the run at your floor, then re-enters automatically
-<font color="#4ade80">•</font> Webhook: Tower Alerts - posts run rewards with images on clear and on exit
 <font color="#4ade80">•</font> Tower list: shorter names so difficulty tags always fit
 <font color="#4ade80">•</font> Cleanup: removed Use Now, Show Active, Rebirth Now and Claim Quests Now buttons
 <font color="#4ade80">•</font> Fix: script load error resolved]]
@@ -1688,7 +1296,7 @@ tChanges:CreateText({
     text = [[<font color="#4ade80">•</font> Smart Tower uses real buffed stats (upgrades + active potions), trusts session wins, logs full sim breakdown
 <font color="#4ade80">•</font> Grade/Trait: Placed Units Only mode (ignores name filter, mutually exclusive with All Units)
 <font color="#4ade80">•</font> Unit dropdowns auto-refresh after every roll + on warmup, with refresh confirmation
-<font color="#4ade80">•</font> Trade counting/webhook fixed (game sends Ended+reason) and works for manual trades too
+<font color="#4ade80">•</font> Trade counting fixed (game sends Ended+reason) and works for manual trades too
 <font color="#4ade80">•</font> Trade timeout: accepted trades get 45s, then auto-cancel and move on
 <font color="#4ade80">•</font> Trade never sends requests or hops while you are in a trade
 <font color="#4ade80">•</font> Grade/Trait unit lists show every copy separately with its own grade/trait (placed marked ★) - pick exact units, no more merged D+S rows]]
@@ -1697,8 +1305,7 @@ tChanges:CreateText({
 tChanges:CreateText({
     name = '<b><font color="#60a5fa">v1.2 - Trade & Smart Tower</font></b>',
     icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Trade webhook: completed trades post partner, what you gave and what you got (fixed: game sends Ended+reason, not a Completed event)
-<font color="#4ade80">•</font> Trade timeout: accepted trades get 45s, then auto-cancel and move to the next player
+    text = [[<font color="#4ade80">•</font> Trade timeout: accepted trades get 45s, then auto-cancel and move to the next player
 <font color="#4ade80">•</font> Grade/Trait: Placed Units Only option - reroll just your slot team, not idle inventory
 <font color="#4ade80">•</font> Trade stays idle until Min Money is set - no more "nobody matches" hop spam
 <font color="#4ade80">•</font> Server Hop reworked: no 3-try give-up, 30s cooldown instead of hop storms
@@ -1710,8 +1317,6 @@ tChanges:CreateText({
     name = '<b><font color="#60a5fa">v1.1 - Speed & Performance</font></b>',
     icon = "rbxassetid://112634880544308",
     text = [[<font color="#4ade80">•</font> Auto Towers rebuilt to match the game's own Auto speed (back-to-back floor calls, no artificial wait)
-<font color="#4ade80">•</font> Stronger FPS Boost: shadows, particles, trails, beams, decals, lights, post effects, terrain water + render quality
-<font color="#4ade80">•</font> FPS Boost is now a toggle - saved with settings and re-applied automatically after rejoin/re-execute
 <font color="#4ade80">•</font> Removed obsolete Floor Wait slider (tower loop is adaptive now)]]
 })
 
@@ -1730,11 +1335,7 @@ tChanges:CreateText({
 <font color="#4ade80">•</font> Auto Grade and Trait reroll with targets, chases above protected on demand
 <font color="#4ade80">•</font> Auto Roll with real game HIDE, tower screen hide
 <font color="#4ade80">•</font> Auto Claim Quests with one-click button
-<font color="#4ade80">•</font> Discord webhooks for rolls and stats with game images
-<font color="#4ade80">•</font> Settings save per player and restore on next run
-<font color="#4ade80">•</font> Rayfield config profiles, apply them on other accounts
-<font color="#4ade80">•</font> Server tools: Rejoin, Server Hop, Low-Player Hop
-<font color="#4ade80">•</font> Character: WalkSpeed, Fly, Noclip, Anti-AFK, FPS Boost]]
+<font color="#4ade80">•</font> Server tools: Rejoin, Server Hop, Low-Player Hop]]
 })
 
 tStats:CreateDivider({ text = "General" })
@@ -1751,118 +1352,6 @@ tStats:CreateButton({ name = "Close Menu (Unload)", callback = function()
     end)
     pcall(function() window:Unload() end)
 end })
-
-tSettings:CreateDivider({ text = "Settings Saving" })
-U.saveSettings = tSettings:CreateToggle({ name = "Auto Save Settings", value = true,
-    callback = function(v)
-        F.saveSettings = v
-        if v then pcall(saveNow) end
-    end })
-U.autoMinimize = tSettings:CreateToggle({ name = "Auto Minimize UI", description = "Automatically minimizes the menu shortly after load.",
-    value = false,
-    callback = function(v)
-        F.autoMinimize = v
-        if v and not loadingCfg then hideUIAuto() end
-    end })
-tSettings:CreateDivider({ text = "Server" })
-tSettings:CreateButton({ name = "Rejoin Server", callback = function() doRejoin(true) end })
-tSettings:CreateButton({ name = "Server Hop", callback = function() doHop(false) end })
-tSettings:CreateButton({ name = "Hop: Low Player Server", callback = function() doHop(true) end })
-tSettings:CreateDivider({ text = "Character" })
-U.wsOn = tSettings:CreateToggle({ name = "WalkSpeed", value = false,
-    callback = function(v) F.wsOn = v applyWS() end })
-U.wsValue = tSettings:CreateSlider({ name = "WalkSpeed Value", range = { 16, 250 }, increment = 1, value = 16,
-    callback = function(v) F.wsValue = math.floor(v) applyWS() end })
-U.flyOn = tSettings:CreateToggle({ name = "Fly (WASD + Space/Shift)", value = false,
-    callback = function(v) setFly(v) end })
-U.flySpeed = tSettings:CreateSlider({ name = "Fly Speed", range = { 10, 200 }, increment = 5, value = 50,
-    callback = function(v) F.flySpeed = v end })
-U.noclip = tSettings:CreateToggle({ name = "Noclip", value = false,
-    callback = function(v) F.noclip = v end })
-U.afk = tSettings:CreateToggle({ name = "Anti-AFK", value = true,
-    callback = function(v) F.afk = v end })
-tSettings:CreateDivider({ text = "Performance" })
-U.fpsOn = tSettings:CreateToggle({ name = "FPS Boost", description = "Hides leaderboards, Best Roll podium + side statues, Towers building, other players/bases, outer islands, all trees/rocks/clovers/decor (lobby, stalls, yours + Shop stay). Plus shadows/particles/mesh-textures/lights/postfx off, render quality lowered. FPS cap is never touched. Saved and re-applied on rejoin.",
-    value = false, callback = function(v) F.fpsOn = v applyFpsBoost(v) end })
-tSettings:CreateDivider({ text = "Rayfield Configs" })
-local cfgDrop
-local cfgSelName = ""
-local cfgNameInput = tSettings:CreateInput({ name = "Config Name", value = "", placeholder = "e.g. main-farm",
-    callback = function() end })
-local function refreshCfgList()
-    if not cfgDrop then return end
-    local list = {}
-    pcall(function() list = window:ListConfigs() or {} end)
-    if type(list) ~= "table" then list = {} end
-    table.sort(list)
-    pcall(function() cfgDrop:Refresh(list) end)
-end
-cfgDrop = tSettings:CreateDropdown({ name = "Saved Configs", options = {},
-    callback = function(sel)
-        cfgSelName = (type(sel) == "table") and (sel[1] or "") or (sel or "")
-    end })
-tSettings:CreateButton({ name = "Save New Config", callback = function()
-    local nm = cfgNameInput and cfgNameInput.value or ""
-    nm = nm:gsub("^%s+", ""):gsub("%s+$", "")
-    if nm == "" then notify("Config", "Enter a name first.") return end
-    local ok = pcall(function() window:Save(nm) end)
-    notify("Config", ok and ("Saved: " .. nm) or "Save failed.")
-    refreshCfgList()
-end })
-tSettings:CreateButton({ name = "Load Selected", callback = function()
-    if cfgSelName == "" then notify("Config", "Select a config first.") return end
-    local ok = pcall(function() window:Load(cfgSelName) end)
-    notify("Config", ok and ("Loaded: " .. cfgSelName) or "Load failed.")
-end })
-tSettings:CreateButton({ name = "Overwrite Selected", callback = function()
-    if cfgSelName == "" then notify("Config", "Select a config first.") return end
-    local ok = pcall(function() window:Save(cfgSelName) end)
-    notify("Config", ok and ("Overwritten: " .. cfgSelName) or "Save failed.")
-end })
-tSettings:CreateButton({ name = "Delete Selected", callback = function()
-    if cfgSelName == "" then notify("Config", "Select a config first.") return end
-    pcall(function() window:DeleteConfig(cfgSelName) end)
-    cfgSelName = ""
-    refreshCfgList()
-    notify("Config", "Deleted.")
-end })
-tSettings:CreateButton({ name = "Refresh Config List", callback = function() refreshCfgList() end })
-refreshCfgList()
-
-tHooks:CreateDivider({ text = "Roll Alerts" })
-U.rollHookUrl = tHooks:CreateInput({ name = "Roll Webhook URL", value = "", placeholder = "https://discord.com/api/webhooks/...",
-    callback = function(t) F.rollHookUrl = t end })
-U.rollHookOn = tHooks:CreateToggle({ name = "Roll Alerts", value = false,
-    callback = function(v) F.rollHookOn = v end })
-U.rollMinT = tHooks:CreateInput({ name = "Roll Min Chance", value = "", placeholder = "e.g. 1b - only above this is sent",
-    callback = function(t) F.rollHookMin = parseCompact(t) or 0 end })
-tHooks:CreateDivider({ text = "Stat Reports" })
-U.statHookUrl = tHooks:CreateInput({ name = "Stat Webhook URL", value = "", placeholder = "https://discord.com/api/webhooks/...",
-    callback = function(t) F.statHookUrl = t end })
-U.statHookOn = tHooks:CreateToggle({ name = "Stat Reports", value = false,
-    callback = function(v) F.statHookOn = v end })
-U.statHookInterval = tHooks:CreateSlider({ name = "Stat Report Interval", range = { 60, 1800 }, increment = 60, value = 300, suffix = "s",
-    callback = function(v) F.statHookInterval = math.floor(v) end })
-U.statHookFields = tHooks:CreateDropdown({ name = "Stat Fields", multiSelect = true,
-    options = { "Money", "Rolls", "Rebirth", "Gems", "Trait Reroll" }, value = {},
-    callback = function(sel) F.statHookFields = (type(sel) == "table") and sel or {} end })
-tHooks:CreateButton({ name = "Send Test Stats", callback = function()
-    task.spawn(function()
-        if type(F.statHookUrl) == "string" and F.statHookUrl ~= "" then
-            notify("Webhook", sendStatsHook(F.statHookUrl) and "Test sent." or "Send failed.")
-        else
-            notify("Webhook", "Set a stat webhook URL first.")
-        end
-    end)
-end })
-tHooks:CreateDivider({ text = "Tower Clears" })
-U.towerHookUrl = tHooks:CreateInput({ name = "Tower Webhook URL", value = "", placeholder = "https://discord.com/api/webhooks/...",
-    callback = function(t) F.towerHookUrl = t end })
-U.towerHookOn = tHooks:CreateToggle({ name = "Tower Alerts", value = false,
-    callback = function(v) F.towerHookOn = v end })
-U.towerHookFields = tHooks:CreateDropdown({ name = "Tower Fields", multiSelect = true,
-    options = { "Floors", "Wins", "Floor Drops", "Clear Bonus", "Item Images" }, value = {},
-    callback = function(sel) F.towerHookFields = (type(sel) == "table") and sel or {} end })
 
 if not G.ok or #G.missing > 0 then
     notify("Warning", "Some modules failed to load: " .. table.concat(G.missing, ", "))
@@ -2282,7 +1771,7 @@ local function towerRewardsAdd(rewards)
     end
 end
 local lastTowerFloor = 1
-local sendTowerHook
+
 local towerRunDrops, towerRunFloor0 = {}, 1
 local function handleTowerSeq(seq, saw)
     local done = false
@@ -2309,10 +1798,6 @@ local function handleTowerSeq(seq, saw)
                     Stats.towerWins[F.towerName] = w
                     smartCapOrder = nil
                     clog("Tower WIN counted.")
-                    if F.towerHookOn and type(F.towerHookUrl) == "string" and F.towerHookUrl ~= "" then
-                        local u, nm, f0, fN, dr, bo = F.towerHookUrl, F.towerName, towerRunFloor0, lastTowerFloor, towerRunDrops, act.rewards
-                        task.spawn(function() sendTowerHook(u, nm, f0, fN, dr, bo, "Cleared") end)
-                    end
                 elseif not hasRewards then
                     clog("Tower wiped at floor " .. lastTowerFloor .. " (not counted).")
                     pcall(function()
@@ -2334,10 +1819,6 @@ local function towerExitRestart()
     if not F.towerExitOn or at <= 0 or lastTowerFloor < at then return false end
     pcall(function() local c = getFn("Towers", "CancelTower") if c then c() end end)
     clog("Tower exit floor reached (" .. lastTowerFloor .. "), restarting " .. tostring(F.towerName) .. ".")
-    if F.towerHookOn and type(F.towerHookUrl) == "string" and F.towerHookUrl ~= "" then
-        local u, nm, f0, fN, dr = F.towerHookUrl, F.towerName, towerRunFloor0, lastTowerFloor, towerRunDrops
-        task.spawn(function() sendTowerHook(u, nm, f0, fN, dr, nil, "Exited") end)
-    end
     lastTowerFloor = 1
     return true
 end
@@ -2915,7 +2396,6 @@ local lastTradeOffers = { own = nil, other = nil }
 local inTradeSession = false
 local tradeSessionPartner = nil
 local tradeCounted = false
-local sendTradeHook
 local tradeEvtConnected = false
 local function tradeEnsureListener()
     if tradeEvtConnected then return end
@@ -2953,10 +2433,6 @@ local function tradeEnsureListener()
                     tradeCounted = false
                     if reason == "Completed" then
                         clog("Trade COMPLETED with " .. tostring(tradeSessionPartner or "?") .. ".")
-                        if F.tradeHookOn and type(F.tradeHookUrl) == "string" and F.tradeHookUrl ~= "" then
-                            local u, o1, o2, pn = F.tradeHookUrl, lastTradeOffers.own, lastTradeOffers.other, tostring(tradeSessionPartner or "?")
-                            task.spawn(function() sendTradeHook(u, pn, o1, o2, "Completed") end)
-                        end
                     else
                         clog("Trade ended (" .. reason .. ") with " .. tostring(tradeSessionPartner or "?") .. ".")
                     end
@@ -3061,135 +2537,6 @@ local function driveTrade()
 end
 local tradeActive = false
 local lastTradeEnd = 0
-local function fmtOffer(off)
-    if type(off) ~= "table" then return "(empty)" end
-    local parts = {}
-    for k, v in pairs(off) do
-        local name, extra = tostring(k), ""
-        pcall(function()
-            local e = invEntry(k) or (type(v) == "string" and invEntry(v))
-            if e and type(e) == "table" and e.name then
-                name = tostring(e.name)
-                local ch = unitChance(e)
-                if ch > 0 then
-                    extra = " [1 in " .. fmt(ch) .. "]"
-                elseif tonumber(e.amount) then
-                    extra = " x" .. tostring(e.amount)
-                end
-            elseif type(v) == "table" then
-                if v.name then name = tostring(v.name) end
-                if tonumber(v.amount) then extra = " x" .. tostring(v.amount) end
-            elseif type(v) ~= "boolean" and tostring(v) ~= "" then
-                extra = " x" .. tostring(v)
-            end
-        end)
-        table.insert(parts, name .. extra)
-    end
-    if #parts == 0 then return "(empty)" end
-    table.sort(parts)
-    local s = table.concat(parts, ", ")
-    if #s > 900 then s = s:sub(1, 900) .. "..." end
-    return s
-end
-sendTradeHook = function(url, partner, ownOff, otherOff, result)
-    local emb = {
-        title = "Trade " .. tostring(result or "Completed") .. " - " .. tostring(partner),
-        fields = {
-            { name = "You Gave", value = fmtOffer(ownOff), inline = false },
-            { name = "You Got", value = fmtOffer(otherOff), inline = false },
-        },
-        color = 0x60A5FA,
-        footer = { text = LocalPlayer.DisplayName },
-        timestamp = hookStamp(),
-    }
-    return postWebhook(url, { username = "Anime Dice - ReefHub", embeds = { emb } })
-end
-sendTowerHook = function(url, towerName, floor0, floorN, drops, bonus, result)
-    local cleared = (result ~= "Exited")
-    local kindOf = {}
-    local function kind(name)
-        if kindOf[name] == nil then
-            local isPot = false
-            pcall(function()
-                local cfg = G.EntryRegistry.getEntryConfig(name)
-                isPot = cfg and cfg.kind == "Boost"
-            end)
-            kindOf[name] = isPot and "pot" or "item"
-        end
-        return kindOf[name]
-    end
-    local function lines(rewards)
-        local pots, items = {}, {}
-        for name, amt in pairs(rewards or {}) do
-            table.insert(kind(name) == "pot" and pots or items, (tonumber(amt) or 0) .. "x " .. tostring(name))
-        end
-        table.sort(pots)
-        table.sort(items)
-        local parts = {}
-        for _, l in ipairs(pots) do table.insert(parts, l) end
-        if #pots > 0 and #items > 0 then table.insert(parts, "· Items ·") end
-        for _, l in ipairs(items) do table.insert(parts, l) end
-        if #parts == 0 then return "-" end
-        local s = table.concat(parts, "\n")
-        if #s > 900 then s = s:sub(1, 900) .. "..." end
-        return s
-    end
-    local sel = F.towerHookFields
-    local function want(name)
-        if type(sel) ~= "table" or #sel == 0 then return true end
-        for _, s in ipairs(sel) do if s == name then return true end end
-        return false
-    end
-    local fields = {}
-    if want("Floors") then table.insert(fields, { name = "Floors", value = tostring(floor0 or 1) .. " → " .. tostring(floorN or "?"), inline = true }) end
-    if want("Wins") then table.insert(fields, { name = "Session Wins", value = tostring(Stats.towerWins[towerName] or 0), inline = true }) end
-    if cleared then
-        if want("Floor Drops") then table.insert(fields, { name = "Floor Drops", value = lines(drops), inline = false }) end
-        if want("Clear Bonus") then table.insert(fields, { name = "Clear Bonus", value = lines(bonus), inline = false }) end
-    else
-        if want("Floor Drops") then table.insert(fields, { name = "Run Drops", value = lines(drops), inline = false }) end
-    end
-    local emb = {
-        title = (cleared and "Tower Cleared - " or "Tower Exited - ") .. tostring(towerName),
-        fields = fields,
-        color = 0xA78BFA,
-        footer = { text = LocalPlayer.DisplayName },
-        timestamp = hookStamp(),
-    }
-    pcall(function()
-        local t = G.TowersMod.Get(towerName)
-        if t and t.image then
-            local th = thumbOf(t.image)
-            if th then emb.thumbnail = { url = th } end
-        end
-    end)
-    local embeds = { emb }
-
-    if want("Item Images") then
-    local totals = {}
-    for name, amt in pairs(drops or {}) do totals[name] = (totals[name] or 0) + (tonumber(amt) or 0) end
-    for name, amt in pairs(bonus or {}) do totals[name] = (totals[name] or 0) + (tonumber(amt) or 0) end
-    local order = {}
-    for name in pairs(totals) do table.insert(order, name) end
-    table.sort(order, function(a, b) return (totals[a] or 0) > (totals[b] or 0) end)
-    for _, name in ipairs(order) do
-        if #embeds >= 10 then break end
-        local cfg = nil
-        pcall(function() cfg = G.EntryRegistry.getEntryConfig(name) end)
-        if cfg and cfg.image then
-            local th = thumbOf(cfg.image)
-            if th then
-                table.insert(embeds, {
-                    title = tostring(totals[name] or 0) .. "x " .. tostring(name),
-                    thumbnail = { url = th },
-                    color = (kind(name) == "pot") and hookColorInt(cfg) or 0x808080,
-                })
-            end
-        end
-    end
-    end
-    return postWebhook(url, { username = "Anime Dice - ReefHub", embeds = embeds })
-end
 sendTradeChat = function()
     local raw = tostring(F.tradeChatMsg or "")
     if raw:gsub("%s", "") == "" then return end
@@ -3299,147 +2646,6 @@ local function doTradeLoop()
     Busy.trade = false
 end
 
-local function applyLoaded(data)
-    if type(data) ~= "table" then return end
-    loadingCfg = true
-    local sF = data.F
-    if type(sF) == "table" then
-        for k, v in pairs(sF) do
-            local cur = F[k]
-            if cur ~= nil and type(v) == type(cur) then
-                if type(v) == "table" then
-                    local clean, okArr = {}, true
-                    for _, e in ipairs(v) do
-                        if type(e) ~= "string" then okArr = false break end
-                        table.insert(clean, e)
-                    end
-                    if okArr then F[k] = clean end
-                else
-                    F[k] = v
-                end
-            end
-        end
-    end
-    local sS = data.S
-    if type(sS) == "table" then
-        for k, v in pairs(sS) do
-            if type(Stats[k]) == "number" and type(v) == "number" then
-                Stats[k] = v
-            elseif type(Stats[k]) == "table" and type(v) == "table" then
-                local clean, okMap = {}, true
-                for mk, mv in pairs(v) do
-                    if type(mk) ~= "string" or type(mv) ~= "number" then okMap = false break end
-                    clean[mk] = mv
-                end
-                if okMap then Stats[k] = clean end
-            end
-        end
-    end
-    if (tonumber(Stats.towerGems) or 0) == 0 and type(Stats.towerRewards) == "table" then
-        Stats.towerGems = tonumber(Stats.towerRewards["Gems"]) or 0
-    end
-    if (tonumber(Stats.towerTraits) or 0) == 0 and type(Stats.towerRewards) == "table" then
-        Stats.towerTraits = tonumber(Stats.towerRewards["Trait Reroll"]) or 0
-    end
-    if U.sellInput then
-        local tt = (type(data.thresholdText) == "string") and data.thresholdText or ""
-        pcall(function() U.sellInput:Set(tt, true) end)
-        F.sellThreshold = parseCompact(tt) or 0
-    end
-    if U.tradeInput then
-        local tx = (type(data.tradeText) == "string") and data.tradeText or ""
-        pcall(function() U.tradeInput:Set(tx, true) end)
-        F.tradeMoney = parseCompact(tx) or 0
-    end
-    if U.rollMinT then
-        local rx = (type(data.rollMinText) == "string") and data.rollMinText or ""
-        pcall(function() U.rollMinT:Set(rx, true) end)
-        F.rollHookMin = parseCompact(rx) or 0
-    end
-    if U.tradeChatMsg then
-        local cx = (type(data.chatText) == "string") and data.chatText or ""
-        pcall(function() U.tradeChatMsg:Set(cx, true) end)
-        F.tradeChatMsg = cx
-    end
-    for k, h in pairs(U) do
-        if h and h.Set and k ~= "sellInput" then
-            if k == "towerSel" then
-                for lbl, n in pairs(towerByLabel) do
-                    if n == F.towerName then pcall(function() h:Set(lbl, true) end) break end
-                end
-            elseif k == "potions" then
-                local back = {}
-                for _, n in ipairs(F.potions) do
-                    for lbl, m in pairs(potByLabel) do
-                        if m == n then table.insert(back, lbl) break end
-                    end
-                end
-                pcall(function() h:Set(back, true) end)
-            elseif k == "upgCats" then
-                pcall(function() h:Set(F.upgradeCats, true) end)
-            elseif k == "statHookFields" or k == "towerHookFields" then
-                pcall(function() h:Set(F[k], true) end)
-            elseif k == "gradeTargets" then
-                local back = {}
-                for _, n in ipairs(F.gradeTargets) do for lbl, m in pairs(gradeByLabel) do if m == n then table.insert(back, lbl) break end end end
-                pcall(function() h:Set(back, true) end)
-            elseif k == "traitTargets" then
-                local back = {}
-                for _, n in ipairs(F.traitTargets) do for lbl, m in pairs(traitByLabel) do if m == n then table.insert(back, lbl) break end end end
-                pcall(function() h:Set(back, true) end)
-            elseif k == "gradeUnits" or k == "traitUnits" then
-                local map = (k == "gradeUnits") and gradeUnitByLabel or traitUnitByLabel
-
-                local live = {}
-                buildUnitOptions(map, (k == "gradeUnits") and "grade" or "trait")
-                for lbl, key in pairs(map) do live[key] = lbl end
-                local clean, back = {}, {}
-                for _, key in ipairs(F[k]) do
-                    if live[key] then table.insert(clean, key) table.insert(back, live[key]) end
-                end
-                F[k] = clean
-                pcall(function() h:Set(back, true) end)
-            elseif F[k] ~= nil and type(F[k]) ~= "table" then
-                pcall(function() h:Set(F[k], true) end)
-            end
-        end
-    end
-
-    if F.gradeAll and F.gradePlacedOnly then
-        F.gradeAll = false
-        if U.gradeAll then pcall(function() U.gradeAll:Set(false, true) end) end
-    end
-    if F.traitAll and F.traitPlacedOnly then
-        F.traitAll = false
-        if U.traitAll then pcall(function() U.traitAll:Set(false, true) end) end
-    end
-    local s = getSig("RollService", "SetAutoRoll")
-    if s then pcall(function() s:Fire(F.autoRoll) end) end
-    applyWS()
-    if F.flyOn then setFly(true) end
-    if F.fpsOn then task.spawn(applyFpsBoost, true) end
-    if F.sellSync and F.sellThreshold > 0 then
-        local s2 = getSig("SellService", "UpdateAutoSell")
-        if s2 then pcall(function() s2:Fire(F.sellThreshold) end) end
-    end
-    if F.hideRolls then task.spawn(function() syncRollHidden() rollHideBackup(true) end) end
-    loadingCfg = false
-    if F.autoMinimize then hideUIAuto() end
-end
-local function loadConfig()
-    if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then return end
-    local path = existingPath(cfgPath(), CFG_FOLDER_OLD .. "/config_" .. tostring(LocalPlayer.UserId) .. ".json")
-    if not path then return end
-    local okR, txt = pcall(readfile, path)
-    if not (okR and txt) then return end
-    local okD, data = pcall(function() return HTS:JSONDecode(txt) end)
-    if okD and type(data) == "table" then
-        applyLoaded(data)
-        clog("Settings loaded.")
-    end
-end
-pcall(loadConfig)
-pcall(watchRolls)
 
 task.spawn(function()
     task.wait(6)
@@ -3452,27 +2658,13 @@ task.spawn(function()
     pcall(function() refreshUnitDrop(U.gradeUnits, gradeUnitByLabel, F.gradeUnits, "grade") end)
     pcall(function() refreshUnitDrop(U.traitUnits, traitUnitByLabel, F.traitUnits, "trait") end)
 end)
-task.spawn(function()
-    while Alive do
-        task.wait(2)
-        if F.saveSettings then pcall(saveNow) end
-    end
-end)
 
 adhShutdown = function()
     Alive = false
-    pcall(flyStop)
-    pcall(function() applyFpsBoost(false) end)
-    pcall(function()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
-    end)
-    for _, c in ipairs(rollHideConns) do pcall(function() c:Disconnect() end) end
+        for _, c in ipairs(rollHideConns) do pcall(function() c:Disconnect() end) end
     table.clear(rollHideConns)
-    for _, c in ipairs({ noclipConn, charConn, afkConn, tradeListenerConn, rollWatchConn }) do
-        if c then pcall(function() c:Disconnect() end) end
-    end
-    noclipConn, charConn, afkConn, tradeListenerConn, rollWatchConn = nil, nil, nil, nil, nil
+    if tradeListenerConn then pcall(function() tradeListenerConn:Disconnect() end) end
+    tradeListenerConn = nil
 end
 
 task.spawn(function() while Alive do task.wait(F.collectDelay) if F.collect then pcall(doCollect) end end end)
@@ -3501,7 +2693,6 @@ task.spawn(function()
         if F.claimQuests then pcall(doClaimQuests) end
         if F.smartSell then pcall(smartSellTick) end
         if F.smartLevel then pcall(smartLevelTick) end
-        pcall(statsHookTick)
         if F.sellSync and F.sellThreshold > 0 and os.clock() - last > 120 then
             last = os.clock()
             local s = getSig("SellService", "UpdateAutoSell")
