@@ -54,7 +54,6 @@ end
 local WindUI = loadWindUI()
 WindUI:SetTheme("Dark")
 
-local currentSection
 local function wrapControl(raw, kind, opts)
     local h = { value = opts.value }
     local callback = opts.callback
@@ -121,6 +120,222 @@ local function wrapControl(raw, kind, opts)
     return setmetatable(h, { __index = raw })
 end
 
+local ICONS = {
+    ["Auto Collect Money"] = "coins",
+    ["Collect Delay"] = "timer",
+    ["Auto Rebirth"] = "rotate-ccw",
+    ["Rebirth Check"] = "timer",
+    ["Auto Roll"] = "dices",
+    ["Auto Hide Rolls"] = "eye-off",
+    ["Auto Claim Quests"] = "list-checks",
+    ["Auto Redeem Codes"] = "ticket-check",
+    ["Redeem Retry"] = "timer",
+    ["Redeem All Codes Now"] = "ticket",
+    ["Auto Level Up"] = "arrow-up-circle",
+    ["Max Unit Level"] = "gauge",
+    ["Smart Level Cap"] = "sparkles",
+    ["Level Delay"] = "timer",
+    ["Auto Place Best"] = "move-up",
+    ["Replace Worst When Full"] = "replace",
+    ["Place Check"] = "timer",
+    ["Game's EquipBest (one-shot)"] = "shield-check",
+    ["Auto Upgrades"] = "trending-up",
+    ["Upgrade Delay"] = "timer",
+    ["Category Filter"] = "list-filter",
+    ["Auto Buy Best Dice"] = "shopping-cart",
+    ["Auto Equip Best Dice"] = "badge-check",
+    ["Dice Check"] = "timer",
+    ["Rarity Threshold (e.g. 1t)"] = "scale",
+    ["Set Threshold"] = "check",
+    ["Smart Sell Threshold"] = "brain",
+    ["Apply Threshold To Game"] = "refresh-cw",
+    ["Auto Instant Sell"] = "package-open",
+    ["Sell Check"] = "timer",
+    ["Keep Top N"] = "layers",
+    ["Sell Now (below threshold)"] = "badge-dollar-sign",
+    ["Tower"] = "castle",
+    ["Auto Towers"] = "play-circle",
+    ["Equip Best Tower Team"] = "users-round",
+    ["Smart Tower (auto pick)"] = "sparkles",
+    ["Exit At Floor"] = "log-out",
+    ["Exit Floor"] = "stairs",
+    ["Stop Tower"] = "square",
+    ["Tower Wins"] = "trophy",
+    ["Tower Steps"] = "layers-3",
+    ["Tower Floor"] = "stairs",
+    ["Tower Gems"] = "gem",
+    ["Tower Traits"] = "sparkles",
+    ["Reset Tower Stats"] = "rotate-ccw",
+    ["Auto Potion"] = "flask-conical",
+    ["Potions"] = "list-checks",
+    ["Best Per Category"] = "sparkles",
+    ["Extend While Active"] = "timer-reset",
+    ["Potion Check"] = "timer",
+    ["Refresh List (show counts)"] = "refresh-cw",
+    ["Auto Grade"] = "award",
+    ["Target Grades"] = "target",
+    ["Grade Units"] = "users",
+    ["Refresh Grade Units"] = "refresh-cw",
+    ["Grade: All Units"] = "users",
+    ["Grade: Placed Units Only"] = "map-pin",
+    ["Grade Delay"] = "timer",
+    ["Grade: Gems Reserve"] = "gem",
+    ["Auto Trait"] = "sparkles",
+    ["Target Traits"] = "target",
+    ["Trait Units"] = "users",
+    ["Refresh Trait Units"] = "refresh-cw",
+    ["Trait: All Units"] = "users",
+    ["Trait: Placed Units Only"] = "map-pin",
+    ["Trait Delay"] = "timer",
+    ["Trait: Trait Reroll Reserve"] = "refresh-cw",
+    ["Auto Trade"] = "handshake",
+    ["Min Money (e.g. 1b)"] = "wallet",
+    ["Set Min Money"] = "check",
+    ["Retries Per Player"] = "rotate-cw",
+    ["Hop When Empty"] = "shuffle",
+    ["Hop Delay"] = "timer",
+    ["Auto Ready + Accept"] = "check-check",
+    ["Require Partner Offer"] = "badge-check",
+    ["Min Partner Items"] = "package",
+    ["Trade Chat"] = "message-circle",
+    ["Chat Words (a, b)"] = "type",
+    ["Send Test Chat"] = "send",
+    ["Stop + Cancel Trade"] = "square",
+    ["Requests Sent"] = "send",
+    ["Trades Opened"] = "handshake",
+    ["Money"] = "coins",
+    ["Rolls"] = "dices",
+    ["Sold"] = "package-open",
+    ["Active Potions"] = "flask-conical",
+    ["Copy Log"] = "copy",
+    ["Reset Growth Stats"] = "rotate-ccw",
+    ["Close Menu (Unload)"] = "x",
+    ["Collected Total"] = "coins",
+    ["Console"] = "terminal",
+    ["Log"] = "terminal",
+}
+
+local DESCS = {
+    ["Auto Collect Money"] = "Automatically collects available money from unlocked slots.",
+    ["Collect Delay"] = "Sets how often collection checks run.",
+    ["Auto Rebirth"] = "Automatically rebirths when the next rebirth is affordable.",
+    ["Rebirth Check"] = "Sets how often the rebirth condition is checked.",
+    ["Auto Roll"] = "Uses the game's auto-roll state when enabled.",
+    ["Auto Hide Rolls"] = "Hides roll results while keeping the roll system active.",
+    ["Auto Claim Quests"] = "Automatically claims completed quests.",
+    ["Auto Redeem Codes"] = "Automatically redeems available game codes.",
+    ["Redeem Retry"] = "Sets the retry interval for automatic code redemption.",
+    ["Redeem All Codes Now"] = "Attempts to redeem every detected code immediately.",
+    ["Auto Level Up"] = "Automatically levels units up to the selected cap.",
+    ["Max Unit Level"] = "Sets the highest level the auto leveler can reach.",
+    ["Smart Level Cap"] = "Adjusts the level cap using your current money and unit levels.",
+    ["Level Delay"] = "Sets how often level-up checks run.",
+    ["Auto Place Best"] = "Automatically equips and places your strongest available unit.",
+    ["Replace Worst When Full"] = "Allows the placer to replace the weakest placed unit.",
+    ["Place Check"] = "Sets how often unit placement checks run.",
+    ["Game's EquipBest (one-shot)"] = "Calls the game's EquipBest action once.",
+    ["Auto Upgrades"] = "Automatically buys available upgrades.",
+    ["Upgrade Delay"] = "Sets how often upgrade checks run.",
+    ["Category Filter"] = "Limits automatic upgrades to the selected categories.",
+    ["Auto Buy Best Dice"] = "Automatically buys the best available dice.",
+    ["Auto Equip Best Dice"] = "Automatically equips the best available dice.",
+    ["Dice Check"] = "Sets how often the dice shop is checked.",
+    ["Rarity Threshold (e.g. 1t)"] = "Enter the minimum rarity value used by auto-sell.",
+    ["Set Threshold"] = "Applies the entered rarity threshold.",
+    ["Smart Sell Threshold"] = "Automatically adjusts the sell threshold using current conditions.",
+    ["Apply Threshold To Game"] = "Synchronizes the selected threshold with the game's auto-sell state.",
+    ["Auto Instant Sell"] = "Automatically performs protected bulk selling.",
+    ["Sell Check"] = "Sets how often instant-sell checks run.",
+    ["Keep Top N"] = "Keeps the selected number of strongest items during bulk selling.",
+    ["Sell Now (below threshold)"] = "Immediately sells items below the selected threshold.",
+    ["Tower"] = "Selects the tower used by the automatic tower runner.",
+    ["Auto Towers"] = "Automatically runs the selected tower.",
+    ["Equip Best Tower Team"] = "Equips your strongest tower team before runs.",
+    ["Smart Tower (auto pick)"] = "Automatically selects the tower based on your current setup.",
+    ["Exit At Floor"] = "Stops the tower run at the selected floor.",
+    ["Exit Floor"] = "Enter the floor where the tower run should stop.",
+    ["Stop Tower"] = "Stops the current tower run immediately.",
+    ["Tower Wins"] = "Shows the number of recorded tower wins.",
+    ["Tower Steps"] = "Shows the total recorded tower floor progress.",
+    ["Tower Floor"] = "Shows the current recorded tower floor.",
+    ["Tower Gems"] = "Shows gems collected from tower runs.",
+    ["Tower Traits"] = "Shows traits collected from tower runs.",
+    ["Reset Tower Stats"] = "Clears the recorded tower statistics.",
+    ["Auto Potion"] = "Automatically uses selected potions when needed.",
+    ["Potions"] = "Selects which potion types can be used automatically.",
+    ["Best Per Category"] = "Uses the highest owned tier for each potion category.",
+    ["Extend While Active"] = "Extends active potion effects when possible.",
+    ["Potion Check"] = "Sets how often potion checks run.",
+    ["Refresh List (show counts)"] = "Refreshes the potion list and shows owned counts.",
+    ["Auto Grade"] = "Automatically rerolls unit grades toward your targets.",
+    ["Target Grades"] = "Selects the grades the auto grade system should target.",
+    ["Grade Units"] = "Selects the units that can be rerolled for grades.",
+    ["Refresh Grade Units"] = "Refreshes the available grade units.",
+    ["Grade: All Units"] = "Allows grade rerolls across all matching units.",
+    ["Grade: Placed Units Only"] = "Limits grade rerolls to units currently placed.",
+    ["Grade Delay"] = "Sets how often grade reroll checks run.",
+    ["Grade: Gems Reserve"] = "Keeps this many gems reserved for other uses.",
+    ["Auto Trait"] = "Automatically rerolls unit traits toward your targets.",
+    ["Target Traits"] = "Selects the traits the auto trait system should target.",
+    ["Trait Units"] = "Selects the units that can be rerolled for traits.",
+    ["Refresh Trait Units"] = "Refreshes the available trait units.",
+    ["Trait: All Units"] = "Allows trait rerolls across all matching units.",
+    ["Trait: Placed Units Only"] = "Limits trait rerolls to units currently placed.",
+    ["Trait Delay"] = "Sets how often trait reroll checks run.",
+    ["Trait: Trait Reroll Reserve"] = "Keeps this many rerolls reserved for other uses.",
+    ["Auto Trade"] = "Automatically sends and manages trade requests.",
+    ["Min Money (e.g. 1b)"] = "Sets the minimum partner money required before trading.",
+    ["Set Min Money"] = "Applies the entered minimum trade value.",
+    ["Retries Per Player"] = "Sets how many times a player can be retried.",
+    ["Hop When Empty"] = "Moves to another server when no matching players remain.",
+    ["Hop Delay"] = "Sets the delay before changing servers.",
+    ["Auto Ready + Accept"] = "Automatically readies and accepts eligible trades.",
+    ["Require Partner Offer"] = "Requires the partner to include an offer before accepting.",
+    ["Min Partner Items"] = "Sets the minimum number of partner items required.",
+    ["Trade Chat"] = "Enables the optional automatic trade chat message.",
+    ["Chat Words (a, b)"] = "Enter the chat phrases used by trade chat.",
+    ["Send Test Chat"] = "Sends the configured trade chat message once.",
+    ["Stop + Cancel Trade"] = "Stops automatic trading and cancels the active trade.",
+    ["Requests Sent"] = "Shows how many trade requests were sent.",
+    ["Trades Opened"] = "Shows how many trades were opened.",
+    ["Money"] = "Shows your current money amount.",
+    ["Rolls"] = "Shows your current roll count.",
+    ["Sold"] = "Shows the number of items sold by the hub.",
+    ["Active Potions"] = "Shows the number of active potion effects.",
+    ["Copy Log"] = "Copies the current hub log to the clipboard.",
+    ["Reset Growth Stats"] = "Resets the growth statistics baseline.",
+    ["Close Menu (Unload)"] = "Stops the hub and closes the interface.",
+}
+
+local TAB_ICONS = {
+    Main = "house",
+    Units = "users",
+    Upgrades = "trending-up",
+    Dice = "dices",
+    Sell = "package-open",
+    Tower = "castle",
+    Potion = "flask-conical",
+    Reroll = "refresh-cw",
+    Trade = "handshake",
+    Stats = "chart-no-axes-combined",
+    Changelogs = "file-text",
+}
+
+local function uiIcon(name)
+    return ICONS[name] or "circle"
+end
+
+local function uiDesc(name, desc, kind)
+    if type(desc) == "string" and desc ~= "" then return desc end
+    if DESCS[name] then return DESCS[name] end
+    if kind == "slider" then return "Adjusts the selected delay or limit." end
+    if kind == "dropdown" then return "Selects the values used by this feature." end
+    if kind == "input" then return "Enter a value for this feature." end
+    if kind == "button" then return "Runs this action once." end
+    if kind == "toggle" then return "Turns this feature on or off." end
+    return "Displays information for this feature."
+end
+
 local function adaptTab(rawTab)
     local tab = {}
     function tab:CreateDivider(opts)
@@ -131,7 +346,8 @@ local function adaptTab(rawTab)
         local cb = opts.callback
         h = wrapControl(rawTab:Toggle({
             Title = opts.name,
-            Desc = opts.description,
+            Desc = uiDesc(opts.name, opts.description, "toggle"),
+            Icon = opts.icon or uiIcon(opts.name),
             Value = opts.value == true,
             Callback = function(v)
                 h.value = v
@@ -147,8 +363,9 @@ local function adaptTab(rawTab)
         local cb = opts.callback
         h = wrapControl(rawTab:Slider({
             Title = opts.name,
-            Desc = opts.description,
+            Desc = uiDesc(opts.name, opts.description, "slider"),
             Step = step,
+            Icons = { From = opts.icon or uiIcon(opts.name) },
             Value = { Min = r[1], Max = r[2], Default = opts.value or r[1] },
             Callback = function(v)
                 h.value = v
@@ -162,7 +379,8 @@ local function adaptTab(rawTab)
         local cb = opts.callback
         h = wrapControl(rawTab:Input({
             Title = opts.name,
-            Desc = opts.description,
+            Desc = uiDesc(opts.name, opts.description, "input"),
+            InputIcon = opts.icon or uiIcon(opts.name),
             Value = tostring(opts.value or ""),
             Placeholder = opts.placeholder,
             Callback = function(v)
@@ -177,7 +395,8 @@ local function adaptTab(rawTab)
         local cb = opts.callback
         h = wrapControl(rawTab:Dropdown({
             Title = opts.name,
-            Desc = opts.description,
+            Desc = uiDesc(opts.name, opts.description, "dropdown"),
+            Icon = opts.icon or uiIcon(opts.name),
             Values = opts.options or {},
             Value = opts.value,
             Multi = opts.multiSelect == true,
@@ -193,22 +412,22 @@ local function adaptTab(rawTab)
     function tab:CreateButton(opts)
         local h = wrapControl(rawTab:Button({
             Title = opts.name,
-            Desc = opts.description,
-            Icon = opts.icon,
+            Desc = uiDesc(opts.name, opts.description, "button"),
+            Icon = opts.icon or uiIcon(opts.name),
             Callback = opts.callback,
         }), "button", opts)
         return h
     end
     function tab:CreateConsole(opts)
-        local raw = rawTab:Paragraph({ Title = opts.name or "Console", Desc = opts.text or "" })
+        local raw = rawTab:Paragraph({ Title = opts.name or "Console", Desc = opts.text or uiDesc(opts.name or "Console", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Console"), ImageSize = 18 })
         return wrapControl(raw, "console", opts)
     end
     function tab:CreateStat(opts)
-        local raw = rawTab:Paragraph({ Title = opts.name or "Stat", Desc = tostring(opts.value or 0) })
+        local raw = rawTab:Paragraph({ Title = opts.name or "Stat", Desc = tostring(opts.value or 0), Image = opts.icon or uiIcon(opts.name or "Stat"), ImageSize = 18 })
         return wrapControl(raw, "stat", opts)
     end
     function tab:CreateText(opts)
-        local raw = rawTab:Paragraph({ Title = opts.name or "", Desc = opts.text or "" })
+        local raw = rawTab:Paragraph({ Title = opts.name or "", Desc = opts.text or uiDesc(opts.name or "Info", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Info"), ImageSize = 18 })
         return wrapControl(raw, "paragraph", opts)
     end
     return setmetatable(tab, { __index = rawTab })
@@ -217,19 +436,26 @@ end
 local rawWindow = WindUI:CreateWindow({
     Title = "Anime Dice",
     Author = "ReefHub",
-    Icon = "rbxassetid://100284944801383",
+    Icon = "dices",
     Theme = "Dark",
     NewElements = true,
-    OpenButton = { Enabled = true, Draggable = true },
+    Resizable = true,
+    SideBarWidth = 180,
+    ToggleKey = Enum.KeyCode.RightControl,
+    OpenButton = { Enabled = true, Draggable = true, OnlyMobile = false },
+    Topbar = { Height = 42, ButtonsType = "Default" },
 })
 
 local window = {}
 function window:CreateSection(opts)
-    currentSection = rawWindow:Section({ Title = opts.name, Opened = true })
-    return currentSection
+    return nil
 end
 function window:CreateTab(opts)
-    local rawTab = currentSection and currentSection:Tab({ Title = opts.name, Icon = opts.icon }) or rawWindow:Tab({ Title = opts.name, Icon = opts.icon })
+    local rawTab = rawWindow:Tab({
+        Title = opts.name,
+        Icon = opts.icon,
+        Desc = opts.description,
+    })
     return adaptTab(rawTab)
 end
 function window:Notify(opts)
@@ -868,7 +1094,7 @@ local function buildUnitOptions(map, kind)
             local v = e.attributes and (kind == "grade" and e.attributes.grade or e.attributes.trait)
             if v ~= nil and v ~= "" then tag = tostring(v) end
         end
-        local lbl = e.name .. " [" .. tag .. "]" .. (placed[key] and " ★" or "")
+        local lbl = e.name .. " [" .. tag .. "]" .. (placed[key] and " (placed)" or "")
         local base, n = lbl, 2
         while map[lbl] do lbl = base .. " #" .. n n += 1 end
         map[lbl] = key
@@ -901,19 +1127,17 @@ end
 
 local towerByLabel, potByLabel, instantSmartCheck = {}, {}, nil
 do
-window:CreateSection({ name = "Farm" })
-local tMain = window:CreateTab({ name = "Main", icon = "rbxassetid://77304764857415" })
-local tUnits = window:CreateTab({ name = "Units", icon = "rbxassetid://133003586374441" })
-local tUpg = window:CreateTab({ name = "Upgrades", icon = "rbxassetid://73069486155895" })
-local tDice = window:CreateTab({ name = "Dice", icon = "rbxassetid://134876970337785" })
-local tSell = window:CreateTab({ name = "Sell", icon = "rbxassetid://118330449034393" })
-local tTower = window:CreateTab({ name = "Tower", icon = "rbxassetid://95008289608947" })
-local tPotion = window:CreateTab({ name = "Potion", icon = "rbxassetid://92709571106091" })
-local tReroll = window:CreateTab({ name = "Reroll", icon = "rbxassetid://138588191124173" })
-local tTrade = window:CreateTab({ name = "Trade", icon = "rbxassetid://72821498911763" })
-window:CreateSection({ name = "Info" })
-local tStats = window:CreateTab({ name = "Stats", icon = "rbxassetid://93129522258096" })
-local tChanges = window:CreateTab({ name = "Changelogs", icon = "rbxassetid://112634880544308" })
+local tMain = window:CreateTab({ name = "Main", icon = TAB_ICONS.Main, description = "Core farming, rolls, quests, and code tools." })
+local tUnits = window:CreateTab({ name = "Units", icon = TAB_ICONS.Units, description = "Level, place, and manage your units." })
+local tUpg = window:CreateTab({ name = "Upgrades", icon = TAB_ICONS.Upgrades, description = "Automate the skill tree and category filters." })
+local tDice = window:CreateTab({ name = "Dice", icon = TAB_ICONS.Dice, description = "Buy, equip, and check your best dice." })
+local tSell = window:CreateTab({ name = "Sell", icon = TAB_ICONS.Sell, description = "Configure thresholds and automatic selling." })
+local tTower = window:CreateTab({ name = "Tower", icon = TAB_ICONS.Tower, description = "Run towers and track tower progress." })
+local tPotion = window:CreateTab({ name = "Potion", icon = TAB_ICONS.Potion, description = "Manage automatic potion usage." })
+local tReroll = window:CreateTab({ name = "Reroll", icon = TAB_ICONS.Reroll, description = "Automate grade and trait rerolls." })
+local tTrade = window:CreateTab({ name = "Trade", icon = TAB_ICONS.Trade, description = "Configure automatic trade handling." })
+local tStats = window:CreateTab({ name = "Stats", icon = TAB_ICONS.Stats, description = "View live stats and hub logs." })
+local tChanges = window:CreateTab({ name = "Changelogs", icon = TAB_ICONS.Changelogs, description = "Review recent hub changes." })
 
 tMain:CreateDivider({ text = "Money Collection" })
 U.collectLine = tMain:CreateConsole({ name = "Collected Total", height = 48, text = "Total collected: 0" })
@@ -1292,73 +1516,45 @@ tStats:CreateButton({ name = "Copy Log", callback = function()
 end })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.6 - Game-specific FPS Boost</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[]]
+    name = "v1.6 - Game-specific performance",
+    icon = "zap",
+    text = "Improved performance tooling for Anime Dice."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.5 - Tower Exit</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Tower: Exit At Floor - leaves the run at your floor, then re-enters automatically
-<font color="#4ade80">•</font> Tower list: shorter names so difficulty tags always fit
-<font color="#4ade80">•</font> Cleanup: removed Use Now, Show Active, Rebirth Now and Claim Quests Now buttons
-<font color="#4ade80">•</font> Fix: script load error resolved]]
+    name = "v1.5 - Tower Exit",
+    icon = "castle",
+    text = "Added floor exit control, shorter tower labels, and load reliability fixes."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.4 - Auto Redeem Codes</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Main tab: Auto Redeem Codes - code list auto-detected from the game itself (RELEASE, UPDATE1-4, 1K-40K CCU + future codes) + Redeem All Codes Now
-<font color="#4ade80">•</font> Skips already-redeemed codes, retries on an interval for future codes]]
+    name = "v1.4 - Auto Redeem Codes",
+    icon = "ticket-check",
+    text = "Added automatic code detection, redemption, and retry handling."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.3 - Smart Tower & Trade reliability</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Smart Tower uses real buffed stats (upgrades + active potions), trusts session wins, logs full sim breakdown
-<font color="#4ade80">•</font> Grade/Trait: Placed Units Only mode (ignores name filter, mutually exclusive with All Units)
-<font color="#4ade80">•</font> Unit dropdowns auto-refresh after every roll + on warmup, with refresh confirmation
-<font color="#4ade80">•</font> Trade counting fixed (game sends Ended+reason) and works for manual trades too
-<font color="#4ade80">•</font> Trade timeout: accepted trades get 45s, then auto-cancel and move on
-<font color="#4ade80">•</font> Trade never sends requests or hops while you are in a trade
-<font color="#4ade80">•</font> Grade/Trait unit lists show every copy separately with its own grade/trait (placed marked ★) - pick exact units, no more merged D+S rows]]
+    name = "v1.3 - Smart Tower and Trade",
+    icon = "handshake",
+    text = "Improved tower selection, unit refresh handling, trade counting, timeouts, and exact unit selection."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.2 - Trade & Smart Tower</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Trade timeout: accepted trades get 45s, then auto-cancel and move to the next player
-<font color="#4ade80">•</font> Grade/Trait: Placed Units Only option - reroll just your slot team, not idle inventory
-<font color="#4ade80">•</font> Trade stays idle until Min Money is set - no more "nobody matches" hop spam
-<font color="#4ade80">•</font> Server Hop reworked: no 3-try give-up, 30s cooldown instead of hop storms
-<font color="#4ade80">•</font> Smart Tower checks instantly on toggle and reports every run (already best or new pick)
-<font color="#4ade80">•</font> All UI text English]]
+    name = "v1.2 - Trade and Smart Tower",
+    icon = "refresh-cw",
+    text = "Improved trade timeouts, placed-unit modes, server hopping, and instant smart tower checks."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#60a5fa">v1.1 - Speed & Performance</font></b>',
-    icon = "rbxassetid://112634880544308",
-    text = [[<font color="#4ade80">•</font> Auto Towers rebuilt to match the game's own Auto speed (back-to-back floor calls, no artificial wait)
-<font color="#4ade80">•</font> Removed obsolete Floor Wait slider (tower loop is adaptive now)]]
+    name = "v1.1 - Speed and Performance",
+    icon = "gauge",
+    text = "Reworked tower speed and removed the obsolete floor wait control."
 })
 
 tChanges:CreateText({
-    name = '<b><font color="#4ade80">v1.0 - Release</font></b>',
-    icon = "rbxassetid://138588191124173",
-    text = [[<font color="#4ade80">•</font> Auto Collect Money with live total counter
-<font color="#4ade80">•</font> Auto Level Up with max level limit
-<font color="#4ade80">•</font> Auto Place Best, replaces weakest unit when full
-<font color="#4ade80">•</font> Auto Rebirth
-<font color="#4ade80">•</font> Auto Upgrades with category filter
-<font color="#4ade80">•</font> Auto Buy and Equip Best Dice
-<font color="#4ade80">•</font> Auto Sell with instant game sync and protected bulk sell
-<font color="#4ade80">•</font> Auto Towers with difficulty picker, honest wins and live floor tracker
-<font color="#4ade80">•</font> Auto Potion, best tier per category
-<font color="#4ade80">•</font> Auto Grade and Trait reroll with targets, chases above protected on demand
-<font color="#4ade80">•</font> Auto Roll with real game HIDE, tower screen hide
-<font color="#4ade80">•</font> Auto Claim Quests with one-click button
-<font color="#4ade80">•</font> Server tools: Rejoin, Server Hop, Low-Player Hop]]
+    name = "v1.0 - Release",
+    icon = "rocket",
+    text = "Released money collection, leveling, placement, rebirth, upgrades, dice, selling, towers, potions, rerolls, quests, and server tools."
 })
 
 tStats:CreateDivider({ text = "General" })
