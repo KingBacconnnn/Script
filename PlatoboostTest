@@ -14,9 +14,9 @@ do
     end)
     if blocked then
         pcall(function()
-            game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Anime Dice - ReefHub", Text = "Already running.", Duration = 4 })
+            game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Anime Dice - Velox Hub", Text = "Already running.", Duration = 4 })
         end)
-        warn("[Anime Dice - ReefHub] Already running.")
+        warn("[Anime Dice - Velox Hub] Already running.")
         return
     end
 end
@@ -395,6 +395,9 @@ local function adaptTab(rawTab)
                 Title = opts.name,
                 Desc = uiDesc(opts.name, opts.description, "slider"),
                 Step = step,
+                Width = 125,
+                IsTooltip = true,
+                IsTextbox = false,
                 Value = { Min = r[1], Max = r[2], Default = opts.value or r[1] },
                 Callback = function(v)
                     if h then h.value = v end
@@ -520,12 +523,12 @@ local function adaptTab(rawTab)
 end
 
 local rawWindow = WindUI:CreateWindow({
-    Title = "Anime Dice",
-    Author = "ReefHub",
+    Title = "[⚙️UPD 6] Anime",
+    Author = "by Over",
     Icon = "dices",
     Theme = "Dark",
     Resizable = true,
-    SideBarWidth = 180,
+    SideBarWidth = 150,
     ToggleKey = Enum.KeyCode.RightControl,
     OpenButton = { Enabled = true, Draggable = true, OnlyMobile = false },
     Topbar = { Height = 42, ButtonsType = "Default" },
@@ -647,7 +650,7 @@ end
 
 G.ok = G.Network ~= nil and G.DC ~= nil
 
-function log(...) print("[Anime Dice - ReefHub]", ...) end
+function log(...) print("[Anime Dice - Velox Hub]", ...) end
 function notify(title, content)
     pcall(function() window:Notify({ title = title, content = content, duration = 4 }) end)
 end
@@ -858,7 +861,7 @@ end
 local UIS = game:GetService("UserInputService")
 local TS = game:GetService("TeleportService")
 local HTS = game:GetService("HttpService")
-local CFG_FOLDER = "Anime Dice - ReefHub"
+local CFG_FOLDER = "Anime Dice - Velox Hub"
 local CFG_FOLDER_OLD = "AnimeDiceHub"
 function existingPath(newPath, oldPath)
     local okE, has = pcall(function() return isfile(newPath) end)
@@ -1211,17 +1214,14 @@ end
 
 local towerByLabel, potByLabel, instantSmartCheck = {}, {}, nil
 do
-local tMain = window:CreateTab({ name = "Main", icon = TAB_ICONS.Main, description = "Core farming, rolls, quests, and code tools." })
-local tUnits = window:CreateTab({ name = "Units", icon = TAB_ICONS.Units, description = "Level, place, and manage your units." })
-local tUpg = window:CreateTab({ name = "Upgrades", icon = TAB_ICONS.Upgrades, description = "Automate the skill tree and category filters." })
-local tDice = window:CreateTab({ name = "Dice", icon = TAB_ICONS.Dice, description = "Buy, equip, and check your best dice." })
-local tSell = window:CreateTab({ name = "Sell", icon = TAB_ICONS.Sell, description = "Configure thresholds and automatic selling." })
-local tTower = window:CreateTab({ name = "Tower", icon = TAB_ICONS.Tower, description = "Run towers and track tower progress." })
-local tPotion = window:CreateTab({ name = "Potion", icon = TAB_ICONS.Potion, description = "Manage automatic potion usage." })
-local tReroll = window:CreateTab({ name = "Reroll", icon = TAB_ICONS.Reroll, description = "Automate grade and trait rerolls." })
-local tTrade = window:CreateTab({ name = "Trade", icon = TAB_ICONS.Trade, description = "Configure automatic trade handling." })
-local tStats = window:CreateTab({ name = "Stats", icon = TAB_ICONS.Stats, description = "View live stats and hub logs." })
-local tChanges = window:CreateTab({ name = "Changelogs", icon = TAB_ICONS.Changelogs, description = "Review recent hub changes." })
+local tMain = window:CreateTab({ name = "Main", icon = TAB_ICONS.Main })
+local tUnits = window:CreateTab({ name = "Units", icon = TAB_ICONS.Units })
+local tAuto = window:CreateTab({ name = "Auto", icon = TAB_ICONS.Upgrades })
+local tTower = window:CreateTab({ name = "Tower", icon = TAB_ICONS.Tower })
+local tReroll = window:CreateTab({ name = "Reroll", icon = TAB_ICONS.Reroll })
+local tTrade = window:CreateTab({ name = "Trade", icon = TAB_ICONS.Trade })
+local tStats = window:CreateTab({ name = "Stats", icon = TAB_ICONS.Stats })
+local tUpg, tDice, tSell, tPotion, tChanges = tAuto, tAuto, tAuto, tAuto, tStats
 
 tMain:CreateDivider({ text = "Money Collection" })
 U.collectLine = tMain:CreateConsole({ name = "Collected Total", height = 48, text = "Total collected: 0" })
@@ -3055,5 +3055,5 @@ task.spawn(function()
     end
 end)
 
-notify("Anime Dice - ReefHub", "Loaded (build " .. tostring(BUILD) .. "). Pick a tab and enable features.")
+notify("Anime Dice - Velox Hub", "Loaded (build " .. tostring(BUILD) .. "). Pick a tab and enable features.")
 log("Hub started (build " .. tostring(BUILD) .. ").")
