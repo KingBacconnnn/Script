@@ -336,6 +336,16 @@ local function uiDesc(name, desc, kind)
     return "Displays information for this feature."
 end
 
+local function safeElement(create, fallback)
+    local ok, result = pcall(create)
+    if ok and result then return result end
+    if fallback then
+        local ok2, result2 = pcall(fallback)
+        if ok2 and result2 then return result2 end
+    end
+    error(result, 0)
+end
+
 local function adaptTab(rawTab)
     local tab = {}
     local function ensureSelected()
@@ -352,16 +362,25 @@ local function adaptTab(rawTab)
         ensureSelected()
         local h
         local cb = opts.callback
-        h = wrapControl(rawTab:Toggle({
-            Title = opts.name,
-            Desc = uiDesc(opts.name, opts.description, "toggle"),
-            Icon = opts.icon or uiIcon(opts.name),
-            Value = opts.value == true,
-            Callback = function(v)
-                h.value = v
-                if not h._silent and cb then cb(v) end
-            end,
-        }), "toggle", opts)
+        local title = opts.name
+        local desc = uiDesc(opts.name, opts.description, "toggle")
+        local icon = opts.icon or uiIcon(opts.name)
+        local function make(withIcon)
+            local config = {
+                Title = title,
+                Desc = desc,
+                Value = opts.value == true,
+                Callback = function(v)
+                    if h then h.value = v end
+                    if not h or not h._silent then
+                        if cb then cb(v) end
+                    end
+                end,
+            }
+            if withIcon and icon then config.Icon = icon end
+            return rawTab:Toggle(config)
+        end
+        h = wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "toggle", opts)
         return h
     end
     function tab:CreateSlider(opts)
@@ -370,80 +389,132 @@ local function adaptTab(rawTab)
         local step = opts.increment or 1
         local h
         local cb = opts.callback
-        h = wrapControl(rawTab:Slider({
-            Title = opts.name,
-            Desc = uiDesc(opts.name, opts.description, "slider"),
-            Step = step,
-            Icons = { From = opts.icon or uiIcon(opts.name) },
-            Value = { Min = r[1], Max = r[2], Default = opts.value or r[1] },
-            Callback = function(v)
-                h.value = v
-                if not h._silent and cb then cb(v) end
-            end,
-        }), "slider", opts)
+        local icon = opts.icon or uiIcon(opts.name)
+        local function make(withIcon)
+            local config = {
+                Title = opts.name,
+                Desc = uiDesc(opts.name, opts.description, "slider"),
+                Step = step,
+                Value = { Min = r[1], Max = r[2], Default = opts.value or r[1] },
+                Callback = function(v)
+                    if h then h.value = v end
+                    if not h or not h._silent then
+                        if cb then cb(v) end
+                    end
+                end,
+            }
+            if withIcon and icon then config.Icons = { From = icon } end
+            return rawTab:Slider(config)
+        end
+        h = wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "slider", opts)
         return h
     end
     function tab:CreateInput(opts)
         ensureSelected()
         local h
         local cb = opts.callback
-        h = wrapControl(rawTab:Input({
-            Title = opts.name,
-            Desc = uiDesc(opts.name, opts.description, "input"),
-            InputIcon = opts.icon or uiIcon(opts.name),
-            Value = tostring(opts.value or ""),
-            Placeholder = opts.placeholder,
-            Callback = function(v)
-                h.value = v
-                if not h._silent and cb then cb(v) end
-            end,
-        }), "input", opts)
+        local icon = opts.icon or uiIcon(opts.name)
+        local function make(withIcon)
+            local config = {
+                Title = opts.name,
+                Desc = uiDesc(opts.name, opts.description, "input"),
+                Value = tostring(opts.value or ""),
+                Placeholder = opts.placeholder,
+                Callback = function(v)
+                    if h then h.value = v end
+                    if not h or not h._silent then
+                        if cb then cb(v) end
+                    end
+                end,
+            }
+            if withIcon and icon then config.InputIcon = icon end
+            return rawTab:Input(config)
+        end
+        h = wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "input", opts)
         return h
     end
     function tab:CreateDropdown(opts)
         ensureSelected()
         local h
         local cb = opts.callback
-        h = wrapControl(rawTab:Dropdown({
-            Title = opts.name,
-            Desc = uiDesc(opts.name, opts.description, "dropdown"),
-            Icon = opts.icon or uiIcon(opts.name),
-            Values = opts.options or {},
-            Value = opts.value,
-            Multi = opts.multiSelect == true,
-            AllowNone = true,
-            Callback = function(v)
-                h.value = v
-                if not h._silent and cb then cb(v) end
-            end,
-        }), "dropdown", opts)
+        local icon = opts.icon or uiIcon(opts.name)
+        local function make(withIcon)
+            local config = {
+                Title = opts.name,
+                Desc = uiDesc(opts.name, opts.description, "dropdown"),
+                Values = opts.options or {},
+                Value = opts.value,
+                Multi = opts.multiSelect == true,
+                AllowNone = true,
+                Callback = function(v)
+                    if h then h.value = v end
+                    if not h or not h._silent then
+                        if cb then cb(v) end
+                    end
+                end,
+            }
+            if withIcon and icon then config.Icon = icon end
+            return rawTab:Dropdown(config)
+        end
+        h = wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "dropdown", opts)
         h.options = opts.options or {}
         return h
     end
     function tab:CreateButton(opts)
         ensureSelected()
-        local h = wrapControl(rawTab:Button({
-            Title = opts.name,
-            Desc = uiDesc(opts.name, opts.description, "button"),
-            Icon = opts.icon or uiIcon(opts.name),
-            Callback = opts.callback,
-        }), "button", opts)
-        return h
+        local icon = opts.icon or uiIcon(opts.name)
+        local function make(withIcon)
+            local config = {
+                Title = opts.name,
+                Desc = uiDesc(opts.name, opts.description, "button"),
+                Callback = opts.callback,
+            }
+            if withIcon and icon then config.Icon = icon end
+            return rawTab:Button(config)
+        end
+        return wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "button", opts)
     end
     function tab:CreateConsole(opts)
         ensureSelected()
-        local raw = rawTab:Paragraph({ Title = opts.name or "Console", Desc = opts.text or uiDesc(opts.name or "Console", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Console"), ImageSize = 18 })
-        return wrapControl(raw, "console", opts)
+        local icon = opts.icon or uiIcon(opts.name or "Console")
+        local function make(withIcon)
+            local config = {
+                Title = opts.name or "Console",
+                Desc = opts.text or uiDesc(opts.name or "Console", opts.description, "paragraph"),
+                ImageSize = 18,
+            }
+            if withIcon and icon then config.Image = icon end
+            return rawTab:Paragraph(config)
+        end
+        return wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "console", opts)
     end
     function tab:CreateStat(opts)
         ensureSelected()
-        local raw = rawTab:Paragraph({ Title = opts.name or "Stat", Desc = tostring(opts.value or 0), Image = opts.icon or uiIcon(opts.name or "Stat"), ImageSize = 18 })
-        return wrapControl(raw, "stat", opts)
+        local icon = opts.icon or uiIcon(opts.name or "Stat")
+        local function make(withIcon)
+            local config = {
+                Title = opts.name or "Stat",
+                Desc = tostring(opts.value or 0),
+                ImageSize = 18,
+            }
+            if withIcon and icon then config.Image = icon end
+            return rawTab:Paragraph(config)
+        end
+        return wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "stat", opts)
     end
     function tab:CreateText(opts)
         ensureSelected()
-        local raw = rawTab:Paragraph({ Title = opts.name or "", Desc = opts.text or uiDesc(opts.name or "Info", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Info"), ImageSize = 18 })
-        return wrapControl(raw, "paragraph", opts)
+        local icon = opts.icon or uiIcon(opts.name or "Info")
+        local function make(withIcon)
+            local config = {
+                Title = opts.name or "",
+                Desc = opts.text or uiDesc(opts.name or "Info", opts.description, "paragraph"),
+                ImageSize = 18,
+            }
+            if withIcon and icon then config.Image = icon end
+            return rawTab:Paragraph(config)
+        end
+        return wrapControl(safeElement(function() return make(true) end, function() return make(false) end), "paragraph", opts)
     end
     return setmetatable(tab, { __index = rawTab })
 end
@@ -453,7 +524,6 @@ local rawWindow = WindUI:CreateWindow({
     Author = "ReefHub",
     Icon = "dices",
     Theme = "Dark",
-    NewElements = true,
     Resizable = true,
     SideBarWidth = 180,
     ToggleKey = Enum.KeyCode.RightControl,
@@ -1175,7 +1245,7 @@ U.autoRoll = tMain:CreateToggle({ name = "Auto Roll", value = false,
     end })
 U.hideRolls = tMain:CreateToggle({ name = "Auto Hide Rolls", value = false,
     callback = function(v) F.hideRolls = v syncRollHidden() rollHideBackup(v) end })
-U.claimQuests = tMain:CreateToggle({ name = "Auto Claim Quests", value = false,
+U.claimQuests = tMain:CreateToggle({ name = "Auto Claim Quests", icon = "check", value = false,
     callback = function(v) F.claimQuests = v end })
 
 tMain:CreateDivider({ text = "Codes" })
