@@ -338,10 +338,18 @@ end
 
 local function adaptTab(rawTab)
     local tab = {}
+    local function ensureSelected()
+        pcall(function() rawTab:Select() end)
+    end
+    function tab:Select()
+        ensureSelected()
+    end
     function tab:CreateDivider(opts)
+        ensureSelected()
         rawTab:Divider()
     end
     function tab:CreateToggle(opts)
+        ensureSelected()
         local h
         local cb = opts.callback
         h = wrapControl(rawTab:Toggle({
@@ -357,6 +365,7 @@ local function adaptTab(rawTab)
         return h
     end
     function tab:CreateSlider(opts)
+        ensureSelected()
         local r = opts.range or {0, 100}
         local step = opts.increment or 1
         local h
@@ -375,6 +384,7 @@ local function adaptTab(rawTab)
         return h
     end
     function tab:CreateInput(opts)
+        ensureSelected()
         local h
         local cb = opts.callback
         h = wrapControl(rawTab:Input({
@@ -391,6 +401,7 @@ local function adaptTab(rawTab)
         return h
     end
     function tab:CreateDropdown(opts)
+        ensureSelected()
         local h
         local cb = opts.callback
         h = wrapControl(rawTab:Dropdown({
@@ -410,6 +421,7 @@ local function adaptTab(rawTab)
         return h
     end
     function tab:CreateButton(opts)
+        ensureSelected()
         local h = wrapControl(rawTab:Button({
             Title = opts.name,
             Desc = uiDesc(opts.name, opts.description, "button"),
@@ -419,14 +431,17 @@ local function adaptTab(rawTab)
         return h
     end
     function tab:CreateConsole(opts)
+        ensureSelected()
         local raw = rawTab:Paragraph({ Title = opts.name or "Console", Desc = opts.text or uiDesc(opts.name or "Console", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Console"), ImageSize = 18 })
         return wrapControl(raw, "console", opts)
     end
     function tab:CreateStat(opts)
+        ensureSelected()
         local raw = rawTab:Paragraph({ Title = opts.name or "Stat", Desc = tostring(opts.value or 0), Image = opts.icon or uiIcon(opts.name or "Stat"), ImageSize = 18 })
         return wrapControl(raw, "stat", opts)
     end
     function tab:CreateText(opts)
+        ensureSelected()
         local raw = rawTab:Paragraph({ Title = opts.name or "", Desc = opts.text or uiDesc(opts.name or "Info", opts.description, "paragraph"), Image = opts.icon or uiIcon(opts.name or "Info"), ImageSize = 18 })
         return wrapControl(raw, "paragraph", opts)
     end
@@ -454,7 +469,6 @@ function window:CreateTab(opts)
     local rawTab = rawWindow:Tab({
         Title = opts.name,
         Icon = opts.icon,
-        Desc = opts.description,
     })
     return adaptTab(rawTab)
 end
@@ -1578,6 +1592,7 @@ if not G.ok or #G.missing > 0 then
 else
     clog("Ready. Money: " .. fmt(money()))
 end
+tMain:Select()
 end
 
 local function doCollect()
