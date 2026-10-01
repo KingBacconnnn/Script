@@ -2,8 +2,6 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
-local AUTOEXEC_CODE = [[loadstring(game:HttpGet("https://raw.githubusercontent.com/perfectusmim1/animeastral/refs/heads/main/animedice.lua"))()]]
-
 if game.PlaceId ~= 113290951185459 then
     error("[Anime Dice - ReefHub] This script only works in Anime Dice.", 0)
 end
@@ -85,14 +83,14 @@ local F = {
     codesAuto = false, codesDelay = 300,
     tradeAuto = false, tradeMoney = 0, tradeRetries = 3, tradeHop = true, tradeHopDelay = 8, tradeAutoGo = true, tradeNeedOffer = true, tradeMinItems = 1, tradeChatOn = false, tradeChatMsg = "",
     tradeHookUrl = "", tradeHookOn = false,
-    saveSettings = true, autoMinimize = false, wsOn = false, wsValue = 16, flyOn = false, flySpeed = 50, noclip = false, afk = true, reexec = true, fpsOn = false,
+    saveSettings = true, autoMinimize = false, wsOn = false, wsValue = 16, flyOn = false, flySpeed = 50, noclip = false, afk = true, fpsOn = false,
 }
 
 local BUILD = 52
 local Alive = true
 local loadingCfg = false
 
-local function hideUIAuto()
+function hideUIAuto()
     task.spawn(function()
         local t0, sawOpen = os.clock(), false
         while os.clock() - t0 < 30 do
@@ -126,7 +124,7 @@ local doInstantSell, doPotionTick, doClaimQuests, doGradeTick, doTraitTick, doRe
 local clog
 
 local G = { ok = false, missing = {} }
-local function need(name, fn)
+function need(name, fn)
     local ok, v = pcall(fn)
     if ok and v ~= nil then G[name] = v return v end
     table.insert(G.missing, name)
@@ -157,24 +155,24 @@ need("UIRefs", function() return require(RS.Framework.Features.UI.UIReferences) 
 need("NF", function() return require(RS.Packages.NumberFormatter) end)
 need("BuffCtrl", function() return require(RS.Framework.Features.Buffs.BuffController) end)
 
-local function plotComm() return G.Network.ClientComm.new(RS.Network, false, "PlotService") end
-local function svcComm(svc) return G.Network.ClientComm.new(RS.Network, false, svc) end
+function plotComm() return G.Network.ClientComm.new(RS.Network, false, "PlotService") end
+function svcComm(svc) return G.Network.ClientComm.new(RS.Network, false, svc) end
 local Sig, Fn = {}, {}
-local function getSig(svc, name)
+function getSig(svc, name)
     local k = svc .. "/" .. name
     if Sig[k] then return Sig[k] end
     local ok, s = pcall(function() return svcComm(svc):GetSignal(name) end)
     if ok and s then Sig[k] = s return s end
     return nil
 end
-local function getFn(svc, name)
+function getFn(svc, name)
     local k = svc .. "/" .. name
     if Fn[k] then return Fn[k] end
     local ok, f = pcall(function() return svcComm(svc):GetFunction(name) end)
     if ok and f then Fn[k] = f return f end
     return nil
 end
-local function buyUpgradeSig()
+function buyUpgradeSig()
     if Sig.BuyUpgrade then return Sig.BuyUpgrade end
     local ok, s = pcall(function() return G.Network.Client.GetSignal(RS.Network, "BuyUpgrade") end)
     if ok and s then Sig.BuyUpgrade = s return s end
@@ -183,38 +181,38 @@ end
 
 G.ok = G.Network ~= nil and G.DC ~= nil
 
-local function log(...) print("[Anime Dice - ReefHub]", ...) end
-local function notify(title, content)
+function log(...) print("[Anime Dice - ReefHub]", ...) end
+function notify(title, content)
     pcall(function() window:Notify({ title = title, content = content, duration = 4 }) end)
 end
 
-local function money() local ok, v = pcall(function() return G.DC.Money() end) return ok and (tonumber(v) or 0) or 0 end
-local function rebirth() local ok, v = pcall(function() return G.DC.Rebirth() end) return ok and (tonumber(v) or 0) or 0 end
-local function slots() local ok, v = pcall(function() return G.DC.Slots() end) return (ok and type(v) == "table") and v or {} end
-local function inventory() local ok, v = pcall(function() return G.DC.Inventory() end) return (ok and type(v) == "table") and v or {} end
-local function invEntry(key)
+function money() local ok, v = pcall(function() return G.DC.Money() end) return ok and (tonumber(v) or 0) or 0 end
+function rebirth() local ok, v = pcall(function() return G.DC.Rebirth() end) return ok and (tonumber(v) or 0) or 0 end
+function slots() local ok, v = pcall(function() return G.DC.Slots() end) return (ok and type(v) == "table") and v or {} end
+function inventory() local ok, v = pcall(function() return G.DC.Inventory() end) return (ok and type(v) == "table") and v or {} end
+function invEntry(key)
     local e
     local ok = pcall(function() e = G.DC.Inventory[key]() end)
     if ok and e then return e end
     return inventory()[key]
 end
-local function equippedKey()
+function equippedKey()
     local ok, v = pcall(function() return G.UnitController.EquippedUnit() end)
     return ok and v or nil
 end
-local function unitChance(entry)
+function unitChance(entry)
     if not entry or type(entry) ~= "table" then return 0 end
     local ok, cfg = pcall(function() return G.EntryRegistry.getEntryConfig(entry.name) end)
     if not ok or not cfg or cfg.kind ~= "Unit" then return 0 end
     local ok2, ch = pcall(function() return cfg.chance(entry.attributes) end)
     return (ok2 and tonumber(ch)) or 0
 end
-local function isUnitEntry(entry)
+function isUnitEntry(entry)
     if not entry or type(entry) ~= "table" or not entry.name then return false end
     local ok, cfg = pcall(function() return G.EntryRegistry.getEntryConfig(entry.name) end)
     return ok and cfg and cfg.kind == "Unit"
 end
-local function unlockedSlots()
+function unlockedSlots()
     local list, s = {}, slots()
     local maxS = 14
     pcall(function() maxS = G.PlotConfig.GetMaxSlots() end)
@@ -226,7 +224,7 @@ local function unlockedSlots()
     end
     return list, s
 end
-local function parseCompact(text)
+function parseCompact(text)
     if not text or text == "" then return 0 end
     local clean = tostring(text):gsub("%$", ""):gsub(",", ""):gsub("%s+", "")
     if clean == "" then return 0 end
@@ -238,11 +236,11 @@ local function parseCompact(text)
     local mult = { k = 1e3, m = 1e6, b = 1e9, t = 1e12, q = 1e15, qd = 1e15, qn = 1e18, aa = 1e18 }
     return num * (mult[suf] or 1)
 end
-local function fmt(n)
+function fmt(n)
     local ok, v = pcall(function() return G.NF.FormatCompact(n) end)
     return (ok and v) or tostring(n)
 end
-local function applySellInput(text)
+function applySellInput(text)
     if not text or text:gsub("%s", "") == "" then
         F.sellThreshold = 0
         notify("Auto Sell", "Threshold off.")
@@ -256,7 +254,7 @@ local function applySellInput(text)
         if F.sellSync then local s = getSig("SellService", "UpdateAutoSell") if s then pcall(function() s:Fire(v) end) end end
     else notify("Auto Sell", "Not understood, e.g. 1t") end
 end
-local function applyTradeInput(text)
+function applyTradeInput(text)
     if not text or text:gsub("%s", "") == "" then
         F.tradeMoney = 0
         notify("Trade", "Min money off.")
@@ -268,14 +266,14 @@ local function applyTradeInput(text)
         notify("Trade", "Min money: " .. fmt(v))
     else notify("Trade", "Not understood, e.g. 1b") end
 end
-local function rolls() local ok, v = pcall(function() return G.DC.Rolls() end) return ok and (tonumber(v) or 0) or 0 end
-local function setStat(h, v)
+function rolls() local ok, v = pcall(function() return G.DC.Rolls() end) return ok and (tonumber(v) or 0) or 0 end
+function setStat(h, v)
     v = tonumber(v) or 0
     if h.value ~= v then h:Set(v) end
 end
 local SMART_K = 100000
 local lastSmartT = 0
-local function effectiveLuck()
+function effectiveLuck()
     local diceLuck, buff = 1, 1
     pcall(function()
         local cur = G.DC.Dice()
@@ -288,7 +286,7 @@ local function effectiveLuck()
     end)
     return math.max(1, diceLuck) * math.max(1, buff)
 end
-local function bestOwnedChance()
+function bestOwnedChance()
     local best = 0
     for _, e in pairs(inventory()) do
         if isUnitEntry(e) then
@@ -299,7 +297,7 @@ local function bestOwnedChance()
     return best
 end
 local smartErrAt, lvlErrAt = 0, 0
-local function smartSellTick(force)
+function smartSellTick(force)
     if not F.smartSell then return end
     if not force and os.clock() - lastSmartT < 60 then return end
     lastSmartT = os.clock()
@@ -325,7 +323,7 @@ local function smartSellTick(force)
     end
 end
 local lastLvlT = 0
-local function smartLevelTick(force)
+function smartLevelTick(force)
     if not F.smartLevel then return end
     if not force and os.clock() - lastLvlT < 30 then return end
     lastLvlT = os.clock()
@@ -380,7 +378,7 @@ local function smartLevelTick(force)
         clog("Smart level error: " .. tostring(err))
     end
 end
-local function waitVerify(fn, timeout)
+function waitVerify(fn, timeout)
     timeout = timeout or 3
     local t = 0
     while t < timeout do
@@ -396,7 +394,7 @@ local TS = game:GetService("TeleportService")
 local HTS = game:GetService("HttpService")
 local CFG_FOLDER = "Anime Dice - ReefHub"
 local CFG_FOLDER_OLD = "AnimeDiceHub"
-local function existingPath(newPath, oldPath)
+function existingPath(newPath, oldPath)
     local okE, has = pcall(function() return isfile(newPath) end)
     if okE and has then return newPath end
     local okO, hasO = pcall(function() return isfile(oldPath) end)
@@ -404,8 +402,8 @@ local function existingPath(newPath, oldPath)
     return nil
 end
 local lastCfgSaved = ""
-local function cfgPath() return CFG_FOLDER .. "/config_" .. tostring(LocalPlayer.UserId) .. ".json" end
-local function saveNow()
+function cfgPath() return CFG_FOLDER .. "/config_" .. tostring(LocalPlayer.UserId) .. ".json" end
+function saveNow()
     if typeof(writefile) ~= "function" or typeof(makefolder) ~= "function" then return false end
     pcall(function() makefolder(CFG_FOLDER) end)
     local ok, txt = pcall(function()
@@ -417,18 +415,18 @@ local function saveNow()
     if ok2 then lastCfgSaved = txt end
     return ok2
 end
-local function applyWS()
+function applyWS()
     local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if hum then hum.WalkSpeed = (F.wsOn and F.wsValue) or 16 end
 end
 local flyGyro, flyVel, flyMoveConn, flyKeys = nil, nil, nil, {}
-local function flyStop()
+function flyStop()
     if flyMoveConn then pcall(function() flyMoveConn:Disconnect() end) flyMoveConn = nil end
     if flyGyro then pcall(function() flyGyro:Destroy() end) flyGyro = nil end
     if flyVel then pcall(function() flyVel:Destroy() end) flyVel = nil end
     table.clear(flyKeys)
 end
-local function flyStart()
+function flyStart()
     flyStop()
     local ch = LocalPlayer.Character
     local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
@@ -462,7 +460,7 @@ local function flyStart()
         end)
     end)
 end
-local function setFly(on)
+function setFly(on)
     F.flyOn = on
     if not on then
         flyStop()
@@ -506,7 +504,7 @@ TS.TeleportInitFailed:Connect(function(_, _, msg)
 end)
 
 local fpsRestore, fpsHidden, fpsMaintConn, fpsKeptPlot = {}, {}, nil, nil
-local function fpsDisable(inst)
+function fpsDisable(inst)
     pcall(function()
         if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") or inst:IsA("Smoke") or inst:IsA("Fire") or inst:IsA("Sparkles") then
             if inst.Enabled then table.insert(fpsRestore, { o = inst, p = "Enabled", v = true }) inst.Enabled = false end
@@ -525,7 +523,7 @@ local function fpsDisable(inst)
         end
     end)
 end
-local function fpsHide(inst)
+function fpsHide(inst)
     pcall(function()
         if inst and inst.Parent then
             for _, h in ipairs(fpsHidden) do if h.o == inst then return end end
@@ -535,7 +533,7 @@ local function fpsHide(inst)
     end)
 end
 
-local function fpsOwnPlot()
+function fpsOwnPlot()
     local plots = workspace:FindFirstChild("Plots")
     local claimed = plots and plots:FindFirstChild("Claimed")
     if not claimed then return nil end
@@ -572,7 +570,7 @@ local function fpsOwnPlot()
     return nil
 end
 
-local function fpsIsDecor(c)
+function fpsIsDecor(c)
     local n = c.Name
     if c:IsA("Model") then
         return n == "Palm Tree" or n == "Mountain" or n == "LOW POLY ISLAND" or n == "LightHouse" or n == "Wind"
@@ -957,22 +955,6 @@ local function doHop(lowPop, isBlocked)
         notify("Server Hop", "All tries failed, hopping random...")
         pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end)
     end)
-end
-local autoexecArmed = false
-local function armReexec()
-    if autoexecArmed then return end
-    if not F.reexec then return end
-    if AUTOEXEC_CODE:find("PASTE_YOUR") then
-        notify("AutoExec", "Paste your loadstring into AUTOEXEC_CODE first.")
-        return
-    end
-    autoexecArmed = true
-    local q = queue_on_teleport or queueonteleport
-    if typeof(q) == "function" then
-        pcall(q, AUTOEXEC_CODE)
-    else
-        notify("AutoExec", "queue_on_teleport not supported.")
-    end
 end
 local rollHideConns = {}
 local function rollHideBackup(on)
@@ -1752,8 +1734,7 @@ tChanges:CreateText({
 <font color="#4ade80">•</font> Settings save per player and restore on next run
 <font color="#4ade80">•</font> Rayfield config profiles, apply them on other accounts
 <font color="#4ade80">•</font> Server tools: Rejoin, Server Hop, Low-Player Hop
-<font color="#4ade80">•</font> Character: WalkSpeed, Fly, Noclip, Anti-AFK, FPS Boost
-<font color="#4ade80">•</font> Auto Execute on teleport with your own loadstring]]
+<font color="#4ade80">•</font> Character: WalkSpeed, Fly, Noclip, Anti-AFK, FPS Boost]]
 })
 
 tStats:CreateDivider({ text = "General" })
@@ -1787,9 +1768,6 @@ tSettings:CreateDivider({ text = "Server" })
 tSettings:CreateButton({ name = "Rejoin Server", callback = function() doRejoin(true) end })
 tSettings:CreateButton({ name = "Server Hop", callback = function() doHop(false) end })
 tSettings:CreateButton({ name = "Hop: Low Player Server", callback = function() doHop(true) end })
-tSettings:CreateDivider({ text = "Auto Execute" })
-U.reexec = tSettings:CreateToggle({ name = "Auto Execute On Teleport", value = true,
-    callback = function(v) F.reexec = v end })
 tSettings:CreateDivider({ text = "Character" })
 U.wsOn = tSettings:CreateToggle({ name = "WalkSpeed", value = false,
     callback = function(v) F.wsOn = v applyWS() end })
@@ -3278,7 +3256,6 @@ local function doTradeLoop()
         if en then en:Fire(true) end
     end)
     tradeEnsureListener()
-    if AUTOEXEC_CODE:find("PASTE_YOUR") then clog("Trade: set AUTOEXEC_CODE or hopping strands you.") end
     while F.tradeAuto and Alive do
         if (tonumber(F.tradeMoney) or 0) <= 0 then
             if not tradeNoMinWarned then
@@ -3462,7 +3439,6 @@ local function loadConfig()
     end
 end
 pcall(loadConfig)
-pcall(armReexec)
 pcall(watchRolls)
 
 task.spawn(function()
